@@ -38,19 +38,18 @@ TAG=$(git rev-parse --short HEAD)
 # Login Scaleway Container Registry
 scw registry login
 
-# Backend
-docker build -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG \
-             -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest \
-             myrag/
-docker push rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG
-docker push rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest
+# Backend — IMPORTANT: --platform linux/amd64 si tu builds depuis un Mac ARM64,
+# sinon exec format error au pod start sur Kapsule (AMD64).
+docker buildx build --platform linux/amd64 --push \
+  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG \
+  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest \
+  myrag/
 
-# Frontend (build statique Nuxt + nginx)
-docker build -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG \
-             -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest \
-             myrag/frontend/
-docker push rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG
-docker push rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest
+# Frontend (build statique Nuxt + nginx), meme contrainte de plateforme.
+docker buildx build --platform linux/amd64 --push \
+  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG \
+  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest \
+  myrag/frontend/
 ```
 
 Les build args du Dockerfile frontend baken les URLs publiques (`MYRAG_API_URL=/api`, `KEYCLOAK_URL=https://mysso.fake-domain.name`, `AUTH_ENABLED=true`). Pour une autre cible (staging), re-builder avec `--build-arg MYRAG_API_URL=... --build-arg KEYCLOAK_URL=...`.
@@ -159,6 +158,14 @@ Causes fréquentes :
 ### Frontend affiche la page d'accueil Nuxt (welcome)
 
 Le build image a bien été fait depuis `mycollections/myrag/frontend/` et pas depuis l'ancien emplacement `openrag/integrations/myrag/frontend/`. Rebuilder avec le bon contexte.
+
+### `exec /docker-entrypoint.sh: exec format error` au pod start
+
+Image construite sur Mac ARM64 (darwin/arm64) alors que le cluster tourne en AMD64. Rebuilder avec `docker buildx build --platform linux/amd64 --push`.
+
+### `can't subtract offset-naive and offset-aware datetimes` dans les logs backend
+
+Le code utilise tz-aware datetimes mais SQLAlchemy `DateTime` mappe sur `TIMESTAMP WITHOUT TIME ZONE` sur PostgreSQL. Assure-toi que `utcnow()` dans `app/models/db.py` retourne bien un datetime naive (`.replace(tzinfo=None)`). Corrigé à partir du commit 968ab8e.
 
 ### Login Keycloak renvoie "invalid redirect_uri"
 
