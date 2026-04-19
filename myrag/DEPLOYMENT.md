@@ -54,6 +54,41 @@ docker buildx build --platform linux/amd64 --push \
 
 Les build args du Dockerfile frontend baken les URLs publiques (`MYRAG_API_URL=/api`, `KEYCLOAK_URL=https://mysso.fake-domain.name`, `AUTH_ENABLED=true`). Pour une autre cible (staging), re-builder avec `--build-arg MYRAG_API_URL=... --build-arg KEYCLOAK_URL=...`.
 
+## 1.5. Provisionner le user bot Drive (source "drive" uniquement)
+
+MyRAG s'authentifie à Drive via `client_credentials` sur le client Keycloak `mycollections-drive`. Drive (Suite Numérique) exige un `core.User` local dont le `sub` correspond au service account — pas de création auto pour les service accounts. On provisionne un user "bot" dédié ; idempotent.
+
+```bash
+# sub du service account mycollections-drive = preferred_username "service-account-mycollections-drive"
+SUB=$(curl -s -X POST https://mysso.fake-domain.name/realms/openwebui/protocol/openid-connect/token \
+  -d "grant_type=client_credentials&client_id=mycollections-drive&client_secret=$DRIVE_CLIENT_SECRET&scope=openid" \
+  | python3 -c "
+import sys,json,base64
+t=json.load(sys.stdin)['access_token']; p=t.split('.')[1]+'=' * (4 - len(t.split('.')[1])%4)
+print(json.loads(base64.urlsafe_b64decode(p))['sub'])")
+
+P=$(kubectl -n miraiku get pod -l app.kubernetes.io/component=backend,app.kubernetes.io/name=drive --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+kubectl -n miraiku exec $P -- python -c "
+import django; django.setup()
+from core.models import User
+SUB = '$SUB'
+try:
+    u = User.objects.get(sub=SUB); print('already exists', u.id)
+except User.DoesNotExist:
+    u = User(
+        sub=SUB, email='mycollections-drive@bot.local',
+        full_name='MyCollections Drive Bot', short_name='mycollections-drive',
+        is_device=True, is_active=True,
+        claims={'bot': True, 'for': 'mycollections'},
+    )
+    u.set_unusable_password()   # bot: no interactive login
+    u.save()
+    print('created', u.id)
+"
+```
+
+**Partage des dossiers** : le bot ne voit par défaut aucun dossier. Pour qu'il puisse indexer un dossier, un admin doit le partager à `mycollections-drive@bot.local` via l'UI Drive (même workflow qu'un collègue humain). Permissions recommandées : `viewer` (lecture seule).
+
 ## 2. Créer la DB PostgreSQL
 
 La DB `myrag` est déjà dans l'init SQL d'owuicore-main (cf. `postgres/init/01-create-databases.sql`). Pour une instance PG déjà en place, créer manuellement :
