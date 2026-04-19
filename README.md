@@ -106,6 +106,25 @@ Points à durcir (cf. `continue-keen-hamming.md` priorité 3) : `/admin/catalog`
 
 **Pré-requis utilisateur** : Drive auto-provisionne son `core.User` local à la **première connexion interactive** sur `https://mesfichiers.fake-domain.name`. Tant que ce n'est pas fait, le resource server de Drive répond `403 Forbidden` (on voit dans MyRAG : *"Votre compte n'est pas encore connu de Drive. Connectez-vous une fois sur https://mesfichiers.fake-domain.name puis revenez ici."*). Un seul login suffit, ensuite tout fonctionne.
 
+### Gestion des sessions et expirations
+
+Trois timeouts en cascade :
+
+| Couche | Valeur actuelle | Ce qui expire | Conséquence |
+|--------|----------------|---------------|-------------|
+| Access token (client `myrag-front`) | **15 min** | Bearer utilisé dans `Authorization` | À chaque appel API, le Bearer peut être rejeté en 401 → besoin d'un renew |
+| SSO session idle (realm `openwebui`) | **4 h** (bump 2026-04-19) | La session Keycloak si l'user est inactif | Au-delà, le refresh token stocké par le browser ne peut plus obtenir un nouveau access token |
+| SSO session max | **10 h** | La session Keycloak absolue | Forced re-login au-delà, quoi qu'il arrive |
+
+Côté frontend, le flow est :
+1. `oidc-client-ts` démarre un `automaticSilentRenew` (best-effort, ~60 s avant expiry, via iframe caché).
+2. Quand un fetch MyRAG répond 401, `useApi` déclenche un **`mgr.signinSilent()` explicite** (utilise le refresh token) et **retry le fetch une fois**.
+3. Si le retry est aussi 401, on propage l'erreur — le layout ou le caller décide (typiquement : redirect login interactif).
+
+Ce pattern absorbe les cas fréquents où `automaticSilentRenew` échoue silencieusement (3rd-party cookies, Safari ITP, iframe bloqué). Les flows async serveur-side (comme l'ingestion Drive) ne dépendent **pas** du token user une fois lancés : MyRAG télécharge les bytes pendant le call HTTP (token encore valide), puis ingest depuis la mémoire (plus aucun appel Drive).
+
+Pour les vrais flows long-running (>15 min, réindexation massive), la V2 utilisera un **pattern hybride user + bot** : l'user autorise une fois, puis l'import passe par le service account `mycollections-drive` qui a un access token renouvelable à l'infini via `client_credentials`.
+
 ## Démarrage local
 
 Prérequis : Docker Desktop, Node 22, Python 3.12, le repo `openrag` et `owuicore-main` clonés à côté.

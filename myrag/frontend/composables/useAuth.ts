@@ -101,6 +101,46 @@ export function useAuth() {
     }
   }
 
+  /**
+   * Force a silent renew via oidc-client-ts (uses the refresh_token stored
+   * in sessionStorage). Used by useApi as a recovery step when a fetch
+   * returns 401 — `automaticSilentRenew` is best-effort and can fail
+   * silently (3rd-party cookies, Safari ITP, iframe blocked, etc.).
+   *
+   * Returns the new access_token on success, null on failure.
+   */
+  async function renewToken(): Promise<string | null> {
+    if (!config.public.authEnabled || import.meta.server) return null
+    try {
+      const { UserManager, WebStorageStateStore } = await import('oidc-client-ts')
+      const keycloakUrl = config.public.keycloakUrl
+      const keycloakRealm = config.public.keycloakRealm
+      const clientId = config.public.keycloakClientId
+      const rawOrigin = window.location.origin
+      const origin = rawOrigin.replace(/:(80|443|3000|8201)$/, '')
+      const redirectUri = `${origin}/auth/callback`
+
+      const mgr = new UserManager({
+        authority: `${keycloakUrl}/realms/${keycloakRealm}`,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile',
+        userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+      })
+      const renewed = await mgr.signinSilent()
+      if (!renewed) return null
+      user.value = {
+        access_token: renewed.access_token,
+        profile: renewed.profile,
+      }
+      return renewed.access_token
+    } catch (e) {
+      console.warn('silent renew failed:', e)
+      return null
+    }
+  }
+
   async function logout() {
     try {
       const { UserManager, WebStorageStateStore } = await import('oidc-client-ts')
@@ -133,5 +173,5 @@ export function useAuth() {
     return user.value?.profile?.groups || []
   }
 
-  return { user, loading, authError, init, logout, getAccessToken, getUserName, getUserGroups }
+  return { user, loading, authError, init, logout, renewToken, getAccessToken, getUserName, getUserGroups }
 }
