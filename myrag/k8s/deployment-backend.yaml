@@ -7,6 +7,11 @@ metadata:
     app: myrag-backend
 spec:
   replicas: 1
+  # PVC myrag-sources is ReadWriteOnce — a RollingUpdate would try to attach
+  # the volume to two pods on different nodes and fail with Multi-Attach.
+  # Recreate stops the old pod before starting the new one.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: myrag-backend
