@@ -1,13 +1,12 @@
 """Publication router — publish/unpublish collections to Open WebUI."""
 
 import json
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.database import async_session
-from app.models.db import Publication, PublicationHistory
+from app.models.db import Publication, PublicationHistory, utcnow
 from app.services.collection_store import get_or_create_collection
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
@@ -40,7 +39,7 @@ async def publish_collection(name: str, req: PublishRequest):
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 
-    now = datetime.now(timezone.utc)
+    now = utcnow()
 
     async with async_session() as session:
         pub = await session.get(Publication, name)

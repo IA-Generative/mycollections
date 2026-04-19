@@ -4,13 +4,12 @@ Replaces the in-memory job_tracker.py.
 """
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
-from app.models.db import IngestJob
+from app.models.db import IngestJob, utcnow
 
 
 async def create_job(
@@ -71,7 +70,7 @@ async def complete_job(job_id: str):
         if not job:
             return
         job.status = "done" if job.failed_chunks == 0 else "done_with_errors"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = utcnow()
         await session.commit()
 
 

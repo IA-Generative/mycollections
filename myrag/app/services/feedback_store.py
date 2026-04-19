@@ -3,13 +3,11 @@
 Replaces file-based FeedbackService.
 """
 
-from datetime import datetime, timezone
-
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
-from app.models.db import Feedback
+from app.models.db import Feedback, utcnow
 
 
 async def ingest_feedback(
@@ -74,7 +72,7 @@ async def review_feedback(feedback_id: int, status: str = "reviewed", reviewed_b
             return None
         fb.status = status
         fb.reviewed_by = reviewed_by
-        fb.reviewed_at = datetime.now(timezone.utc)
+        fb.reviewed_at = utcnow()
         await session.commit()
         await session.refresh(fb)
         return fb.to_dict()
@@ -87,7 +85,7 @@ async def promote_feedback(feedback_id: int, promote_to: str = "qr") -> dict | N
             return None
         fb.status = "promoted"
         fb.promoted_to = promote_to
-        fb.reviewed_at = datetime.now(timezone.utc)
+        fb.reviewed_at = utcnow()
         await session.commit()
         await session.refresh(fb)
         return fb.to_dict()

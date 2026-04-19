@@ -1,7 +1,6 @@
 """Collection CRUD service backed by SQLAlchemy database."""
 
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import delete, select
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session
 from app.models.db import (
     Collection,
+    utcnow,
     EvalDataset,
     EvalRun,
     Feedback,
@@ -80,7 +80,7 @@ async def archive_collection(name: str) -> dict | None:
         c = await session.get(Collection, name)
         if not c:
             return None
-        c.archived_at = datetime.now(timezone.utc)
+        c.archived_at = utcnow()
         await session.commit()
         await session.refresh(c)
         return c.to_dict()

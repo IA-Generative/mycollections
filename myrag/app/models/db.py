@@ -10,7 +10,11 @@ from app.database import Base
 
 
 def utcnow():
-    return datetime.now(timezone.utc)
+    # Return a naive UTC datetime. SQLAlchemy's DateTime column maps to
+    # TIMESTAMP WITHOUT TIME ZONE on PostgreSQL; asyncpg rejects tz-aware
+    # values against that type ("can't subtract offset-naive and offset-aware
+    # datetimes"). Keeping everything naive-UTC avoids a schema migration.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Collection(Base):
