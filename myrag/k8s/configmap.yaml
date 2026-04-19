@@ -11,7 +11,7 @@ data:
   KEYCLOAK_REALM: "openwebui"
   KEYCLOAK_CLIENT_ID: "openrag"
   # Public URL of this MyRAG instance (used by server-generated links).
-  MYRAG_PUBLIC_URL: "https://mycorpus.fake-domain.name"
+  MYRAG_PUBLIC_URL: "https://mycollections.fake-domain.name"
   # Graph viewer — kept in-cluster for now.
   GRAPHRAG_VIEWER_URL: "http://bridge.miraiku.svc.cluster.local:8081/graph"
   # Auth on backend API (OIDC introspection).

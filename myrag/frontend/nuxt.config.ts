@@ -17,7 +17,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      myragApiUrl: process.env.MYRAG_API_URL || 'http://localhost:8200',
+      // NB: use ?? (nullish coalescing) not || here — an empty string is a
+      // valid value that means "same-origin, relative URLs" behind the prod
+      // ingress. With || the empty string would fall through to localhost.
+      myragApiUrl: process.env.MYRAG_API_URL ?? 'http://localhost:8200',
       appTitle: process.env.APP_TITLE || 'MyRAG (beta)',
       keycloakUrl: process.env.KEYCLOAK_URL || 'http://host.docker.internal:8082',
       keycloakRealm: process.env.KEYCLOAK_REALM || 'openwebui',
