@@ -33,9 +33,29 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    """Create all tables. Called on startup."""
+    """Create all tables + lightweight in-place migrations. Called on startup."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _migrate_add_archived_at(conn)
+
+
+async def _migrate_add_archived_at(conn):
+    """Add collections.archived_at if missing (SQLite + PostgreSQL compatible)."""
+    from sqlalchemy import text
+
+    def _sync(sync_conn):
+        dialect = sync_conn.dialect.name
+        if dialect == "sqlite":
+            rows = sync_conn.exec_driver_sql("PRAGMA table_info(collections)").fetchall()
+            cols = {r[1] for r in rows}
+            if "archived_at" not in cols:
+                sync_conn.exec_driver_sql("ALTER TABLE collections ADD COLUMN archived_at DATETIME")
+        else:
+            sync_conn.execute(text(
+                "ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"
+            ))
+
+    await conn.run_sync(_sync)
 
 
 async def get_session() -> AsyncSession:

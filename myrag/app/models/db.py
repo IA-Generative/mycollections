@@ -33,6 +33,7 @@ class Collection(Base):
     source_config_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     def to_dict(self) -> dict:
         return {
@@ -52,6 +53,7 @@ class Collection(Base):
             "source_url": self.source_url,
             "created_at": self.created_at.isoformat() if self.created_at else "",
             "updated_at": self.updated_at.isoformat() if self.updated_at else "",
+            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
         }
 
 
