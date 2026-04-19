@@ -104,6 +104,8 @@ Points à durcir (cf. `continue-keen-hamming.md` priorité 3) : `/admin/catalog`
 
 **Limite connue** : si le téléchargement prend > 15 min (gros dossiers, Drive lent), le token expire pendant l'appel et `/drive/add` retourne 502. Dans ce cas : fractionner, ou implémenter l'offline_access + refresh token (V2).
 
+**Pré-requis utilisateur** : Drive auto-provisionne son `core.User` local à la **première connexion interactive** sur `https://mesfichiers.fake-domain.name`. Tant que ce n'est pas fait, le resource server de Drive répond `403 Forbidden` (on voit dans MyRAG : *"Votre compte n'est pas encore connu de Drive. Connectez-vous une fois sur https://mesfichiers.fake-domain.name puis revenez ici."*). Un seul login suffit, ensuite tout fonctionne.
+
 ## Démarrage local
 
 Prérequis : Docker Desktop, Node 22, Python 3.12, le repo `openrag` et `owuicore-main` clonés à côté.

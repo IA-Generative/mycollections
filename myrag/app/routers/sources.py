@@ -271,6 +271,17 @@ async def list_drive_folders(
             data = resp.json()
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
+        if code == 403:
+            # Drive requires the user to exist in its local DB; it is
+            # auto-provisioned on the first interactive login on Drive.
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Votre compte n'est pas encore connu de Drive. "
+                    f"Connectez-vous une fois sur {settings.drive_url} "
+                    "(c'est instantané) puis revenez ici."
+                ),
+            )
         raise HTTPException(
             status_code=401 if code == 401 else 502,
             detail=f"Drive API {code} sur /items/{parent_id or ''}",
@@ -357,8 +368,17 @@ async def add_drive_source(
         folder = await probe.get_item(req.folder_id)
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
-        if code in (401, 403):
-            raise HTTPException(status_code=code, detail="Drive refuse l'acces a ce dossier pour votre compte.")
+        if code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Votre compte n'est pas encore connu de Drive. "
+                    f"Connectez-vous une fois sur {settings.drive_url} "
+                    "puis revenez ici."
+                ),
+            )
+        if code == 401:
+            raise HTTPException(status_code=401, detail="Drive refuse votre token (expiré ou invalide).")
         if code == 404:
             raise HTTPException(status_code=404, detail=f"Drive folder '{req.folder_id}' not found")
         raise HTTPException(status_code=502, detail=f"Drive API error {code}")
