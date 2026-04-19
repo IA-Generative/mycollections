@@ -14,15 +14,21 @@ _SERVICE_TOKENS: dict[str, tuple[str, float]] = {}
 
 
 async def get_service_token(
-    client_id: str, client_secret: str, realm: str | None = None
+    client_id: str, client_secret: str, realm: str | None = None,
+    scope: str = "openid",
 ) -> str:
     """Fetch an access_token via client_credentials for a confidential client.
 
-    Cached per client_id until 30s before expiry. Raises httpx.HTTPStatusError
-    if Keycloak rejects the credentials.
+    Cached per (client_id, scope) until 30s before expiry. Raises
+    httpx.HTTPStatusError if Keycloak rejects the credentials.
+
+    The Drive resource server rejects tokens without the ``openid`` scope, so
+    we request it explicitly here rather than relying on the client's default
+    scopes (Keycloak only adds ``profile email`` by default).
     """
     realm = realm or settings.keycloak_realm
-    cached = _SERVICE_TOKENS.get(client_id)
+    cache_key = f"{client_id}|{scope}"
+    cached = _SERVICE_TOKENS.get(cache_key)
     if cached and time.time() < cached[1]:
         return cached[0]
 
@@ -31,6 +37,7 @@ async def get_service_token(
         "grant_type": "client_credentials",
         "client_id": client_id,
         "client_secret": client_secret,
+        "scope": scope,
     }
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(url, data=data)
@@ -39,7 +46,7 @@ async def get_service_token(
 
     token = payload["access_token"]
     expires_at = time.time() + payload.get("expires_in", 300) - 30
-    _SERVICE_TOKENS[client_id] = (token, expires_at)
+    _SERVICE_TOKENS[cache_key] = (token, expires_at)
     return token
 
 

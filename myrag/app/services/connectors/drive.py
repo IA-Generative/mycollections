@@ -18,8 +18,11 @@ class DriveClient:
 
     def __init__(self, base_url: str, access_token: str, timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
+        # IMPORTANT: /external_api/v1.0/ — the OIDC-RS protected variant.
+        # /api/v1.0/ requires a session cookie (user login) and would 500
+        # on Bearer-token calls from a service account.
         self._client = httpx.AsyncClient(
-            base_url=f"{self.base_url}/api/v1.0",
+            base_url=f"{self.base_url}/external_api/v1.0",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=timeout,
             follow_redirects=True,
