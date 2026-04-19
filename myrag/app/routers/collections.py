@@ -18,6 +18,7 @@ from app.services.collection_store import (
     update_collection as db_update_collection,
     get_system_prompt as db_get_system_prompt,
     update_system_prompt as db_update_system_prompt,
+    purge_collection as db_purge_collection,
 )
 from app.services.openrag_client import OpenRAGClient
 
@@ -182,6 +183,24 @@ async def update_collection_endpoint(name: str, updates: dict):
     if not collection:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     return collection
+
+
+@router.delete("/{name}")
+async def purge_collection_endpoint(name: str):
+    """Hard-delete a collection. Requires the collection to be archived first.
+
+    Drops the OpenRAG partition, removes source files on disk, and cascades
+    all related DB rows (publications, jobs, feedback, evals, source_files).
+    """
+    result = await db_purge_collection(name)
+    if result["status"] == "not_found":
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+    if result["status"] == "not_archived":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Collection '{name}' must be archived before it can be purged",
+        )
+    return result
 
 
 # --- System prompt ---

@@ -1,12 +1,25 @@
 """Collection CRUD service backed by SQLAlchemy database."""
 
+import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
-from app.models.db import Collection
+from app.models.db import (
+    Collection,
+    EvalDataset,
+    EvalRun,
+    Feedback,
+    IngestJob,
+    Publication,
+    PublicationHistory,
+    SourceFile,
+)
+
+logger = logging.getLogger("myrag.collection_store")
 
 
 async def list_collections(include_archived: bool = False) -> list[dict]:
@@ -88,6 +101,71 @@ async def is_archived(name: str) -> bool:
     async with async_session() as session:
         c = await session.get(Collection, name)
         return bool(c and c.archived_at is not None)
+
+
+async def purge_collection(name: str) -> dict:
+    """Hard delete: OpenRAG partition + source files on disk + all DB rows.
+
+    The collection must already be archived. Returns a report with the counts
+    of rows/files removed and whether OpenRAG acknowledged the partition drop.
+    """
+    from app.services.openrag_client import OpenRAGClient
+
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        if not c:
+            return {"status": "not_found"}
+        if c.archived_at is None:
+            return {"status": "not_archived"}
+
+    # 1. OpenRAG partition
+    openrag_status = "skipped"
+    try:
+        result = await OpenRAGClient(timeout=15.0).delete_partition(name)
+        openrag_status = result.get("status", "unknown")
+    except Exception as e:
+        logger.warning("purge: failed to drop OpenRAG partition %s: %s", name, e)
+        openrag_status = f"error: {e.__class__.__name__}"
+
+    # 2. Source files on disk
+    files_deleted = 0
+    async with async_session() as session:
+        paths_rows = await session.execute(
+            select(SourceFile.storage_path).where(SourceFile.collection_name == name)
+        )
+        for (path,) in paths_rows:
+            if not path:
+                continue
+            try:
+                Path(path).unlink(missing_ok=True)
+                files_deleted += 1
+            except Exception as e:
+                logger.warning("purge: failed to unlink %s: %s", path, e)
+
+    # 3. DB cascade — one transaction
+    counts: dict[str, int] = {}
+    async with async_session() as session:
+        for model in (
+            SourceFile, EvalRun, EvalDataset, Feedback,
+            IngestJob, PublicationHistory, Publication,
+        ):
+            stmt = delete(model).where(model.collection_name == name)
+            result = await session.execute(stmt)
+            counts[model.__tablename__] = result.rowcount or 0
+        # finally the collection row itself
+        c = await session.get(Collection, name)
+        if c:
+            await session.delete(c)
+            counts["collections"] = 1
+        await session.commit()
+
+    return {
+        "status": "purged",
+        "collection": name,
+        "openrag": openrag_status,
+        "files_deleted": files_deleted,
+        "rows_deleted": counts,
+    }
 
 
 async def get_or_create_collection(name: str) -> dict:
