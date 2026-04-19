@@ -6,7 +6,11 @@ export function useApi() {
   const baseUrl = config.public.myragApiUrl
 
   async function get<T = any>(path: string, params?: Record<string, string>): Promise<T> {
-    const url = new URL(`${baseUrl}${path}`)
+    // baseUrl can be "" in prod (same-origin) — `new URL("/foo")` alone
+    // throws "Invalid URL" without an explicit base, so we use the page
+    // origin as the base for resolution.
+    const base = baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+    const url = new URL(`${baseUrl}${path}`, base)
     if (params) {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
     }
