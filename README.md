@@ -87,6 +87,23 @@ Partager un dossier Drive au bot ≠ rendre son contenu public. Il y a **deux co
 
 Points à durcir (cf. `continue-keen-hamming.md` priorité 3) : `/admin/catalog` et `/c/{id}/playground` ne sont pas encore filtrés par rôle — tout user authentifié peut lister et interroger.
 
+### Filtrage du picker Drive par utilisateur (impersonation)
+
+**Problème résolu** : en v1 naïve, le picker appelait Drive avec un service account (`mycollections-drive`) → tous les dossiers partagés au bot étaient listés à **tous** les admins MyRAG. Un admin A pouvait indexer le dossier partagé par l'admin B sans son consentement.
+
+**Solution implémentée (2026-04-19, option 1a)** :
+- Les routes `/api/sources/drive/folders`, `/drive/add`, `/drive/sync/*`, `/drive/status/*` **reçoivent et relaient le token OIDC de l'utilisateur connecté** (`Authorization: Bearer <user_access_token>`). Drive voit l'appel comme fait par cet utilisateur → retourne uniquement les dossiers que cet utilisateur peut voir.
+- **Download synchrone avant async** : dans `/drive/add`, MyRAG télécharge tous les fichiers du dossier **pendant l'appel HTTP initial** (où le token user est encore valide), puis lance le chunking + upload OpenRAG en arrière-plan depuis les bytes déjà en mémoire. Plus aucun appel Drive après que la route a répondu.
+- **Access token lifespan bumped à 15 min** pour le client Keycloak `myrag-front` (attribut `access.token.lifespan=900`), ce qui laisse largement le temps de télécharger un dossier raisonnable avant expiry.
+- **Garde-fou** : refus si le dossier contient > 500 fichiers ou > 500 MB cumulés (HTTP 413) — l'utilisateur doit fractionner.
+
+**Conséquence pratique** :
+- Dans le picker, chaque user voit **ses propres dossiers + ceux qu'on lui a partagés** (via l'UI Drive). Pas ceux de ses collègues.
+- L'audit Drive montre le vrai user comme auteur de la lecture massive (plus traçable qu'un bot).
+- Plus besoin de provisionner un user bot dans Drive pour le flow nominal (le user bot reste uniquement utilisé par `/api/sources/drive/sync/*` en ligne de commande d'admin, où aucun user n'est connecté).
+
+**Limite connue** : si le téléchargement prend > 15 min (gros dossiers, Drive lent), le token expire pendant l'appel et `/drive/add` retourne 502. Dans ce cas : fractionner, ou implémenter l'offline_access + refresh token (V2).
+
 ## Démarrage local
 
 Prérequis : Docker Desktop, Node 22, Python 3.12, le repo `openrag` et `owuicore-main` clonés à côté.
