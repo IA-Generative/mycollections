@@ -1,5 +1,7 @@
 """Collection CRUD service backed by SQLAlchemy database."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,9 +9,12 @@ from app.database import async_session
 from app.models.db import Collection
 
 
-async def list_collections() -> list[dict]:
+async def list_collections(include_archived: bool = False) -> list[dict]:
     async with async_session() as session:
-        result = await session.execute(select(Collection).order_by(Collection.name))
+        stmt = select(Collection).order_by(Collection.name)
+        if not include_archived:
+            stmt = stmt.where(Collection.archived_at.is_(None))
+        result = await session.execute(stmt)
         return [c.to_dict() for c in result.scalars().all()]
 
 
@@ -55,6 +60,34 @@ async def delete_collection(name: str) -> bool:
         await session.delete(c)
         await session.commit()
         return True
+
+
+async def archive_collection(name: str) -> dict | None:
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        if not c:
+            return None
+        c.archived_at = datetime.now(timezone.utc)
+        await session.commit()
+        await session.refresh(c)
+        return c.to_dict()
+
+
+async def unarchive_collection(name: str) -> dict | None:
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        if not c:
+            return None
+        c.archived_at = None
+        await session.commit()
+        await session.refresh(c)
+        return c.to_dict()
+
+
+async def is_archived(name: str) -> bool:
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        return bool(c and c.archived_at is not None)
 
 
 async def get_or_create_collection(name: str) -> dict:
