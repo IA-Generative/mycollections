@@ -74,3 +74,14 @@ async def get_config():
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
     }
+
+
+@app.get("/api/openrag/health")
+async def openrag_health():
+    """Proxy for OpenRAG's health_check. Browsers can't reach OpenRAG
+    directly (CORS) so the layout status badge calls this instead.
+    """
+    from app.services.openrag_client import OpenRAGClient
+    client = OpenRAGClient(timeout=5.0)
+    ok = await client.health_check()
+    return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}

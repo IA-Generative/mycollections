@@ -141,23 +141,19 @@ async function checkServices() {
     myragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: 'MyRAG — Non accessible' }
   }
 
-  // Check OpenRAG (via MyRAG proxy or directly)
+  // Check OpenRAG via the MyRAG proxy (browsers can't hit OpenRAG directly
+  // because of CORS — the VM only allows same-origin).
   try {
-    const resp = await fetch(`${config.public.myragApiUrl}/api/config`, { signal: AbortSignal.timeout(3000) })
+    const resp = await fetch(`${config.public.myragApiUrl}/api/openrag/health`, { signal: AbortSignal.timeout(5000) })
     if (resp.ok) {
       const data = await resp.json()
-      // Try to reach OpenRAG health via its URL
-      try {
-        const orResp = await fetch(`${data.openrag_url}/health_check`, { signal: AbortSignal.timeout(3000) })
-        if (orResp.ok) {
-          openragStatus.value = { status: 'up', class: 'myrag-status__dot--up', title: 'OpenRAG — OK' }
-        } else {
-          openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `OpenRAG — HTTP ${orResp.status}` }
-        }
-      } catch {
-        // OpenRAG might not be reachable from browser (Docker internal), check via MyRAG
-        openragStatus.value = { status: 'unknown', class: 'myrag-status__dot--unknown', title: 'OpenRAG — reseau interne (non verifiable depuis le navigateur)' }
+      if (data.status === 'up') {
+        openragStatus.value = { status: 'up', class: 'myrag-status__dot--up', title: `OpenRAG — OK (${data.openrag_url})` }
+      } else {
+        openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `OpenRAG — ${data.openrag_url} injoignable` }
       }
+    } else {
+      openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `OpenRAG — HTTP ${resp.status}` }
     }
   } catch {
     openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: 'OpenRAG — Non accessible' }
