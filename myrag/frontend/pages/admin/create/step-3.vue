@@ -18,8 +18,74 @@
     </div>
 
     <div v-else class="fr-col-8">
-      <!-- Source selector -->
-      <div class="fr-card fr-mb-4w">
+      <!-- Drive folder picker (when source=drive) -->
+      <div v-if="source === 'drive'" class="fr-card fr-mb-4w">
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <h3 class="fr-h5">☁️ Choisir un dossier Drive à indexer</h3>
+
+            <p v-if="!driveReady" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w">
+              {{ driveError || 'Chargement du service Drive…' }}
+            </p>
+
+            <div v-else>
+              <!-- Breadcrumb -->
+              <nav class="fr-breadcrumb" aria-label="Chemin Drive">
+                <ol class="fr-breadcrumb__list">
+                  <li>
+                    <a class="fr-breadcrumb__link" href="#" @click.prevent="goBack(-1)">Racine</a>
+                  </li>
+                  <li v-for="(f, idx) in drivePath" :key="f.id">
+                    <a class="fr-breadcrumb__link" href="#" @click.prevent="goBack(idx)">{{ f.title }}</a>
+                  </li>
+                </ol>
+              </nav>
+
+              <!-- Items list -->
+              <ul class="fr-mt-2w" style="list-style:none;padding:0;">
+                <li v-for="item in driveItems" :key="item.id" class="fr-mb-1w">
+                  <button v-if="item.type === 'FOLDER'"
+                          class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-folder-2-line fr-btn--icon-left"
+                          @click="enterFolder(item)"
+                          :disabled="driveLoading">
+                    {{ item.title || '(sans nom)' }}
+                  </button>
+                  <span v-else class="fr-text--sm" style="color:#666;">
+                    <span class="fr-icon-file-line" aria-hidden="true"></span>
+                    {{ item.title || '(sans nom)' }}
+                    <span v-if="item.size" style="color:#999;"> — {{ formatSize(item.size) }}</span>
+                  </span>
+                </li>
+                <li v-if="!driveItems.length && !driveLoading" class="fr-text--sm" style="color:#666;">
+                  (Dossier vide)
+                </li>
+              </ul>
+
+              <!-- Index current folder button -->
+              <div v-if="drivePath.length" class="fr-mt-3w">
+                <p class="fr-text--sm fr-mb-1w">
+                  <strong>Dossier courant :</strong> {{ drivePath[drivePath.length - 1].title }}
+                  ({{ driveItems.filter(i => i.type === 'FILE').length }} fichier(s) visible(s))
+                </p>
+                <button class="fr-btn" @click="indexDriveFolder"
+                        :disabled="driveIndexing">
+                  {{ driveIndexing ? 'Import en cours…' : 'Indexer ce dossier →' }}
+                </button>
+              </div>
+              <p v-else class="fr-text--sm fr-mt-2w" style="color:#666;">
+                Ouvrez un dossier pour pouvoir l'indexer.
+              </p>
+
+              <div v-if="driveError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
+                <p>{{ driveError }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Source selector (upload file / URL) — hidden when Drive picker is active -->
+      <div v-if="source !== 'drive'" class="fr-card fr-mb-4w">
         <div class="fr-card__body">
           <div class="fr-card__content">
             <div class="fr-segmented fr-segmented--sm fr-mt-2w fr-mb-2w">
@@ -205,6 +271,64 @@ const job = ref<any>(null)
 const remoteUrl = ref('')
 const remoteCheck = ref<{ status: string; contentType?: string; size?: number; message?: string; githubConverted?: boolean } | null>(null)
 const uploadError = ref('')
+
+// --- Drive picker state ---
+interface DriveItem { id: string; title: string; type: 'FOLDER' | 'FILE'; size?: number; updated_at?: string }
+const driveReady = ref(false)
+const driveLoading = ref(false)
+const driveIndexing = ref(false)
+const driveError = ref('')
+const driveItems = ref<DriveItem[]>([])
+const drivePath = ref<DriveItem[]>([])      // breadcrumb stack (folders traversed)
+
+async function loadDriveFolder(parentId: string | null) {
+  driveLoading.value = true
+  driveError.value = ''
+  try {
+    const params: Record<string, string> = {}
+    if (parentId) params.parent_id = parentId
+    const res = await get('/api/sources/drive/folders', params)
+    driveItems.value = res.items || []
+    driveReady.value = true
+  } catch (e: any) {
+    driveError.value = e?.message || 'Erreur de chargement Drive'
+    driveReady.value = false
+  } finally {
+    driveLoading.value = false
+  }
+}
+
+async function enterFolder(item: DriveItem) {
+  drivePath.value = [...drivePath.value, item]
+  await loadDriveFolder(item.id)
+}
+
+async function goBack(index: number) {
+  // index === -1 → back to root
+  drivePath.value = index >= 0 ? drivePath.value.slice(0, index + 1) : []
+  const parent = drivePath.value[drivePath.value.length - 1]
+  await loadDriveFolder(parent?.id || null)
+}
+
+async function indexDriveFolder() {
+  if (!drivePath.value.length) return
+  const folder = drivePath.value[drivePath.value.length - 1]
+  driveIndexing.value = true
+  driveError.value = ''
+  try {
+    await post('/api/sources/drive/add', {
+      collection,
+      folder_id: folder.id,
+      folder_title: folder.title,
+    })
+    // Redirect to step 4 — the import runs async server-side; step-4 can poll /api/ingest/jobs
+    router.push({ path: '/admin/create/step-4', query: { collection, source: 'drive' } })
+  } catch (e: any) {
+    driveError.value = e?.message || 'Erreur lors du lancement de l\'import Drive'
+  } finally {
+    driveIndexing.value = false
+  }
+}
 const previewContent = ref<string | null>(null)
 const previewLoading = ref(false)
 const previewTruncated = ref(false)
@@ -401,6 +525,12 @@ async function checkRemoteUrl() {
 function next() {
   router.push(`/admin/create/step-4?collection=${collection}`)
 }
+
+onMounted(() => {
+  if (source === 'drive') {
+    loadDriveFolder(null)
+  }
+})
 </script>
 
 <style scoped>
