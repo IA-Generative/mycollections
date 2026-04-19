@@ -16,3 +16,8 @@ data:
   GRAPHRAG_VIEWER_URL: "http://bridge.miraiku.svc.cluster.local:8081/graph"
   # Auth on backend API (OIDC introspection).
   AUTH_ENABLED: "true"
+  # Suite Numerique Drive (file source). Auth via Keycloak client_credentials
+  # on the dedicated confidential client 'mycollections-drive'; the secret
+  # is injected separately from myrag-secrets.
+  DRIVE_URL: "https://mesfichiers.fake-domain.name"
+  DRIVE_CLIENT_ID: "mycollections-drive"

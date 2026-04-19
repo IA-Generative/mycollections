@@ -68,6 +68,18 @@ spec:
                   name: myrag-config
                   key: GRAPHRAG_VIEWER_URL
                   optional: true
+            - name: DRIVE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: DRIVE_URL
+                  optional: true
+            - name: DRIVE_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: DRIVE_CLIENT_ID
+                  optional: true
             # From Secret
             - name: OPENRAG_ADMIN_TOKEN
               valueFrom:
@@ -105,6 +117,12 @@ spec:
                 secretKeyRef:
                   name: myrag-secrets
                   key: LEGIFRANCE_CLIENT_SECRET
+                  optional: true
+            - name: DRIVE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: myrag-secrets
+                  key: DRIVE_CLIENT_SECRET
                   optional: true
             - name: DATA_DIR
               value: "/app/data"

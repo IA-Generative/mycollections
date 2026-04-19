@@ -11,9 +11,51 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
+        - mycollections.fake-domain.name
         - mycorpus.fake-domain.name
       secretName: mycorpus-tls
   rules:
+    # Primary host: mycollections.fake-domain.name (aligned with the app name).
+    - host: mycollections.fake-domain.name
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /graph
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /articles
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-frontend
+                port:
+                  number: 3000
+
+    # Legacy alias (initial deployment URL, kept until all callers migrate).
     - host: mycorpus.fake-domain.name
       http:
         paths:
