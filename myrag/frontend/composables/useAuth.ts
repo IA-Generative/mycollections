@@ -28,7 +28,12 @@ export function useAuth() {
       // Strip non-standard ports from origin (e.g. :3000 injected by reverse proxy)
       const rawOrigin = window.location.origin
       const origin = rawOrigin.replace(/:(80|443|3000|8201)$/, '')
-      const redirectUri = `${origin}/auth/callback/`
+      // IMPORTANT: keep this in sync with the path test below. We send
+      // /auth/callback (no trailing slash) so Keycloak returns the user to
+      // the exact same path — trailing-slash mismatches between the declared
+      // redirect_uri and window.location.pathname caused a fast redirect
+      // loop in prod (/auth/callback/ vs /auth/callback).
+      const redirectUri = `${origin}/auth/callback`
 
       const mgr = new UserManager({
         authority: `${keycloakUrl}/realms/${keycloakRealm}`,
@@ -41,8 +46,10 @@ export function useAuth() {
         automaticSilentRenew: true,
       })
 
-      // Case 1: returning from Keycloak callback
-      if (window.location.pathname === '/auth/callback') {
+      // Case 1: returning from Keycloak callback (accept with or without
+      // trailing slash — some proxies/servers normalize one way or the other).
+      const normalizedPath = window.location.pathname.replace(/\/+$/, '')
+      if (normalizedPath === '/auth/callback') {
         try {
           const signed = await mgr.signinRedirectCallback()
           user.value = {
@@ -53,12 +60,15 @@ export function useAuth() {
           loading.value = false
           return
         } catch (cbError: any) {
+          // Do NOT auto-retry signinRedirect here — if the callback itself is
+          // broken (stale state, clock skew, missing redirect_uri), an auto
+          // retry creates an infinite loop. Surface the error to the user.
           console.error('OIDC callback error:', cbError)
-          authError.value = `Callback error: ${cbError.message}`
-          // Clear stale state and retry login
+          authError.value = `Callback error: ${cbError.message || cbError}`
           await mgr.removeUser()
           window.sessionStorage.clear()
-          await mgr.signinRedirect()
+          window.history.replaceState({}, '', '/')
+          loading.value = false
           return
         }
       }
