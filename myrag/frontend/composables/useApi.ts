@@ -1,9 +1,20 @@
 /**
  * MyRAG API composable — centralized API calls.
+ *
+ * Injects the user's current OIDC access_token as "Authorization: Bearer"
+ * so that routes doing impersonation (e.g. /api/sources/drive/*) can relay
+ * it to downstream services. The token is looked up lazily from useAuth
+ * at call time so it stays in sync with silent renew.
  */
 export function useApi() {
   const config = useRuntimeConfig()
   const baseUrl = config.public.myragApiUrl
+
+  function authHeaders(): Record<string, string> {
+    const { getAccessToken } = useAuth()
+    const token = getAccessToken()
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
 
   async function get<T = any>(path: string, params?: Record<string, string>): Promise<T> {
     // baseUrl can be "" in prod (same-origin) — `new URL("/foo")` alone
@@ -14,7 +25,7 @@ export function useApi() {
     if (params) {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
     }
-    const resp = await fetch(url.toString())
+    const resp = await fetch(url.toString(), { headers: authHeaders() })
     if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
     return resp.json()
   }
@@ -22,7 +33,7 @@ export function useApi() {
   async function post<T = any>(path: string, body?: any): Promise<T> {
     const resp = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: body ? JSON.stringify(body) : undefined,
     })
     if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
@@ -32,7 +43,7 @@ export function useApi() {
   async function patch<T = any>(path: string, body?: any): Promise<T> {
     const resp = await fetch(`${baseUrl}${path}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: body ? JSON.stringify(body) : undefined,
     })
     if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
@@ -40,7 +51,7 @@ export function useApi() {
   }
 
   async function del<T = any>(path: string): Promise<T> {
-    const resp = await fetch(`${baseUrl}${path}`, { method: 'DELETE' })
+    const resp = await fetch(`${baseUrl}${path}`, { method: 'DELETE', headers: authHeaders() })
     if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
     return resp.json()
   }
@@ -51,7 +62,11 @@ export function useApi() {
     if (fields) {
       Object.entries(fields).forEach(([k, v]) => form.append(k, v))
     }
-    const resp = await fetch(`${baseUrl}${path}`, { method: 'POST', body: form })
+    const resp = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: authHeaders(),          // Content-Type is set automatically for FormData
+      body: form,
+    })
     if (!resp.ok) throw new Error(`Upload error ${resp.status}: ${await resp.text()}`)
     return resp.json()
   }

@@ -5,11 +5,26 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import settings
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
+
+# Safety caps for the synchronous fetch in /drive/add — protect against both
+# ingress timeouts and OOM. If a user really needs more, they can fractionner.
+DRIVE_MAX_FILES = 500
+DRIVE_MAX_TOTAL_BYTES = 500 * 1024 * 1024   # 500 MB
+
+
+def _bearer(authorization: str | None) -> str:
+    """Extract the raw Bearer token from an Authorization header, or 401."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid Authorization header (expected 'Bearer <token>').",
+        )
+    return authorization.split(" ", 1)[1].strip()
 
 logger = logging.getLogger("myrag.sources")
 
@@ -177,8 +192,28 @@ class AddDriveSourceRequest(BaseModel):
     folder_title: str = ""
 
 
-async def _drive_client():
-    """Build a DriveConnector-friendly client with a fresh service token."""
+def _drive_client_for_user(user_token: str):
+    """Build a DriveClient that relays the user's access token.
+
+    Drive sees the call as made by the real user → the Resource Server
+    filter surfaces only the folders the user can see on Drive. No service
+    account involved in this path.
+    """
+    from app.services.connectors.drive import DriveClient
+
+    if not settings.drive_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Drive n'est pas configure (DRIVE_URL manquant).",
+        )
+    return DriveClient(settings.drive_url, user_token)
+
+
+async def _drive_service_client():
+    """Fallback: build a DriveClient with a service-account token.
+
+    Used only by paths where no user is in session (e.g. scheduled sync).
+    """
     from app.services.connectors.drive import DriveClient
     from app.services.keycloak_client import get_service_token
 
@@ -215,28 +250,30 @@ def _map_drive_item(raw: dict) -> dict:
 async def list_drive_folders(
     parent_id: str | None = Query(
         default=None,
-        description="Parent folder id. Omit to list root items the service account can see.",
+        description="Parent folder id. Omit to list the user's root items.",
     ),
+    authorization: str | None = Header(default=None),
 ):
     """List children of a Drive folder (for the wizard picker).
 
+    Uses the caller's OIDC token (impersonation) so Drive returns only the
+    folders that specific user can see — no leaking of other users' shares.
     Returns a mix of folders and files so the user can see what's inside
-    before picking a target folder to index. The frontend can filter on
-    `type == "FOLDER"` for pure navigation.
+    before picking a target folder to index.
     """
-    client = await _drive_client()
+    client = _drive_client_for_user(_bearer(authorization))
     try:
         if parent_id:
             data = await client.list_children(parent_id)
         else:
-            # No parent_id = service-account root view via /items/ (paginated)
             resp = await client._client.get("/items/")
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as e:
+        code = e.response.status_code
         raise HTTPException(
-            status_code=502,
-            detail=f"Drive API {e.response.status_code} sur /items/{parent_id or ''}",
+            status_code=401 if code == 401 else 502,
+            detail=f"Drive API {code} sur /items/{parent_id or ''}",
         )
     finally:
         await client.close()
@@ -267,74 +304,100 @@ async def drive_status(collection: str):
     }
 
 
-async def _ingest_drive_folder(collection: str, folder_id: str) -> list[str]:
-    """Pull every file of a Drive folder (recursive) and hand each one to the
-    existing ingest pipeline. Returns the list of job_ids created.
+async def _ingest_downloaded_files(
+    collection: str, files: list[tuple[bytes, str, str]]
+) -> list[str]:
+    """Ingest already-downloaded bytes into the standard pipeline, one job
+    per file. Runs in the background — at this point the user token is no
+    longer needed because the bytes are in memory.
+
+    ``files`` is a list of ``(content, filename, source_url)`` tuples.
     """
     from app.routers.ingest import _ingest_content
-    from app.services.connectors.drive import DriveConnector
-    from app.services.keycloak_client import get_service_token
 
-    token = await get_service_token(settings.drive_client_id, settings.drive_client_secret)
-    connector = DriveConnector(settings.drive_url, token, folder_id)
-    try:
-        docs = await connector.list_documents()
-        job_ids: list[str] = []
-        for doc in docs:
-            try:
-                content, filename = await connector.fetch_document(doc.id)
-            except Exception as e:
-                logger.warning("drive fetch failed for %s: %s", doc.id, e)
-                continue
-            try:
-                result = await _ingest_content(
-                    collection=collection,
-                    filename=filename,
-                    content=content,
-                    strategy="auto",
-                    sensitivity="public",
-                    source_path=doc.url,
-                )
-                if "job_id" in result:
-                    job_ids.append(result["job_id"])
-            except Exception as e:
-                logger.warning("drive ingest failed for %s: %s", filename, e)
-        return job_ids
-    finally:
-        await connector.close()
+    job_ids: list[str] = []
+    for content, filename, src_url in files:
+        try:
+            result = await _ingest_content(
+                collection=collection, filename=filename, content=content,
+                strategy="auto", sensitivity="public", source_path=src_url,
+            )
+            if "job_id" in result:
+                job_ids.append(result["job_id"])
+        except Exception as e:
+            logger.warning("drive ingest failed for %s: %s", filename, e)
+    return job_ids
 
 
 @router.post("/drive/add")
-async def add_drive_source(req: AddDriveSourceRequest):
+async def add_drive_source(
+    req: AddDriveSourceRequest,
+    authorization: str | None = Header(default=None),
+):
     """Register a Drive folder as the source of a collection and kick off the
-    initial import. Returns immediately; each file is indexed as a separate
-    async job trackable via /api/ingest/jobs/{job_id}.
+    initial import. Downloads every file synchronously in this call using
+    the caller's user token (Drive ACL is honored), then hands the bytes to
+    the ingest pipeline in the background. The user's access token only has
+    to live through the download phase.
+
+    Refuses folders exceeding DRIVE_MAX_FILES or DRIVE_MAX_TOTAL_BYTES (413).
     """
     from app.services.collection_store import get_collection, update_collection
+    from app.services.connectors.drive import DriveConnector
 
-    if not settings.drive_url or not settings.drive_client_secret:
-        raise HTTPException(
-            status_code=503,
-            detail="Drive n'est pas configure (DRIVE_URL / DRIVE_CLIENT_SECRET manquants).",
-        )
+    user_token = _bearer(authorization)
 
     collection = await get_collection(req.collection)
     if not collection:
         raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
 
-    # Resolve the folder (will 404 if invalid, auth fail, etc.)
-    client = await _drive_client()
+    # Resolve the folder with the user's token (404 if user can't see it).
+    probe = _drive_client_for_user(user_token)
     try:
-        folder = await client.get_item(req.folder_id)
+        folder = await probe.get_item(req.folder_id)
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
+        if code in (401, 403):
+            raise HTTPException(status_code=code, detail="Drive refuse l'acces a ce dossier pour votre compte.")
         if code == 404:
             raise HTTPException(status_code=404, detail=f"Drive folder '{req.folder_id}' not found")
         raise HTTPException(status_code=502, detail=f"Drive API error {code}")
     finally:
-        await client.close()
+        await probe.close()
 
     folder_title = req.folder_title or folder.get("title") or folder.get("filename") or req.folder_id
+
+    # Sync download — while the user's access token is still valid.
+    connector = DriveConnector(settings.drive_url, user_token, req.folder_id)
+    downloaded: list[tuple[bytes, str, str]] = []
+    total_bytes = 0
+    try:
+        docs = await connector.list_documents()
+        if len(docs) > DRIVE_MAX_FILES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Dossier trop volumineux: {len(docs)} fichiers (max {DRIVE_MAX_FILES}). Fractionnez le dossier.",
+            )
+        for doc in docs:
+            try:
+                content, filename = await connector.fetch_document(doc.id)
+            except httpx.HTTPStatusError as e:
+                logger.warning("drive fetch %s: HTTP %s", doc.id, e.response.status_code)
+                continue
+            except Exception as e:
+                logger.warning("drive fetch %s: %s", doc.id, e)
+                continue
+            total_bytes += len(content)
+            if total_bytes > DRIVE_MAX_TOTAL_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Dossier trop volumineux: >{DRIVE_MAX_TOTAL_BYTES // (1024*1024)} Mo cumulés. Fractionnez.",
+                )
+            downloaded.append((content, filename, doc.url))
+    finally:
+        await connector.close()
+
+    # Persist source config.
     source_config = {
         "folder_id": req.folder_id,
         "folder_title": folder_title,
@@ -347,32 +410,36 @@ async def add_drive_source(req: AddDriveSourceRequest):
         "source_config_json": json.dumps(source_config),
     })
 
-    # Fire-and-forget initial import — jobs are tracked in the DB.
-    task = asyncio.create_task(_ingest_drive_folder(req.collection, req.folder_id))
-    # Keep a reference so the task isn't GC'd prematurely.
-    asyncio.get_running_loop()._drive_import_tasks = getattr(
-        asyncio.get_running_loop(), "_drive_import_tasks", []
-    ) + [task]
+    # Fire-and-forget async ingest from bytes already in memory — no Drive
+    # calls from here on, so the user's token can expire without impact.
+    task = asyncio.create_task(_ingest_downloaded_files(req.collection, downloaded))
+    loop = asyncio.get_running_loop()
+    loop._drive_import_tasks = getattr(loop, "_drive_import_tasks", []) + [task]
 
     return {
         "status": "registered",
         "collection": req.collection,
         "folder_id": req.folder_id,
         "folder_title": folder_title,
+        "files_count": len(downloaded),
+        "total_bytes": total_bytes,
         "import_started": True,
     }
 
 
 @router.post("/drive/sync/{collection}")
-async def sync_drive_source(collection: str):
-    """Delta-sync: re-ingest files modified since the last sync. Blocks until
-    all new/modified files have been queued. V2 will replace this with a
-    cron."""
+async def sync_drive_source(
+    collection: str,
+    authorization: str | None = Header(default=None),
+):
+    """Delta-sync: re-ingest files modified since the last sync. Uses the
+    caller's user token for impersonation (same ACL as /drive/add)."""
     from app.services.collection_store import get_collection, update_collection
     from app.services.connectors.drive import DriveConnector
-    from app.services.keycloak_client import get_service_token
     from app.routers.ingest import _ingest_content
     from app.models.db import utcnow
+
+    user_token = _bearer(authorization)
 
     config = await get_collection(collection)
     if not config:
@@ -384,8 +451,7 @@ async def sync_drive_source(collection: str):
     folder_id = cfg.get("folder_id")
     since = cfg.get("last_sync_at") or ""
 
-    token = await get_service_token(settings.drive_client_id, settings.drive_client_secret)
-    connector = DriveConnector(settings.drive_url, token, folder_id)
+    connector = DriveConnector(settings.drive_url, user_token, folder_id)
     try:
         updated = await connector.check_updates(since)
         job_ids: list[str] = []
