@@ -7,6 +7,42 @@ import httpx
 from app.config import settings
 
 
+# Module-level cache of service-account tokens, keyed by client_id.
+# Used by out-of-class callers (e.g. Drive connector) that need a short-lived
+# Bearer token to call an external OIDC-protected API on behalf of the service.
+_SERVICE_TOKENS: dict[str, tuple[str, float]] = {}
+
+
+async def get_service_token(
+    client_id: str, client_secret: str, realm: str | None = None
+) -> str:
+    """Fetch an access_token via client_credentials for a confidential client.
+
+    Cached per client_id until 30s before expiry. Raises httpx.HTTPStatusError
+    if Keycloak rejects the credentials.
+    """
+    realm = realm or settings.keycloak_realm
+    cached = _SERVICE_TOKENS.get(client_id)
+    if cached and time.time() < cached[1]:
+        return cached[0]
+
+    url = f"{settings.keycloak_url.rstrip('/')}/realms/{realm}/protocol/openid-connect/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(url, data=data)
+        resp.raise_for_status()
+        payload = resp.json()
+
+    token = payload["access_token"]
+    expires_at = time.time() + payload.get("expires_in", 300) - 30
+    _SERVICE_TOKENS[client_id] = (token, expires_at)
+    return token
+
+
 class KeycloakClient:
     def __init__(
         self,

@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     legifrance_client_id: str = Field(default="")
     legifrance_client_secret: str = Field(default="")
 
+    # Suite Numerique Drive (file source)
+    drive_url: str = Field(default="")
+    drive_client_id: str = Field(default="mycollections-drive")
+    drive_client_secret: str = Field(default="")
+
     # Graph
     graphrag_viewer_url: str = Field(default="")
     myrag_group_root: str = Field(default="/myrag")
