@@ -25,8 +25,10 @@ export function useAuth() {
       const keycloakUrl = config.public.keycloakUrl || 'http://host.docker.internal:8082'
       const keycloakRealm = config.public.keycloakRealm || 'openwebui'
       const clientId = config.public.keycloakClientId || 'myrag-front'
-      const origin = window.location.origin
-      const redirectUri = `${origin}/auth/callback`
+      // Strip non-standard ports from origin (e.g. :3000 injected by reverse proxy)
+      const rawOrigin = window.location.origin
+      const origin = rawOrigin.replace(/:(80|443|3000|8201)$/, '')
+      const redirectUri = `${origin}/auth/callback/`
 
       const mgr = new UserManager({
         authority: `${keycloakUrl}/realms/${keycloakRealm}`,
