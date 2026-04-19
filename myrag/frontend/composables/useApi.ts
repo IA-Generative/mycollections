@@ -35,6 +35,12 @@ export function useApi() {
     return resp.json()
   }
 
+  async function del<T = any>(path: string): Promise<T> {
+    const resp = await fetch(`${baseUrl}${path}`, { method: 'DELETE' })
+    if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
+    return resp.json()
+  }
+
   async function uploadFile(path: string, file: File, fields?: Record<string, string>) {
     const form = new FormData()
     form.append('file', file)
@@ -46,5 +52,5 @@ export function useApi() {
     return resp.json()
   }
 
-  return { get, post, patch, uploadFile, baseUrl }
+  return { get, post, patch, del, uploadFile, baseUrl }
 }
