@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / Nuxt
+node_modules/
+.nuxt/
+.output/
+*.log
+
+# Data / local secrets
+/data/
+myrag/data/
+*.db
+*.db-journal
+.env
+.env.local
+myrag/k8s/secret.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

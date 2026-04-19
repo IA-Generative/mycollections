@@ -1,38 +1,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myrag
-  namespace: myrag
+  name: myrag-backend
+  namespace: miraiku
   labels:
-    app: myrag
+    app: myrag-backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: myrag
+      app: myrag-backend
   template:
     metadata:
       labels:
-        app: myrag
+        app: myrag-backend
     spec:
+      imagePullSecrets:
+        - name: owui-registry
       containers:
-        - name: myrag
-          image: rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag:latest
+        - name: backend
+          image: rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8200
           env:
             - name: APP_TITLE
-              value: "MyRAG (beta)"
+              value: "Mes collections (beta)"
+            # From ConfigMap
             - name: OPENRAG_URL
               valueFrom:
                 configMapKeyRef:
                   name: myrag-config
                   key: OPENRAG_URL
-            - name: OPENRAG_ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: myrag-secrets
-                  key: OPENRAG_ADMIN_TOKEN
             - name: KEYCLOAK_URL
               valueFrom:
                 configMapKeyRef:
@@ -44,12 +43,42 @@ spec:
                   name: myrag-config
                   key: KEYCLOAK_REALM
             - name: KEYCLOAK_CLIENT_ID
-              value: "myrag-admin"
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: KEYCLOAK_CLIENT_ID
+            - name: MYRAG_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYRAG_PUBLIC_URL
+            - name: AUTH_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: AUTH_ENABLED
+            - name: GRAPHRAG_VIEWER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: GRAPHRAG_VIEWER_URL
+                  optional: true
+            # From Secret
+            - name: OPENRAG_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: myrag-secrets
+                  key: OPENRAG_ADMIN_TOKEN
             - name: KEYCLOAK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: myrag-secrets
                   key: KEYCLOAK_CLIENT_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: myrag-secrets
+                  key: DATABASE_URL
             - name: LEGIFRANCE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -62,17 +91,6 @@ spec:
                   name: myrag-secrets
                   key: LEGIFRANCE_CLIENT_SECRET
                   optional: true
-            - name: MYRAG_PUBLIC_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: myrag-config
-                  key: MYRAG_PUBLIC_URL
-            - name: GRAPHRAG_VIEWER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: myrag-config
-                  key: GRAPHRAG_VIEWER_URL
-                  optional: true
             - name: DATA_DIR
               value: "/app/data"
           volumeMounts:
@@ -82,7 +100,7 @@ spec:
             httpGet:
               path: /health
               port: 8200
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:
@@ -100,4 +118,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: myrag-data
+            claimName: myrag-sources

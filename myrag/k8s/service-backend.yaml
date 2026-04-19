@@ -1,12 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: myrag
-  namespace: myrag
+  name: myrag-backend
+  namespace: miraiku
 spec:
   selector:
-    app: myrag
+    app: myrag-backend
   ports:
-    - port: 8200
+    - name: http
+      port: 8200
       targetPort: 8200
       protocol: TCP

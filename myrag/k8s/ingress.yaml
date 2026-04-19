@@ -1,24 +1,54 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: myrag
-  namespace: myrag
+  name: mycorpus
+  namespace: miraiku
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
+  ingressClassName: nginx
   tls:
     - hosts:
-        - myrag.mirai.gouv.fr
-      secretName: myrag-tls
+        - mycorpus.fake-domain.name
+      secretName: mycorpus-tls
   rules:
-    - host: myrag.mirai.gouv.fr
+    - host: mycorpus.fake-domain.name
       http:
         paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /graph
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
+          - path: /articles
+            pathType: Prefix
+            backend:
+              service:
+                name: myrag-backend
+                port:
+                  number: 8200
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: myrag
+                name: myrag-frontend
                 port:
-                  number: 8200
+                  number: 3000

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrag-frontend
+  namespace: miraiku
+  labels:
+    app: myrag-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myrag-frontend
+  template:
+    metadata:
+      labels:
+        app: myrag-frontend
+    spec:
+      imagePullSecrets:
+        - name: owui-registry
+      containers:
+        - name: frontend
+          image: rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"

@@ -2,10 +2,17 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: myrag-config
-  namespace: myrag
+  namespace: miraiku
 data:
-  OPENRAG_URL: "http://openrag.openrag.svc:8080"
-  KEYCLOAK_URL: "http://keycloak.owui.svc:8080"
+  # OpenRAG backend lives on a Scaleway VM (HTTPS public, auth via Bearer token).
+  OPENRAG_URL: "https://api.openrag.fake-domain.name"
+  # Shared Keycloak (same cluster, same namespace).
+  KEYCLOAK_URL: "https://mysso.fake-domain.name"
   KEYCLOAK_REALM: "openwebui"
-  MYRAG_PUBLIC_URL: "https://myrag.mirai.gouv.fr"
-  GRAPHRAG_VIEWER_URL: "http://bridge.grafrag.svc:8081/graph"
+  KEYCLOAK_CLIENT_ID: "openrag"
+  # Public URL of this MyRAG instance (used by server-generated links).
+  MYRAG_PUBLIC_URL: "https://mycorpus.fake-domain.name"
+  # Graph viewer — kept in-cluster for now.
+  GRAPHRAG_VIEWER_URL: "http://bridge.miraiku.svc.cluster.local:8081/graph"
+  # Auth on backend API (OIDC introspection).
+  AUTH_ENABLED: "true"
