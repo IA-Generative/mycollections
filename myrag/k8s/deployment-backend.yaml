@@ -74,11 +74,21 @@ spec:
                 secretKeyRef:
                   name: myrag-secrets
                   key: KEYCLOAK_CLIENT_SECRET
-            - name: DATABASE_URL
+            # Compose DATABASE_URL from the shared owui-socle-secrets so we don't
+            # duplicate the password. The $(VAR) substitution requires the source
+            # vars to be declared first in this env list.
+            - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: myrag-secrets
-                  key: DATABASE_URL
+                  name: owui-socle-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: owui-socle-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/myrag"
             - name: LEGIFRANCE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
