@@ -97,17 +97,54 @@ async def unpublish_collection(name: str):
 
 @router.post("/{name}/archive")
 async def archive_collection(name: str):
+    """Archive a collection: hide it from the default catalog and disable any
+    active publication. Reversible via /unarchive. Data is retained.
+    """
+    from app.services.collection_store import archive_collection as store_archive
+
+    result = await store_archive(name)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+
     async with async_session() as session:
         pub = await session.get(Publication, name)
-        if not pub:
-            raise HTTPException(status_code=404, detail=f"No publication for '{name}'")
-        pub.state = "archived"
-
+        pub_state = None
+        if pub:
+            pub.state = "archived"
+            pub_state = pub.state
         session.add(PublicationHistory(
             collection_name=name, action="archived", acted_by="admin",
         ))
         await session.commit()
-        return {"state": pub.state, "collection": name}
+
+    return {
+        "collection": name,
+        "archived_at": result["archived_at"],
+        "state": pub_state or "archived",
+    }
+
+
+@router.post("/{name}/unarchive")
+async def unarchive_collection_endpoint(name: str):
+    """Restore an archived collection. Publication state is NOT auto-restored:
+    the admin must re-publish explicitly if needed.
+    """
+    from app.services.collection_store import unarchive_collection as store_unarchive
+
+    result = await store_unarchive(name)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+
+    async with async_session() as session:
+        pub = await session.get(Publication, name)
+        if pub and pub.state == "archived":
+            pub.state = "disabled"
+        session.add(PublicationHistory(
+            collection_name=name, action="unarchived", acted_by="admin",
+        ))
+        await session.commit()
+
+    return {"collection": name, "archived_at": None}
 
 
 @router.get("/{name}/publication/history")

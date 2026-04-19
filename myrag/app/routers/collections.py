@@ -100,13 +100,17 @@ async def delete_prompt_template_endpoint(key: str):
 # ============================================================
 
 @router.get("")
-async def list_collections_endpoint():
+async def list_collections_endpoint(include_archived: bool = False):
     """List all MyRAG collections.
 
-    Merges DB collections with OpenRAG partitions.
+    Merges DB collections with OpenRAG partitions. Archived collections are
+    hidden by default; pass ?include_archived=true to include them.
     """
-    collections = await db_list_collections()
-    known_names = {c["name"] for c in collections}
+    collections = await db_list_collections(include_archived=include_archived)
+    # Fetch the full set of known names (incl. archived) so we do not
+    # re-surface an archived collection via the OpenRAG merge below.
+    all_known = await db_list_collections(include_archived=True)
+    known_names = {c["name"] for c in all_known}
 
     # Also fetch partitions from OpenRAG
     try:
