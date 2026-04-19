@@ -133,6 +133,47 @@ class OpenRAGClient:
             params={"text": query, "partitions": partition, "top_k": top_k},
         )
 
+    async def chat(
+        self,
+        model: str,
+        messages: list[dict],
+        temperature: float = 0.1,
+        **extra,
+    ) -> dict:
+        """OpenAI-compatible chat completion via OpenRAG (auto-RAGs from the
+        partition encoded in the model name, e.g. ``openrag-<partition>``).
+        """
+        body = {"model": model, "messages": messages, "temperature": temperature, **extra}
+        return await self._post("/v1/chat/completions", json=body)
+
+    async def list_files(self, partition: str) -> list[dict]:
+        """List files indexed in an OpenRAG partition. Returns the files array
+        from ``GET /partition/{partition}`` (empty list if the partition is
+        missing or has no files)."""
+        try:
+            data = await self._get(f"/partition/{partition}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (404, 400):
+                return []
+            raise
+        return data.get("files", []) if isinstance(data, dict) else []
+
+    async def get_file_content(self, partition: str, file_id: str) -> str:
+        """Best-effort plain-text retrieval of an indexed file's content.
+        Used by generate-eval to build a sample. Returns an empty string if
+        the endpoint is unavailable."""
+        try:
+            data = await self._get(f"/search/partition/{partition}/file/{file_id}")
+        except httpx.HTTPStatusError:
+            return ""
+        if isinstance(data, dict):
+            chunks = data.get("chunks") or data.get("documents") or []
+            return "\n\n".join(
+                c.get("content", "") if isinstance(c, dict) else str(c)
+                for c in chunks
+            )
+        return ""
+
     async def list_models(self) -> dict:
         return await self._get("/v1/models")
 
