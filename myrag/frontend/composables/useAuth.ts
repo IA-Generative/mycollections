@@ -56,8 +56,11 @@ export function useAuth() {
             access_token: signed.access_token,
             profile: signed.profile,
           }
-          window.history.replaceState({}, '', '/')
           loading.value = false
+          // Full navigation to "/" — window.history.replaceState alone would
+          // change the URL bar but Nuxt router would keep rendering the
+          // callback page forever (stuck on "Connexion en cours...").
+          window.location.replace('/')
           return
         } catch (cbError: any) {
           // Do NOT auto-retry signinRedirect here — if the callback itself is
@@ -67,7 +70,6 @@ export function useAuth() {
           authError.value = `Callback error: ${cbError.message || cbError}`
           await mgr.removeUser()
           window.sessionStorage.clear()
-          window.history.replaceState({}, '', '/')
           loading.value = false
           return
         }
