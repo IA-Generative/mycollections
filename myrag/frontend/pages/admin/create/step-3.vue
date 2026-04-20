@@ -24,9 +24,14 @@
           <div class="fr-card__content">
             <h3 class="fr-h5">☁️ Choisir un dossier Drive à indexer</h3>
 
-            <p v-if="!driveReady" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w">
-              {{ driveError || 'Chargement du service Drive…' }}
-            </p>
+            <div v-if="!driveReady" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w">
+              <p>{{ driveError || 'Chargement du service Drive…' }}</p>
+              <p v-if="driveError && driveUrl" class="fr-mt-1w">
+                <a :href="driveUrl" target="_blank" rel="noopener noreferrer">
+                  Ouvrir Drive dans un nouvel onglet ↗
+                </a>
+              </p>
+            </div>
 
             <div v-else>
               <!-- Breadcrumb -->
@@ -78,6 +83,11 @@
 
               <div v-if="driveError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
                 <p>{{ driveError }}</p>
+                <p v-if="driveUrl" class="fr-mt-1w">
+                  <a :href="driveUrl" target="_blank" rel="noopener noreferrer">
+                    Ouvrir Drive dans un nouvel onglet ↗
+                  </a>
+                </p>
               </div>
             </div>
           </div>
@@ -278,8 +288,22 @@ const driveReady = ref(false)
 const driveLoading = ref(false)
 const driveIndexing = ref(false)
 const driveError = ref('')
+const driveUrl = ref('')
 const driveItems = ref<DriveItem[]>([])
 const drivePath = ref<DriveItem[]>([])      // breadcrumb stack (folders traversed)
+
+function parseApiError(raw: string, fallback: string): string {
+  // useApi throws "API error <code>: <body>" — pull out the backend detail
+  // so we show a readable sentence instead of JSON noise.
+  const m = /^API error \d+: (.*)$/s.exec(raw || '')
+  if (!m) return raw || fallback
+  try {
+    const body = JSON.parse(m[1])
+    return body.detail || body.message || m[1]
+  } catch {
+    return m[1]
+  }
+}
 
 async function loadDriveFolder(parentId: string | null) {
   driveLoading.value = true
@@ -291,7 +315,7 @@ async function loadDriveFolder(parentId: string | null) {
     driveItems.value = res.items || []
     driveReady.value = true
   } catch (e: any) {
-    driveError.value = e?.message || 'Erreur de chargement Drive'
+    driveError.value = parseApiError(e?.message, 'Erreur de chargement Drive')
     driveReady.value = false
   } finally {
     driveLoading.value = false
@@ -324,7 +348,7 @@ async function indexDriveFolder() {
     // Redirect to step 4 — the import runs async server-side; step-4 can poll /api/ingest/jobs
     router.push({ path: '/admin/create/step-4', query: { collection, source: 'drive' } })
   } catch (e: any) {
-    driveError.value = e?.message || 'Erreur lors du lancement de l\'import Drive'
+    driveError.value = parseApiError(e?.message, 'Erreur lors du lancement de l\'import Drive')
   } finally {
     driveIndexing.value = false
   }
@@ -526,8 +550,12 @@ function next() {
   router.push(`/admin/create/step-4?collection=${collection}`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (source === 'drive') {
+    try {
+      const cfg = await get('/api/config')
+      driveUrl.value = cfg.drive_url || ''
+    } catch { /* non-blocking — link just won't appear */ }
     loadDriveFolder(null)
   }
 })

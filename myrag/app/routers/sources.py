@@ -192,6 +192,19 @@ class AddDriveSourceRequest(BaseModel):
     folder_title: str = ""
 
 
+def _drive_403_detail() -> str:
+    """Message for a Drive 403. Two realistic causes, indistinguishable from
+    the response: the token is missing the `mycollections-drive` audience
+    (Keycloak mapper not applied yet — reconnecting mints a fresh one), or
+    the user has never logged into Drive so its local DB has no entry."""
+    return (
+        "Drive a refuse votre acces (403). Essayez dans l'ordre : "
+        "1) deconnectez-vous puis reconnectez-vous ici pour rafraichir votre "
+        f"jeton ; 2) si le probleme persiste, connectez-vous une fois sur "
+        f"{settings.drive_url} (instantane) puis revenez."
+    )
+
+
 def _drive_client_for_user(user_token: str):
     """Build a DriveClient that relays the user's access token.
 
@@ -272,16 +285,7 @@ async def list_drive_folders(
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
         if code == 403:
-            # Drive requires the user to exist in its local DB; it is
-            # auto-provisioned on the first interactive login on Drive.
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "Votre compte n'est pas encore connu de Drive. "
-                    f"Connectez-vous une fois sur {settings.drive_url} "
-                    "(c'est instantané) puis revenez ici."
-                ),
-            )
+            raise HTTPException(status_code=403, detail=_drive_403_detail())
         raise HTTPException(
             status_code=401 if code == 401 else 502,
             detail=f"Drive API {code} sur /items/{parent_id or ''}",
@@ -369,14 +373,7 @@ async def add_drive_source(
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
         if code == 403:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "Votre compte n'est pas encore connu de Drive. "
-                    f"Connectez-vous une fois sur {settings.drive_url} "
-                    "puis revenez ici."
-                ),
-            )
+            raise HTTPException(status_code=403, detail=_drive_403_detail())
         if code == 401:
             raise HTTPException(status_code=401, detail="Drive refuse votre token (expiré ou invalide).")
         if code == 404:

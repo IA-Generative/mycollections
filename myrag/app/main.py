@@ -73,6 +73,7 @@ async def get_config():
         "openrag_url": settings.openrag_url,
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
+        "drive_url": settings.drive_url,
     }
 
 
