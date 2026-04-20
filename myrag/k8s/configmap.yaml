@@ -21,3 +21,8 @@ data:
   # is injected separately from myrag-secrets.
   DRIVE_URL: "https://mesfichiers.fake-domain.name"
   DRIVE_CLIENT_ID: "mycollections-drive"
+  # Open WebUI — same cluster, used by the publish flow to register models
+  # as aliases. Internal service DNS to avoid a round-trip through the
+  # public ingress. Auth is per-user: the admin's OWUI API key is sent
+  # with each publish request.
+  OWUI_URL: "http://openwebui.miraiku.svc.cluster.local"

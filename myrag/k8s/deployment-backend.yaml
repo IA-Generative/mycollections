@@ -124,6 +124,18 @@ spec:
                   name: myrag-secrets
                   key: DRIVE_CLIENT_SECRET
                   optional: true
+            - name: OWUI_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: OWUI_URL
+                  optional: true
+            - name: OWUI_ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: myrag-secrets
+                  key: OWUI_ADMIN_API_KEY
+                  optional: true
             - name: DATA_DIR
               value: "/app/data"
           volumeMounts:

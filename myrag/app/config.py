@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     drive_client_id: str = Field(default="mycollections-drive")
     drive_client_secret: str = Field(default="")
 
+    # Open WebUI (used by /publish to create model aliases)
+    owui_url: str = Field(default="http://openwebui.miraiku.svc.cluster.local")
+    owui_admin_api_key: str = Field(default="")
+
     # Graph
     graphrag_viewer_url: str = Field(default="")
     myrag_group_root: str = Field(default="/myrag")

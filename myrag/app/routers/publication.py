@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/collections", tags=["Publication"])
 class PublishRequest(BaseModel):
     alias_enabled: bool = True
     alias_name: str = ""
+    alias_description: str = ""
     tool_enabled: bool = False
     embed_enabled: bool = False
     visibility: str = "all"
@@ -76,7 +77,50 @@ async def publish_collection(name: str, req: PublishRequest):
 
         await session.commit()
         await session.refresh(pub)
-        return pub.to_dict()
+
+    # --- OWUI model registration ---------------------------------------
+    # The publish flow here is two-step: we always persist local state
+    # first (done above), then best-effort-sync to OWUI. A broken OWUI
+    # sync should not roll back the local state — the user can re-run the
+    # publish to retry, and the UI surfaces the error.
+    owui_result: dict | None = None
+    owui_error: str | None = None
+    if req.alias_enabled and pub.state == "published":
+        try:
+            from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
+            client = OwuiClient()
+            # Access control: map visibility_groups (Keycloak group names)
+            # onto OWUI's read/write group_ids. V1 passes names through as-is;
+            # if OWUI uses sub-based group ids, the group list silently matches
+            # nothing (the model stays restricted, not public). Fine for V1,
+            # to revisit when we wire KC group id resolution.
+            ac = None
+            if req.visibility == "group" and req.visibility_groups:
+                ac = {
+                    "read":  {"group_ids": req.visibility_groups, "user_ids": []},
+                    "write": {"group_ids": req.visibility_groups, "user_ids": []},
+                }
+            owui_result = await client.upsert_model(
+                model_id=f"openrag-{name}",
+                name=pub.alias_name,
+                description=req.alias_description,
+                base_model_id=f"openrag-{name}",
+                access_control=ac,
+            )
+        except OwuiAdminUnavailable as e:
+            owui_error = str(e)
+        except PermissionError as e:
+            owui_error = str(e)
+        except Exception as e:
+            owui_error = f"Publication OWUI echouee : {e}"
+
+    result = pub.to_dict()
+    result["owui"] = {
+        "synced": owui_result is not None,
+        "error": owui_error,
+        "model_id": f"openrag-{name}" if owui_result else None,
+    }
+    return result
 
 
 @router.post("/{name}/unpublish")

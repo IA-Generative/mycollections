@@ -115,8 +115,12 @@
             </button>
           </div>
 
-          <div v-if="result" class="fr-alert fr-alert--success fr-mt-2w">
+          <div v-if="result" class="fr-alert fr-mt-2w"
+               :class="owuiError ? 'fr-alert--warning' : 'fr-alert--success'">
             <p>{{ result }}</p>
+            <p v-if="owuiError" class="fr-text--sm" style="margin-top:0.4rem;">
+              <strong>OWUI :</strong> {{ owuiError }}
+            </p>
           </div>
         </div>
 
@@ -146,6 +150,7 @@ const { get, post } = useApi()
 const pub = ref<any>(null)
 const publishing = ref(false)
 const result = ref('')
+const owuiError = ref('')
 
 const allMethods = ['search_collection', 'view_article', 'explore_graph', 'browse_collection']
 
@@ -177,15 +182,21 @@ async function publish() {
   publishing.value = true
   result.value = ''
   try {
+    owuiError.value = ''
     const data = await post(`/api/collections/${id}/publish`, form.value)
     pub.value = await get(`/api/collections/${id}/publication`)
-    // Backend returns flat flags on Publication; legacy code referenced
-    // data.modes.* which no longer exists. Fall back to the response
-    // itself so the message works whatever shape the API converges on.
     const m = data?.modes || data || {}
     const active = [m.alias_enabled && 'alias', m.tool_enabled && 'tool', m.embed_enabled && '#collection']
       .filter(Boolean).join(' + ')
-    result.value = active ? `Publie en mode ${active}` : 'Publie'
+    const base = active ? `Publie en mode ${active}` : 'Publie'
+    if (data?.owui?.synced) {
+      result.value = `${base} — modele '${data.owui.model_id}' synchronise avec OWUI.`
+    } else if (data?.owui?.error) {
+      result.value = base
+      owuiError.value = data.owui.error
+    } else {
+      result.value = base
+    }
   } catch (e: any) {
     result.value = `Erreur: ${e.message}`
   }
