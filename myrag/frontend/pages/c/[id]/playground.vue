@@ -14,9 +14,8 @@
     </p>
 
     <div class="fr-grid-row fr-grid-row--gutters">
-      <!-- Left: Chat — bounded to viewport via flex column so input stays
-           visible on any screen height. -->
-      <div class="fr-col-7 myrag-chat-column">
+      <!-- Left: Chat -->
+      <div class="fr-col-7">
         <!-- Suggestions (cliquables) -->
         <div v-if="suggestions.length && !messages.length" class="fr-card fr-mb-2w">
           <div class="fr-card__body">
@@ -285,34 +284,10 @@ onMounted(loadSuggestions)
   font-size: 0.95rem;
   line-height: 1.5;
 }
-/* Chat column: fixed overall height so the input card stays pinned at the
-   bottom no matter the conversation length. Computed from the viewport:
-   100vh minus the header/breadcrumb/H1/footer (~260px). */
-.myrag-chat-column {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 260px);
-  min-height: 420px;
-}
-/* Suggestions + input cards never shrink below their content. */
-.myrag-chat-column > :first-child,
-.myrag-chat-column > .fr-input-group,
-.myrag-chat-column > .fr-btns-group {
-  flex-shrink: 0;
-}
-/* Messages card takes the remaining room and its inner content scrolls. */
-.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) {
-  flex: 1 1 auto;
-  min-height: 0;             /* critical so flex children can actually shrink */
-  display: flex;
-  flex-direction: column;
-}
-.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) > .fr-card__body,
-.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) > .fr-card__body > .myrag-chat-scroll {
-  height: 100%;
-  min-height: 0;
-}
+/* Hard cap on the conversation area so the input bar always stays in view.
+   400px absolute — no dependency on viewport height. Scrolls internally. */
 .myrag-chat-scroll {
+  max-height: 400px;
   overflow-y: auto;
   padding-right: 0.5rem;
 }
