@@ -91,30 +91,90 @@ async def openrag_health():
     return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}
 
 
+def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status: int) -> str:
+    """Render a chunk payload as a minimal DSFR-flavored HTML page.
+
+    The user opens the proxy URL in a new tab. Raw JSON with literal \\n
+    escapes is unreadable; we extract page_content + metadata and wrap in
+    a monospace pre with whitespace preserved.
+
+    Falls back to showing the upstream status + raw body on non-2xx or
+    non-JSON responses so you still have a clue what went wrong.
+    """
+    import html as _h
+    title = f"Extrait · {chunk_id[:12]}…"
+    if status >= 400 or payload is None:
+        body = (
+            f"<h1 class='fr-h4'>Extrait indisponible</h1>"
+            f"<p class='fr-text--sm'>OpenRAG a renvoye HTTP {status}.</p>"
+            f"<pre class='myrag-extract__raw'>{_h.escape(raw.decode('utf-8', 'replace')[:2000])}</pre>"
+        )
+    else:
+        content = payload.get("page_content") or payload.get("content") or payload.get("text") or ""
+        meta_parts = []
+        for k in ("original_filename", "filename", "page", "file_id", "chunk_id"):
+            v = payload.get(k)
+            if v:
+                meta_parts.append(f"<strong>{_h.escape(str(k))}:</strong> {_h.escape(str(v))}")
+        meta = " &middot; ".join(meta_parts) if meta_parts else ""
+        body = (
+            f"<h1 class='fr-h4'>Extrait de source</h1>"
+            + (f"<p class='fr-text--sm' style='color:#666;'>{meta}</p>" if meta else "")
+            + f"<pre class='myrag-extract__body'>{_h.escape(content)}</pre>"
+        )
+    # Inline CSS keeps this self-contained; no DSFR asset required (which
+    # would need another roundtrip through the frontend host).
+    return f"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>{_h.escape(title)}</title>
+<style>
+  body {{ font-family: -apple-system, Segoe UI, system-ui, sans-serif; max-width: 900px;
+           margin: 2rem auto; padding: 0 1.2rem; color: #161616; line-height: 1.5; }}
+  .fr-h4 {{ font-size: 1.25rem; margin: 0 0 0.6rem; }}
+  pre {{ background: #f6f6f6; padding: 1rem 1.2rem; border-left: 3px solid #000091;
+         border-radius: 4px; white-space: pre-wrap; word-break: break-word;
+         font-size: 0.92rem; line-height: 1.55; }}
+  .myrag-extract__raw {{ border-left-color: #ce0500; }}
+  a.back {{ display: inline-block; margin-bottom: 1rem; color: #000091; text-decoration: none; }}
+  a.back:hover {{ text-decoration: underline; }}
+</style></head>
+<body><a class="back" href="javascript:history.back()">&larr; Retour</a>{body}</body></html>"""
+
+
 @app.get("/api/openrag/extract/{chunk_id}")
-async def openrag_extract_proxy(chunk_id: str):
-    """Proxy for OpenRAG's /extract/{chunk_id} and /file/{id} endpoints.
+async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
+    """Proxy for OpenRAG's /extract/{chunk_id} endpoint.
 
     Those endpoints require a Bearer admin token; a bare link opened in a
     new browser tab would send no Authorization header and get 401. This
-    relays the request server-side with the stored admin token so the
-    browser sees plain content.
+    relays the request server-side with the stored admin token.
 
-    Chunk URL and file URL are both under OpenRAG's /extract path family in
-    practice — /extract/<chunk_uuid> returns the chunk snippet, /extract/
-    /file/<file_id> or a direct /file/<id> exposes the source file. We
-    forward the raw path so both shapes work.
+    Default response is a minimal HTML page rendering page_content with
+    whitespace preserved — opening the raw JSON (with \\n escapes) in a
+    browser tab is unreadable. Pass ?raw=1 to get the upstream JSON as-is
+    (useful for debugging or programmatic access).
     """
     import httpx
+    import json as _json
     from fastapi import Response
+    from fastapi.responses import HTMLResponse
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/extract/{chunk_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         upstream = await client.get(url, headers=headers)
-    return Response(
-        content=upstream.content,
-        status_code=upstream.status_code,
-        media_type=upstream.headers.get("content-type", "text/plain"),
+    if raw:
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type", "text/plain"),
+        )
+    payload = None
+    try:
+        payload = _json.loads(upstream.content)
+    except Exception:
+        payload = None
+    return HTMLResponse(
+        content=_extract_render_html(payload, chunk_id, upstream.content, upstream.status_code),
+        status_code=upstream.status_code if upstream.status_code < 500 else 200,
     )
 
 
