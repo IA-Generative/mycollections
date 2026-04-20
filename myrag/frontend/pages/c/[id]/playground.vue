@@ -14,8 +14,9 @@
     </p>
 
     <div class="fr-grid-row fr-grid-row--gutters">
-      <!-- Left: Chat -->
-      <div class="fr-col-7">
+      <!-- Left: Chat — bounded to viewport via flex column so input stays
+           visible on any screen height. -->
+      <div class="fr-col-7 myrag-chat-column">
         <!-- Suggestions (cliquables) -->
         <div v-if="suggestions.length && !messages.length" class="fr-card fr-mb-2w">
           <div class="fr-card__body">
@@ -284,13 +285,36 @@ onMounted(loadSuggestions)
   font-size: 0.95rem;
   line-height: 1.5;
 }
+/* Chat column: fixed overall height so the input card stays pinned at the
+   bottom no matter the conversation length. Computed from the viewport:
+   100vh minus the header/breadcrumb/H1/footer (~260px). */
+.myrag-chat-column {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 260px);
+  min-height: 420px;
+}
+/* Suggestions + input cards never shrink below their content. */
+.myrag-chat-column > :first-child,
+.myrag-chat-column > .fr-input-group,
+.myrag-chat-column > .fr-btns-group {
+  flex-shrink: 0;
+}
+/* Messages card takes the remaining room and its inner content scrolls. */
+.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;             /* critical so flex children can actually shrink */
+  display: flex;
+  flex-direction: column;
+}
+.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) > .fr-card__body,
+.myrag-chat-column > .fr-card:has(.myrag-chat-scroll) > .fr-card__body > .myrag-chat-scroll {
+  height: 100%;
+  min-height: 0;
+}
 .myrag-chat-scroll {
-  /* Bounds the conversation so the input stays in view on typical screens.
-     clamp scales with viewport height: min 260px on short windows, max
-     60vh, target 50vh. */
-  max-height: clamp(260px, 50vh, 60vh);
   overflow-y: auto;
-  padding-right: 0.5rem;   /* breathing room for the scrollbar */
+  padding-right: 0.5rem;
 }
 .myrag-md-preview p:first-child { margin-top: 0; }
 .myrag-md-preview p:last-child { margin-bottom: 0; }
