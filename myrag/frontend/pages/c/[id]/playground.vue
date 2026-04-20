@@ -43,7 +43,7 @@
         <!-- Messages -->
         <div v-if="messages.length" class="fr-card fr-mb-2w">
           <div class="fr-card__body">
-            <div class="fr-card__content">
+            <div class="fr-card__content myrag-chat-scroll" ref="chatScrollEl">
               <div v-for="(m, i) in messages" :key="i" class="fr-mb-2w">
                 <!-- User -->
                 <div v-if="m.role === 'user'" class="myrag-msg myrag-msg--user">
@@ -156,6 +156,16 @@ const lastDebug = ref<any>(null)
 
 const suggestions = ref<string[]>([])
 const loadingSuggestions = ref(false)
+const chatScrollEl = ref<HTMLElement | null>(null)
+
+/** Scroll the chat panel to the latest message after Vue renders it. */
+function scrollChatToBottom() {
+  nextTick(() => {
+    if (chatScrollEl.value) {
+      chatScrollEl.value.scrollTop = chatScrollEl.value.scrollHeight
+    }
+  })
+}
 
 const canSend = computed(() => !sending.value && question.value.trim().length > 0)
 
@@ -179,6 +189,7 @@ async function send() {
 async function ask(q: string) {
   if (!q.trim()) return
   messages.value.push({ role: 'user', content: q })
+  scrollChatToBottom()
   sending.value = true
   try {
     const data = await post(`/api/playground/${id}/chat`, { question: q })
@@ -201,6 +212,7 @@ async function ask(q: string) {
     })
   } finally {
     sending.value = false
+    scrollChatToBottom()
   }
 }
 
@@ -271,6 +283,14 @@ onMounted(loadSuggestions)
 .myrag-msg__body {
   font-size: 0.95rem;
   line-height: 1.5;
+}
+.myrag-chat-scroll {
+  /* Bounds the conversation so the input stays in view on typical screens.
+     clamp scales with viewport height: min 260px on short windows, max
+     60vh, target 50vh. */
+  max-height: clamp(260px, 50vh, 60vh);
+  overflow-y: auto;
+  padding-right: 0.5rem;   /* breathing room for the scrollbar */
 }
 .myrag-md-preview p:first-child { margin-top: 0; }
 .myrag-md-preview p:last-child { margin-bottom: 0; }
