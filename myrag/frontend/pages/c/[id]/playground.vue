@@ -212,15 +212,30 @@ function clearChat() {
 async function loadSuggestions() {
   loadingSuggestions.value = true
   try {
-    const data = await post(`/api/playground/${id}/generate-eval`, {})
-    const qs = (data?.questions || [])
-      .filter((x: any) => !x.out_of_scope && x.question)
+    // Uses the chat endpoint (robust: works on any indexed collection) with
+    // a prompt that asks the LLM for raw question lines. We then parse the
+    // response into a list. /generate-eval would be richer (it also produces
+    // expected answers + tags) but depends on OpenRAG returning file content
+    // via its internal endpoint, which currently 400s on several partitions.
+    const data = await post(`/api/playground/${id}/chat`, {
+      question:
+        "Propose 4 questions variees qu'un utilisateur pourrait poser sur le contenu indexe " +
+        "de cette collection, pour tester le RAG. Reponds UNIQUEMENT avec les 4 questions, " +
+        "une par ligne, sans numerotation, sans puces, sans introduction, sans conclusion. " +
+        "Chaque question doit etre specifique au contenu reel, pas generique.",
+      temperature: 0.4,
+      top_k: 5,
+    })
+    const text = (data?.response || '').trim()
+    const qs = text
+      .split('\n')
+      .map((line: string) =>
+        line.replace(/^[\s\-\*\d\.\)•>]+/, '').replace(/[\s—-]+$/, '').trim()
+      )
+      .filter((line: string) => line.length > 5 && line.includes('?'))
       .slice(0, 4)
-      .map((x: any) => x.question)
     suggestions.value = qs
   } catch {
-    // Best-effort. generate-eval requires the collection to have content;
-    // on empty/unindexed collections it 400s — the UI just shows nothing.
     suggestions.value = []
   } finally {
     loadingSuggestions.value = false
