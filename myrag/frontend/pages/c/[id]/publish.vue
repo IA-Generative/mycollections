@@ -179,7 +179,13 @@ async function publish() {
   try {
     const data = await post(`/api/collections/${id}/publish`, form.value)
     pub.value = await get(`/api/collections/${id}/publication`)
-    result.value = `Publie en mode ${data.modes.alias ? 'alias' : ''}${data.modes.tool ? ' + tool' : ''}${data.modes.embed ? ' + #collection' : ''}`
+    // Backend returns flat flags on Publication; legacy code referenced
+    // data.modes.* which no longer exists. Fall back to the response
+    // itself so the message works whatever shape the API converges on.
+    const m = data?.modes || data || {}
+    const active = [m.alias_enabled && 'alias', m.tool_enabled && 'tool', m.embed_enabled && '#collection']
+      .filter(Boolean).join(' + ')
+    result.value = active ? `Publie en mode ${active}` : 'Publie'
   } catch (e: any) {
     result.value = `Erreur: ${e.message}`
   }
