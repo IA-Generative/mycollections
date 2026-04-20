@@ -1,3 +1,8 @@
+# Primary ingress — serves the app on the canonical host
+# mycollections.fake-domain.name. The metadata.name is kept as "mycorpus"
+# (historic) to allow kubectl apply to update the existing Ingress in place
+# without a rename/recreate downtime. Both ingresses share the same TLS
+# secret which already covers both SANs (mycollections + mycorpus).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,10 +17,8 @@ spec:
   tls:
     - hosts:
         - mycollections.fake-domain.name
-        - mycorpus.fake-domain.name
       secretName: mycorpus-tls
   rules:
-    # Primary host: mycollections.fake-domain.name (aligned with the app name).
     - host: mycollections.fake-domain.name
       http:
         paths:
@@ -55,38 +58,36 @@ spec:
                 port:
                   number: 3000
 
-    # Legacy alias (initial deployment URL, kept until all callers migrate).
+---
+# Legacy alias — permanent 301 redirect to the canonical host. Bookmarks or
+# OIDC callbacks pointing at mycorpus.fake-domain.name are forwarded to the
+# mycollections root. Path + query are lost (the nginx ingress admission
+# policy on this cluster rejects $request_uri substitution), which is
+# acceptable since this is a one-time migration redirect.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mycorpus-redirect
+  namespace: miraiku
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/permanent-redirect: https://mycollections.fake-domain.name
+    nginx.ingress.kubernetes.io/permanent-redirect-code: "301"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mycorpus.fake-domain.name
+      # Dedicated cert for the legacy host — the main ingress now publishes
+      # only mycollections, so its mycorpus-tls was re-issued without the
+      # mycorpus SAN by cert-manager.
+      secretName: mycorpus-legacy-tls
+  rules:
     - host: mycorpus.fake-domain.name
       http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: myrag-backend
-                port:
-                  number: 8200
-          - path: /health
-            pathType: Prefix
-            backend:
-              service:
-                name: myrag-backend
-                port:
-                  number: 8200
-          - path: /graph
-            pathType: Prefix
-            backend:
-              service:
-                name: myrag-backend
-                port:
-                  number: 8200
-          - path: /articles
-            pathType: Prefix
-            backend:
-              service:
-                name: myrag-backend
-                port:
-                  number: 8200
+          # A backend still has to be declared for the Ingress to be valid;
+          # nginx short-circuits with the 301 before hitting it.
           - path: /
             pathType: Prefix
             backend:
