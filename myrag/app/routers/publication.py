@@ -100,11 +100,16 @@ async def publish_collection(name: str, req: PublishRequest):
                     "read":  {"group_ids": req.visibility_groups, "user_ids": []},
                     "write": {"group_ids": req.visibility_groups, "user_ids": []},
                 }
+            # Route through the pipelines container's openrag manifold
+            # (id "openrag.<col>") rather than the direct OpenRAG provider
+            # ("openrag-<col>"). The pipeline appends source links to the
+            # response — the direct provider can't because OWUI ignores
+            # OpenRAG's non-standard `extra` field.
             owui_result = await client.upsert_model(
                 model_id=f"openrag-{name}",
                 name=pub.alias_name,
                 description=req.alias_description,
-                base_model_id=f"openrag-{name}",
+                base_model_id=f"openrag.{name}",
                 access_control=ac,
             )
         except OwuiAdminUnavailable as e:
