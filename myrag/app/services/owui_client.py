@@ -109,9 +109,11 @@ class OwuiClient:
                 json=body,
                 headers=self._headers(),
             )
-            if upd.status_code == 401:
+            if upd.status_code in (401, 403):
                 raise PermissionError(
-                    "OWUI a rejete la cle admin lors de la publication."
+                    f"OWUI a rejete la cle admin (HTTP {upd.status_code}). "
+                    f"Reponse: {upd.text[:300]}. "
+                    f"URL: {upd.request.url}."
                 )
             if upd.is_success:
                 return upd.json()
