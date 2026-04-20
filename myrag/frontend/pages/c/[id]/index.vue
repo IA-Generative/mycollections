@@ -12,19 +12,26 @@
 
     <!-- Collection not found in MyRAG DB (may exist as bare OpenRAG partition) -->
     <div v-else-if="!collection" class="fr-alert fr-alert--warning">
-      <h3 class="fr-alert__title">Collection « {{ id }} » introuvable</h3>
+      <h3 class="fr-alert__title">Collection « {{ id }} » sans configuration MyRAG</h3>
       <p>
-        Cette collection n'a pas de configuration MyRAG.
-        <span v-if="loadError">({{ loadError }})</span>
-        Elle peut exister comme partition OpenRAG sans métadonnées MyRAG,
-        ou avoir été purgée. Tu peux :
+        Cette collection existe peut-être côté OpenRAG mais n'a pas encore de
+        configuration MyRAG (description, stratégie, responsable…).
+        <span v-if="loadError" class="fr-text--sm" style="color:#666;">({{ loadError }})</span>
       </p>
+      <p>
+        Tu peux la rattacher à une config MyRAG minimale puis compléter les
+        métadonnées depuis les onglets habituels — aucune donnée OpenRAG n'est
+        touchée.
+      </p>
+      <div v-if="adoptError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
+        <p>{{ adoptError }}</p>
+      </div>
       <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
+        <button class="fr-btn" @click="adoptCollection" :disabled="adopting">
+          {{ adopting ? 'Création en cours…' : 'Rattacher cette collection' }}
+        </button>
         <NuxtLink to="/admin/catalog" class="fr-btn fr-btn--secondary">
           Retour au catalogue
-        </NuxtLink>
-        <NuxtLink :to="`/admin/create?prefill=${id}`" class="fr-btn fr-btn--tertiary">
-          Créer la configuration
         </NuxtLink>
       </div>
     </div>
@@ -166,6 +173,8 @@ const { get, patch } = useApi()
 
 const collection = ref<any>(null)
 const loadError = ref<string>('')
+const adopting = ref(false)
+const adoptError = ref<string>('')
 const feedbackStats = ref({ satisfaction_rate: 0, positive: 0, negative: 0, total: 0, pending_review: 0 })
 const feedbackItems = ref<any[]>([])
 const loading = ref(true)
@@ -184,6 +193,32 @@ function qualityClass(rate: number) {
 async function reviewFeedback(fbId: string, status: string) {
   await patch(`/api/feedback/${id}/${fbId}/review`, { status })
   feedbackItems.value = feedbackItems.value.map(f => f.id === fbId ? { ...f, status } : f)
+}
+
+/**
+ * Create a minimal MyRAG config for a collection that exists as an OpenRAG
+ * partition but has no DB record. Backend POST is idempotent on the OpenRAG
+ * side (create_partition returns {status: exists} if the partition is
+ * already there), so this is safe to call on an orphan partition.
+ */
+async function adoptCollection() {
+  adopting.value = true
+  adoptError.value = ''
+  try {
+    const { post } = useApi()
+    await post('/api/collections', {
+      name: id,
+      description: '',
+      strategy: 'auto',
+      sensitivity: 'public',
+      scope: 'group',
+    })
+    // Reload the whole page so onMounted re-runs with the new DB record.
+    window.location.reload()
+  } catch (e: any) {
+    adoptError.value = e?.message || 'Echec de la creation.'
+    adopting.value = false
+  }
 }
 
 onMounted(async () => {
