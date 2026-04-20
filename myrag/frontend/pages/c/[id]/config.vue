@@ -21,6 +21,15 @@
         </label>
         <textarea class="fr-input" v-model="form.description" rows="2"
                   placeholder="Ex: Documentation juridique sur le droit des etrangers"></textarea>
+        <div class="fr-mt-1w">
+          <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-magic-line fr-btn--icon-left"
+                  @click="guessDescription" :disabled="guessing">
+            {{ guessing ? 'Analyse en cours…' : 'Deviner depuis le contenu indexé' }}
+          </button>
+          <span v-if="guessError" class="fr-text--sm fr-ml-2w" style="color:#ce0500;">
+            {{ guessError }}
+          </span>
+        </div>
       </div>
 
       <!-- Type de collection (profil couple) -->
@@ -150,6 +159,7 @@
 const route = useRoute()
 const id = route.params.id as string
 const { get, post, patch } = useApi()
+const { user } = useAuth()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -159,6 +169,8 @@ const isNew = ref(false)
 const selectedProfile = ref('generique')
 const initialStrategy = ref('')
 const initialPrompt = ref('')
+const guessing = ref(false)
+const guessError = ref('')
 
 const hasSourceFiles = ref(false)
 const reindexing = ref(false)
@@ -228,6 +240,18 @@ onMounted(async () => {
   } catch {
     isNew.value = true
   }
+
+  // Pre-fill contact from Keycloak profile if empty (same logic as wizard step 2)
+  if (user.value?.profile) {
+    const p = user.value.profile
+    if (!form.value.contact_name) {
+      form.value.contact_name = p.name || p.preferred_username || ''
+    }
+    if (!form.value.contact_email) {
+      form.value.contact_email = p.email || ''
+    }
+  }
+
   // Check if source files exist for reindex
   try {
     const sources = await get(`/api/ingest/${id}/sources`)
@@ -236,6 +260,37 @@ onMounted(async () => {
 
   loading.value = false
 })
+
+/**
+ * Ask the collection itself (via the RAG playground) to summarise its
+ * own content. Useful when an orphan OpenRAG partition is adopted and
+ * no description was ever written — we prompt the LLM to introspect.
+ */
+async function guessDescription() {
+  guessing.value = true
+  guessError.value = ''
+  try {
+    const result = await post(`/api/playground/${id}/chat`, {
+      question:
+        "Decris en 1 ou 2 phrases factuelles le contenu general de cette collection " +
+        "pour qu'un autre utilisateur comprenne a quoi elle sert. " +
+        "Pas d'introduction, pas de conclusion, pas de meta-commentaire. " +
+        "Si tu n'as aucune information exploitable, reponds simplement 'Contenu non determinable'.",
+      top_k: 5,
+      temperature: 0.1,
+    })
+    const text = (result?.response || '').trim()
+    if (!text || text.toLowerCase().startsWith('contenu non determinable')) {
+      guessError.value = "Pas assez de contenu indexé pour en deduire une description."
+    } else {
+      form.value.description = text
+    }
+  } catch (e: any) {
+    guessError.value = e?.message || 'Echec de la generation.'
+  } finally {
+    guessing.value = false
+  }
+}
 
 async function reindex() {
   reindexing.value = true
