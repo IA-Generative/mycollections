@@ -2,7 +2,28 @@
 
 Front augmenté DSFR pour OpenRAG. Module qui s'intercale entre l'utilisateur et OpenRAG pour offrir un découpage intelligent de documents, un graph de références croisées, une administration des collections en DSFR, et une intégration riche dans Open WebUI.
 
-**Production** : [https://mycollections.fake-domain.name](https://mycollections.fake-domain.name) (alias : `mycorpus.fake-domain.name`).
+**Lien pour expérimenter** : [https://mycollections.fake-domain.name](https://mycollections.fake-domain.name) (alias : `mycorpus.fake-domain.name`).
+
+## Raison d'être
+
+**Mes collections** existe :
+- pour qu'un **administrateur de données** puisse mettre à disposition des agents des corpus d'intérêt général ;
+- pour que les **métiers** puissent mettre à disposition leurs codes et leur doctrine ;
+- pour qu'un **agent public** puisse, au quotidien, transformer ses propres documents de travail en assistants conversationnels utiles à ses collègues — sans passer par une DSI, sans écrire de code, sans comprendre ce qu'est un embedding.
+
+Dans l'usage courant, ça ressemble à ça :
+- un référent métier rassemble une doc qu'il maîtrise (notes internes, guides, textes juridiques, dossiers Drive partagés) et la publie en quelques clics comme un **assistant disponible dans Open WebUI** pour son équipe ou son groupe ;
+- il choisit à qui ça s'adresse, vérifie lui-même que les réponses tiennent la route, corrige ce qui dérape, et fait évoluer son corpus au fil de l'eau ;
+- les utilisateurs finaux s'en servent comme d'un collègue qui aurait lu toute la doc, **laissent un pouce / un commentaire** quand une réponse est bonne ou mauvaise, et ces retours remontent directement à la personne qui maintient l'assistant.
+
+C'est aussi, et assumé comme tel, un **playground pour recueillir de vraies évaluations usagers** : chaque collection publiée devient un terrain d'observation où l'on mesure ce qui marche, ce qui ne marche pas, et ce qui doit être retravaillé — côté corpus comme côté modèle. L'outil sert autant à produire des assistants qu'à apprendre, ensemble et en continu, comment un RAG se comporte face à de vrais besoins métier.
+
+La diffusion d'une collection se fait à travers plusieurs canaux, à différents niveaux d'intégration dans les applications métier :
+- **agent conversationnel mirai chat** (collection publiée en tant que modèle, alias de modèle, ou outil — notamment pour les graphes de références) ;
+- **appel depuis un autre agent conversationnel** qui délègue la recherche à la collection ;
+- **plug-in navigateur** qui écoute les URL consultées et propose un menu contextualisé par-dessus l'application ;
+- **snippet HTML/JS** pour une intégration légère (« une ligne de code ») dans une application existante ;
+- **API** pour une intégration serveur dans une application tierce.
 
 ## Sommaire
 
