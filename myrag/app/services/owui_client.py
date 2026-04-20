@@ -103,32 +103,30 @@ class OwuiClient:
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # Update first — if the model exists this is a no-op creation-wise.
+            # Update first — succeeds only if the model already exists.
+            # OWUI v0.8.12 returns 401 (not 404) on update for missing
+            # models; we used to raise here, but that broke first-time
+            # publication. Treat update as best-effort and fall through to
+            # create for *any* non-success status.
             upd = await client.post(
                 f"{self.base_url}/api/v1/models/model/update",
                 json=body,
                 headers=self._headers(),
             )
-            if upd.status_code in (401, 403):
-                raise PermissionError(
-                    f"OWUI a rejete la cle admin (HTTP {upd.status_code}). "
-                    f"Reponse: {upd.text[:300]}. "
-                    f"URL: {upd.request.url}."
-                )
             if upd.is_success:
                 return upd.json()
 
-            # Any other status: try create. OWUI v0.8.12 returns 400 on
-            # update for unknown models — we don't want to branch on exact
-            # codes, so just fall through.
             cre = await client.post(
                 f"{self.base_url}/api/v1/models/create",
                 json=body,
                 headers=self._headers(),
             )
-            if cre.status_code == 401:
+            if cre.status_code in (401, 403):
+                # Both calls hit a real auth failure — the key truly lacks
+                # the required role.
                 raise PermissionError(
-                    "OWUI a rejete la cle admin lors de la publication."
+                    f"OWUI a rejete la cle admin (HTTP {cre.status_code}). "
+                    f"Reponse: {cre.text[:300]}. URL: {cre.request.url}."
                 )
             if not cre.is_success:
                 raise RuntimeError(
