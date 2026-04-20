@@ -89,3 +89,48 @@ async def openrag_health():
     client = OpenRAGClient(timeout=5.0)
     ok = await client.health_check()
     return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}
+
+
+@app.get("/api/openrag/extract/{chunk_id}")
+async def openrag_extract_proxy(chunk_id: str):
+    """Proxy for OpenRAG's /extract/{chunk_id} and /file/{id} endpoints.
+
+    Those endpoints require a Bearer admin token; a bare link opened in a
+    new browser tab would send no Authorization header and get 401. This
+    relays the request server-side with the stored admin token so the
+    browser sees plain content.
+
+    Chunk URL and file URL are both under OpenRAG's /extract path family in
+    practice — /extract/<chunk_uuid> returns the chunk snippet, /extract/
+    /file/<file_id> or a direct /file/<id> exposes the source file. We
+    forward the raw path so both shapes work.
+    """
+    import httpx
+    from fastapi import Response
+    headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
+    url = f"{settings.openrag_url.rstrip('/')}/extract/{chunk_id}"
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        upstream = await client.get(url, headers=headers)
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "text/plain"),
+    )
+
+
+@app.get("/api/openrag/file/{file_id}")
+async def openrag_file_proxy(file_id: str):
+    """Same as /api/openrag/extract but for /file/<id> URLs that OpenRAG
+    emits for whole-document downloads.
+    """
+    import httpx
+    from fastapi import Response
+    headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
+    url = f"{settings.openrag_url.rstrip('/')}/file/{file_id}"
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        upstream = await client.get(url, headers=headers)
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/octet-stream"),
+    )

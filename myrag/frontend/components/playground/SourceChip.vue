@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { prettyName, toHttps } from '~/utils/playground'
+import { prettyName, proxiedSourceUrl } from '~/utils/playground'
 
 const props = defineProps<{
   source: {
@@ -27,7 +27,7 @@ const props = defineProps<{
 const fullName = computed(() => props.source.original_filename || props.source.filename || '')
 const label = computed(() => prettyName(fullName.value) || 'Source')
 const page = computed(() => props.source.page)
-const href = computed(() => toHttps(props.source.chunk_url || props.source.file_url))
+const href = computed(() => proxiedSourceUrl(props.source.chunk_url || props.source.file_url))
 </script>
 
 <style scoped>
