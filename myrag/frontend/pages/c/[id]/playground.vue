@@ -38,15 +38,15 @@
                   <div class="myrag-msg__role">Vous</div>
                   <div class="myrag-msg__body">{{ m.content }}</div>
                 </div>
-                <!-- Assistant -->
+                <!-- Assistant — the LLM already cites its own sources inside
+                     the markdown response, so we don't repeat them here. A
+                     quiet warning shows only when the RAG returned nothing. -->
                 <div v-else class="myrag-msg myrag-msg--assistant">
                   <div class="myrag-msg__role">🤖 Assistant</div>
                   <div class="myrag-msg__body myrag-md-preview" v-html="renderMd(m.content)"></div>
-                  <div v-if="m.sources?.length" class="fr-text--xs fr-mt-1w" style="color:#666;">
-                    <strong>Sources :</strong> {{ m.sources.join(', ') }}
-                  </div>
-                  <p v-else-if="m.content && !m.error" class="fr-text--xs fr-mt-1w" style="color:#b34000;">
-                    Aucune source retrouvee — le RAG n'a pas trouve de chunks pertinents.
+                  <p v-if="m.content && !m.error && !m.sources?.length"
+                     class="fr-text--xs fr-mt-1w" style="color:#b34000;">
+                    Aucune source retrouvée — le RAG n'a pas trouvé de chunks pertinents.
                   </p>
                 </div>
               </div>
@@ -103,8 +103,9 @@
           <h4 class="fr-h6">Sources ({{ lastDebug.sources.length }})</h4>
           <div v-for="(chunk, i) in lastDebug.sources" :key="i" class="fr-mb-1w">
             <details class="fr-accordion">
-              <summary class="fr-accordion__btn">
-                {{ chunk.original_filename || chunk.filename || `Source ${i + 1}` }}
+              <summary class="fr-accordion__btn" :title="chunk.original_filename || chunk.filename || ''">
+                {{ prettyName(chunk.original_filename || chunk.filename || '') || `Source ${i + 1}` }}
+                <span v-if="chunk.page" class="fr-text--xs" style="color:#666;"> · p. {{ chunk.page }}</span>
               </summary>
               <div class="fr-collapse">
                 <p class="fr-text--sm" style="white-space:pre-wrap;">
@@ -160,6 +161,22 @@ const canSend = computed(() => !sending.value && question.value.trim().length > 
 function renderMd(text: string): string {
   if (!text) return ''
   return marked.parse(text, { breaks: true }) as string
+}
+
+/**
+ * Turn a raw indexed filename into something a human can scan.
+ * Drops the noisy "export_mirai___poc_rag_..._base_de_connaissance_" prefix
+ * the corpus pipeline stamps on every file, the file extension, and
+ * collapses the triple underscores DSFR exports use as separators. Keeps
+ * the original if the result would be too short to be useful.
+ */
+function prettyName(raw: string): string {
+  if (!raw) return ''
+  let s = raw.replace(/\.[a-z0-9]{2,5}$/i, '')              // drop .txt/.pdf/.docx
+  s = s.replace(/^.*?base_de_connaissance_[^_.]*[._]?/i, '') // drop pipeline prefix
+  s = s.replace(/___+|_{2,}/g, ' · ').replace(/_/g, ' ')    // underscores → spaces
+  s = s.replace(/\s+/g, ' ').trim()
+  return s.length < 8 ? raw : s
 }
 
 async function send() {
