@@ -42,8 +42,14 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
 - **Chunking intelligent** (4 stratégies : auto, article, chunk, directory) avec stockage du fichier source sur PVC pour permettre la réindexation.
 - **Archivage / purge réversible** d'une collection : archiver = dépublier OWUI + cacher du catalog (data conservée). Purger = hard-delete (OpenRAG partition + fichiers + DB en cascade). Modale de confirmation stricte avec re-saisie du nom.
 - **Publication vers Open WebUI** : la collection devient un modèle `openrag-<nom>` utilisable comme outil ou alias dans OWUI, avec visibilité par groupe Keycloak.
-- **Feedback OWUI** : ingestion des retours utilisateurs, review/promote vers des datasets d'évaluation.
-- **Playground RAG** : test rapide depuis le front avec affichage des sources.
+- **Feedback OWUI** : ingestion des retours utilisateurs (👍/👎) via `POST /api/feedback/ingest`, review/promote vers `QRCache` (réponses curées servies directement) ou vers un `EvalDataset`. Un service de **pull automatique** depuis la DB OWUI ([myrag/app/services/owui_feedback_sync.py](myrag/app/services/owui_feedback_sync.py), CronJob K8s toutes les 15 min) mirror les feedbacks sur modèles `openrag-*` côté MyRAG, idempotent sur `owui_message_id`.
+- **Playground RAG** ([myrag/frontend/pages/c/[id]/playground.vue](myrag/frontend/pages/c/[id]/playground.vue)) : page chat + **banque de questions de test** (colonne droite) qui agrège 4 sources via `GET /api/playground/{col}/bank` :
+  - 🤖 auto-générées (seed au premier chargement si banque vide),
+  - 📄 importées (JSON du wizard step-4 persisté en `EvalDataset`),
+  - 👎 retours négatifs (`Feedback.rating < 0`),
+  - 👍 promues (`QRCache` avec `source="feedback"`).
+
+  Click sur une carte → la question part dans le chat. Vote 👍 → `QRCache` (réponse curée). Vote 👎 → nouveau `Feedback(rating=-1, status="pending")`. Bouton **« Lancer toute la banque »** → exécute toutes les questions en série et affiche un tableau synthétique en pied de colonne. Sources rendues comme puces cliquables sous chaque réponse, avec **popover au survol** (preview ~500 chars du chunk) et lien « Document complet » pour ouvrir l'original. Debug (prompt/chunks/modèle/temps) en accordéon replié sous chaque message. Le backend relaie `/extract/{id}`, `/file/{id}` et `/static/{path}` d'OpenRAG via `/api/openrag/*` avec le token admin côté serveur — les liens ouverts en nouvel onglet contournent ainsi le 401 de l'API OpenRAG.
 - **Graph de références croisées** (NetworkX + Cytoscape.js) pour les collections le supportant.
 - **Sync Keycloak ↔ OpenRAG** : propagation des groupes `rag-query/<collection>` vers les partitions.
 
