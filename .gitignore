@@ -9,6 +9,7 @@ venv/
 node_modules/
 .nuxt/
 .output/
+myrag/frontend/dist/
 *.log
 
 # Data / local secrets

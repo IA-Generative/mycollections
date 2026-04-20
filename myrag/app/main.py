@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import init_db
-from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router
+from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,6 +66,7 @@ app.include_router(publication.router)
 app.include_router(playground.router)
 app.include_router(playground_bank.router)
 app.include_router(qr_cache_router.router)
+app.include_router(eval_datasets.router)
 
 
 @app.get("/api/config")

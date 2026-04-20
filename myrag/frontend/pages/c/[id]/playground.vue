@@ -4,335 +4,315 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Playground</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Tester</a></li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">Playground RAG — {{ id }}</h1>
-
-    <div class="fr-grid-row fr-grid-row--gutters">
-      <!-- Left: Chat -->
-      <div class="fr-col-7">
-        <!-- Suggestions (cliquables, compactes) -->
-        <div v-if="suggestions.length && !messages.length" class="myrag-suggestions">
-          <button v-for="(s, i) in suggestions" :key="i"
-                  class="fr-btn fr-btn--sm fr-btn--secondary"
-                  style="white-space:normal;text-align:left;margin:0 0.4rem 0.4rem 0;"
-                  :disabled="sending"
-                  @click="ask(s)">
-            💡 {{ s }}
-          </button>
+    <div class="myrag-playground">
+      <!-- LEFT: chat column -->
+      <section class="myrag-playground__chat">
+        <!-- Empty state: invite to pick from bank or type -->
+        <div v-if="!messages.length" class="myrag-playground__empty">
+          <p v-if="bank.items.value.length" class="fr-text--sm">
+            Clique sur une question a droite, ou tape la tienne ci-dessous.
+          </p>
+          <p v-else-if="bank.isGenerating.value" class="fr-text--sm">
+            Preparation des premieres questions de test…
+          </p>
+          <p v-else class="fr-text--sm">
+            Pose une question pour tester comment le RAG repond sur cette collection.
+          </p>
         </div>
-        <p v-if="loadingSuggestions && !suggestions.length && !messages.length"
-           class="fr-text--xs" style="color:#666;margin:0 0 0.6rem 0;">
-          Génération des suggestions…
-        </p>
 
-        <!-- Messages -->
-        <div v-if="messages.length" class="fr-card fr-mb-2w">
-          <div class="fr-card__body">
-            <div class="fr-card__content myrag-chat-scroll" ref="chatScrollEl">
-              <div v-for="(m, i) in messages" :key="i" class="fr-mb-2w">
-                <!-- User -->
-                <div v-if="m.role === 'user'" class="myrag-msg myrag-msg--user">
-                  <div class="myrag-msg__role">Vous</div>
-                  <div class="myrag-msg__body">{{ m.content }}</div>
-                </div>
-                <!-- Assistant — the LLM already cites its own sources inside
-                     the markdown response, so we don't repeat them here. A
-                     quiet warning shows only when the RAG returned nothing. -->
-                <div v-else class="myrag-msg myrag-msg--assistant">
-                  <div class="myrag-msg__role">🤖 Assistant</div>
-                  <div class="myrag-msg__body myrag-md-preview" v-html="renderMd(m.content)"></div>
-                  <p v-if="m.content && !m.error && !m.sources?.length"
-                     class="fr-text--xs fr-mt-1w" style="color:#b34000;">
-                    Aucune source retrouvée — le RAG n'a pas trouvé de chunks pertinents.
-                  </p>
-                </div>
-              </div>
-              <div v-if="sending" class="fr-text--sm" style="color:#666;">
-                ⏳ L'assistant reflechit...
-              </div>
-            </div>
+        <!-- Message list -->
+        <div v-if="messages.length" class="myrag-playground__messages" ref="messagesEl">
+          <PlaygroundChatMessage v-for="m in messages" :key="m.turnId || m.content"
+                       :message="m"
+                       @vote="(v) => onVote(m, v)" />
+          <div v-if="isLoading" class="fr-text--sm" style="color:#666;padding:0.4rem 0;">
+            ⏳ L'assistant reflechit…
           </div>
         </div>
 
         <!-- Input -->
-        <div class="fr-input-group">
-          <label class="fr-label fr-sr-only" for="question">Votre question</label>
-          <textarea id="question" class="fr-input" v-model="question" rows="2"
-                    placeholder="Posez une question…"
-                    @keydown.enter.exact.prevent="canSend && send()"></textarea>
-          <p class="fr-hint-text">Entrée pour envoyer · Maj+Entrée pour retour ligne</p>
+        <div class="myrag-playground__input">
+          <div class="fr-input-group">
+            <label class="fr-label fr-sr-only" for="question">Votre question</label>
+            <textarea id="question" class="fr-input" v-model="draft" rows="2"
+                      placeholder="Ta question ici…"
+                      @keydown.enter.exact.prevent="canSend && send()"></textarea>
+          </div>
+          <div class="fr-btns-group fr-btns-group--inline">
+            <button class="fr-btn" @click="send" :disabled="!canSend">
+              {{ isLoading ? 'Envoi…' : 'Envoyer' }}
+            </button>
+            <button class="fr-btn fr-btn--secondary" @click="reset" :disabled="!messages.length">
+              Effacer
+            </button>
+          </div>
         </div>
-        <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
-          <button class="fr-btn" @click="send" :disabled="!canSend">
-            {{ sending ? 'Envoi...' : 'Envoyer' }}
-          </button>
-          <button class="fr-btn fr-btn--secondary" @click="clearChat" :disabled="!messages.length">
-            Effacer l'historique
-          </button>
-          <button class="fr-btn fr-btn--tertiary" @click="regenSuggestions" :disabled="loadingSuggestions">
-            {{ loadingSuggestions ? 'Chargement...' : 'Nouvelles suggestions' }}
-          </button>
+      </section>
+
+      <!-- RIGHT: bank column -->
+      <aside class="myrag-playground__bank">
+        <div class="myrag-playground__bank-header">
+          <h2 class="fr-h5" style="margin:0;">Banque de questions</h2>
+          <p class="fr-text--xs" style="color:#666;margin:0.2rem 0 0 0;">
+            Questions venant des retours utilisateurs, d'un import, ou generees.
+          </p>
         </div>
-      </div>
 
-      <!-- Right: Debug panel — only shown once there has been a chat turn -->
-      <div v-if="lastDebug" class="fr-col-5">
-        <h3 class="fr-h5">Debug</h3>
+        <PlaygroundBankFilter v-model="bank.filter.value" :stats="bank.stats.value" />
 
-        <!-- Metrics -->
-        <div class="fr-card fr-mb-2w">
-          <div class="fr-card__body">
-            <div class="fr-card__content">
-              <p class="fr-text--sm">
-                <strong>Dernier appel :</strong>
-                {{ lastDebug.model || '' }}
-                <span v-if="lastDebug.fallback_used"> — fallback metadata</span>
-              </p>
-              <p v-if="lastDebug.sources?.length" class="fr-text--sm">
-                Sources retrouvees : {{ lastDebug.sources.length }}
-              </p>
-            </div>
+        <!-- Loading / empty -->
+        <p v-if="bank.isLoading.value && !bank.items.value.length" class="fr-text--sm" style="color:#666;">
+          Chargement…
+        </p>
+        <p v-else-if="bank.isGenerating.value && !bank.items.value.length" class="fr-text--sm" style="color:#666;">
+          Generation de questions de test…
+        </p>
+        <p v-else-if="!bank.filtered.value.length" class="fr-text--sm" style="color:#666;">
+          Aucune question dans ce filtre.
+        </p>
+
+        <!-- Cards -->
+        <div class="myrag-playground__bank-list">
+          <PlaygroundBankCard v-for="q in bank.filtered.value" :key="q.id"
+                    :item="q"
+                    :tested="testedIds.has(q.id)"
+                    :loading="isLoading"
+                    @test="runFromBank(q)"
+                    @remove="bank.removeItem(q)" />
+        </div>
+
+        <!-- Batch results table -->
+        <div v-if="batchResults.length" class="myrag-playground__batch">
+          <h3 class="fr-h6" style="margin:1rem 0 0.5rem;">Resultats batch ({{ batchResults.length }})</h3>
+          <div class="fr-table fr-table--no-caption" style="margin-bottom:0;">
+            <table>
+              <thead>
+                <tr><th>Question</th><th>Reponse</th><th>Sources</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(r, i) in batchResults" :key="i">
+                  <td style="max-width:150px;font-size:0.78rem;">{{ trunc(r.question, 60) }}</td>
+                  <td style="font-size:0.78rem;">{{ trunc(r.response, 100) }}</td>
+                  <td style="font-size:0.78rem;">{{ r.source_count }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <!-- Sources -->
-        <div v-if="lastDebug?.sources?.length">
-          <h4 class="fr-h6">Sources ({{ lastDebug.sources.length }})</h4>
-          <div v-for="(chunk, i) in lastDebug.sources" :key="i" class="fr-mb-1w">
-            <details class="fr-accordion">
-              <summary class="fr-accordion__btn" :title="chunk.original_filename || chunk.filename || ''">
-                {{ prettyName(chunk.original_filename || chunk.filename || '') || `Source ${i + 1}` }}
-                <span v-if="chunk.page" class="fr-text--xs" style="color:#666;"> · p. {{ chunk.page }}</span>
-              </summary>
-              <div class="fr-collapse">
-                <p class="fr-text--sm" style="white-space:pre-wrap;">
-                  {{ (chunk.content || '').substring(0, 500) }}{{ (chunk.content || '').length > 500 ? '...' : '' }}
-                </p>
-                <p v-if="chunk.file_url || chunk.chunk_url" class="fr-text--xs fr-mt-1w">
-                  <a v-if="chunk.file_url" :href="toHttps(chunk.file_url)" target="_blank" rel="noopener"
-                     class="fr-link fr-link--sm fr-icon-external-link-line fr-link--icon-right">
-                    Ouvrir le fichier source
-                  </a>
-                  <a v-if="chunk.chunk_url" :href="toHttps(chunk.chunk_url)" target="_blank" rel="noopener"
-                     class="fr-link fr-link--sm fr-ml-2w fr-icon-eye-line fr-link--icon-right">
-                    Voir l'extrait
-                  </a>
-                </p>
-              </div>
-            </details>
-          </div>
+        <!-- Footer actions -->
+        <div class="myrag-playground__bank-footer">
+          <button class="fr-btn fr-btn--sm fr-btn--secondary"
+                  :disabled="!bank.items.value.length || isBatchRunning"
+                  @click="runAll">
+            {{ isBatchRunning ? `⏳ ${batchProgress}/${bank.items.value.length}` : '▶▶ Lancer toute la banque' }}
+          </button>
+          <button class="fr-btn fr-btn--sm fr-btn--tertiary"
+                  :disabled="bank.isGenerating.value"
+                  @click="bank.generate">
+            {{ bank.isGenerating.value ? '⏳ Generation…' : '🤖 Generer 4 de plus' }}
+          </button>
         </div>
-
-        <NuxtLink :to="`/c/${id}/graph`" class="fr-link fr-text--sm fr-mt-2w">
-          Voir le graph de references →
-        </NuxtLink>
-      </div>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { marked } from 'marked'
-
-interface ChatMsg {
-  role: 'user' | 'assistant'
-  content: string
-  sources?: string[]
-  error?: boolean
-}
+import { useChat } from '~/composables/useChat'
+import { useBank, type BankItem } from '~/composables/useBank'
 
 const route = useRoute()
 const id = route.params.id as string
 const { post } = useApi()
 
-const question = ref('')
-const messages = ref<ChatMsg[]>([])
-const sending = ref(false)
-const lastDebug = ref<any>(null)
+const { messages, isLoading, sendMessage, reset: resetChat } = useChat(id)
+const bank = useBank(id)
 
-const suggestions = ref<string[]>([])
-const loadingSuggestions = ref(false)
-const chatScrollEl = ref<HTMLElement | null>(null)
+const draft = ref('')
+const messagesEl = ref<HTMLElement | null>(null)
 
-/** Scroll the chat panel to the latest message after Vue renders it. */
-function scrollChatToBottom() {
+/** Remember which bank items have been run through the chat this session,
+ *  so the BankCard can switch its button label to "Re-tester". */
+const testedIds = ref(new Set<string>())
+
+/** Keep the bank item that originated each assistant turn so a 👍/👎 vote
+ *  can call the right backend endpoint. Map is message.turnId → BankItem. */
+const turnToBankItem = new Map<string, BankItem>()
+
+const canSend = computed(() => !isLoading.value && draft.value.trim().length > 0)
+
+function scrollToBottom() {
   nextTick(() => {
-    if (chatScrollEl.value) {
-      chatScrollEl.value.scrollTop = chatScrollEl.value.scrollHeight
-    }
+    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   })
-}
-
-const canSend = computed(() => !sending.value && question.value.trim().length > 0)
-
-function renderMd(text: string): string {
-  if (!text) return ''
-  return marked.parse(text, { breaks: true }) as string
-}
-
-/**
- * Turn a raw indexed filename into something a human can scan.
- * Drops the noisy "export_mirai___poc_rag_..._base_de_connaissance_" prefix
- * the corpus pipeline stamps on every file, the file extension, and
- * collapses the triple underscores DSFR exports use as separators. Keeps
- * the original if the result would be too short to be useful.
- */
-/** Upgrade any http:// source URL to https:// — the OpenRAG VM is served
- * over HTTPS via Traefik and browser mixed-content rules would otherwise
- * block links emitted as bare http by the API response. */
-function toHttps(url: string | undefined | null): string {
-  if (!url) return ''
-  return url.replace(/^http:\/\//i, 'https://')
-}
-
-function prettyName(raw: string): string {
-  if (!raw) return ''
-  let s = raw.replace(/\.[a-z0-9]{2,5}$/i, '')              // drop .txt/.pdf/.docx
-  s = s.replace(/^.*?base_de_connaissance_[^_.]*[._]?/i, '') // drop pipeline prefix
-  s = s.replace(/___+|_{2,}/g, ' · ').replace(/_/g, ' ')    // underscores → spaces
-  s = s.replace(/\s+/g, ' ').trim()
-  return s.length < 8 ? raw : s
 }
 
 async function send() {
   if (!canSend.value) return
-  const q = question.value.trim()
-  question.value = ''
-  await ask(q)
+  const q = draft.value.trim()
+  draft.value = ''
+  const assistant = await sendMessage(q)
+  scrollToBottom()
+  if (assistant?.turnId) {
+    // Unlinked ad-hoc question — vote handler will create a QR/feedback with
+    // only the question+answer, no bank link. Recorded as null.
+    turnToBankItem.set(assistant.turnId, null as any)
+  }
 }
 
-/**
- * Send a question to the RAG pipeline and append both the user question and
- * the assistant reply to the conversation history. Suggestions disappear on
- * first turn (the UI already shows them only when messages is empty).
- */
-async function ask(q: string) {
-  if (!q.trim()) return
-  messages.value.push({ role: 'user', content: q })
-  scrollChatToBottom()
-  sending.value = true
-  try {
-    const data = await post(`/api/playground/${id}/chat`, { question: q })
-    const content = data.response || 'Pas de reponse generee.'
-    messages.value.push({
-      role: 'assistant',
-      content,
-      sources: data.source_names || [],
-    })
-    lastDebug.value = {
-      model: data.model,
-      fallback_used: data.fallback_used,
-      sources: data.sources || [],
+async function runFromBank(item: BankItem) {
+  testedIds.value.add(item.id)
+  const assistant = await sendMessage(item.question)
+  scrollToBottom()
+  if (assistant?.turnId) {
+    turnToBankItem.set(assistant.turnId, item)
+  }
+}
+
+function reset() {
+  resetChat()
+  testedIds.value.clear()
+  turnToBankItem.clear()
+}
+
+async function onVote(msg: any, vote: 'up' | 'down') {
+  const item = msg.turnId ? turnToBankItem.get(msg.turnId) : null
+  if (item) {
+    if (vote === 'up') await bank.voteUp(item, msg.content)
+    else               await bank.voteDown(item, msg.content, '')
+  } else {
+    // Ad-hoc question — find the preceding user turn to capture the question.
+    const idx = messages.value.indexOf(msg)
+    const prev = idx > 0 ? messages.value[idx - 1] : null
+    const question = prev?.content || ''
+    if (!question) return
+    if (vote === 'up') {
+      await post(`/api/qr-cache/${id}`, {
+        question, answer: msg.content, source: 'manual',
+      })
+    } else {
+      await post(`/api/feedback/ingest`, {
+        collection: id, question, response: msg.content, rating: -1,
+      })
     }
-  } catch (e: any) {
-    messages.value.push({
-      role: 'assistant',
-      content: `**Erreur** : ${e.message || e}`,
-      error: true,
-    })
-  } finally {
-    sending.value = false
-    scrollChatToBottom()
+    await bank.load()
   }
+  // Reflect the vote on the message so VoteBar locks.
+  msg.vote = vote
 }
 
-function clearChat() {
-  messages.value = []
-  lastDebug.value = null
-}
+// Batch run — hits /chat for every item, accumulates a compact summary.
+const batchResults = ref<{ question: string, response: string, source_count: number }[]>([])
+const isBatchRunning = ref(false)
+const batchProgress = ref(0)
 
-async function loadSuggestions() {
-  loadingSuggestions.value = true
+async function runAll() {
+  if (isBatchRunning.value || !bank.items.value.length) return
+  isBatchRunning.value = true
+  batchResults.value = []
+  batchProgress.value = 0
   try {
-    // Uses the chat endpoint (robust: works on any indexed collection) with
-    // a prompt that asks the LLM for raw question lines. We then parse the
-    // response into a list. /generate-eval would be richer (it also produces
-    // expected answers + tags) but depends on OpenRAG returning file content
-    // via its internal endpoint, which currently 400s on several partitions.
-    const data = await post(`/api/playground/${id}/chat`, {
-      question:
-        "Propose 4 questions variees qu'un utilisateur pourrait poser sur le contenu indexe " +
-        "de cette collection, pour tester le RAG. Reponds UNIQUEMENT avec les 4 questions, " +
-        "une par ligne, sans numerotation, sans puces, sans introduction, sans conclusion. " +
-        "Chaque question doit etre specifique au contenu reel, pas generique.",
-      temperature: 0.4,
-      top_k: 5,
-    })
-    const text = (data?.response || '').trim()
-    const qs = text
-      .split('\n')
-      .map((line: string) =>
-        line.replace(/^[\s\-\*\d\.\)•>]+/, '').replace(/[\s—-]+$/, '').trim()
-      )
-      .filter((line: string) => line.length > 5 && line.includes('?'))
-      .slice(0, 4)
-    suggestions.value = qs
-  } catch {
-    suggestions.value = []
+    for (const q of bank.items.value) {
+      try {
+        const data = await post(`/api/playground/${id}/chat`, { question: q.question })
+        batchResults.value.push({
+          question: q.question,
+          response: (data?.response || '').replace(/\s+/g, ' ').trim(),
+          source_count: (data?.sources || []).length,
+        })
+      } catch (e: any) {
+        batchResults.value.push({
+          question: q.question,
+          response: `Erreur: ${e?.message || e}`,
+          source_count: 0,
+        })
+      }
+      batchProgress.value += 1
+    }
   } finally {
-    loadingSuggestions.value = false
+    isBatchRunning.value = false
   }
 }
 
-async function regenSuggestions() {
-  await loadSuggestions()
+function trunc(s: string, n: number): string {
+  if (!s) return ''
+  return s.length > n ? s.substring(0, n) + '…' : s
 }
 
-onMounted(loadSuggestions)
+onMounted(() => {
+  bank.autoSeedIfEmpty()
+})
 </script>
 
 <style>
-.myrag-msg {
-  padding: 0.8rem 1rem;
-  border-radius: 6px;
+/* Scoped inside the page — not scoped-to-component because we want the same
+ * grid behavior to apply regardless of which slotted components render. */
+.myrag-playground {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+  align-items: start;
 }
-.myrag-msg--user {
-  background: #eef3ff;
-  border-left: 3px solid #6a6af4;
+@media (max-width: 1200px) {
+  .myrag-playground {
+    grid-template-columns: 1fr;
+  }
 }
-.myrag-msg--assistant {
-  background: #f6f6f6;
-  border-left: 3px solid #18753c;
+
+.myrag-playground__chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
-.myrag-msg__role {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 0.3rem;
-}
-.myrag-msg__body {
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-/* Hard cap on the conversation area so the input bar always stays in view.
-   400px absolute — no dependency on viewport height. Scrolls internally. */
-.myrag-chat-scroll {
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-}
-.myrag-md-preview p:first-child { margin-top: 0; }
-.myrag-md-preview p:last-child { margin-bottom: 0; }
-.myrag-md-preview ul, .myrag-md-preview ol {
-  padding-left: 1.2rem;
-  margin: 0.4rem 0;
-}
-.myrag-md-preview code {
-  background: #e8e8e8;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  font-size: 0.85em;
-}
-.myrag-md-preview pre {
-  background: #282c34;
-  color: #f0f0f0;
+.myrag-playground__empty {
   padding: 0.6rem 0.8rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 0.82em;
+  background: #f6f6f6;
+  border-left: 3px solid #dddddd;
+  margin-bottom: 1rem;
+  color: #555;
 }
-.myrag-md-preview pre code { background: transparent; padding: 0; }
+.myrag-playground__messages {
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+  margin-bottom: 1rem;
+}
+.myrag-playground__input {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 0.4rem;
+}
+
+.myrag-playground__bank {
+  background: #fafafa;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 0.8rem 0.9rem;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+.myrag-playground__bank-header { margin-bottom: 0.6rem; }
+.myrag-playground__bank-list { min-height: 60px; }
+.myrag-playground__bank-footer {
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #e5e5e5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+@media (max-width: 1200px) {
+  .myrag-playground__bank {
+    position: static;
+    max-height: none;
+  }
+}
 </style>
