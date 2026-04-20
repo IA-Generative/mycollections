@@ -3,7 +3,7 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li aria-current="page">Creer une collection</li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Creer une collection</a></li>
       </ol>
     </nav>
 

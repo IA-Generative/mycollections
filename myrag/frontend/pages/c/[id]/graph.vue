@@ -4,7 +4,7 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
-        <li aria-current="page">Graph</li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Graph</a></li>
       </ol>
     </nav>
     <h1 class="fr-h3">Graph de references — {{ id }}</h1>

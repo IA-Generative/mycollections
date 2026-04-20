@@ -4,7 +4,7 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
-        <li aria-current="page">Playground</li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Playground</a></li>
       </ol>
     </nav>
 

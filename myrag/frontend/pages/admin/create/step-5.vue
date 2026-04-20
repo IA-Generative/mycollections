@@ -4,7 +4,7 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Creer</NuxtLink></li>
-        <li aria-current="page">Publication</li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Publication</a></li>
       </ol>
     </nav>
 
