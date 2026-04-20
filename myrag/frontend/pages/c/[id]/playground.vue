@@ -14,17 +14,17 @@
       <!-- Left: Chat -->
       <div class="fr-col-7">
         <!-- Suggestions (cliquables, compactes) -->
-        <div v-if="suggestions.length && !messages.length" class="fr-mb-2w">
+        <div v-if="suggestions.length && !messages.length" class="myrag-suggestions">
           <button v-for="(s, i) in suggestions" :key="i"
-                  class="fr-btn fr-btn--sm fr-btn--secondary fr-mb-1w fr-mr-1w"
-                  style="white-space:normal;text-align:left;"
+                  class="fr-btn fr-btn--sm fr-btn--secondary"
+                  style="white-space:normal;text-align:left;margin:0 0.4rem 0.4rem 0;"
                   :disabled="sending"
                   @click="ask(s)">
             💡 {{ s }}
           </button>
         </div>
         <p v-if="loadingSuggestions && !suggestions.length && !messages.length"
-           class="fr-text--xs fr-mb-2w" style="color:#666;">
+           class="fr-text--xs" style="color:#666;margin:0 0 0.6rem 0;">
           Génération des suggestions…
         </p>
 
@@ -78,12 +78,12 @@
         </div>
       </div>
 
-      <!-- Right: Debug panel -->
-      <div class="fr-col-5">
+      <!-- Right: Debug panel — only shown once there has been a chat turn -->
+      <div v-if="lastDebug" class="fr-col-5">
         <h3 class="fr-h5">Debug</h3>
 
         <!-- Metrics -->
-        <div v-if="lastDebug" class="fr-card fr-mb-2w">
+        <div class="fr-card fr-mb-2w">
           <div class="fr-card__body">
             <div class="fr-card__content">
               <p class="fr-text--sm">
