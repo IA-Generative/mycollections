@@ -137,6 +137,76 @@ kubectl -n miraiku rollout status deploy/myrag-frontend --timeout=60s
 kubectl -n miraiku get pod,svc,ingress -l 'app in (myrag-backend,myrag-frontend)'
 ```
 
+## 4.5. Branchement OWUI ↔ OpenRAG (one-shot par cluster)
+
+Sans cette étape, le bouton **Publier** crée bien un wrapper de modèle dans OWUI mais cliquer dessus dans OWUI renvoie `404: Model not found` — OWUI n'a pas de provider qui expose les `openrag-<col>`. Une fois fait, c'est définitif : chaque future publication MyRAG marche sans intervention admin.
+
+### 4.5.1. Ajouter OpenRAG comme provider OpenAI dans OWUI
+
+OWUI auto-découvre tous les modèles (`/v1/models`) de chaque URL listée dans `OPENAI_API_BASE_URLS`. On ajoute l'URL publique de la VM OpenRAG comme troisième entrée (à côté de `pipelines:9099` et `api.scaleway.ai`).
+
+```bash
+# Vérifier d'abord que /v1/models répond bien (15+ modèles openrag-* attendus)
+curl -sS "https://api.openrag.fake-domain.name/v1/models" \
+  -H "Authorization: Bearer ***REMOVED-OPENRAG-ADMIN-TOKEN***" \
+  | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']), 'modèles')"
+
+# Ajouter OpenRAG. set env merge proprement avec les valeurs existantes
+# (Pipelines + Scaleway Direct) — il suffit de redonner les 3 listes ;-séparées
+# en entier. On lit les clés Pipelines et Scaleway depuis owui-socle-secrets pour
+# ne pas les écrire en clair dans la commande.
+kubectl -n miraiku set env deploy/openwebui \
+  OPENAI_API_BASE_URLS="http://pipelines:9099/v1;https://api.scaleway.ai/<SCW_PROJECT_ID>/v1;https://api.openrag.fake-domain.name/v1" \
+  OPENAI_API_KEYS="$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.PIPELINES_API_KEY}' | base64 -d);$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.SCW_SECRET_KEY_LLM}' | base64 -d);<OPENRAG_ADMIN_TOKEN>" \
+  OPENAI_API_CONFIGS='[{"prefix":"scaleway-general.","name":"Pipelines"},{"prefix":"","name":"Scaleway Direct"},{"prefix":"openrag-","name":"OpenRAG MyRAG"}]'
+
+kubectl -n miraiku rollout status deploy/openwebui --timeout=120s
+```
+
+### 4.5.2. Donner à MyRAG la clé API admin OWUI
+
+Le router `/api/collections/{name}/publish` du backend MyRAG appelle `POST /api/v1/models/create` côté OWUI pour matérialiser le wrapper d'alias. OWUI v0.8.12 exige soit un cookie de session (impossible depuis un pod), soit une **clé API personnelle** d'un compte admin.
+
+```bash
+# 1. Dans OWUI : Paramètres > Compte > Clés API > "+ Créer une clé"
+#    (le compte qui crée la clé doit être admin OWUI — la clé hérite du rôle).
+# 2. Stocker dans le secret myrag-secrets :
+kubectl -n miraiku patch secret myrag-secrets --type=merge \
+  -p "{\"stringData\":{\"OWUI_ADMIN_API_KEY\":\"sk-<la-clé-générée>\"}}"
+
+# 3. Le pod backend doit être redémarré pour relire le secret
+kubectl -n miraiku rollout restart deploy/myrag-backend
+kubectl -n miraiku rollout status deploy/myrag-backend
+```
+
+### 4.5.3. Vérification end-to-end
+
+```bash
+# Diagnostic : la clé est-elle valide, admin, et le base model existe-t-il ?
+curl -sS https://mycollections.fake-domain.name/api/owui/probe | python3 -m json.tool
+
+# Attendu (ordre des calls) :
+# - GET /api/v1/users/      → 200 + JSON {users:[…role=admin…]}    (clé admin)
+# - GET /api/models         → 200 + 30+ entrées dont 15 openrag-*  (provider OK)
+
+# Test d'un publish complet
+curl -sS -X POST https://mycollections.fake-domain.name/api/collections/<col>/publish \
+  -H 'Content-Type: application/json' \
+  -d '{"alias_enabled":true,"alias_name":"📚 <col>","alias_description":"Test","visibility":"all"}' \
+  | python3 -m json.tool
+# Doit retourner : "owui": {"synced": true, "error": null, "model_id": "openrag-<col>"}
+
+# Et dans le picker OWUI sur https://mychat.fake-domain.name/, le modèle "📚 <col>"
+# doit ouvrir une conversation fonctionnelle (pas de 404).
+```
+
+### 4.5.4. Persistance dans le repo source
+
+Les `kubectl set env` et `patch secret` ci-dessus sont **éphémères** : un futur `kubectl apply -f` du repo `owuicore-main` les écraserait. Pour persister :
+
+- Mettre à jour le ConfigMap source `owui-socle-config` dans [`owuicore-main/k8s/base/configmap.yaml`](../../owuicore-main/k8s/base/configmap.yaml) avec les 3 nouvelles valeurs `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS`.
+- Le secret `myrag-secrets` est géré par `myrag/k8s/secret.yaml` (gitignored) — penser à y ajouter `OWUI_ADMIN_API_KEY` si on régénère le secret depuis le template.
+
 ## 5. DNS
 
 Le CNAME `mycorpus.fake-domain.name → mychat.fake-domain.name.` est déjà configuré (vérifiable via `scw dns record list dns-zone=fake-domain.name`). cert-manager génère le certificat TLS automatiquement via `letsencrypt-prod` dès que l'Ingress est en place (compter 1-2 minutes).

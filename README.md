@@ -208,6 +208,44 @@ kubectl apply -f myrag/k8s/secret.yaml -f myrag/k8s/configmap.yaml -f myrag/k8s/
 kubectl -n miraiku rollout status deploy/myrag-backend
 ```
 
+### Branchement OWUI ↔ OpenRAG (one-shot, à faire une fois par cluster)
+
+Le bouton **« Publier »** côté MyRAG crée un wrapper de modèle dans OWUI qui aliase un modèle `openrag-<collection>`. Pour qu'OWUI sache router l'inférence vers ces modèles, il faut **deux étapes admin one-shot**, après quoi chaque future publication MyRAG marche sans action supplémentaire :
+
+**1. Déclarer OpenRAG comme provider OpenAI dans OWUI** (les `openrag-*` deviennent auto-découvrables) :
+
+```bash
+# Ajoute OpenRAG comme 3e provider en plus de Pipelines et Scaleway Direct.
+# Le rollout est automatique sur set env. Lit les clés existantes depuis owui-socle-secrets.
+kubectl -n miraiku set env deploy/openwebui \
+  OPENAI_API_BASE_URLS="http://pipelines:9099/v1;https://api.scaleway.ai/<SCW_PROJECT_ID>/v1;https://api.openrag.fake-domain.name/v1" \
+  OPENAI_API_KEYS="$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.PIPELINES_API_KEY}' | base64 -d);$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.SCW_SECRET_KEY_LLM}' | base64 -d);<OPENRAG_ADMIN_TOKEN>" \
+  OPENAI_API_CONFIGS='[{"prefix":"scaleway-general.","name":"Pipelines"},{"prefix":"","name":"Scaleway Direct"},{"prefix":"openrag-","name":"OpenRAG MyRAG"}]'
+```
+
+**2. Donner à MyRAG la clé API admin OWUI** (pour appeler `/api/v1/models/create`) :
+
+```bash
+# Génère une clé dans OWUI : Paramètres > Compte > Clés API (compte avec rôle admin).
+kubectl -n miraiku patch secret myrag-secrets --type=merge \
+  -p "{\"stringData\":{\"OWUI_ADMIN_API_KEY\":\"sk-...\"}}"
+kubectl -n miraiku rollout restart deploy/myrag-backend
+```
+
+**Vérification** :
+
+```bash
+# Doit lister 15+ modèles openrag-* avec connection_type=external (pas preset)
+curl -sS https://mychat.fake-domain.name/api/models \
+  -H "Authorization: Bearer $(kubectl -n miraiku get secret myrag-secrets -o jsonpath='{.data.OWUI_ADMIN_API_KEY}' | base64 -d)" \
+  | python3 -c "import sys,json; print('\n'.join(sorted([m['id'] for m in json.load(sys.stdin)['data'] if 'openrag' in m['id']])))"
+
+# Diagnostic complet de la chaîne OWUI (clé valide ? admin ? base models discoverables ?)
+curl -sS https://mycollections.fake-domain.name/api/owui/probe | python3 -m json.tool
+```
+
+Pour persister les changements OWUI au prochain redéploiement de l'environnement, mettre à jour le ConfigMap `owui-socle-config` dans `../owuicore-main/k8s/base/configmap.yaml` (variables `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS`).
+
 Procédure complète (création DB, provisioning bot user Drive, troubleshooting amd64 / naive UTC datetimes / nginx redirects / redirect_uri Keycloak) → [myrag/DEPLOYMENT.md](myrag/DEPLOYMENT.md).
 
 ## Documentation
