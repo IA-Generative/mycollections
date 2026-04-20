@@ -353,18 +353,31 @@ function checkNameAvailability() {
   }
 }
 
+/**
+ * Strip common versioning suffixes so "ceseda-v2" and "ceseda" collide
+ * while "test-drive" and "test" do not. We only collapse real version
+ * markers (-v<digits>, -<digits>, bare trailing digits), not arbitrary
+ * hyphen segments which typically carry semantic meaning.
+ */
+function normalizeCollectionName(s: string): string {
+  return s.toLowerCase()
+    .replace(/-v\d+$/, '')   // -v2, -v10
+    .replace(/-\d+$/, '')    // -2, -10
+    .replace(/\d+$/, '')     // trailing digits without separator
+}
+
 async function checkDuplicates() {
   if (!form.value.name.trim()) return
   const name = form.value.name.toLowerCase()
+  const normName = normalizeCollectionName(name)
 
-  // Check for similar names
-  const similar = allCollections.value.find(c => {
-    const n = c.name.toLowerCase()
-    return n === name
-      || n.includes(name)
-      || name.includes(n)
-      || (source === 'legifrance' && c.source?.type === 'legifrance')
-  })
+  // Exact match wins — shows "existe deja" to block duplicate creation.
+  const exact = allCollections.value.find(c => c.name.toLowerCase() === name)
+
+  // Otherwise flag a soft "similar" only if the *normalized* names collide:
+  // e.g. "ceseda-v2" vs "ceseda" -> warning, but "test-drive" vs "test" -> no warning.
+  const similar = exact
+    || allCollections.value.find(c => normalizeCollectionName(c.name) === normName)
 
   if (similar) {
     duplicateWarning.value = {
