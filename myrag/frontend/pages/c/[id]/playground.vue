@@ -111,6 +111,16 @@
                 <p class="fr-text--sm" style="white-space:pre-wrap;">
                   {{ (chunk.content || '').substring(0, 500) }}{{ (chunk.content || '').length > 500 ? '...' : '' }}
                 </p>
+                <p v-if="chunk.file_url || chunk.chunk_url" class="fr-text--xs fr-mt-1w">
+                  <a v-if="chunk.file_url" :href="toHttps(chunk.file_url)" target="_blank" rel="noopener"
+                     class="fr-link fr-link--sm fr-icon-external-link-line fr-link--icon-right">
+                    Ouvrir le fichier source
+                  </a>
+                  <a v-if="chunk.chunk_url" :href="toHttps(chunk.chunk_url)" target="_blank" rel="noopener"
+                     class="fr-link fr-link--sm fr-ml-2w fr-icon-eye-line fr-link--icon-right">
+                    Voir l'extrait
+                  </a>
+                </p>
               </div>
             </details>
           </div>
@@ -170,6 +180,14 @@ function renderMd(text: string): string {
  * collapses the triple underscores DSFR exports use as separators. Keeps
  * the original if the result would be too short to be useful.
  */
+/** Upgrade any http:// source URL to https:// — the OpenRAG VM is served
+ * over HTTPS via Traefik and browser mixed-content rules would otherwise
+ * block links emitted as bare http by the API response. */
+function toHttps(url: string | undefined | null): string {
+  if (!url) return ''
+  return url.replace(/^http:\/\//i, 'https://')
+}
+
 function prettyName(raw: string): string {
   if (!raw) return ''
   let s = raw.replace(/\.[a-z0-9]{2,5}$/i, '')              // drop .txt/.pdf/.docx
