@@ -315,13 +315,16 @@ async function save() {
     } else {
       await patch(`/api/collections/${id}`, form.value)
     }
-    savedMsg.value = 'Configuration sauvegardee.'
+    savedMsg.value = 'Configuration sauvegardee. Retour a la liste dans un instant…'
     savedClass.value = 'fr-alert--success'
+    // Leave the success banner visible briefly, then send the user back
+    // to the home page listing all collections.
+    setTimeout(() => { navigateTo('/') }, 1500)
   } catch (e: any) {
     savedMsg.value = `Erreur: ${e.message}`
     savedClass.value = 'fr-alert--error'
+    setTimeout(() => { savedMsg.value = '' }, 4000)
   }
   saving.value = false
-  setTimeout(() => { savedMsg.value = '' }, 4000)
 }
 </script>
