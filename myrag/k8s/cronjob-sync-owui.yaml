@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: myrag-sync-owui-feedback
+  namespace: miraiku
+  labels:
+    app: myrag-sync-owui-feedback
+spec:
+  # Every 15 min — frequent enough that a bad response surfaces in the
+  # playground bank before the owner logs in for the day, rarely enough
+  # to keep the pull cost negligible on a small OWUI footprint.
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: owui-registry
+          containers:
+            - name: sync
+              image: rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest
+              imagePullPolicy: Always
+              # Same DATABASE_URL composition trick as the backend deployment:
+              # we compose two URLs from owui-socle-secrets, one pointed at
+              # the MyRAG DB (for feedback writes) and one at the OWUI DB
+              # (for the source reads). DB names are hardcoded because they
+              # are a stable infra contract, not user config.
+              command:
+                - python
+                - -m
+                - app.services.owui_feedback_sync
+                - --cron
+              env:
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: owui-socle-secrets
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: owui-socle-secrets
+                      key: POSTGRES_PASSWORD
+                - name: DATABASE_URL
+                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/myrag"
+                - name: OWUI_DB_URL
+                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/openwebui"
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi

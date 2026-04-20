@@ -180,8 +180,8 @@ async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
 
 @app.get("/api/openrag/file/{file_id}")
 async def openrag_file_proxy(file_id: str):
-    """Same as /api/openrag/extract but for /file/<id> URLs that OpenRAG
-    emits for whole-document downloads.
+    """Proxy for OpenRAG's /file/<id> endpoint (rarely emitted in practice,
+    but kept for completeness).
     """
     import httpx
     from fastapi import Response
@@ -193,4 +193,32 @@ async def openrag_file_proxy(file_id: str):
         content=upstream.content,
         status_code=upstream.status_code,
         media_type=upstream.headers.get("content-type", "application/octet-stream"),
+    )
+
+
+@app.get("/api/openrag/static/{filepath:path}")
+async def openrag_static_proxy(filepath: str):
+    """Proxy for OpenRAG's /static/<hashname> URLs — what source.file_url
+    points to for whole-document access. Auth-protected on OpenRAG's side
+    (redirects to /auth/login for anonymous callers), relayed here with
+    the stored admin token.
+
+    Preserves the upstream content-type so the browser opens PDFs inline
+    (application/pdf), images inline, etc.
+    """
+    import httpx
+    from fastapi import Response
+    headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
+    url = f"{settings.openrag_url.rstrip('/')}/static/{filepath}"
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        upstream = await client.get(url, headers=headers)
+    # Preserve content-disposition so browsers can hint a filename on save.
+    resp_headers = {}
+    if "content-disposition" in upstream.headers:
+        resp_headers["Content-Disposition"] = upstream.headers["content-disposition"]
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/octet-stream"),
+        headers=resp_headers,
     )

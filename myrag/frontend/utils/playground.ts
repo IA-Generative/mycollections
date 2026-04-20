@@ -29,18 +29,22 @@ export function toHttps(url: string | undefined | null): string {
 /**
  * Rewrite an OpenRAG source URL so it goes through the MyRAG proxy.
  *
- * OpenRAG's /extract/<id> and /file/<id> require a Bearer admin token.
- * Links opened in a new browser tab can't attach that header, so the raw
- * URLs 401. Same-origin proxy endpoints on MyRAG carry the token server
- * side, and the browser sees plain content.
+ * OpenRAG's /extract/, /file/, and /static/ endpoints all require a
+ * Bearer admin token. Links opened in a new browser tab can't attach that
+ * header and end up on a 401 or a redirect to /auth/login. Same-origin
+ * proxy endpoints on MyRAG carry the token server-side, and the browser
+ * sees plain content (HTML-wrapped chunk text, or raw PDF/image).
  *
- * Safe no-op for anything that isn't an openrag extract/file URL.
+ * Safe no-op for anything that isn't recognized as an OpenRAG URL.
  */
 export function proxiedSourceUrl(url: string | undefined | null): string {
   if (!url) return ''
   const https = toHttps(url)
-  // Match …/extract/<id> or …/file/<id> on the openrag host family.
+  // /static/<file> serves the original document.
+  const staticM = https.match(/\/static\/(.+)$/i)
+  if (staticM) return `/api/openrag/static/${staticM[1]}`
+  // /extract/<id> or /file/<id> serves a chunk or the file metadata.
   const m = https.match(/\/(extract|file)\/([^/?#]+)/i)
-  if (!m) return https
-  return `/api/openrag/${m[1]}/${m[2]}`
+  if (m) return `/api/openrag/${m[1]}/${m[2]}`
+  return https
 }

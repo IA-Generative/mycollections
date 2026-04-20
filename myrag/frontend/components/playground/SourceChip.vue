@@ -13,13 +13,19 @@
       {{ label }}<span v-if="page">&nbsp;·&nbsp;p. {{ page }}</span>
     </span>
 
-    <!-- Hover preview: tail of the chunk text with a hint to open the full
-         view. We already have chunk.content from the /chat payload, so no
-         extra fetch is needed. -->
+    <!-- Hover preview: chunk content + quick links. chunk.content comes
+         straight from the /chat payload, so no extra fetch is needed. -->
     <span v-if="showPreview && previewText" class="myrag-source-chip__popover" role="tooltip">
       <span class="myrag-source-chip__popover-title">{{ fullName || 'Extrait' }}</span>
       <span class="myrag-source-chip__popover-body">{{ previewText }}</span>
-      <span v-if="href" class="myrag-source-chip__popover-hint">Clique pour la vue complete &rarr;</span>
+      <span class="myrag-source-chip__popover-hint">
+        <span v-if="href">Clique la puce &rarr; extrait complet</span>
+        <a v-if="fullDocHref" :href="fullDocHref" target="_blank" rel="noopener"
+           class="myrag-source-chip__popover-link"
+           @click.stop>
+          &#128196; Document complet
+        </a>
+      </span>
     </span>
   </span>
 </template>
@@ -43,6 +49,16 @@ const fullName = computed(() => props.source.original_filename || props.source.f
 const label = computed(() => prettyName(fullName.value) || 'Source')
 const page = computed(() => props.source.page)
 const href = computed(() => proxiedSourceUrl(props.source.chunk_url || props.source.file_url))
+/** Separate link for the original document (file_url), shown in the popover
+ *  so the user can open the full PDF/HTML/etc. when the chunk alone isn't
+ *  enough context. Hidden if the source has no file_url distinct from the
+ *  chunk link. */
+const fullDocHref = computed(() => {
+  const fu = props.source.file_url
+  if (!fu) return ''
+  const proxied = proxiedSourceUrl(fu)
+  return proxied === href.value ? '' : proxied
+})
 
 /** Preview uses the chunk content already embedded in the RAG response;
  *  500 chars is enough to judge relevance without dominating the screen. */
@@ -105,8 +121,28 @@ const previewText = computed(() => {
   -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%);
 }
 .myrag-source-chip__popover-hint {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  align-items: center;
   font-size: 0.72rem;
   color: #000091;
   margin-top: 0.2rem;
 }
+.myrag-source-chip__popover-link {
+  pointer-events: auto;
+  color: #000091;
+  text-decoration: none;
+  padding: 0.2rem 0.5rem;
+  background: #eef3ff;
+  border-radius: 3px;
+}
+.myrag-source-chip__popover-link:hover {
+  background: #d4defa;
+  text-decoration: underline;
+}
+/* The popover was pointer-events:none to let clicks fall through to the
+   chip; re-enable it on the link specifically. */
+.myrag-source-chip__popover { pointer-events: none; }
+.myrag-source-chip__popover:hover { pointer-events: auto; }
 </style>
