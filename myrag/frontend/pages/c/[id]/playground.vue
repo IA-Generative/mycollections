@@ -73,9 +73,9 @@
         <div class="fr-input-group">
           <label class="fr-label" for="question">Votre question</label>
           <textarea id="question" class="fr-input" v-model="question" rows="2"
-                    placeholder="Quelles sont les conditions pour une carte de sejour vie privee ?"
+                    placeholder="Posez une question en langage naturel sur le contenu de cette collection. L'assistant citera les sources utilisées dans sa réponse."
                     @keydown.enter.exact.prevent="canSend && send()"></textarea>
-          <p class="fr-hint-text">Entree pour envoyer, Maj+Entree pour retour a la ligne.</p>
+          <p class="fr-hint-text">Entree pour envoyer, Maj+Entree pour retour a la ligne. Cliquez une suggestion pour demarrer.</p>
         </div>
         <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
           <button class="fr-btn" @click="send" :disabled="!canSend">
