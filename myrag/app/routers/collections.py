@@ -122,8 +122,13 @@ async def list_collections_endpoint(include_archived: bool = False):
             if model_id.startswith("openrag-"):
                 name = model_id[len("openrag-"):]
                 if name and name not in known_names and name not in ("all", "default"):
+                    # Orphan: a partition exists on OpenRAG but no MyRAG fiche
+                    # was ever created for it. Flagged so the UI can surface
+                    # "adoptable" cards without fabricating a description from
+                    # raw filenames (which read as junk to end users).
                     collections.append({"name": name, "description": "", "strategy": "auto",
-                                        "sensitivity": "public", "scope": "group"})
+                                        "sensitivity": "public", "scope": "group",
+                                        "orphan": True})
                     known_names.add(name)
 
         # Enrich with file counts
@@ -131,11 +136,6 @@ async def list_collections_endpoint(include_archived: bool = False):
             try:
                 files = await client.list_files(c["name"])
                 c["file_count"] = len(files)
-                if not c.get("description") and files:
-                    names = [f.get("original_filename") or f.get("filename", "") for f in files[:5]]
-                    names = [n for n in names if n]
-                    if names:
-                        c["description"] = f"{len(files)} documents indexes ({', '.join(names[:3])}{'...' if len(files) > 3 else ''})"
             except Exception:
                 c["file_count"] = 0
     except Exception:

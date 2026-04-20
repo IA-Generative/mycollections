@@ -112,9 +112,15 @@
               </span>
               <span class="fr-badge fr-badge--sm fr-badge--info">{{ col.strategy }}</span>
               <span v-if="col.graph_enabled" class="fr-badge fr-badge--sm fr-badge--new">graph</span>
+              <span v-if="col.orphan" class="fr-badge fr-badge--sm fr-badge--warning" title="Partition OpenRAG sans fiche MyRAG — ouvrez la collection pour l'adopter.">
+                sans fiche
+              </span>
             </div>
 
-            <p class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);">
+            <p class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);font-style:italic;" v-if="col.orphan">
+              Collection importee depuis OpenRAG, pas encore decrite dans Mes collections.
+            </p>
+            <p v-else class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);">
               {{ col.description || 'Pas de description' }}
             </p>
             <p v-if="col.file_count" class="fr-text--xs fr-mb-2w" style="color:var(--text-mention-grey);">
