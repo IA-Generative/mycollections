@@ -141,7 +141,18 @@ async def sync_batch(owui_db_url: str, limit: int | None = None) -> SyncResult:
             q = select(OwuiFeedback).order_by(OwuiFeedback.created_at.desc())
             if limit:
                 q = q.limit(limit)
-            rows = (await owui_session.execute(q)).scalars().all()
+            try:
+                rows = (await owui_session.execute(q)).scalars().all()
+            except Exception as e:
+                # OWUI creates the feedback table lazily (on first vote); a
+                # fresh deployment hits UndefinedTableError. Not a real
+                # error — just nothing to sync yet. Log and exit clean.
+                msg = str(e).lower()
+                if "does not exist" in msg or "undefined" in msg or "undefinedtable" in msg:
+                    log.info("owui_feedback_sync: feedback table not found — "
+                             "OWUI likely has no votes yet, nothing to sync")
+                    return result
+                raise
 
             log.info("owui_feedback_sync: %d OWUI feedback rows to scan", len(rows))
 

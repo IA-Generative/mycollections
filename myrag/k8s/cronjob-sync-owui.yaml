@@ -50,7 +50,9 @@ spec:
                 - name: DATABASE_URL
                   value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/myrag"
                 - name: OWUI_DB_URL
-                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/openwebui"
+                  # DB name is `owui`, hardcoded by owuicore-main postgres init
+                  # (POSTGRES_DB: ${POSTGRES_DB:-owui}). Not `openwebui`.
+                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/owui"
               resources:
                 requests:
                   cpu: 50m
