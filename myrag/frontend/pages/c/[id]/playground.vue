@@ -9,36 +9,24 @@
     </nav>
 
     <h1 class="fr-h3">Playground RAG — {{ id }}</h1>
-    <p class="fr-text--sm" style="color:#666;">
-      Mini-agent conversationnel pour tester les reponses RAG de cette collection.
-    </p>
 
     <div class="fr-grid-row fr-grid-row--gutters">
       <!-- Left: Chat -->
       <div class="fr-col-7">
-        <!-- Suggestions (cliquables) -->
-        <div v-if="suggestions.length && !messages.length" class="fr-card fr-mb-2w">
-          <div class="fr-card__body">
-            <div class="fr-card__content">
-              <h3 class="fr-card__title">💡 Questions suggerees</h3>
-              <p class="fr-text--sm" style="color:#666;">
-                Cliquez une suggestion pour l'envoyer, ou tapez la votre en bas.
-              </p>
-              <div class="fr-mt-1w">
-                <button v-for="(s, i) in suggestions" :key="i"
-                        class="fr-btn fr-btn--sm fr-btn--secondary fr-mb-1w fr-mr-1w"
-                        style="white-space:normal;text-align:left;"
-                        :disabled="sending"
-                        @click="ask(s)">
-                  {{ s }}
-                </button>
-              </div>
-              <p v-if="loadingSuggestions" class="fr-text--xs fr-mt-1w" style="color:#666;">
-                Generation des suggestions en cours...
-              </p>
-            </div>
-          </div>
+        <!-- Suggestions (cliquables, compactes) -->
+        <div v-if="suggestions.length && !messages.length" class="fr-mb-2w">
+          <button v-for="(s, i) in suggestions" :key="i"
+                  class="fr-btn fr-btn--sm fr-btn--secondary fr-mb-1w fr-mr-1w"
+                  style="white-space:normal;text-align:left;"
+                  :disabled="sending"
+                  @click="ask(s)">
+            💡 {{ s }}
+          </button>
         </div>
+        <p v-if="loadingSuggestions && !suggestions.length && !messages.length"
+           class="fr-text--xs fr-mb-2w" style="color:#666;">
+          Génération des suggestions…
+        </p>
 
         <!-- Messages -->
         <div v-if="messages.length" class="fr-card fr-mb-2w">
@@ -71,11 +59,11 @@
 
         <!-- Input -->
         <div class="fr-input-group">
-          <label class="fr-label" for="question">Votre question</label>
+          <label class="fr-label fr-sr-only" for="question">Votre question</label>
           <textarea id="question" class="fr-input" v-model="question" rows="2"
-                    placeholder="Posez une question en langage naturel sur le contenu de cette collection. L'assistant citera les sources utilisées dans sa réponse."
+                    placeholder="Posez une question…"
                     @keydown.enter.exact.prevent="canSend && send()"></textarea>
-          <p class="fr-hint-text">Entree pour envoyer, Maj+Entree pour retour a la ligne. Cliquez une suggestion pour demarrer.</p>
+          <p class="fr-hint-text">Entrée pour envoyer · Maj+Entrée pour retour ligne</p>
         </div>
         <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
           <button class="fr-btn" @click="send" :disabled="!canSend">
