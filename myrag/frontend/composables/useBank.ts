@@ -57,27 +57,44 @@ export function useBank(collection: string) {
   }
 
   /**
-   * Hit /generate-eval and persist the result as an EvalDataset so the
-   * questions appear on subsequent loads. The backend already attaches
-   * "Jeu de test genere automatiquement" in the description, which the
-   * /bank endpoint uses to classify the dataset as 'generated'.
+   * Generate fresh test questions and persist them as an EvalDataset so
+   * subsequent loads see them classified as 'generated'.
+   *
+   * We deliberately use /chat with a list-producing prompt rather than
+   * /generate-eval. The latter depends on an OpenRAG internal endpoint
+   * (get_file_content) that 400s on a number of partitions, leaving the
+   * bank permanently empty on those collections. /chat uses the public
+   * RAG pipeline and works anywhere the playground itself works.
    */
   async function generate() {
     if (isGenerating.value) return
     isGenerating.value = true
     try {
-      const ds = await post(`/api/playground/${collection}/generate-eval`, {})
-      if (ds?.questions?.length) {
-        // Persist. The backend has no POST /eval/datasets yet — create one
-        // through the same shape the wizard step-4 uses.
+      const data = await post(`/api/playground/${collection}/chat`, {
+        question:
+          "Propose 4 questions variees qu'un utilisateur pourrait poser sur le contenu indexe " +
+          "de cette collection, pour tester le RAG. Reponds UNIQUEMENT avec les 4 questions, " +
+          "une par ligne, sans numerotation, sans puces, sans introduction, sans conclusion. " +
+          "Chaque question doit etre specifique au contenu reel, pas generique.",
+        temperature: 0.4,
+        top_k: 5,
+      })
+      const raw = (data?.response || '').trim()
+      const questions = raw
+        .split('\n')
+        .map((line: string) =>
+          line.replace(/^[\s\-\*\d\.\)•>]+/, '').replace(/[\s—-]+$/, '').trim(),
+        )
+        .filter((line: string) => line.length > 5 && line.includes('?'))
+        .slice(0, 4)
+        .map((q: string, i: number) => ({ id: `auto-${Date.now()}-${i}`, question: q, expected_answer: '' }))
+
+      if (questions.length) {
         await post(`/api/eval/${collection}/datasets`, {
-          name: ds.name || `${collection}-evaluation`,
-          description: ds.description || 'Jeu de test genere automatiquement',
-          questions: ds.questions,
-        }).catch(() => {
-          // Best-effort: if the endpoint is missing the questions still
-          // render this session via a one-shot in-memory fallback below.
-        })
+          name: `${collection}-evaluation`,
+          description: 'Jeu de test genere automatiquement',
+          questions,
+        }).catch(() => { /* non-fatal: load() will just show nothing new */ })
       }
       await load()
     } finally {
