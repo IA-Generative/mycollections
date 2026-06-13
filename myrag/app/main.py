@@ -222,6 +222,8 @@ async def owui_probe():
         ("GET", "/api/v1/auths", None),              # whoami — confirms key validity
         ("GET", "/api/v1/users/", None),             # admin-only — confirms admin role
         ("GET", "/api/v1/models/model", {"id": "openrag-bas"}),
+        ("GET", "/api/models", None),                # full model list incl. discovered base models
+        ("GET", "/openai/models", None),             # OWUI's OpenAI proxy listing
     ]
     async with httpx.AsyncClient(timeout=10.0) as h:
         for method, path, params in probes:

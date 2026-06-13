@@ -10,6 +10,7 @@ node_modules/
 .nuxt/
 .output/
 myrag/frontend/dist/
+myrag/frontend/dist
 *.log
 
 # Data / local secrets
@@ -20,6 +21,9 @@ myrag/data/
 .env
 .env.local
 myrag/k8s/secret.yaml
+
+# Sorties locales sensibles (audit, homologation) — ne pas committer
+private/
 
 # OS
 .DS_Store
