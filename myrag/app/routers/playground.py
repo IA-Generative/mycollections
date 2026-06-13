@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.openrag_client import OpenRAGClient
+from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
 
@@ -76,14 +77,16 @@ async def generate_eval_dataset(collection: str):
     sample_files = files[:15]  # max 15 chunks for context
     content_parts = []
     for f in sample_files:
-        fname = f.get("original_filename") or f.get("filename") or "?"
+        # fname et contenu proviennent de documents ingérés (non fiables) :
+        # on les neutralise avant insertion dans le prompt (anti-injection).
+        fname = sanitize_oneline(f.get("original_filename") or f.get("filename") or "?", max_len=200)
         # Fetch chunk content via extract URL
         try:
             chunk_id = f.get("_id") or ""
             file_id = f.get("file_id", "")
             text = await client.get_file_content(collection, file_id)
             if text:
-                content_parts.append(f"### {fname}\n{text[:800]}")
+                content_parts.append(f"### {fname}\n{neutralize_for_prompt(text, max_len=800)}")
         except Exception:
             content_parts.append(f"### {fname}\n(contenu non disponible)")
 
@@ -93,7 +96,7 @@ async def generate_eval_dataset(collection: str):
             detail="Impossible de lire le contenu des documents indexes.",
         )
 
-    context = "\n\n".join(content_parts)
+    context = wrap_untrusted("\n\n".join(content_parts), label="EXTRAITS")
     model = f"openrag-{collection}"
 
     prompt = f"""Voici des extraits d'une collection de documents :
@@ -238,28 +241,30 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
         if sample_files:
             fallback_used = True
 
-            # Build context from file names and metadata
+            # Build context from file names and metadata. Les noms de fichiers
+            # sont contrôlés à l'upload (non fiables) : on les neutralise et on
+            # les passe en DONNÉE délimitée, jamais dans le prompt système.
             file_list = []
             for i, f in enumerate(sample_files, 1):
-                fname = f.get("original_filename") or f.get("filename") or f"fichier-{i}"
-                fsize = f.get("file_size", "")
+                fname = sanitize_oneline(f.get("original_filename") or f.get("filename") or f"fichier-{i}", max_len=200)
+                fsize = sanitize_oneline(str(f.get("file_size", "")), max_len=20)
                 file_list.append(f"- {fname} ({fsize})")
                 sources.append(f)
 
             total_files_count = len(await client.list_files(collection))
-            files_block = "\n".join(file_list)
+            files_block = wrap_untrusted("\n".join(file_list), label="NOMS DE FICHIERS")
 
-            fallback_prompt = (
+            fallback_system = (
                 system_prompt + "\n\n" if system_prompt else ""
             ) + (
                 f"Cette collection '{collection}' contient {total_files_count} documents indexes. "
-                f"Voici un echantillon des fichiers :\n{files_block}\n\n"
-                "Reponds a la question en te basant sur les noms de fichiers pour decrire le contenu de la collection."
+                "Reponds a la question en te basant sur les noms de fichiers (fournis comme donnee) "
+                "pour decrire le contenu de la collection."
             )
 
             fallback_messages = [
-                {"role": "system", "content": fallback_prompt},
-                {"role": "user", "content": req.question},
+                {"role": "system", "content": fallback_system},
+                {"role": "user", "content": f"{files_block}\n\n{req.question}"},
             ]
 
             try:
