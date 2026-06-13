@@ -10,6 +10,10 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
+from app.security_utils import assert_public_http_url, ssrf_request_guard
+
+# Hook anti-SSRF appliqué à tous les fetch d'URL fournies par l'utilisateur.
+_SSRF_HOOKS = {"request": [ssrf_request_guard]}
 
 # Safety caps for the synchronous fetch in /drive/add — protect against both
 # ingress timeouts and OOM. If a user really needs more, they can fractionner.
@@ -58,7 +62,8 @@ async def check_url(url: str = Query(..., description="URL to check")):
     Server-side HEAD request avoids browser CORS restrictions.
     """
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+        assert_public_http_url(url)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0, event_hooks=_SSRF_HOOKS) as client:
             resp = await client.head(url)
             if resp.status_code < 400:
                 content_type = resp.headers.get("content-type", "inconnu").split(";")[0].strip()
@@ -92,7 +97,8 @@ async def preview_url(
     Server-side fetch avoids CORS and X-Frame-Options restrictions.
     """
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+        assert_public_http_url(url)
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0, event_hooks=_SSRF_HOOKS) as client:
             async with client.stream("GET", url) as resp:
                 if resp.status_code >= 400:
                     return {"content": None, "error": f"HTTP {resp.status_code}"}

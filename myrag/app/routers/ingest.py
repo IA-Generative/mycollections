@@ -14,7 +14,7 @@ from app.config import settings
 from app.services.chunker import chunk_document, Strategy, Sensitivity
 from app.services.job_store import create_job, get_job, update_job, increment_job_progress, complete_job, list_jobs
 from app.services.openrag_client import OpenRAGClient
-from app.security_utils import safe_filename, ensure_within
+from app.security_utils import safe_filename, ensure_within, assert_public_http_url, ssrf_request_guard
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -156,8 +156,12 @@ class IngestFromUrlRequest(BaseModel):
 @router.post("/{collection}/from-url")
 async def ingest_from_url(collection: str, req: IngestFromUrlRequest):
     """Download a remote file by URL, chunk it, and index in OpenRAG."""
+    assert_public_http_url(req.url)
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=60.0,
+            event_hooks={"request": [ssrf_request_guard]},
+        ) as client:
             resp = await client.get(req.url)
             if resp.status_code >= 400:
                 raise HTTPException(status_code=400, detail=f"HTTP {resp.status_code}")

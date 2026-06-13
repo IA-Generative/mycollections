@@ -88,3 +88,15 @@ def assert_public_http_url(url: str) -> str:
         ):
             raise HTTPException(status_code=400, detail="Cible d'URL non autorisée (adresse interne)")
     return url
+
+
+async def ssrf_request_guard(request) -> None:
+    """Hook de requête httpx : valide l'URL de CHAQUE requête, y compris les
+    cibles de redirection 3xx.
+
+    Branché via ``event_hooks={"request": [ssrf_request_guard]}`` sur un client
+    httpx en ``follow_redirects=True`` : ferme le contournement SSRF où une URL
+    publique redirige vers une adresse interne, sans casser les redirections
+    publiques légitimes.
+    """
+    assert_public_http_url(str(request.url))
