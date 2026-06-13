@@ -207,11 +207,11 @@ async def openrag_file_proxy(file_id: str):
 async def owui_probe():
     """Diagnostic endpoint for the admin API key.
 
-    Returns the HTTP status + response-text preview from three OWUI calls
-    that /publish would make. Helps pin down whether a 401 is "bad key",
-    "key valid but not admin", "wrong URL", or "OWUI unreachable".
+    Returns only the HTTP status of the OWUI calls that /publish would make,
+    to pin down whether a 401 is "bad key", "key valid but not admin", "wrong
+    URL", or "OWUI unreachable".
 
-    Does not expose the key itself.
+    Does not expose the key (not even a prefix) nor any upstream response body.
     """
     from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
     import httpx
@@ -222,7 +222,6 @@ async def owui_probe():
     out = {
         "base_url": client.base_url,
         "key_set": bool(client.api_key),
-        "key_prefix": (client.api_key[:6] + "…") if client.api_key else "",
         "calls": [],
     }
     probes = [
@@ -240,10 +239,10 @@ async def owui_probe():
                 out["calls"].append({
                     "method": method, "path": path,
                     "status": r.status_code,
-                    "body_preview": r.text[:200],
+                    "ok": r.status_code < 400,
                 })
-            except Exception as e:
-                out["calls"].append({"method": method, "path": path, "error": str(e)})
+            except Exception:
+                out["calls"].append({"method": method, "path": path, "error": "request failed"})
     return out
 
 
