@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { marked } from 'marked'
+import { renderMarkdownSafe } from '~/utils/sanitize'
 import type { ChatMessage } from '~/composables/useChat'
 
 const props = defineProps<{
@@ -50,10 +50,7 @@ const deduped = computed(() => {
   return out
 })
 
-const rendered = computed(() => {
-  if (!props.message.content) return ''
-  return marked.parse(props.message.content, { breaks: true }) as string
-})
+const rendered = computed(() => renderMarkdownSafe(props.message.content))
 
 function onVote(v: 'up' | 'down') {
   emit('vote', v)

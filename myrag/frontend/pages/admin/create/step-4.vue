@@ -219,7 +219,7 @@ const route = useRoute()
 const collection = route.query.collection as string
 const { get, post, patch } = useApi()
 
-import { marked } from 'marked'
+import { renderMarkdownSafe } from '~/utils/sanitize'
 
 const question = ref('')
 const response = ref('')
@@ -235,10 +235,7 @@ const runProgress = ref(0)
 const evalResults = ref<any[]>([])
 const evalScore = computed(() => evalResults.value.filter(r => r.pass).length)
 
-const renderedResponse = computed(() => {
-  if (!response.value) return ''
-  return marked.parse(response.value, { breaks: true }) as string
-})
+const renderedResponse = computed(() => renderMarkdownSafe(response.value))
 
 async function test() {
   testing.value = true
@@ -282,8 +279,7 @@ function downloadDataset() {
 }
 
 function renderMd(text: string): string {
-  if (!text) return ''
-  return marked.parse(text, { breaks: true }) as string
+  return renderMarkdownSafe(text)
 }
 
 function resultStyle(r: any): string {
