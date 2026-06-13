@@ -26,10 +26,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Origines explicites si configurées (credentials autorisés) ; sinon repli sur
+# '*' SANS credentials — combo '*' + credentials interdit par la spec et risqué.
+_cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins or ["*"],
+    allow_credentials=bool(_cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

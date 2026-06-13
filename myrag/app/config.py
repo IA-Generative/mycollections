@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Public URL (for iframe links)
     myrag_public_url: str = Field(default="http://localhost:8200")
 
+    # CORS — liste d'origines autorisées (CSV). Vide => '*' SANS credentials
+    # (l'API utilise des Bearer, pas de cookies). En prod, renseigner les
+    # origines frontend de confiance pour verrouiller.
+    cors_allow_origins: str = Field(default="")
+
     # Data directory
     data_dir: str = Field(default="/app/data")
 
