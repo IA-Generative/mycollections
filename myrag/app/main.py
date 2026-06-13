@@ -157,6 +157,8 @@ async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
     import json as _json
     from fastapi import Response
     from fastapi.responses import HTMLResponse
+    from app.security_utils import reject_path_traversal
+    reject_path_traversal(chunk_id, field="chunk_id")
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/extract/{chunk_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -185,6 +187,8 @@ async def openrag_file_proxy(file_id: str):
     """
     import httpx
     from fastapi import Response
+    from app.security_utils import reject_path_traversal
+    reject_path_traversal(file_id, field="file_id")
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/file/{file_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -252,6 +256,8 @@ async def openrag_static_proxy(filepath: str):
     """
     import httpx
     from fastapi import Response
+    from app.security_utils import reject_path_traversal
+    reject_path_traversal(filepath, field="filepath")
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/static/{filepath}"
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:

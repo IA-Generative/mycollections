@@ -32,7 +32,10 @@ class QRCache:
         self._stats: dict[str, dict] = {}  # collection → {hits, misses}
 
     def _path(self, collection: str) -> Path:
-        return Path(self.data_dir) / collection / "qr_cache.json"
+        # `collection` provient d'un paramètre de route : on confine sous data_dir.
+        from app.security_utils import ensure_within
+        base = Path(self.data_dir)
+        return ensure_within(base, base / collection) / "qr_cache.json"
 
     def _load(self, collection: str) -> list[QREntry]:
         path = self._path(collection)

@@ -14,6 +14,7 @@ from app.config import settings
 from app.services.chunker import chunk_document, Strategy, Sensitivity
 from app.services.job_store import create_job, get_job, update_job, increment_job_progress, complete_job, list_jobs
 from app.services.openrag_client import OpenRAGClient
+from app.security_utils import safe_filename, ensure_within
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -23,10 +24,16 @@ SOURCES_DIR = Path(settings.data_dir) / "_sources"
 
 
 def _save_source_file(collection: str, filename: str, content: bytes) -> str:
-    """Save source file to disk for re-indexation (R7). Returns the storage path."""
-    col_dir = SOURCES_DIR / collection
+    """Save source file to disk for re-indexation (R7). Returns the storage path.
+
+    `collection` et `filename` proviennent d'entrées utilisateur : on confine
+    le chemin sous SOURCES_DIR et on réduit le filename à un basename sûr pour
+    empêcher toute traversée de répertoire.
+    """
+    filename = safe_filename(filename)
+    col_dir = ensure_within(SOURCES_DIR, SOURCES_DIR / collection)
     col_dir.mkdir(parents=True, exist_ok=True)
-    path = col_dir / filename
+    path = ensure_within(col_dir, col_dir / filename)
     path.write_bytes(content)
     return str(path)
 

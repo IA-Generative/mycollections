@@ -64,11 +64,17 @@ class EvalService:
         from app.config import settings
         self.data_dir = data_dir or settings.data_dir
 
+    def _collection_dir(self, collection: str) -> Path:
+        # `collection` provient d'un paramètre de route : on confine sous data_dir.
+        from app.security_utils import ensure_within
+        base = Path(self.data_dir)
+        return ensure_within(base, base / collection)
+
     def _questions_path(self, collection: str) -> Path:
-        return Path(self.data_dir) / collection / "eval_questions.json"
+        return self._collection_dir(collection) / "eval_questions.json"
 
     def _runs_path(self, collection: str) -> Path:
-        return Path(self.data_dir) / collection / "eval_runs.json"
+        return self._collection_dir(collection) / "eval_runs.json"
 
     # --- Dataset management ---
 
