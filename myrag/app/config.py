@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     keycloak_admin_user: str = Field(default="admin")
     keycloak_admin_password: str = Field(default="")
 
+    # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
+    # false par défaut (dev/tests) ; true en prod via la configmap. Sert aussi
+    # de coupe-circuit (repasser à false + restart désactive la garde).
+    auth_enabled: bool = Field(default=False)
+
     # Legifrance PISTE
     legifrance_client_id: str = Field(default="")
     legifrance_client_secret: str = Field(default="")

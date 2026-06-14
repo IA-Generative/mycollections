@@ -58,18 +58,24 @@ async def root():
     )
 
 
-app.include_router(ingest.router)
-app.include_router(collections.router)
-app.include_router(sync.router)
+from app.auth import AUTH_REQUIRED
+
+# Routes XHR (le front attache un Bearer via useApi) → garde JWT activable par
+# AUTH_ENABLED. Exemptés : graph/articles (HTML servi en iframe/lien direct,
+# sans Authorization possible), feedback (écritures externes possibles) et les
+# proxys admin-token (liens ouverts dans un nouvel onglet) — cf. risques résiduels.
+app.include_router(ingest.router, dependencies=AUTH_REQUIRED)
+app.include_router(collections.router, dependencies=AUTH_REQUIRED)
+app.include_router(sync.router, dependencies=AUTH_REQUIRED)
 app.include_router(graph.router)
 app.include_router(articles.router)
-app.include_router(sources.router)
+app.include_router(sources.router, dependencies=AUTH_REQUIRED)
 app.include_router(feedback.router)
-app.include_router(publication.router)
-app.include_router(playground.router)
-app.include_router(playground_bank.router)
-app.include_router(qr_cache_router.router)
-app.include_router(eval_datasets.router)
+app.include_router(publication.router, dependencies=AUTH_REQUIRED)
+app.include_router(playground.router, dependencies=AUTH_REQUIRED)
+app.include_router(playground_bank.router, dependencies=AUTH_REQUIRED)
+app.include_router(qr_cache_router.router, dependencies=AUTH_REQUIRED)
+app.include_router(eval_datasets.router, dependencies=AUTH_REQUIRED)
 
 
 @app.get("/api/config")
