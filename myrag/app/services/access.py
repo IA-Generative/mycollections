@@ -85,9 +85,10 @@ def can_write_collection(name: str, groups: list[str] | None) -> bool:
 
 
 def can_create_collection(groups: list[str] | None) -> bool:
-    """Créer une collection = action d'opérateur : superadmin, ou admin d'au
-    moins une collection. Un simple membre (lecture) ou un auditeur ne peut pas.
+    """Créer une collection est ouvert à tout utilisateur authentifié.
+
+    Créer sa propre collection est une action utilisateur (modèle multi-tenant),
+    pas réservée aux opérateurs ; l'endpoint est déjà protégé par l'auth. Seule
+    l'administration (sync, jobs, monitoring) reste réservée aux super-admins.
     """
-    if is_superadmin(groups):
-        return True
-    return bool(_collections(groups, admin_only=True))
+    return True

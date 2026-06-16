@@ -215,7 +215,6 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ middleware: 'admin-only' })
 const route = useRoute()
 const collection = route.query.collection as string
 const { get, post, patch } = useApi()

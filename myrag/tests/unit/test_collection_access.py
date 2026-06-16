@@ -59,8 +59,9 @@ class TestPredicates:
         assert access.can_read_collection("collec-user1", groups) is True
         assert access.can_write_collection("collec-user1", groups) is False
 
-    def test_can_create_requires_operator(self):
+    def test_any_authenticated_user_can_create(self):
+        # Créer sa collection = action utilisateur (multi-tenant), pas réservée aux ops.
         assert access.can_create_collection([G_SUPER]) is True
         assert access.can_create_collection([G_USER1_ADMIN]) is True
-        assert access.can_create_collection([G_USER1]) is False  # membre simple
-        assert access.can_create_collection([]) is False
+        assert access.can_create_collection([G_USER1]) is True  # membre simple : OK
+        assert access.can_create_collection([]) is True

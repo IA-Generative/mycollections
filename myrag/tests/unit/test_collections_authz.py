@@ -117,12 +117,14 @@ def test_acces_direct_a_une_collection_d_autrui_refuse(mock_cls, app_client):
 
 
 @patch("app.routers.collections.OpenRAGClient")
-def test_membre_simple_ne_peut_pas_creer(mock_cls, app_client):
+def test_tout_utilisateur_authentifie_peut_creer(mock_cls, app_client):
+    # Créer sa collection est une action utilisateur (multi-tenant), pas réservée
+    # aux opérateurs. Seule l'administration (sync/jobs) reste superadmin-only.
     app, client = app_client
     _no_openrag(mock_cls)
 
-    membre = CurrentUser(sub="m", username="m", groups=["/myrag/authzt-u1"])  # pas -admin
+    membre = CurrentUser(sub="m", username="m", groups=["/myrag/authzt-u1"])  # membre simple
     _as(app, membre)
-    assert client.post("/api/collections", json={"name": "nouvelle"}).status_code == 403
+    assert client.post("/api/collections", json={"name": "authzt-nouvelle"}).status_code == 200
 
     app.dependency_overrides.clear()

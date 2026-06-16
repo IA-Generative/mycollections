@@ -56,7 +56,7 @@
         </div>
       </div>
 
-      <div class="fr-col-12 fr-col-md-4">
+      <div v-if="isAdmin" class="fr-col-12 fr-col-md-4">
         <div class="fr-tile fr-enlarge-link">
           <div class="fr-tile__body">
             <div class="fr-tile__content">
@@ -166,6 +166,7 @@
 
 <script setup lang="ts">
 const { get } = useApi()
+const { isAdmin } = useAdminAuth()
 const collections = ref<any[]>([])
 const loading = ref(true)
 
