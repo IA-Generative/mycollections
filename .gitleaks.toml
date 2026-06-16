@@ -1,0 +1,13 @@
+# Configuration gitleaks — etend les regles par defaut.
+# Utilise par le hook pre-commit local et par la CI (.github/workflows/gitleaks.yml).
+title = "mycollections gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chemins locaux gitignores uniquement (le vrai secret.yaml et les notes internes). Les .template/.example NE sont PAS exemptes : ils doivent rester a placeholders."
+paths = [
+  '''myrag/k8s/secret\.yaml$''',
+  '''private/.*''',
+]

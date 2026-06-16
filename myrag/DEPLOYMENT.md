@@ -148,7 +148,7 @@ OWUI auto-découvre tous les modèles (`/v1/models`) de chaque URL listée dans 
 ```bash
 # Vérifier d'abord que /v1/models répond bien (15+ modèles openrag-* attendus)
 curl -sS "https://api.openrag.fake-domain.name/v1/models" \
-  -H "Authorization: Bearer ***REMOVED-OPENRAG-ADMIN-TOKEN***" \
+  -H "Authorization: Bearer ${OPENRAG_ADMIN_TOKEN}" \
   | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']), 'modèles')"
 
 # Ajouter OpenRAG. set env merge proprement avec les valeurs existantes

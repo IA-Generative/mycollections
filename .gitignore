@@ -22,6 +22,17 @@ myrag/data/
 .env.local
 myrag/k8s/secret.yaml
 
+# Secrets / clefs / etats sensibles (ne jamais committer)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+kubeconfig*
+*.kubeconfig
+*.tfstate
+*.tfstate.*
+
 # Sorties locales sensibles (audit, homologation) — ne pas committer
 private/
 
