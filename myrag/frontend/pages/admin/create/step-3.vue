@@ -265,6 +265,7 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'admin-only' })
 const route = useRoute()
 const router = useRouter()
 const collection = route.query.collection as string

@@ -118,6 +118,7 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'admin-only' })
 const { get, post } = useApi()
 
 const collections = ref<any[]>([])

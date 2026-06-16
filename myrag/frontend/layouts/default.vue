@@ -43,7 +43,7 @@
                       {{ getUserName() }}
                     </span>
                   </li>
-                  <li>
+                  <li v-if="isAdmin">
                     <NuxtLink to="/admin" class="fr-btn fr-icon-settings-5-line fr-btn--sm">
                       Admin
                     </NuxtLink>
@@ -68,7 +68,7 @@
                   Mes collections
                 </NuxtLink>
               </li>
-              <li class="fr-nav__item">
+              <li v-if="isAdmin" class="fr-nav__item">
                 <NuxtLink to="/admin" class="fr-nav__link" :aria-current="route.path.startsWith('/admin') ? 'page' : undefined">
                   Administration
                 </NuxtLink>
@@ -124,6 +124,7 @@
 const config = useRuntimeConfig()
 const route = useRoute()
 const { user, loading: authLoading, authError, init: initAuth, logout, getUserName } = useAuth()
+const { isAdmin } = useAdminAuth()
 
 const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
 const openragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
