@@ -6,6 +6,10 @@ export default defineNuxtConfig({
     head: {
       title: 'Mes collections (beta)',
       htmlAttrs: { lang: 'fr', 'data-fr-scheme': 'light' },
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
     },
   },
 

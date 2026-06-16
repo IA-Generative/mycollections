@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Mes collections — collections de documents et graphe de références">
+  <title>Mes collections</title>
+  <!-- Fond bleu France (DSFR) -->
+  <rect width="256" height="256" rx="56" fill="#000091"/>
+
+  <!-- Pile de collections : carte arrière en retrait -->
+  <rect x="92" y="48" width="104" height="128" rx="14" fill="#ffffff" opacity="0.38"/>
+  <!-- Carte avant (document principal) -->
+  <rect x="64" y="64" width="122" height="146" rx="16" fill="#ffffff"/>
+
+  <!-- Graphe de références croisées (RAG) posé sur la collection -->
+  <g stroke="#000091" stroke-width="5" stroke-linecap="round" opacity="0.55">
+    <line x1="100" y1="110" x2="158" y2="100"/>
+    <line x1="100" y1="110" x2="118" y2="158"/>
+    <line x1="158" y1="100" x2="118" y2="158"/>
+    <line x1="118" y1="158" x2="156" y2="178"/>
+    <line x1="158" y1="100" x2="156" y2="178"/>
+  </g>
+  <g>
+    <circle cx="100" cy="110" r="11" fill="#000091"/>
+    <circle cx="118" cy="158" r="11" fill="#000091"/>
+    <circle cx="156" cy="178" r="11" fill="#000091"/>
+    <!-- Nœud actif : rouge Marianne (DSFR) -->
+    <circle cx="158" cy="100" r="13" fill="#e1000f"/>
+  </g>
+</svg>
