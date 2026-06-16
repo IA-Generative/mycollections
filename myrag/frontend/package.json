@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -18,5 +18,8 @@
     "nuxt": "^4.4.2",
     "oidc-client-ts": "^3.5.0",
     "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
   }
 }

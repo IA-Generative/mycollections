@@ -13,8 +13,32 @@ from app.auth import CurrentUser, current_user
 
 # Identités de test (groupes Keycloak)
 SUPERADMIN = CurrentUser(sub="op", username="op", groups=["/myrag/superadmin"])
-USER1 = CurrentUser(sub="u1", username="user1", groups=["/myrag/collec-user1-admin"])
-AUDITEUR1 = CurrentUser(sub="a1", username="auditeur1", groups=["/myrag/collec-audit-admin"])
+USER1 = CurrentUser(sub="u1", username="user1", groups=["/myrag/authzt-u1-admin"])
+AUDITEUR1 = CurrentUser(sub="a1", username="auditeur1", groups=["/myrag/authzt-aud-admin"])
+
+
+def _reset_collections_table():
+    """Vide la table collections du fichier SQLite partagé entre modules de test.
+
+    La suite partage un unique fichier DB via DATABASE_URL et tous les modules
+    n'initialisent pas la base de la même façon : on isole donc explicitement ce
+    test de toute pollution inter-modules (sinon l'override d'identité d'un autre
+    test ou des collections résiduelles faussent le filtrage par groupe).
+    """
+    import os
+    import sqlite3
+
+    url = os.environ.get("DATABASE_URL", "")
+    if "sqlite" not in url:
+        return
+    path = url.split("///")[-1]  # sqlite+aiosqlite:////tmp/x.db -> /tmp/x.db
+    try:
+        con = sqlite3.connect(path)
+        con.execute("DELETE FROM collections")
+        con.commit()
+        con.close()
+    except sqlite3.OperationalError:
+        pass  # table pas encore créée : rien à nettoyer
 
 
 @pytest.fixture
@@ -22,8 +46,11 @@ def app_client(tmp_path, monkeypatch):
     import app.config
     monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
     from app.main import app
+    # Pas d'override d'identité hérité d'un autre test.
+    app.dependency_overrides.clear()
     # Le context manager déclenche le lifespan (init_db crée les tables).
     with TestClient(app) as client:
+        _reset_collections_table()  # ardoise propre, indépendante des autres modules
         yield app, client
     app.dependency_overrides.clear()
 
@@ -48,24 +75,24 @@ def test_auditeur_ne_voit_pas_les_collections_de_user1(mock_cls, app_client):
 
     # Seed : superadmin crée deux collections de groupes différents
     _as(app, SUPERADMIN)
-    assert client.post("/api/collections", json={"name": "collec-user1"}).status_code == 200
-    assert client.post("/api/collections", json={"name": "collec-audit"}).status_code == 200
+    assert client.post("/api/collections", json={"name": "authzt-u1"}).status_code == 200
+    assert client.post("/api/collections", json={"name": "authzt-aud"}).status_code == 200
 
-    # auditeur1 ne doit voir QUE collec-audit
+    # auditeur1 ne doit voir QUE authzt-aud
     _as(app, AUDITEUR1)
     names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
-    assert names == {"collec-audit"}
-    assert "collec-user1" not in names
+    assert names == {"authzt-aud"}
+    assert "authzt-u1" not in names
 
-    # user1 ne doit voir QUE collec-user1
+    # user1 ne doit voir QUE authzt-u1
     _as(app, USER1)
     names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
-    assert names == {"collec-user1"}
+    assert names == {"authzt-u1"}
 
     # superadmin voit tout (au moins les deux créées)
     _as(app, SUPERADMIN)
     names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
-    assert {"collec-user1", "collec-audit"} <= names
+    assert {"authzt-u1", "authzt-aud"} <= names
 
 
 @patch("app.routers.collections.OpenRAGClient")
@@ -74,16 +101,16 @@ def test_acces_direct_a_une_collection_d_autrui_refuse(mock_cls, app_client):
     _no_openrag(mock_cls)
 
     _as(app, SUPERADMIN)
-    client.post("/api/collections", json={"name": "collec-user1"})
+    client.post("/api/collections", json={"name": "authzt-u1"})
 
     _as(app, AUDITEUR1)
     # GET direct : 404 (ne pas divulguer l'existence)
-    assert client.get("/api/collections/collec-user1").status_code == 404
+    assert client.get("/api/collections/authzt-u1").status_code == 404
     # PATCH : 403
-    assert client.patch("/api/collections/collec-user1", json={"description": "x"}).status_code == 403
+    assert client.patch("/api/collections/authzt-u1", json={"description": "x"}).status_code == 403
     # system-prompt en lecture : 404 ; en écriture : 403
-    assert client.get("/api/collections/collec-user1/system-prompt").status_code == 404
-    assert client.patch("/api/collections/collec-user1/system-prompt",
+    assert client.get("/api/collections/authzt-u1/system-prompt").status_code == 404
+    assert client.patch("/api/collections/authzt-u1/system-prompt",
                         json={"system_prompt": "x"}).status_code == 403
 
     app.dependency_overrides.clear()
@@ -94,7 +121,7 @@ def test_membre_simple_ne_peut_pas_creer(mock_cls, app_client):
     app, client = app_client
     _no_openrag(mock_cls)
 
-    membre = CurrentUser(sub="m", username="m", groups=["/myrag/collec-user1"])  # pas -admin
+    membre = CurrentUser(sub="m", username="m", groups=["/myrag/authzt-u1"])  # pas -admin
     _as(app, membre)
     assert client.post("/api/collections", json={"name": "nouvelle"}).status_code == 403
 
