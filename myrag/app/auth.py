@@ -82,3 +82,37 @@ def verify_jwt(
 
 # Liste de dépendances à passer aux routers protégés.
 AUTH_REQUIRED = [Depends(verify_jwt)]
+
+
+class CurrentUser:
+    """Identité de l'appelant dérivée de l'access token (sub, username, groupes)."""
+
+    __slots__ = ("sub", "username", "groups")
+
+    def __init__(self, sub: str, username: str, groups: list[str]):
+        self.sub = sub
+        self.username = username
+        self.groups = groups
+
+
+def current_user(claims: dict = Depends(verify_jwt)) -> CurrentUser:
+    """Dépendance FastAPI : identité + groupes Keycloak de l'appelant.
+
+    Réutilise ``verify_jwt`` (mis en cache par FastAPI dans la requête, donc le
+    JWT n'est validé qu'une fois même si la garde de routeur l'a déjà appelé).
+
+    Quand l'auth est désactivée (dev/tests), renvoie un superadmin synthétique
+    afin de préserver le comportement « tout visible » sans token.
+    """
+    if not settings.auth_enabled:
+        root = settings.myrag_group_root.rstrip("/")
+        return CurrentUser(sub="dev", username="dev", groups=[f"{root}/superadmin"])
+
+    groups = claims.get("groups") or []
+    if not isinstance(groups, list):
+        groups = []
+    return CurrentUser(
+        sub=claims.get("sub", ""),
+        username=claims.get("preferred_username", "") or claims.get("email", ""),
+        groups=[g for g in groups if isinstance(g, str)],
+    )

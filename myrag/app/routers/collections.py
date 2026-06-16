@@ -1,8 +1,10 @@
 """Collections router — CRUD for MyRAG collections + prompt templates."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth import CurrentUser, current_user
+from app.services import access
 from app.models.collection import (
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TEMPLATE_KEY,
@@ -101,13 +103,21 @@ async def delete_prompt_template_endpoint(key: str):
 # ============================================================
 
 @router.get("")
-async def list_collections_endpoint(include_archived: bool = False):
-    """List all MyRAG collections.
+async def list_collections_endpoint(
+    include_archived: bool = False,
+    user: CurrentUser = Depends(current_user),
+):
+    """List the MyRAG collections visible to the caller.
 
-    Merges DB collections with OpenRAG partitions. Archived collections are
-    hidden by default; pass ?include_archived=true to include them.
+    Visibility is derived from the caller's Keycloak groups (members of
+    ``/myrag/<collection>[-admin]`` or ``/myrag/superadmin``). Merges DB
+    collections with OpenRAG partitions. Archived collections are hidden by
+    default; pass ?include_archived=true to include them.
     """
-    collections = await db_list_collections(include_archived=include_archived)
+    allowed = access.visible_collection_names(user.groups)  # None = superadmin/all
+    collections = await db_list_collections(
+        include_archived=include_archived, allowed_names=allowed
+    )
     # Fetch the full set of known names (incl. archived) so we do not
     # re-surface an archived collection via the OpenRAG merge below.
     all_known = await db_list_collections(include_archived=True)
@@ -121,7 +131,8 @@ async def list_collections_endpoint(include_archived: bool = False):
             model_id = m.get("id", "")
             if model_id.startswith("openrag-"):
                 name = model_id[len("openrag-"):]
-                if name and name not in known_names and name not in ("all", "default"):
+                if (name and name not in known_names and name not in ("all", "default")
+                        and (allowed is None or name in allowed)):
                     # Orphan: a partition exists on OpenRAG but no MyRAG fiche
                     # was ever created for it. Flagged so the UI can surface
                     # "adoptable" cards without fabricating a description from
@@ -145,8 +156,13 @@ async def list_collections_endpoint(include_archived: bool = False):
 
 
 @router.post("")
-async def create_collection_endpoint(req: CreateCollectionRequest):
-    """Create a new collection."""
+async def create_collection_endpoint(
+    req: CreateCollectionRequest,
+    user: CurrentUser = Depends(current_user),
+):
+    """Create a new collection (operators only: superadmin or a collection-admin)."""
+    if not access.can_create_collection(user.groups):
+        raise HTTPException(status_code=403, detail="Création réservée aux opérateurs")
     existing = await db_get_collection(req.name)
     if existing:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
@@ -170,7 +186,10 @@ async def create_collection_endpoint(req: CreateCollectionRequest):
 
 
 @router.get("/{name}")
-async def get_collection_endpoint(name: str):
+async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
+    if not access.can_read_collection(name, user.groups):
+        # 404 plutôt que 403 : ne pas divulguer l'existence à un non-membre.
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     collection = await db_get_collection(name)
     if not collection:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
@@ -178,7 +197,11 @@ async def get_collection_endpoint(name: str):
 
 
 @router.patch("/{name}")
-async def update_collection_endpoint(name: str, updates: dict):
+async def update_collection_endpoint(
+    name: str, updates: dict, user: CurrentUser = Depends(current_user)
+):
+    if not access.can_write_collection(name, user.groups):
+        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     collection = await db_update_collection(name, updates)
     if not collection:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
@@ -186,12 +209,14 @@ async def update_collection_endpoint(name: str, updates: dict):
 
 
 @router.delete("/{name}")
-async def purge_collection_endpoint(name: str):
+async def purge_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
     """Hard-delete a collection. Requires the collection to be archived first.
 
     Drops the OpenRAG partition, removes source files on disk, and cascades
     all related DB rows (publications, jobs, feedback, evals, source_files).
     """
+    if not access.can_write_collection(name, user.groups):
+        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     result = await db_purge_collection(name)
     if result["status"] == "not_found":
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
@@ -206,7 +231,9 @@ async def purge_collection_endpoint(name: str):
 # --- System prompt ---
 
 @router.get("/{name}/system-prompt")
-async def get_system_prompt_endpoint(name: str):
+async def get_system_prompt_endpoint(name: str, user: CurrentUser = Depends(current_user)):
+    if not access.can_read_collection(name, user.groups):
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     collection = await db_get_collection(name)
     if not collection:
         return {"collection": name, "system_prompt": DEFAULT_SYSTEM_PROMPT,
@@ -220,7 +247,11 @@ async def get_system_prompt_endpoint(name: str):
 
 
 @router.patch("/{name}/system-prompt")
-async def update_system_prompt_endpoint(name: str, req: UpdateSystemPromptRequest):
+async def update_system_prompt_endpoint(
+    name: str, req: UpdateSystemPromptRequest, user: CurrentUser = Depends(current_user)
+):
+    if not access.can_write_collection(name, user.groups):
+        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     result = await db_update_system_prompt(name, req.system_prompt)
     if not result:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")

@@ -1,0 +1,101 @@
+"""Tests d'autorisation des endpoints collections (filtrage par groupe).
+
+Reproduit et verrouille le bug signalé : auditeur1 ne doit pas voir/atteindre
+les collections d'un autre groupe (user1).
+"""
+
+import pytest
+from unittest.mock import AsyncMock, patch
+from fastapi.testclient import TestClient
+
+from app.auth import CurrentUser, current_user
+
+
+# Identités de test (groupes Keycloak)
+SUPERADMIN = CurrentUser(sub="op", username="op", groups=["/myrag/superadmin"])
+USER1 = CurrentUser(sub="u1", username="user1", groups=["/myrag/collec-user1-admin"])
+AUDITEUR1 = CurrentUser(sub="a1", username="auditeur1", groups=["/myrag/collec-audit-admin"])
+
+
+@pytest.fixture
+def app_client(tmp_path, monkeypatch):
+    import app.config
+    monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
+    from app.main import app
+    # Le context manager déclenche le lifespan (init_db crée les tables).
+    with TestClient(app) as client:
+        yield app, client
+    app.dependency_overrides.clear()
+
+
+def _as(app, user: CurrentUser):
+    app.dependency_overrides[current_user] = lambda: user
+
+
+def _no_openrag(mock_cls):
+    """Neutralise les appels réseau OpenRAG du endpoint list/create."""
+    m = mock_cls.return_value
+    m.create_partition = AsyncMock(return_value={})
+    m.list_models = AsyncMock(return_value={"data": []})
+    m.list_files = AsyncMock(return_value=[])
+    return m
+
+
+@patch("app.routers.collections.OpenRAGClient")
+def test_auditeur_ne_voit_pas_les_collections_de_user1(mock_cls, app_client):
+    app, client = app_client
+    _no_openrag(mock_cls)
+
+    # Seed : superadmin crée deux collections de groupes différents
+    _as(app, SUPERADMIN)
+    assert client.post("/api/collections", json={"name": "collec-user1"}).status_code == 200
+    assert client.post("/api/collections", json={"name": "collec-audit"}).status_code == 200
+
+    # auditeur1 ne doit voir QUE collec-audit
+    _as(app, AUDITEUR1)
+    names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
+    assert names == {"collec-audit"}
+    assert "collec-user1" not in names
+
+    # user1 ne doit voir QUE collec-user1
+    _as(app, USER1)
+    names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
+    assert names == {"collec-user1"}
+
+    # superadmin voit tout (au moins les deux créées)
+    _as(app, SUPERADMIN)
+    names = {c["name"] for c in client.get("/api/collections").json()["collections"]}
+    assert {"collec-user1", "collec-audit"} <= names
+
+
+@patch("app.routers.collections.OpenRAGClient")
+def test_acces_direct_a_une_collection_d_autrui_refuse(mock_cls, app_client):
+    app, client = app_client
+    _no_openrag(mock_cls)
+
+    _as(app, SUPERADMIN)
+    client.post("/api/collections", json={"name": "collec-user1"})
+
+    _as(app, AUDITEUR1)
+    # GET direct : 404 (ne pas divulguer l'existence)
+    assert client.get("/api/collections/collec-user1").status_code == 404
+    # PATCH : 403
+    assert client.patch("/api/collections/collec-user1", json={"description": "x"}).status_code == 403
+    # system-prompt en lecture : 404 ; en écriture : 403
+    assert client.get("/api/collections/collec-user1/system-prompt").status_code == 404
+    assert client.patch("/api/collections/collec-user1/system-prompt",
+                        json={"system_prompt": "x"}).status_code == 403
+
+    app.dependency_overrides.clear()
+
+
+@patch("app.routers.collections.OpenRAGClient")
+def test_membre_simple_ne_peut_pas_creer(mock_cls, app_client):
+    app, client = app_client
+    _no_openrag(mock_cls)
+
+    membre = CurrentUser(sub="m", username="m", groups=["/myrag/collec-user1"])  # pas -admin
+    _as(app, membre)
+    assert client.post("/api/collections", json={"name": "nouvelle"}).status_code == 403
+
+    app.dependency_overrides.clear()

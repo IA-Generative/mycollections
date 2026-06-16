@@ -22,11 +22,24 @@ from app.models.db import (
 logger = logging.getLogger("myrag.collection_store")
 
 
-async def list_collections(include_archived: bool = False) -> list[dict]:
+async def list_collections(
+    include_archived: bool = False,
+    allowed_names: set[str] | None = None,
+) -> list[dict]:
+    """Liste les collections.
+
+    ``allowed_names`` restreint le résultat aux noms autorisés (contrôle d'accès
+    par groupe). ``None`` = aucune restriction (superadmin/dev) ; un set vide =
+    aucune collection visible.
+    """
     async with async_session() as session:
         stmt = select(Collection).order_by(Collection.name)
         if not include_archived:
             stmt = stmt.where(Collection.archived_at.is_(None))
+        if allowed_names is not None:
+            if not allowed_names:
+                return []
+            stmt = stmt.where(Collection.name.in_(allowed_names))
         result = await session.execute(stmt)
         return [c.to_dict() for c in result.scalars().all()]
 
