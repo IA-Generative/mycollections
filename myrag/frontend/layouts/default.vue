@@ -8,13 +8,15 @@
             <div class="fr-header__brand fr-enlarge-link">
               <div class="fr-header__brand-top">
                 <div class="fr-header__logo">
-                  <p class="fr-logo">Mes collections<br><small>(beta)</small></p>
+                  <p class="fr-logo">République<br>Française</p>
+                </div>
+                <div class="fr-header__operator">
+                  <img class="fr-responsive-img myrag-operator-logo" src="/favicon.svg" alt="Mes collections" />
                 </div>
               </div>
               <div class="fr-header__service">
-                <NuxtLink to="/" class="fr-header__service-title myrag-service-title">
-                  <img src="/favicon.svg" alt="" aria-hidden="true" class="myrag-logo" width="40" height="40" />
-                  <span>Mes collections <span class="fr-badge fr-badge--sm fr-badge--info">beta</span></span>
+                <NuxtLink to="/" class="fr-header__service-title">
+                  Mes collections <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">Beta</span>
                 </NuxtLink>
                 <p class="fr-header__service-tagline">Recherche augmentee dans vos collections documentaires</p>
               </div>
@@ -47,8 +49,8 @@
                     </NuxtLink>
                   </li>
                   <li v-if="user">
-                    <button class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline" @click="logout">
-                      Deconnexion
+                    <button class="fr-btn fr-btn--sm fr-icon-logout-box-r-line fr-btn--tertiary-no-outline" @click="logout">
+                      Se deconnecter
                     </button>
                   </li>
                 </ul>
@@ -103,11 +105,13 @@
       <div class="fr-container">
         <div class="fr-footer__body">
           <div class="fr-footer__brand fr-enlarge-link">
-            <p class="fr-logo">Mes collections (beta)</p>
+            <NuxtLink to="/" title="Accueil — Mes collections">
+              <p class="fr-logo">République<br>Française</p>
+            </NuxtLink>
           </div>
           <div class="fr-footer__content">
             <p class="fr-footer__content-desc">
-              Recherche et analyse documentaire assistee par IA.
+              Mes collections (beta) — recherche et analyse documentaire assistee par IA.
             </p>
           </div>
         </div>
@@ -173,16 +177,10 @@ onMounted(async () => {
 </script>
 
 <style>
-/* Logo devant le titre de service dans l'en-tete */
-.myrag-service-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.myrag-logo {
-  height: 2.5rem;
-  width: 2.5rem;
-  flex: 0 0 auto;
+/* Logo opérateur dans l'en-tête — emplacement DSFR standard (look myvault) */
+.myrag-operator-logo {
+  width: auto;
+  height: 3.5rem;
   border-radius: 6px;
 }
 
