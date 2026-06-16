@@ -35,9 +35,23 @@ class SyncService:
         """Sync a single collection's groups to OpenRAG memberships."""
         synced = 0
         errors = 0
+        error_details: list[str] = []
+
+        def _fail(msg: str) -> None:
+            """Enregistre une erreur : log + compteur + détail remonté à l'appelant."""
+            nonlocal errors
+            errors += 1
+            logger.warning("sync[%s] %s", collection, msg)
+            error_details.append(msg)
 
         # Ensure partition exists
-        await self.openrag.create_partition(collection)
+        try:
+            await self.openrag.create_partition(collection)
+        except Exception as e:
+            # Échec dur : sans partition, rien ne peut être synchronisé.
+            _fail(f"create_partition a échoué: {e}")
+            return {"collection": collection, "synced": 0, "errors": errors,
+                    "error_details": error_details}
 
         # Get existing OpenRAG users
         try:
@@ -49,14 +63,16 @@ class SyncService:
                 if u.get("external_user_id")
             }
         except Exception as e:
-            logger.warning(f"Failed to list OpenRAG users: {e}")
+            # Échec probable d'auth OpenRAG (token admin) — rendu visible.
+            _fail(f"liste des utilisateurs OpenRAG impossible (token admin ?): {e}")
             or_by_ext_id = {}
 
         # Sync user group members → editor role
         try:
             user_members = await self.kc.list_group_members(user_group_id)
         except Exception as e:
-            logger.warning(f"Failed to list user group members: {e}")
+            # Échec probable d'auth Keycloak admin (service account / rôles) — rendu visible.
+            _fail(f"liste des membres du groupe Keycloak impossible (droits admin ?): {e}")
             user_members = []
 
         for member in user_members:
@@ -85,8 +101,7 @@ class SyncService:
                     )
                     or_by_ext_id[kc_id] = or_user
                 except Exception as e:
-                    logger.warning(f"Failed to create user {username}: {e}")
-                    errors += 1
+                    _fail(f"création de l'utilisateur {username} échouée: {e}")
                     continue
 
             # Add to partition as editor
@@ -98,14 +113,17 @@ class SyncService:
                         data={"user_id": str(user_id), "role": "editor"},
                     )
                     synced += 1
-                except Exception:
-                    pass  # Already a member or other error
+                except Exception as e:
+                    # _upload_form renvoie {"status":"exists"} sur 409 sans lever :
+                    # une exception ici est donc une vraie erreur (champ/endpoint/auth).
+                    _fail(f"ajout de {username} (editor) à la partition échoué: {e}")
 
         # Sync admin group members → owner role
         if admin_group_id:
             try:
                 admin_members = await self.kc.list_group_members(admin_group_id)
-            except Exception:
+            except Exception as e:
+                _fail(f"liste des membres du groupe admin Keycloak impossible: {e}")
                 admin_members = []
 
             for member in admin_members:
@@ -118,18 +136,25 @@ class SyncService:
                             data={"user_id": str(or_user["id"]), "role": "owner"},
                         )
                         synced += 1
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _fail(f"ajout de {member.get('username','?')} (owner) échoué: {e}")
 
-        return {
-            "collection": collection,
-            "synced": synced,
-            "errors": errors,
-        }
+        result = {"collection": collection, "synced": synced, "errors": errors}
+        if error_details:
+            result["error_details"] = error_details
+        return result
 
     async def sync_all(self) -> list[dict]:
         """Sync all MyRAG collection groups to OpenRAG."""
-        collections = await self.kc.list_collection_groups()
+        try:
+            collections = await self.kc.list_collection_groups()
+        except Exception as e:
+            # Cause racine typique : le client admin Keycloak (myrag-admin) n'a pas
+            # les droits realm-management. On remonte une erreur explicite plutôt
+            # qu'un 500 nu / un sync vide silencieux.
+            logger.error("sync_all: lecture des groupes Keycloak impossible: %s", e)
+            return [{"collection": "*", "synced": 0, "errors": 1,
+                     "error": f"Keycloak admin inaccessible (droits du service account ?): {e}"}]
         results = []
 
         for col in collections:

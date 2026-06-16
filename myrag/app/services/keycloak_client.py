@@ -1,10 +1,13 @@
 """Keycloak Admin API client for MyRAG group management."""
 
+import logging
 import time
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger("myrag.keycloak")
 
 
 # Module-level cache of service-account tokens, keyed by client_id.
@@ -94,8 +97,14 @@ class KeycloakClient:
                 self._token = result["access_token"]
                 self._token_expires = time.time() + result.get("expires_in", 300) - 30
                 return self._token
-            except Exception:
-                pass
+            except Exception as e:
+                # Rendu visible : si le service account échoue (secret, ou rôles
+                # realm-management manquants), on le journalise avant de basculer
+                # sur le mot de passe admin. Cause racine fréquente du sync KO.
+                logger.warning(
+                    "client_credentials KO pour le client '%s' (secret/rôles ?): %s — bascule mot de passe admin",
+                    self.client_id, e,
+                )
 
         # Fallback: admin password on master realm
         admin_password = settings.keycloak_admin_password

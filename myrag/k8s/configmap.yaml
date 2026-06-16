@@ -9,7 +9,11 @@ data:
   # Shared Keycloak (same cluster, same namespace).
   KEYCLOAK_URL: "https://mysso.fake-domain.name"
   KEYCLOAK_REALM: "openwebui"
-  KEYCLOAK_CLIENT_ID: "openrag"
+  # Client service-account du BACKEND pour l'API admin Keycloak (synchro KC->OpenRAG).
+  # Doit avoir les rôles realm-management (query-groups/users, view/manage-users).
+  # Le secret est injecté via myrag-secrets (KEYCLOAK_CLIENT_SECRET). NB : le FRONT
+  # utilise son propre client public 'myrag-front' (défaut Nuxt, pas cette clé).
+  KEYCLOAK_CLIENT_ID: "myrag-admin"
   # Public URL of this MyRAG instance (used by server-generated links).
   MYRAG_PUBLIC_URL: "https://mycollections.fake-domain.name"
   # Graph viewer — kept in-cluster for now.

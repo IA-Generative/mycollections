@@ -63,11 +63,19 @@ async def sync_all():
     results = await service.sync_all()
     total_synced = sum(r.get("synced", 0) for r in results)
     total_errors = sum(r.get("errors", 0) for r in results)
+    # Remonte les messages d'erreur pour que l'échec soit visible côté UI
+    # (avant : un sync vide ou en échec restait silencieux, total=0).
+    error_messages = [
+        m for r in results
+        for m in ([r["error"]] if r.get("error") else r.get("error_details", []))
+    ]
+    status = "error" if (total_errors and total_synced == 0) else ("partial" if total_errors else "done")
     return {
-        "status": "done",
+        "status": status,
         "collections_synced": len(results),
         "total_members_synced": total_synced,
         "total_errors": total_errors,
+        "errors": error_messages,
         "details": results,
     }
 
