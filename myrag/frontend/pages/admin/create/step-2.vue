@@ -233,6 +233,8 @@
 </template>
 
 <script setup lang="ts">
+import { slugifyCollectionName, isConflictError } from '~/utils/collectionName'
+
 const route = useRoute()
 const router = useRouter()
 const { get, post } = useApi()
@@ -333,22 +335,36 @@ const duplicateWarning = ref<any>(null)
 const nameStatus = ref('')  // '' | 'available' | 'taken'
 const nameSuggestion = ref('')
 
-function checkNameAvailability() {
+function suggestName(name: string): string {
+  // Suggestion best-effort à partir de la liste locale (juste une aide).
+  let suffix = 2
+  while (allCollections.value.some(c => c.name.toLowerCase() === `${name}-v${suffix}`)) {
+    suffix++
+  }
+  return `${name}-v${suffix}`
+}
+
+async function checkNameAvailability() {
   if (!form.value.name.trim()) return
-  const name = form.value.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  const name = slugifyCollectionName(form.value.name)
   form.value.name = name  // normalize
 
-  const exists = allCollections.value.some(c => c.name.toLowerCase() === name)
-  if (exists) {
-    nameStatus.value = 'taken'
-    // Generate suggestion by appending version number
-    let suffix = 2
-    while (allCollections.value.some(c => c.name.toLowerCase() === `${name}-v${suffix}`)) {
-      suffix++
+  // Vérif AUTORITAIRE côté serveur : la liste locale est filtrée par groupe, donc
+  // un nom déjà pris mais invisible y paraîtrait « disponible » puis échouerait
+  // en 409 à la création.
+  try {
+    const { available } = await get('/api/collections/check-name', { name })
+    if (available) {
+      nameStatus.value = 'available'
+      nameSuggestion.value = ''
+    } else {
+      nameStatus.value = 'taken'
+      nameSuggestion.value = suggestName(name)
     }
-    nameSuggestion.value = `${name}-v${suffix}`
-  } else {
-    nameStatus.value = 'available'
+  } catch {
+    // En cas d'échec de la vérif, on ne bloque pas : la création reste protégée
+    // côté serveur (409 géré dans createAndNext).
+    nameStatus.value = ''
     nameSuggestion.value = ''
   }
 }
@@ -398,7 +414,15 @@ async function createAndNext() {
     await post('/api/collections', form.value)
     router.push(`/admin/create/step-3?collection=${form.value.name}&source=${source}`)
   } catch (e: any) {
-    error.value = e.message
+    if (isConflictError(e)) {
+      // Nom déjà pris (ex. collection invisible car cloisonnée) : on guide vers
+      // un autre nom au lieu d'afficher l'erreur API brute, et on reste sur l'étape.
+      nameStatus.value = 'taken'
+      nameSuggestion.value = suggestName(form.value.name)
+      error.value = `Le nom « ${form.value.name} » est déjà pris. Choisissez-en un autre (suggestion : ${nameSuggestion.value}).`
+    } else {
+      error.value = e.message
+    }
   }
   creating.value = false
 }
