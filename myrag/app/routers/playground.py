@@ -11,6 +11,13 @@ from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_unt
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
 
+# Les modèles RAG d'OpenRAG sont des modèles « à raisonnement » : ils émettent
+# d'abord un reasoning_content (chaîne de pensée), puis la réponse dans content.
+# Avec la limite par défaut (~1024 tokens), le raisonnement épuise le budget et
+# content ressort VIDE (finish_reason=length) -> réponses vides côté playground
+# et faux KO à l'évaluation. On donne donc une marge confortable.
+_CHAT_MAX_TOKENS = 4096
+
 
 # Questions hors-sujet ajoutées à tout jeu généré : vérifient que le RAG refuse
 # de fabriquer une réponse quand le sujet n'est pas couvert.
@@ -56,7 +63,8 @@ async def _generate_questions_via_lines(client: OpenRAGClient, model: str) -> li
     )
     try:
         result = await client.chat(
-            model=model, messages=[{"role": "user", "content": prompt}], temperature=0.4,
+            model=model, messages=[{"role": "user", "content": prompt}],
+            temperature=0.4, max_tokens=_CHAT_MAX_TOKENS,
         )
     except Exception:
         return []
@@ -191,6 +199,7 @@ async def generate_eval_dataset(collection: str):
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
+            max_tokens=_CHAT_MAX_TOKENS,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Erreur LLM: {e}")
@@ -277,6 +286,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
             model=model,
             messages=messages,
             temperature=req.temperature,
+            max_tokens=_CHAT_MAX_TOKENS,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Erreur OpenRAG: {e}")
@@ -333,6 +343,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
                     model=model,
                     messages=fallback_messages,
                     temperature=req.temperature,
+                    max_tokens=_CHAT_MAX_TOKENS,
                 )
                 if "choices" in fallback_result and fallback_result["choices"]:
                     content = fallback_result["choices"][0].get("message", {}).get("content", "")
