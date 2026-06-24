@@ -73,41 +73,27 @@ async def generate_eval_dataset(collection: str):
             detail="La collection est vide. Indexez au moins un document.",
         )
 
-    # Fetch content from a sample of files
+    # Fetch content from a sample of files (best-effort). OpenRAG's per-file
+    # content endpoint (get_file_content) is fragile and returns empty/errors on
+    # a number of partitions, so we treat a successful read as a bonus, not a
+    # requirement.
     sample_files = files[:15]  # max 15 chunks for context
     content_parts = []
     for f in sample_files:
         # fname et contenu proviennent de documents ingérés (non fiables) :
         # on les neutralise avant insertion dans le prompt (anti-injection).
         fname = sanitize_oneline(f.get("original_filename") or f.get("filename") or "?", max_len=200)
-        # Fetch chunk content via extract URL
         try:
-            chunk_id = f.get("_id") or ""
             file_id = f.get("file_id", "")
             text = await client.get_file_content(collection, file_id)
-            if text:
-                content_parts.append(f"### {fname}\n{neutralize_for_prompt(text, max_len=800)}")
         except Exception:
-            content_parts.append(f"### {fname}\n(contenu non disponible)")
+            text = ""
+        if text:
+            content_parts.append(f"### {fname}\n{neutralize_for_prompt(text, max_len=800)}")
 
-    if not content_parts:
-        raise HTTPException(
-            status_code=400,
-            detail="Impossible de lire le contenu des documents indexes.",
-        )
-
-    context = wrap_untrusted("\n\n".join(content_parts), label="EXTRAITS")
     model = f"openrag-{collection}"
 
-    prompt = f"""Voici des extraits d'une collection de documents :
-
-{context}
-
-A partir de ces extraits, genere un jeu de test d'evaluation pour un systeme RAG.
-Produis exactement 8 questions-reponses variees qui couvrent les differents sujets du contenu.
-
-Reponds UNIQUEMENT avec un JSON valide, sans texte avant ou apres, au format suivant :
-{{
+    json_format = f"""{{
   "name": "{collection}-evaluation",
   "description": "Jeu de test genere automatiquement",
   "questions": [
@@ -120,6 +106,30 @@ Reponds UNIQUEMENT avec un JSON valide, sans texte avant ou apres, au format sui
     }}
   ]
 }}"""
+    common_instructions = (
+        "Produis exactement 8 questions-reponses variees qui couvrent les "
+        "differents sujets du contenu.\n\n"
+        "Reponds UNIQUEMENT avec un JSON valide, sans texte avant ou apres, "
+        f"au format suivant :\n{json_format}"
+    )
+
+    # Quand on a pu lire des extraits, on ancre le LLM dessus. Sinon (endpoint de
+    # contenu OpenRAG indisponible — cf. commit b2d714a), on se rabat sur le RAG
+    # lui-même : OpenRAG auto-récupère depuis la partition, exactement comme
+    # /chat. L'endpoint marche donc partout où le chat marche, au lieu de 400.
+    if content_parts:
+        context = wrap_untrusted("\n\n".join(content_parts), label="EXTRAITS")
+        prompt = (
+            f"Voici des extraits d'une collection de documents :\n\n{context}\n\n"
+            "A partir de ces extraits, genere un jeu de test d'evaluation pour un "
+            f"systeme RAG.\n{common_instructions}"
+        )
+    else:
+        prompt = (
+            "Tu as acces au contenu indexe de cette collection de documents via la "
+            "recherche documentaire. En t'appuyant sur ce contenu reel, genere un jeu "
+            f"de test d'evaluation pour un systeme RAG.\n{common_instructions}"
+        )
 
     try:
         result = await client.chat(
