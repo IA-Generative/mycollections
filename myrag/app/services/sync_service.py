@@ -31,8 +31,15 @@ class SyncService:
         collection: str,
         user_group_id: str,
         admin_group_id: str | None = None,
+        reader_group_paths: list[str] | None = None,
     ) -> dict:
-        """Sync a single collection's groups to OpenRAG memberships."""
+        """Sync a single collection's groups to OpenRAG memberships.
+
+        ``user_group_id`` (membres → ``editor``) et ``admin_group_id`` (→ ``owner``)
+        sont les 2 groupes ``/myrag/<name>[-admin]``. ``reader_group_paths`` est la
+        liste des **groupes externes autorisés** à interroger (``scope_groups``),
+        provisionnés aussi en ``editor``.
+        """
         synced = 0
         errors = 0
         error_details: list[str] = []
@@ -67,77 +74,73 @@ class SyncService:
             _fail(f"liste des utilisateurs OpenRAG impossible (token admin ?): {e}")
             or_by_ext_id = {}
 
-        # Sync user group members → editor role
-        try:
-            user_members = await self.kc.list_group_members(user_group_id)
-        except Exception as e:
-            # Échec probable d'auth Keycloak admin (service account / rôles) — rendu visible.
-            _fail(f"liste des membres du groupe Keycloak impossible (droits admin ?): {e}")
-            user_members = []
-
-        for member in user_members:
+        async def _resolve_or_user(member: dict) -> dict | None:
+            """Renvoie l'utilisateur OpenRAG (le crée si absent), ou None sur échec."""
             kc_id = member["id"]
-            username = member.get("username", "")
-
-            # Skip service accounts
-            if username.startswith("service-account-"):
-                continue
-
             or_user = or_by_ext_id.get(kc_id)
-            if not or_user:
-                # Create user in OpenRAG
-                try:
-                    display = (
-                        f"{member.get('firstName', '')} {member.get('lastName', '')}".strip()
-                        or username
-                    )
-                    or_user = await self.openrag._post(
-                        "/users/",
-                        json={
-                            "display_name": display,
-                            "external_user_id": kc_id,
-                            "is_admin": False,
-                        },
-                    )
-                    or_by_ext_id[kc_id] = or_user
-                except Exception as e:
-                    _fail(f"création de l'utilisateur {username} échouée: {e}")
-                    continue
+            if or_user:
+                return or_user
+            username = member.get("username", "")
+            try:
+                display = (
+                    f"{member.get('firstName', '')} {member.get('lastName', '')}".strip()
+                    or username
+                )
+                or_user = await self.openrag._post(
+                    "/users/",
+                    json={"display_name": display, "external_user_id": kc_id, "is_admin": False},
+                )
+                or_by_ext_id[kc_id] = or_user
+                return or_user
+            except Exception as e:
+                _fail(f"création de l'utilisateur {username} échouée: {e}")
+                return None
 
-            # Add to partition as editor
-            user_id = or_user.get("id")
-            if user_id:
+        async def _provision_members(group_id: str, role: str, *, create_if_missing: bool) -> None:
+            """Ajoute les membres d'un groupe Keycloak à la partition avec ``role``."""
+            nonlocal synced
+            try:
+                members = await self.kc.list_group_members(group_id)
+            except Exception as e:
+                _fail(f"liste des membres du groupe Keycloak ({role}) impossible (droits admin ?): {e}")
+                return
+            for member in members:
+                username = member.get("username", "")
+                if username.startswith("service-account-"):
+                    continue
+                if create_if_missing:
+                    or_user = await _resolve_or_user(member)
+                else:
+                    or_user = or_by_ext_id.get(member["id"])
+                if not (or_user and or_user.get("id")):
+                    continue
                 try:
                     await self.openrag._upload_form(
                         f"/partition/{collection}/users",
-                        data={"user_id": str(user_id), "role": "editor"},
+                        data={"user_id": str(or_user["id"]), "role": role},
                     )
                     synced += 1
                 except Exception as e:
                     # _upload_form renvoie {"status":"exists"} sur 409 sans lever :
                     # une exception ici est donc une vraie erreur (champ/endpoint/auth).
-                    _fail(f"ajout de {username} (editor) à la partition échoué: {e}")
+                    _fail(f"ajout de {username} ({role}) à la partition échoué: {e}")
 
-        # Sync admin group members → owner role
+        # Membres du groupe lecteur /myrag/<name> → editor
+        await _provision_members(user_group_id, "editor", create_if_missing=True)
+
+        # Membres du groupe gestionnaire /myrag/<name>-admin → owner
         if admin_group_id:
-            try:
-                admin_members = await self.kc.list_group_members(admin_group_id)
-            except Exception as e:
-                _fail(f"liste des membres du groupe admin Keycloak impossible: {e}")
-                admin_members = []
+            # owner sans (re)création : les owners doivent aussi être membres du
+            # groupe utilisateur (déjà créés ci-dessus) — conserve le comportement.
+            await _provision_members(admin_group_id, "owner", create_if_missing=False)
 
-            for member in admin_members:
-                kc_id = member["id"]
-                or_user = or_by_ext_id.get(kc_id)
-                if or_user and or_user.get("id"):
-                    try:
-                        await self.openrag._upload_form(
-                            f"/partition/{collection}/users",
-                            data={"user_id": str(or_user["id"]), "role": "owner"},
-                        )
-                        synced += 1
-                    except Exception as e:
-                        _fail(f"ajout de {member.get('username','?')} (owner) échoué: {e}")
+        # Groupes externes autorisés (scope_groups) → editor
+        for path in reader_group_paths or []:
+            gid = await self.kc.get_group_id_by_path(path)
+            if not gid:
+                _fail(f"groupe lecteur introuvable: {path}")
+                continue
+            await _provision_members(gid, "editor", create_if_missing=True)
 
         result = {"collection": collection, "synced": synced, "errors": errors}
         if error_details:

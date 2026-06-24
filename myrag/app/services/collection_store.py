@@ -1,5 +1,6 @@
 """Collection CRUD service backed by SQLAlchemy database."""
 
+import json
 import logging
 from pathlib import Path
 
@@ -50,7 +51,20 @@ async def get_collection(name: str) -> dict | None:
         return c.to_dict() if c else None
 
 
+async def is_creator(name: str, sub: str | None) -> bool:
+    """Vrai si ``sub`` est le créateur (``created_by``) de la collection."""
+    if not sub:
+        return False
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        return bool(c and c.created_by and c.created_by == sub)
+
+
 async def create_collection(data: dict) -> dict:
+    data = dict(data)
+    # scope_groups est exposé comme une liste mais stocké en JSON (scope_groups_json).
+    if isinstance(data.get("scope_groups"), list):
+        data["scope_groups_json"] = json.dumps(data.pop("scope_groups"))
     async with async_session() as session:
         c = Collection(**{k: v for k, v in data.items() if hasattr(Collection, k)})
         session.add(c)
@@ -73,6 +87,9 @@ async def update_collection(name: str, updates: dict) -> dict | None:
         for key, value in updates.items():
             if key in allowed and hasattr(c, key):
                 setattr(c, key, value)
+        # scope_groups est exposé comme une liste mais stocké en JSON.
+        if "scope_groups" in updates and isinstance(updates["scope_groups"], list):
+            c.scope_groups_json = json.dumps(updates["scope_groups"])
         await session.commit()
         await session.refresh(c)
         return c.to_dict()

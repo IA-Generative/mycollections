@@ -37,6 +37,8 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_add_archived_at(conn)
+        await _migrate_add_column(conn, "created_by", "VARCHAR(255)", "VARCHAR(255)")
+        await _migrate_add_column(conn, "scope_groups_json", "TEXT", "TEXT")
 
 
 async def _migrate_add_archived_at(conn):
@@ -53,6 +55,27 @@ async def _migrate_add_archived_at(conn):
         else:
             sync_conn.execute(text(
                 "ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"
+            ))
+
+    await conn.run_sync(_sync)
+
+
+async def _migrate_add_column(conn, column: str, sqlite_type: str, pg_type: str):
+    """Add a collections.<column> if missing (SQLite + PostgreSQL compatible)."""
+    from sqlalchemy import text
+
+    def _sync(sync_conn):
+        dialect = sync_conn.dialect.name
+        if dialect == "sqlite":
+            rows = sync_conn.exec_driver_sql("PRAGMA table_info(collections)").fetchall()
+            cols = {r[1] for r in rows}
+            if column not in cols:
+                sync_conn.exec_driver_sql(
+                    f"ALTER TABLE collections ADD COLUMN {column} {sqlite_type}"
+                )
+        else:
+            sync_conn.execute(text(
+                f"ALTER TABLE collections ADD COLUMN IF NOT EXISTS {column} {pg_type}"
             ))
 
     await conn.run_sync(_sync)

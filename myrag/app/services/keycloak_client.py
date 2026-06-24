@@ -207,6 +207,20 @@ class KeycloakClient:
         """List members of a group."""
         return await self._admin_get(f"/groups/{group_id}/members")
 
+    async def get_group_id_by_path(self, path: str) -> str | None:
+        """Résout un chemin de groupe arbitraire (ex. /dir/pole-juridique) en id.
+
+        Renvoie ``None`` si le groupe n'existe pas. S'appuie sur l'endpoint
+        Keycloak ``GET /group-by-path/{path}`` (gère les groupes imbriqués, là
+        où ``_find_group_id`` ne voit que les enfants directs d'un parent).
+        """
+        p = "/" + path.strip("/")
+        try:
+            g = await self._admin_get(f"/group-by-path{p}")
+        except Exception:
+            return None
+        return g.get("id") if isinstance(g, dict) else None
+
     async def add_user_to_group(self, user_id: str, group_id: str):
         """Add a user to a group."""
         return await self._admin_put(f"/users/{user_id}/groups/{group_id}")

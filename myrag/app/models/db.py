@@ -30,6 +30,12 @@ class Collection(Base):
     ai_summary_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_summary_threshold: Mapped[int] = mapped_column(Integer, default=1000)
     scope: Mapped[str] = mapped_column(String(50), default="group")
+    # Chemins de groupes Keycloak autorisés à interroger la collection quand
+    # scope == "group" (liste JSON). Honoré par app.services.access.can_read.
+    scope_groups_json: Mapped[str] = mapped_column(Text, default="[]")
+    # sub Keycloak du créateur : lui garantit l'accès à sa propre collection
+    # indépendamment du claim `groups` (qui ne se met à jour qu'au refresh token).
+    created_by: Mapped[str] = mapped_column(String(255), default="", index=True)
     contact_name: Mapped[str] = mapped_column(String(255), default="")
     contact_email: Mapped[str] = mapped_column(String(255), default="")
     source_type: Mapped[str] = mapped_column(String(50), default="")
@@ -51,6 +57,8 @@ class Collection(Base):
             "ai_summary_enabled": self.ai_summary_enabled,
             "ai_summary_threshold": self.ai_summary_threshold,
             "scope": self.scope,
+            "scope_groups": json.loads(self.scope_groups_json or "[]"),
+            "created_by": self.created_by,
             "contact_name": self.contact_name,
             "contact_email": self.contact_email,
             "source_type": self.source_type,
