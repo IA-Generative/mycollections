@@ -1,6 +1,7 @@
 """Playground router — quick RAG test for a collection."""
 
 import json
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -9,6 +10,60 @@ from app.services.openrag_client import OpenRAGClient
 from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
+
+
+# Questions hors-sujet ajoutées à tout jeu généré : vérifient que le RAG refuse
+# de fabriquer une réponse quand le sujet n'est pas couvert.
+_OUT_OF_SCOPE = [
+    {"id": "hors-sujet-1", "question": "Quel est l'age du capitaine ?",
+     "expected_answer": "", "must_cite": [], "tags": ["hors-sujet"], "out_of_scope": True,
+     "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse."},
+    {"id": "hors-sujet-2", "question": "Quelle est la capitale de la Mongolie ?",
+     "expected_answer": "", "must_cite": [], "tags": ["hors-sujet"], "out_of_scope": True,
+     "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse."},
+]
+
+
+def _parse_question_lines(text: str, limit: int = 8) -> list[dict]:
+    """Parse une réponse « une question par ligne » en questions d'éval (léger).
+
+    Réplique l'extraction robuste de useBank.generate() côté front : les modèles
+    RAG produisent fiablement une liste de questions en texte, là où un prompt
+    JSON exigeant renvoie souvent du vide.
+    """
+    questions: list[dict] = []
+    for line in (text or "").split("\n"):
+        q = re.sub(r"^[\s\-\*\d.\)•>]+", "", line)
+        q = re.sub(r"[\s—-]+$", "", q).strip()
+        if len(q) > 5 and "?" in q:
+            questions.append({
+                "id": f"q{len(questions) + 1}", "question": q,
+                "expected_answer": "", "must_cite": [], "tags": [],
+            })
+            if len(questions) >= limit:
+                break
+    return questions
+
+
+async def _generate_questions_via_lines(client: OpenRAGClient, model: str) -> list[dict]:
+    """Fallback robuste : demande N questions une par ligne, puis les parse."""
+    prompt = (
+        "Propose 8 questions variees qu'un utilisateur pourrait poser sur le "
+        "contenu indexe de cette collection, pour tester le RAG. Reponds "
+        "UNIQUEMENT avec les questions, une par ligne, sans numerotation, sans "
+        "puces, sans introduction ni conclusion. Chaque question doit etre "
+        "specifique au contenu reel."
+    )
+    try:
+        result = await client.chat(
+            model=model, messages=[{"role": "user", "content": prompt}], temperature=0.4,
+        )
+    except Exception:
+        return []
+    content = ""
+    if "choices" in result and result["choices"]:
+        content = result["choices"][0].get("message", {}).get("content", "")
+    return _parse_question_lines(content)
 
 
 class PlaygroundChatRequest(BaseModel):
@@ -144,48 +199,44 @@ async def generate_eval_dataset(collection: str):
     if "choices" in result and result["choices"]:
         content = result["choices"][0].get("message", {}).get("content", "")
 
-    # Try to parse JSON from the response
+    # 1) Essai format riche JSON (expected_answer / must_cite quand le modèle s'y prête).
+    dataset = None
     try:
-        # Handle markdown code blocks
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-        dataset = json.loads(content.strip())
+        raw = content
+        if "```json" in raw:
+            raw = raw.split("```json")[1].split("```")[0]
+        elif "```" in raw:
+            raw = raw.split("```")[1].split("```")[0]
+        parsed = json.loads(raw.strip())
+        if isinstance(parsed, dict) and parsed.get("questions"):
+            dataset = parsed
+    except (json.JSONDecodeError, IndexError, AttributeError):
+        dataset = None
 
-        # Add out-of-scope questions to test RAG robustness
-        out_of_scope = [
-            {
-                "id": "hors-sujet-1",
-                "question": "Quel est l'age du capitaine ?",
-                "expected_answer": "",
-                "must_cite": [],
-                "tags": ["hors-sujet"],
-                "out_of_scope": True,
-                "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.",
-            },
-            {
-                "id": "hors-sujet-2",
-                "question": "Quelle est la capitale de la Mongolie ?",
-                "expected_answer": "",
-                "must_cite": [],
-                "tags": ["hors-sujet"],
-                "out_of_scope": True,
-                "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.",
-            },
-        ]
-        dataset.setdefault("questions", []).extend(out_of_scope)
+    # 2) Fallback robuste : les modèles RAG renvoient souvent du vide / du non-JSON
+    #    sur un prompt JSON exigeant, mais produisent fiablement une liste de
+    #    questions en texte (approche éprouvée par useBank).
+    if not (dataset and dataset.get("questions")):
+        questions = await _generate_questions_via_lines(client, model)
+        if questions:
+            dataset = {
+                "name": f"{collection}-evaluation",
+                "description": "Jeu de test genere automatiquement",
+                "questions": questions,
+            }
 
-        return dataset
-    except (json.JSONDecodeError, IndexError):
-        # Return raw text if JSON parsing fails
+    if not (dataset and dataset.get("questions")):
         return {
             "name": f"{collection}-evaluation",
             "description": "Jeu de test genere automatiquement",
             "questions": [],
             "raw_response": content,
-            "error": "Le LLM n'a pas produit un JSON valide. Vous pouvez copier et corriger la reponse ci-dessus.",
+            "error": "Le LLM n'a pas pu generer de questions. Reessayez.",
         }
+
+    # Add out-of-scope questions to test RAG robustness
+    dataset.setdefault("questions", []).extend(_OUT_OF_SCOPE)
+    return dataset
 
 
 @router.post("/{collection}/chat")

@@ -56,6 +56,55 @@ def test_fallback_chat_quand_contenu_illisible(mock_cls):
 
 
 @patch("app.routers.playground.OpenRAGClient")
+def test_fallback_lignes_quand_json_vide(mock_cls):
+    """Le modèle RAG renvoie souvent du vide sur un prompt JSON : on se rabat sur
+    l'extraction 'une question par ligne' (2e appel chat)."""
+    from app.main import app
+
+    m = mock_cls.return_value
+    m.health_check = AsyncMock(return_value=True)
+    m.list_files = AsyncMock(return_value=[{"file_id": "f1"}])
+    m.get_file_content = AsyncMock(return_value="")
+    empty = {"choices": [{"message": {"content": ""}}]}
+    lines = {"choices": [{"message": {"content":
+        "Quelle est la procedure de demande ?\n"
+        "Quels documents faut-il fournir ?\n"
+        "Quel est le delai applicable ?"}}]}
+    m.chat = AsyncMock(side_effect=[empty, lines])
+
+    with TestClient(app) as client:
+        resp = client.post("/api/playground/ceseda/generate-eval")
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    normal = [q for q in data["questions"] if not q.get("out_of_scope")]
+    assert len(normal) == 3
+    assert all(q["question"].endswith("?") for q in normal)
+    assert any(q.get("out_of_scope") for q in data["questions"])
+    assert m.chat.await_count == 2  # tentative JSON puis fallback lignes
+
+
+@patch("app.routers.playground.OpenRAGClient")
+def test_200_avec_erreur_si_aucune_question(mock_cls):
+    """Aucune génération possible : 200 + message clair (plus de 400 brutal)."""
+    from app.main import app
+
+    m = mock_cls.return_value
+    m.health_check = AsyncMock(return_value=True)
+    m.list_files = AsyncMock(return_value=[{"file_id": "f1"}])
+    m.get_file_content = AsyncMock(return_value="")
+    m.chat = AsyncMock(return_value={"choices": [{"message": {"content": ""}}]})
+
+    with TestClient(app) as client:
+        resp = client.post("/api/playground/sansreponse/generate-eval")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["questions"] == []
+    assert data["error"]
+
+
+@patch("app.routers.playground.OpenRAGClient")
 def test_400_seulement_si_collection_vide(mock_cls):
     from app.main import app
 
