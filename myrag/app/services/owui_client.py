@@ -9,11 +9,26 @@ pressed the button on our side.
 
 OWUI v0.8.12 endpoint shape:
 - POST /api/v1/models/create         — create new model
-- POST /api/v1/models/model/update   — update (id in body, not query)
+- POST /api/v1/models/model/update   — update (id in body AND query — cf. ci-dessous)
 - POST /api/v1/models/model/delete   — delete
 - GET  /api/v1/models/model?id=…     — fetch one
 
 All accept `Authorization: Bearer <admin_api_key>`.
+
+À partir d'OWUI 0.11, le partage ne passe plus par ``access_control`` mais par une
+liste ``access_grants``. Deux conséquences, toutes deux mesurées sur un socle 0.11 :
+
+1. ``access_control: null`` fait échouer la mise à jour avec un **500** dont le corps ne
+   dit rien (la trace n'existe que dans le journal du socle : « access_grants — Input
+   should be a valid list »). La mise à jour tombait alors sur la création, qui répond
+   **401 « This model id is already registered »** — un code d'authentification pour un
+   conflit de nom, de quoi chercher la panne du mauvais côté pendant longtemps ;
+2. le partage se déclare avec ``{principal_type, principal_id, permission}``.
+   ``user/*`` = tout compte connecté ; ``group/<id>`` = un groupe ; ``anyone/*`` =
+   **sans authentification**, systématiquement retiré par le socle sur cette route —
+   ce n'est pas la façon de rendre une collection visible aux testeurs.
+
+Le corps envoyé porte les DEUX formes : le socle ignore celle qu'il ne connaît pas.
 """
 
 from __future__ import annotations
@@ -28,6 +43,23 @@ class OwuiAdminUnavailable(RuntimeError):
     catches this and returns a helpful message to the UI rather than
     exposing the bare exception text.
     """
+
+
+def grants_de_partage(visibility: str, groupes: list[str] | None) -> list[dict]:
+    """Traduit la portée d'une publication en autorisations OpenWebUI (>= 0.11).
+
+    `anyone/*` n'est JAMAIS émis : ce serait un accès sans authentification, et le
+    socle le retire de toute façon sur cette route. « Tout le monde » veut dire ici
+    « tout compte connecté », soit `user/*`.
+    """
+    if visibility == "group" and groupes:
+        return [
+            {"principal_type": "group", "principal_id": g, "permission": "read"}
+            for g in groupes
+        ]
+    if visibility == "all":
+        return [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
+    return []
 
 
 class OwuiClient:
@@ -74,6 +106,7 @@ class OwuiClient:
         base_model_id: str | None = None,
         system_prompt: str = "",
         access_control: dict | None = None,
+        access_grants: list[dict] | None = None,
         suggestion_prompts: list[str] | None = None,
     ) -> dict:
         """Create or update an OWUI Model.
@@ -99,6 +132,9 @@ class OwuiClient:
             ),
             "base_model_id": base_model_id or model_id,
             "access_control": access_control,
+            # Toujours une LISTE, jamais `None` : c'est cette valeur nulle qui faisait
+            # répondre 500 au socle 0.11, sans rien dire dans le corps de la réponse.
+            "access_grants": access_grants or [],
             "is_active": True,
         }
 
@@ -110,6 +146,7 @@ class OwuiClient:
             # create for *any* non-success status.
             upd = await client.post(
                 f"{self.base_url}/api/v1/models/model/update",
+                params={"id": model_id},
                 json=body,
                 headers=self._headers(),
             )
@@ -145,6 +182,9 @@ class OwuiClient:
             ):
                 resp = await client.request(
                     method, f"{self.base_url}{path}",
+                    # L'identifiant est passé des deux façons : en paramètre de requête
+                    # pour les socles récents, dans le corps pour les anciens.
+                    params={"id": model_id},
                     headers=self._headers(),
                     json=json_body,
                 )
