@@ -130,7 +130,16 @@ class OwuiClient:
             "params": (
                 {"system": system_prompt} if system_prompt else {}
             ),
-            "base_model_id": base_model_id or model_id,
+            # `None` veut dire « cette fiche RECOUVRE le modele de connexion qui porte le
+            # meme identifiant » — c'est le cas quand la collection est servie
+            # directement par OpenRAG, declare comme connexion du socle. Y remettre
+            # l'identifiant du modele donnerait le resultat inverse : la fiche serait
+            # traitee comme un modele DERIVE, dont l'identifiant existe deja, donc
+            # ignoree en silence. La collection disparaitrait du selecteur des
+            # utilisateurs tout en restant appelable — un symptome qui n'oriente vers
+            # rien. Ne renseigner ce champ que pour viser un AUTRE modele (un connecteur
+            # « pipelines », par exemple).
+            "base_model_id": base_model_id,
             "access_control": access_control,
             # Toujours une LISTE, jamais `None` : c'est cette valeur nulle qui faisait
             # répondre 500 au socle 0.11, sans rien dire dans le corps de la réponse.

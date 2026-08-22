@@ -107,16 +107,20 @@ async def publish_collection(name: str, req: PublishRequest):
             # apparaît dans l'interface d'administration et nulle part ailleurs, sans
             # qu'aucun message ne le signale.
             grants = grants_de_partage(req.visibility, req.visibility_groups)
-            # Route through the pipelines container's openrag manifold
-            # (id "openrag.<col>") rather than the direct OpenRAG provider
-            # ("openrag-<col>"). The pipeline appends source links to the
-            # response — the direct provider can't because OWUI ignores
-            # OpenRAG's non-standard `extra` field.
+            # La fiche RECOUVRE le modele `openrag-<col>` que le socle recoit deja de sa
+            # connexion OpenRAG : d'ou `base_model_id` absent. Elle ne cree pas un
+            # modele, elle le NOMME et le PARTAGE — sans elle, la collection reste
+            # reservee a l'administration du socle.
+            #
+            # Elle designait auparavant `openrag.<col>`, servi par le conteneur
+            # « pipelines » d'OpenWebUI, qui ajoute les liens vers les documents cites.
+            # Ce conteneur n'est pas deploye partout ; quand il l'est, c'est ici que se
+            # remet son identifiant — au prix d'une chaine que le controle d'acces devra
+            # pouvoir suivre.
             owui_result = await client.upsert_model(
                 model_id=f"openrag-{name}",
                 name=pub.alias_name,
                 description=req.alias_description,
-                base_model_id=f"openrag.{name}",
                 access_control=ac,
                 access_grants=grants,
             )
