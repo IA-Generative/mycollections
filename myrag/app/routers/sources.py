@@ -225,7 +225,8 @@ def _drive_client_for_user(user_token: str):
             status_code=503,
             detail="Drive n'est pas configure (DRIVE_URL manquant).",
         )
-    return DriveClient(settings.drive_url, user_token)
+    return DriveClient(settings.drive_url, user_token,
+                       public_host=settings.drive_public_host or None)
 
 
 async def _drive_service_client():
@@ -250,7 +251,8 @@ async def _drive_service_client():
             status_code=502,
             detail=f"Echec auth Keycloak client_credentials: {e.response.status_code}",
         )
-    return DriveClient(settings.drive_url, token)
+    return DriveClient(settings.drive_url, token,
+                       public_host=settings.drive_public_host or None)
 
 
 def _map_drive_item(raw: dict) -> dict:
@@ -391,7 +393,8 @@ async def add_drive_source(
     folder_title = req.folder_title or folder.get("title") or folder.get("filename") or req.folder_id
 
     # Sync download — while the user's access token is still valid.
-    connector = DriveConnector(settings.drive_url, user_token, req.folder_id)
+    connector = DriveConnector(settings.drive_url, user_token, req.folder_id,
+                               public_host=settings.drive_public_host or None)
     downloaded: list[tuple[bytes, str, str]] = []
     total_bytes = 0
     try:

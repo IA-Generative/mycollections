@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     drive_url: str = Field(default="")
     drive_client_id: str = Field(default="mycollections-drive")
     drive_client_secret: str = Field(default="")
+    # Nom d'hôte public de Drive, à envoyer en en-tête quand `drive_url` désigne le
+    # service INTERNE. Drive est un Django : il refuse par un « Bad Request (400) » nu
+    # tout hôte absent de sa liste, et redirige en 301 vers son adresse publique tant
+    # qu'il croit répondre en clair. Vide = on n'y touche pas (dev, adresse publique).
+    drive_public_host: str = Field(default="")
 
     # Open WebUI (used by /publish to create model aliases)
     owui_url: str = Field(default="http://openwebui.miraiku.svc.cluster.local")

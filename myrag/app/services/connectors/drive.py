@@ -13,17 +13,39 @@ import httpx
 from app.services.connectors.base import BaseConnector, DocumentInfo
 
 
+def _entetes(access_token: str, public_host: str | None) -> dict:
+    """En-têtes d'appel à Drive.
+
+    Quand on joint Drive par son SERVICE INTERNE — ce qui est la règle dans un cluster
+    partagé, l'adresse publique n'y répondant qu'une fois sur deux — deux en-têtes sont
+    indispensables, et leur absence ne produit aucun message exploitable :
+
+    · ``Host`` : Drive est un Django dont la liste d'hôtes autorisés ne contient que son
+      nom public. Un appel au nom du service reçoit un « Bad Request (400) » en HTML nu,
+      sans un mot d'explication.
+    · ``X-Forwarded-Proto`` : sans lui, Drive se croit appelé en clair et répond 301 vers
+      son adresse publique — l'appelant y court, et retombe précisément sur l'adresse
+      qu'on cherchait à éviter.
+    """
+    entetes = {"Authorization": f"Bearer {access_token}"}
+    if public_host:
+        entetes["Host"] = public_host
+        entetes["X-Forwarded-Proto"] = "https"
+    return entetes
+
+
 class DriveClient:
     """Thin async HTTP client for the Suite Numerique Drive API."""
 
-    def __init__(self, base_url: str, access_token: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, access_token: str, timeout: float = 30.0,
+                 public_host: str | None = None):
         self.base_url = base_url.rstrip("/")
         # IMPORTANT: /external_api/v1.0/ — the OIDC-RS protected variant.
         # /api/v1.0/ requires a session cookie (user login) and would 500
         # on Bearer-token calls from a service account.
         self._client = httpx.AsyncClient(
             base_url=f"{self.base_url}/external_api/v1.0",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers=_entetes(access_token, public_host),
             timeout=timeout,
             follow_redirects=True,
         )
@@ -60,8 +82,9 @@ class DriveClient:
 class DriveConnector(BaseConnector):
     """BaseConnector implementation backed by Suite Numerique Drive."""
 
-    def __init__(self, base_url: str, access_token: str, folder_id: str):
-        self.client = DriveClient(base_url, access_token)
+    def __init__(self, base_url: str, access_token: str, folder_id: str,
+                 public_host: str | None = None):
+        self.client = DriveClient(base_url, access_token, public_host=public_host)
         self.folder_id = folder_id
         self.base_url = base_url.rstrip("/")
 
