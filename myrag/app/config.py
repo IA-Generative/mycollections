@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     keycloak_admin_user: str = Field(default="admin")
     keycloak_admin_password: str = Field(default="")
 
+    # Restriction d'accès à un groupe du realm. Vide = pas de restriction (dev,
+    # tests, intégration). Renseigné en bêta avec le NOM FEUILLE du groupe des
+    # testeurs — le mapper Keycloak émet les groupes en `full.path=false`, donc le
+    # claim porte `mirai-beta-testeurs`, jamais `/g/mirai-beta-testeurs`.
+    myrag_groupe_exige: str = Field(default="")
+
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
     # false par défaut (dev/tests) ; true en prod via la configmap. Sert aussi
     # de coupe-circuit (repasser à false + restart désactive la garde).
