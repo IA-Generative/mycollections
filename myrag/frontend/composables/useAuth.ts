@@ -3,6 +3,15 @@
  * Uses oidc-client-ts with PKCE flow.
  */
 
+// `basic` est un scope Keycloak qui ajoute `sub` (et `auth_time`) au jeton d'ACCÈS.
+// Sans lui, ce realm n'y met pas `sub` : les services qui identifient leur utilisateur
+// par ce claim — Drive, par exemple — refusent l'appel avec un 401 dont rien ne dit
+// qu'il s'agit d'un claim manquant.
+//
+// Il doit être DEMANDÉ tant qu'il est assigné au client en scope « optionnel ». S'il
+// passe un jour en « par défaut », cette demande devient sans effet, pas nuisible.
+const OIDC_SCOPES = 'openid email profile basic'
+
 export function useAuth() {
   const config = useRuntimeConfig()
   const user = useState<any>('auth-user', () => null)
@@ -41,7 +50,7 @@ export function useAuth() {
         redirect_uri: redirectUri,
         post_logout_redirect_uri: origin,
         response_type: 'code',
-        scope: 'openid email profile',
+        scope: OIDC_SCOPES,
         userStore: new WebStorageStateStore({ store: window.sessionStorage }),
         automaticSilentRenew: true,
       })
@@ -125,7 +134,7 @@ export function useAuth() {
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: 'openid email profile',
+        scope: OIDC_SCOPES,
         userStore: new WebStorageStateStore({ store: window.sessionStorage }),
       })
       const renewed = await mgr.signinSilent()
