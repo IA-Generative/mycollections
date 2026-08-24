@@ -16,7 +16,7 @@
               </div>
               <div class="fr-header__service">
                 <NuxtLink to="/" class="fr-header__service-title">
-                  Mes collections <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">Beta</span>
+                  Mes collections
                 </NuxtLink>
                 <p class="fr-header__service-tagline">Recherche augmentee dans vos collections documentaires</p>
               </div>
