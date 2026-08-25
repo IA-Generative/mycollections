@@ -4,7 +4,9 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Mes collections (beta)',
+      // Casse de phrase, sans mention bêta : la pastille « MirAI Next Beta » du menu
+      // commun porte déjà ce repère (docs/nommage.md du dépôt mirai-apps-menu).
+      title: 'Mes collections',
       htmlAttrs: { lang: 'fr', 'data-fr-scheme': 'light' },
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
