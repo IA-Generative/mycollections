@@ -67,9 +67,16 @@
               </td>
               <td>
                 <span v-if="col.archived_at" class="fr-badge fr-badge--sm fr-badge--warning">Archivee</span>
-                <span v-else class="fr-badge fr-badge--sm" :class="stateBadge(col.publication?.state)">
-                  {{ stateLabel(col.publication?.state) }}
-                </span>
+                <template v-else>
+                  <span class="fr-badge fr-badge--sm" :class="stateBadge(col.publication?.state)">
+                    {{ stateLabel(col.publication?.state) }}
+                  </span>
+                  <span v-for="t in col.publication?.targets || []" :key="t.app"
+                        class="fr-badge fr-badge--sm fr-badge--success fr-ml-1v"
+                        :title="`Servie dans ${appLabel(t.app)} (${t.model_id})`">
+                    {{ appLabel(t.app) }}
+                  </span>
+                </template>
               </td>
               <td>
                 <div v-if="col.contact_name">
@@ -200,6 +207,12 @@ function stateBadge(state: string) {
 
 function stateLabel(state: string) {
   return { draft: 'Brouillon', published: 'Publie', disabled: 'Desactive', archived: 'Archive' }[state] || 'Brouillon'
+}
+
+// Applications dans lesquelles une collection publiee est servie. L'assistant
+// est la seule aujourd'hui ; les suivantes (greffon LibreOffice…) s'ajoutent ici.
+function appLabel(app: string) {
+  return { assistant: 'Assistant' }[app] || app
 }
 
 async function loadCollections() {

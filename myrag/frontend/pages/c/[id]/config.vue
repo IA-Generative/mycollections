@@ -13,6 +13,27 @@
     <div v-if="loading" class="fr-callout"><p>Chargement...</p></div>
 
     <div v-else class="fr-col-8">
+      <!-- Etat de partage : ou cette collection est-elle servie ? -->
+      <div class="fr-callout fr-mb-2w" :class="estServie ? 'fr-callout--green-emeraude' : ''">
+        <h2 class="fr-callout__title fr-h6">Partage</h2>
+        <p v-if="estServie" class="fr-callout__text fr-text--sm">
+          Cette collection est <strong>partagee</strong> — servie dans :
+          <span v-for="t in partage.targets" :key="t.app" class="fr-badge fr-badge--sm fr-badge--success fr-ml-1v"
+                :title="t.model_id">{{ appLabel(t.app) }}</span>
+          <br />
+          Alias : <strong>{{ partage.alias_name || '—' }}</strong> ·
+          Visibilite : <strong>{{ visibiliteLabel(partage.visibility) }}</strong>
+          <span v-if="partage.published_at"> · depuis le {{ partage.published_at.slice(0, 10) }}</span>
+        </p>
+        <p v-else class="fr-callout__text fr-text--sm">
+          Cette collection <strong>n'est partagee dans aucune application</strong>
+          ({{ etatLabel(partage.state) }}) : elle n'apparait pas dans l'agent conversationnel.
+        </p>
+        <NuxtLink :to="`/c/${id}/publish`" class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w">
+          {{ estServie ? 'Modifier le partage' : 'Publier la collection' }}
+        </NuxtLink>
+      </div>
+
       <!-- Description -->
       <div class="fr-input-group">
         <label class="fr-label">
@@ -208,6 +229,25 @@ const form = ref({
   contact_email: '',
 })
 
+// Etat de partage renvoye par GET /api/collections/{id} (cle `publication`).
+const partage = ref<{ state: string, targets: any[], alias_name?: string,
+                      visibility?: string, published_at?: string }>({ state: 'draft', targets: [] })
+const estServie = computed(() => (partage.value.targets || []).length > 0)
+
+function appLabel(app: string) {
+  return { assistant: 'Agent conversationnel' }[app] || app
+}
+
+function etatLabel(s: string) {
+  return { draft: 'brouillon, jamais publiee', disabled: 'publication desactivee',
+           archived: 'archivee' }[s] || 'brouillon'
+}
+
+function visibiliteLabel(v?: string) {
+  return { all: 'tous les utilisateurs connectes', group: 'groupes autorises',
+           users: 'utilisateurs nommes' }[v || ''] || v || '—'
+}
+
 function applyProfile() {
   const p = profiles.find(pr => pr.key === selectedProfile.value)
   if (p) {
@@ -220,6 +260,7 @@ function applyProfile() {
 onMounted(async () => {
   try {
     const config = await get(`/api/collections/${id}`)
+    partage.value = config.publication || { state: 'draft', targets: [] }
     form.value = {
       description: config.description || '',
       strategy: config.strategy || 'auto',
