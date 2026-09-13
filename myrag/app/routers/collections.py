@@ -145,6 +145,42 @@ async def delete_prompt_template_endpoint(key: str):
 # Collection CRUD (backed by SQLite/PostgreSQL)
 # ============================================================
 
+async def _etats_de_partage(names: list[str]) -> dict[str, dict]:
+    """État de partage par collection : où la collection est-elle servie ?
+
+    Le catalogue affichait « Brouillon » pour des collections pourtant servies
+    dans l'assistant : la liste ne joignait jamais la table des publications.
+    Une seule application est servie aujourd'hui (l'assistant, via l'alias
+    OpenWebUI) ; la liste `targets` est là pour que les suivantes (greffon
+    LibreOffice…) s'ajoutent sans changer les clients.
+    """
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.db import Publication
+
+    if not names:
+        return {}
+    async with async_session() as session:
+        result = await session.execute(
+            select(Publication).where(Publication.collection_name.in_(names))
+        )
+        etats: dict[str, dict] = {}
+        for pub in result.scalars().all():
+            servie = pub.state == "published" and pub.alias_enabled
+            etats[pub.collection_name] = {
+                "state": pub.state,
+                "visibility": pub.visibility,
+                "alias_name": pub.alias_name,
+                "published_at": pub.published_at.isoformat() if pub.published_at else "",
+                "targets": (
+                    [{"app": "assistant", "model_id": f"openrag-{pub.collection_name}"}]
+                    if servie else []
+                ),
+            }
+        return etats
+
+
 @router.get("")
 async def list_collections_endpoint(
     include_archived: bool = False,
@@ -201,6 +237,12 @@ async def list_collections_endpoint(
                 c["file_count"] = 0
     except Exception:
         pass
+
+    # L'état de partage, joint en une requête — sans lui, le badge « Publie »
+    # du catalogue ne peut jamais s'allumer.
+    partages = await _etats_de_partage([c["name"] for c in collections])
+    for c in collections:
+        c["publication"] = partages.get(c["name"]) or {"state": "draft", "targets": []}
 
     return {"collections": collections}
 
@@ -274,6 +316,9 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
         created_by=collection.get("created_by"), user_groups=user.groups, user_sub=user.sub,
     ):
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+    collection["publication"] = (
+        (await _etats_de_partage([name])).get(name) or {"state": "draft", "targets": []}
+    )
     return collection
 
 
