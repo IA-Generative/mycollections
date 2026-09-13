@@ -65,8 +65,8 @@ Règles actées :
 ## Conséquences
 
 - **Positives** : les six règles sont des tests (`tests/unit/test_regle*.py`) ; la suite
-  historique est isolée sur une base propre (`tests/conftest.py`) et passe de 207 à 304
-  verts ; le fil d'avancement est le contrat commun des lots 4 et 6.
+  historique est isolée sur une base propre (`tests/conftest.py`) et passe de 207 à 333
+  verts (343 tests) ; le fil d'avancement est le contrat commun des lots 4 et 6.
 - **Négatives** : publier « tout le monde » depuis la page de publication répond 422
   tant que la collection n'est pas `publiee_tous` — déployer avec le lot 3. Dix tests
   historiques (`test_collections.py`, `test_publication.py`) restent rouges : ils
@@ -78,10 +78,12 @@ Règles actées :
 ## Suivi
 
 - [x] Schéma, machine à états, tests, routes — lot 1 (`lot-1/modele-api`)
-- [ ] Déploiement : Secret `obs-pseudo-salt` copié dans `mycollections`, `CAPACITES_URL`,
-      sortie Cilium vers `apps-menu` (8080), `IMAGE_TAG=0.3.0` après fusion
+- [x] Déploiement (2026-09-13, image 0.3.0) : valeur d'`obs-pseudo-salt` dans
+      `myrag-secrets.MYRAG_PSEUDO_SEL`, `BUS_SECRET` partagé avec le Secret `bus-secret` du
+      menu, `CAPACITES_URL` / `BUS_URL` / `SEUIL_CHANTIER_DEFAUT`, sortie Cilium vers
+      `apps-menu` (8080) et les trois FQDN des amorces, entrée `allow-menu-bus` (8200)
 - [x] Lot 0 : connecteurs des six amorces (`app/services/amorces/`, branche `lot-0/amorces`) — sorties réseau à ouvrir : static.data.gouv.fr, natinfo.app, opendata.justice-administrative.fr
 - [x] Lot 3 : écrans Nuxt + DSFR (option A), guide en cinq pages, branche `lot-3/ecrans`
 - [ ] Lot 2 : `collectif_store.appliquer_proposition` (Grist, versions de fichier)
-- [ ] Lot 4 : route machine `POST /_beta/messages` côté bus, relais des événements aux abonnés
-- [ ] Lot 6 : canal de lecture du suivi (GRANT SELECT ou route agrégée) — ADR à part
+- [x] Lot 4 : route machine `POST /_beta/messages` côté bus (apps-menu-api 0.8.0), relais des événements aux abonnés
+- [x] Lot 6 : canal de lecture du suivi — GRANT SELECT par colonnes nommées (suivi 0.26.0, `scripts/pg-roles-suivi-myrag.sh` du dépôt GitOps)
