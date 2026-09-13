@@ -18,7 +18,7 @@ from app.models.db import (
     Abonnement, Amorce, Collection, Demande, Evenement, GrilleControle, Proposition,
     Signalement, Soutien, utcnow,
 )
-from app.services import etats, journal
+from app.services import etats, journal, relais
 from app.services.pseudo import SelAbsent, condenser
 
 
@@ -92,6 +92,11 @@ async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> l
         })
         resultat.append(fiche)
     return resultat
+
+
+async def _abonnes_dans(session, objet_type: str, objet_id: str) -> list[str]:
+    return list((await session.execute(select(Abonnement.sub_hash).where(
+        Abonnement.objet_type == objet_type, Abonnement.objet_id == objet_id))).scalars().all())
 
 
 async def _abonner_dans(session, objet_type: str, objet_id: str, sub_hash: str) -> None:
@@ -192,8 +197,12 @@ async def soutenir(ident: str, sub_hash: str, role: str, temps: int | None) -> d
         )).scalar_one()
         journal.ecrire(session, "demande", ident, "soutien.ajoute", auteur_hash=sub_hash,
                        detail={"role": role, "temps_declare_min": temps, "nb_soutiens": int(nb)})
+        avant = d.etat
         await _recalculer_etat(session, d, sub_hash)
+        abonnes = await _abonnes_dans(session, "demande", ident) if d.etat != avant else []
         await session.commit()
+        if d.etat != avant:
+            relais.planifier(abonnes, f"« {d.titre} » : le seuil est atteint, un garant est là — le chantier démarre.")
         return (await _enrichir(session, [d], sub_hash))[0]
 
 
@@ -334,6 +343,9 @@ async def changer_etat(name: str, cible: str, sub_hash: str, *, forcer: bool, mo
             detail.update({"force": True, "motif": motif})
         journal.ecrire(session, "collection", name, "collection.etat", auteur_hash=sub_hash,
                        collection_name=name, detail=detail)
+        abonnes = await _abonnes_dans(session, "collection", name)
+        if c.demande_id:
+            abonnes += await _abonnes_dans(session, "demande", c.demande_id)
         if vers == "publiee_tous" and c.demande_id:
             d = await session.get(Demande, c.demande_id)
             if d and d.etat in ("ouverte", "chantier"):
@@ -341,6 +353,9 @@ async def changer_etat(name: str, cible: str, sub_hash: str, *, forcer: bool, mo
                                detail={"de": d.etat, "vers": "realisee", "collection": name})
                 d.etat, d.collection_name, d.maj_le = "realisee", name, utcnow()
         await session.commit()
+    libelles = {"amorcee": "amorcée", "en_controle": "en contrôle", "publiee_groupe": "publiée au groupe", "publiee_tous": "publiée à tous"}
+    relais.planifier(abonnes, f"La collection « {name} » est désormais {libelles.get(vers, vers)}"
+                              + (" (forçage par l'administration)." if forcer else "."))
     return await lire_etat(name, sub_hash, True)
 
 
@@ -456,7 +471,10 @@ async def decider_proposition(name: str, ident: str, decision: str, motif: str |
         journal.ecrire(session, "proposition", ident, type_, auteur_hash=sub_hash, collection_name=name, detail=detail)
         journal.ecrire(session, "collection", name, type_, auteur_hash=sub_hash, collection_name=name,
                        detail={"proposition": ident, **detail})
+        destinataires = [p.auteur_hash] + await _abonnes_dans(session, "collection", name)
         await session.commit()
+        relais.planifier(destinataires, f"Proposition sur « {name} » {'publiée' if decision == 'publiee' else 'refusée'}"
+                                        + (f" — motif : {motif}" if motif else "") + ".")
         return p.to_dict()
 
 
@@ -494,7 +512,9 @@ async def traiter_signalement(name: str, ident: str, etat: str, sub_hash: str) -
                        collection_name=name, detail={"de": de, "vers": etat})
         journal.ecrire(session, "collection", name, "signalement.traite", auteur_hash=sub_hash,
                        collection_name=name, detail={"signalement": ident, "vers": etat})
+        auteur = s.auteur_hash
         await session.commit()
+        relais.planifier([auteur], f"Votre signalement sur « {name} » est {'clos' if etat == 'clos' else 'pris en compte'}.")
         return s.to_dict()
 
 
@@ -545,3 +565,52 @@ async def marquer_amorce(ident: str, etat_import: str, *, collection_name: str |
             a.dernier_import_le = utcnow()
         await session.commit()
         return a.to_dict()
+
+
+# ─── Ce que la cloche de la barre commune affiche (lot 4) ─────────────────────────
+
+async def suivi_pour(sub_hash: str) -> dict:
+    """Les demandes que je soutiens ou que je suis, celles à un soutien du seuil, les
+    collections que je suis — pour la cloche, en un appel."""
+    async with async_session() as session:
+        miennes = set((await session.execute(select(Soutien.demande_id).where(Soutien.sub_hash == sub_hash))).scalars().all())
+        miennes |= set((await session.execute(select(Abonnement.objet_id).where(
+            Abonnement.objet_type == "demande", Abonnement.sub_hash == sub_hash))).scalars().all())
+        ouvertes = list((await session.execute(select(Demande).where(Demande.etat.in_(("ouverte", "chantier")))
+                                               .order_by(Demande.maj_le.desc()))).scalars().all())
+        enrichies = await _enrichir(session, ouvertes, sub_hash)
+        suivies = [d for d in enrichies if d["id"] in miennes]
+        presque = [d for d in enrichies if d["etat"] == "ouverte" and not d["soutenue_par_moi"]
+                   and d["nb_soutiens"] >= max(1, d["seuil"] - 1)][:5]
+        collections = list((await session.execute(select(Abonnement.objet_id).where(
+            Abonnement.objet_type == "collection", Abonnement.sub_hash == sub_hash))).scalars().all())
+        cles = ("id", "titre", "etat", "nb_soutiens", "seuil", "garant", "sommeil", "soutenue_par_moi", "mon_role", "collection_name")
+        return {"demandes": [{k: d[k] for k in cles} for d in suivies],
+                "presque_au_seuil": [{k: d[k] for k in cles} for d in presque],
+                "collections": collections}
+
+
+async def collections_publiees_a_tous() -> list[dict]:
+    async with async_session() as session:
+        lignes = (await session.execute(select(Collection).where(
+            Collection.etat_collab == "publiee_tous", Collection.archived_at.is_(None)).order_by(Collection.name))).scalars().all()
+        return [{"name": c.name, "description": c.description or ""} for c in lignes]
+
+
+async def deposer_version(name: str, document: str, nom_fichier: str, contenu: bytes, sub_hash: str,
+                          signalement_id: str) -> dict:
+    """Une nouvelle version proposée pour un document cité : rangée à part, jamais
+    servie, en attente de la décision du garant (proposition de type fichier)."""
+    from pathlib import Path
+    from app.routers.ingest import safe_filename, ensure_within
+    base = Path(settings.data_dir) / "_versions_proposees"
+    dossier = ensure_within(base, base / safe_filename(name))
+    dossier.mkdir(parents=True, exist_ok=True)
+    nom_sur = f"{signalement_id[:8]}-{safe_filename(nom_fichier)}"
+    chemin = ensure_within(dossier, dossier / nom_sur)
+    chemin.write_bytes(contenu)
+    return await creer_proposition(name, {
+        "cible_type": "fichier", "cible_ref": document, "avant": document, "apres": str(chemin.name),
+        "justification": f"Nouvelle version déposée avec le signalement {signalement_id} (document obsolète).",
+        "source": None,
+    }, sub_hash)
