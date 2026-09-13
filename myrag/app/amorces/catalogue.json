@@ -1053,6 +1053,163 @@
           ]
         }
       ]
+    },
+    {
+      "id": "guide",
+      "titre": "Guide « Soyez acteurs vous-mêmes »",
+      "description": "Les cinq pages du guide des collections collaboratives, interrogeables depuis l'assistant et ouvertes aux propositions de modification.",
+      "connecteur": "guide",
+      "source_url": "/guide",
+      "collection": "guide-soyez-acteurs",
+      "garant_pressenti": "Équipe de la bêta MirAI",
+      "grille": {
+        "source_licence": "Rédigé par l'équipe de la bêta ; réutilisable librement dans le ministère.",
+        "donnees_perso": "Aucune.",
+        "fraicheur": "À chaque évolution du produit ; réimport après modification d'une page."
+      },
+      "parametres": {},
+      "questions": [
+        {
+          "question": "Que doit contenir une demande de jeu de données ?",
+          "expected_answer": "Le jeu, l'usage, la fréquence, comment on fait aujourd'hui, la réponse au recontact — jamais un score.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Combien de soutiens faut-il pour démarrer un chantier ?",
+          "expected_answer": "Le seuil affiché (cinq par défaut) ET un garant.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Un garant et quatre soutiens suffisent-ils ?",
+          "expected_answer": "Non : les deux conditions ne se remplacent pas.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Quels sont les quatre rôles et leur coût en temps ?",
+          "expected_answer": "Soutien (secondes), fournisseur (~2 h), relecteur (~1 h), garant (~2 h/mois).",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Quels sont les états d'une collection ?",
+          "expected_answer": "Amorcée, en contrôle, publiée au groupe, publiée à tous.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Que signifie la mention « en cours de vérification » ?",
+          "expected_answer": "La collection n'est pas publiée à tous ; ses réponses sont à vérifier.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Que contient la grille de contrôle ?",
+          "expected_answer": "Source et licence, données personnelles, fraîcheur, relecture.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Que faut-il pour publier à tous ?",
+          "expected_answer": "La grille complète : trois champs et au moins une relecture, décidé par le garant.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Un administrateur peut-il sauter une étape ?",
+          "expected_answer": "Oui, en forçant ; le forçage et son motif restent dans le fil.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Où chercher une donnée avant de la saisir ?",
+          "expected_answer": "data.gouv.fr, les producteurs (justice administrative, PISTE, natinfo.app), les fichiers du service.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Que fixe une amorce dès l'import ?",
+          "expected_answer": "État amorcée, garant pressenti, grille pré-remplie, vingt questions, couverture constatée.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Un import rejoué crée-t-il des doublons ?",
+          "expected_answer": "Non : ce qui est déjà là est ignoré, ce qui a changé est versionné.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Quels sont les trois motifs d'un signalement ?",
+          "expected_answer": "Obsolète, erreur, manquant.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Qui peut proposer une modification ?",
+          "expected_answer": "Toute personne connectée.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Qui publie ou refuse une proposition ?",
+          "expected_answer": "Le garant ; un refus est toujours motivé.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Qu'est-ce qu'un chantier en sommeil ?",
+          "expected_answer": "Un chantier sans événement depuis trente jours, visible de tous.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Qui reçoit le fil d'avancement ?",
+          "expected_answer": "Les abonnés, dans la cloche de la barre commune.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Pourquoi demander comment on se procure la donnée aujourd'hui ?",
+          "expected_answer": "Sans cette information, constituer un nouveau jeu est pratiquement impossible.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Où déposer une demande ?",
+          "expected_answer": "Onglet Demandes de la communauté, ou panneau Mon avis de la barre commune.",
+          "tags": [
+            "guide"
+          ]
+        },
+        {
+          "question": "Que faire si une demande proche existe déjà ?",
+          "expected_answer": "La soutenir plutôt que la doubler.",
+          "tags": [
+            "guide"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from app.services.amorces import baac, justice_administrative, natinf, rne, sdis, ssmsi
+from app.services.amorces import baac, guide, justice_administrative, natinf, rne, sdis, ssmsi
 
 CONNECTEURS = {
     "natinfo": natinf.importer,
@@ -12,4 +12,5 @@ CONNECTEURS = {
     "rne-elus": rne.importer,
     "sdis-interventions": sdis.importer,
     "baac": baac.importer,
+    "guide": guide.importer,
 }

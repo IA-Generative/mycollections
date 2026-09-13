@@ -79,6 +79,20 @@
       </div>
     </div>
 
+    <!-- Comment ça se passe : le collectif -->
+    <section class="fr-callout fr-mb-6w">
+      <h2 class="fr-callout__title">Comment ça se passe ?</h2>
+      <p class="fr-callout__text" style="max-width:65ch">
+        Un jeu de données vous manque ? Dites-le. Rassemblez {{ capacites.seuil_chantier }} collègues et un garant, amorcez depuis ce qui existe,
+        vérifiez avant de publier, entretenez. Tant qu'une collection n'est pas publiée à tous, ses réponses portent la mention
+        « en cours de vérification ».
+      </p>
+      <div class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-2w">
+        <NuxtLink v-if="capacites.demandes" to="/demandes" class="fr-btn fr-btn--sm">Demandes de la communauté</NuxtLink>
+        <NuxtLink to="/guide" class="fr-btn fr-btn--secondary fr-btn--sm">Le guide « Soyez acteurs vous-mêmes »</NuxtLink>
+      </div>
+    </section>
+
     <!-- Collections list -->
     <section>
       <h2 class="fr-h3">Mes collections ({{ collections.length }})</h2>
@@ -112,6 +126,9 @@
               </span>
               <span class="fr-badge fr-badge--sm fr-badge--info">{{ col.strategy }}</span>
               <span v-if="col.graph_enabled" class="fr-badge fr-badge--sm fr-badge--new">graph</span>
+              <span v-if="col.etat_collab && col.etat_collab !== 'publiee_tous'" class="fr-badge fr-badge--sm fr-badge--warning fr-badge--no-icon" title="Non publiée à tous : servie à son groupe seulement, réponses en cours de vérification.">
+                {{ libelleEtat(col.etat_collab) }}
+              </span>
               <span v-if="col.orphan" class="fr-badge fr-badge--sm fr-badge--warning" title="Partition OpenRAG sans fiche MyRAG — ouvrez la collection pour l'adopter.">
                 sans fiche
               </span>
@@ -165,8 +182,10 @@
 </template>
 
 <script setup lang="ts">
+import { libelleEtat } from '~/utils/collectif'
 const { get } = useApi()
 const { isAdmin } = useAdminAuth()
+const { capacites } = useCapacites()
 const collections = ref<any[]>([])
 const loading = ref(true)
 

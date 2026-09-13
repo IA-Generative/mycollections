@@ -77,8 +77,13 @@
           <fieldset class="fr-fieldset fr-mb-4w">
             <legend class="fr-fieldset__legend fr-h5">Visibilite</legend>
             <div class="fr-fieldset__element">
+              <div v-if="etat && etat.mention" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
+                <p>Cette collection est <strong>{{ libelleEtat(etat.etat).toLowerCase() }}</strong> : elle ne peut être partagée qu'avec son groupe.
+                  Publier à tous demande de la faire d'abord « publiée à tous » dans son parcours de contrôle
+                  (<NuxtLink :to="`/c/${id}`" class="fr-link fr-text--sm">fiche de la collection</NuxtLink>).</p>
+              </div>
               <div class="fr-radio-group">
-                <input type="radio" id="vis-all" value="all" v-model="form.visibility" />
+                <input type="radio" id="vis-all" value="all" v-model="form.visibility" :disabled="!!(etat && etat.mention)" />
                 <label class="fr-label" for="vis-all">Tous les utilisateurs</label>
               </div>
             </div>
@@ -143,11 +148,13 @@
 </template>
 
 <script setup lang="ts">
+import { libelleEtat } from '~/utils/collectif'
 const route = useRoute()
 const id = route.params.id as string
 const { get, post } = useApi()
 
 const pub = ref<any>(null)
+const etat = ref<any>(null)
 const publishing = ref(false)
 const result = ref('')
 const owuiError = ref('')
@@ -215,6 +222,10 @@ async function archive() {
 
 onMounted(async () => {
   try {
+    etat.value = await get(`/api/collections/${id}/etat`)
+    if (etat.value?.mention) form.value.visibility = 'group'
+  } catch (e) {}
+  try {
     pub.value = await get(`/api/collections/${id}/publication`)
     if (pub.value) {
       form.value.alias_enabled = pub.value.alias_enabled
@@ -223,7 +234,8 @@ onMounted(async () => {
       form.value.tool_enabled = pub.value.tool_enabled
       form.value.tool_methods = pub.value.tool_methods || [...allMethods]
       form.value.embed_enabled = pub.value.embed_enabled
-      form.value.visibility = pub.value.visibility || 'all'
+      form.value.visibility = pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
+      if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
       form.value.visibility_group = pub.value.visibility_group || `myrag/${id}`
     }
   } catch (e) {}

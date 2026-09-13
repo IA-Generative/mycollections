@@ -41,6 +41,7 @@
         <!-- Left: collection info -->
         <div class="fr-col-8">
           <h1 class="fr-h2">{{ collection.name }}</h1>
+          <p v-if="etat && etat.mention" class="collectif-mention fr-mb-1w">⚠ {{ etat.mention }} — servie à son groupe seulement</p>
           <p class="fr-text--lg">{{ collection.description || 'Pas de description' }}</p>
 
           <!-- Badges -->
@@ -74,8 +75,10 @@
           </div>
         </div>
 
-        <!-- Right: quality indicator -->
+        <!-- Right: état du circuit, puis qualité -->
         <div class="fr-col-4">
+          <CollectifEtapesCollection v-if="etat" :etat="etat" :superadmin="isAdmin" class="fr-mb-2w" @changer="changerEtat" @forcer="forcerEtat" />
+          <div v-if="erreurEtat" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>{{ erreurEtat }}</p></div>
           <div class="fr-card">
             <div class="fr-card__body">
               <div class="fr-card__content">
@@ -103,6 +106,31 @@
       <div class="fr-tabs">
         <ul class="fr-tabs__list" role="tablist">
           <li role="presentation">
+            <button class="fr-tabs__tab" :aria-selected="tab === 'consulter'" @click="tab = 'consulter'">
+              Consulter
+            </button>
+          </li>
+          <li role="presentation">
+            <button class="fr-tabs__tab" :aria-selected="tab === 'signaler'" @click="tab = 'signaler'">
+              Signaler un défaut{{ signalements && signalements.length ? ` (${signalements.filter(s => s.etat !== 'clos').length})` : '' }}
+            </button>
+          </li>
+          <li role="presentation">
+            <button class="fr-tabs__tab" :aria-selected="tab === 'proposer'" @click="tab = 'proposer'">
+              Proposer une modification{{ propositions && propositions.length ? ` (${propositions.filter(p => p.etat === 'proposee').length})` : '' }}
+            </button>
+          </li>
+          <li role="presentation">
+            <button class="fr-tabs__tab" :aria-selected="tab === 'historique'" @click="tab = 'historique'">
+              Historique
+            </button>
+          </li>
+          <li role="presentation">
+            <button class="fr-tabs__tab" :aria-selected="tab === 'discussion'" @click="tab = 'discussion'">
+              Discussion
+            </button>
+          </li>
+          <li role="presentation">
             <button class="fr-tabs__tab" :aria-selected="tab === 'prompt'" @click="tab = 'prompt'">
               System Prompt
             </button>
@@ -118,6 +146,45 @@
             </button>
           </li>
         </ul>
+
+        <!-- Consulter : la grille de contrôle, toujours affichée, même vide -->
+        <div v-show="tab === 'consulter'" class="fr-tabs__panel">
+          <CollectifGrilleControle v-if="grille" :grille="grille" :garant="estGarant" @enregistrer="enregistrerGrille" @relire="relire" />
+          <p v-else class="fr-text--sm" style="color:var(--text-mention-grey)">Grille de contrôle indisponible.</p>
+          <div v-if="erreurGrille" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"><p>{{ erreurGrille }}</p></div>
+          <p class="fr-text--sm fr-mt-3w">
+            <NuxtLink to="/guide/verifier-avant-de-publier" class="fr-link fr-text--sm">Vérifier avant de publier — le guide</NuxtLink>
+          </p>
+        </div>
+
+        <!-- Signaler un défaut -->
+        <div v-show="tab === 'signaler'" class="fr-tabs__panel">
+          <CollectifSignalements :signalements="signalements" :garant="estGarant" :actif="capacites.signalements" :fichiers="fichiers"
+                                 :signaler="corps => c.signaler(id, corps)" @depose="rechargerCollectif" @traiter="traiterSignalement" />
+        </div>
+
+        <!-- Proposer une modification -->
+        <div v-show="tab === 'proposer'" class="fr-tabs__panel">
+          <CollectifPropositions :propositions="propositions" :garant="estGarant" :proposer="corps => c.proposer(id, corps)"
+                                 @deposee="rechargerCollectif" @publier="publierProposition" @refuser="refuserProposition" />
+        </div>
+
+        <!-- Historique : le fil -->
+        <div v-show="tab === 'historique'" class="fr-tabs__panel">
+          <CollectifAvancement :evenements="evenements" :suivant="suivant" abonnable :abonne="abonne" @abonner="abonner" @suite="suite" />
+        </div>
+
+        <!-- Discussion -->
+        <div v-show="tab === 'discussion'" class="fr-tabs__panel">
+          <div class="fr-callout">
+            <h3 class="fr-callout__title">La discussion se tient dans les forums Mirai</h3>
+            <p class="fr-callout__text">
+              Les échanges entre contributeurs passent par le salon Tchap de la bêta. Ce qui engage la collection
+              — un défaut, une modification — se dépose ici, dans les onglets « Signaler » et « Proposer », pour rester tracé.
+            </p>
+            <button class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-2w" @click="abonner(!abonne)">{{ abonne ? 'Abonné·e au fil' : "S'abonner au fil d'avancement" }}</button>
+          </div>
+        </div>
 
         <!-- Prompt tab -->
         <div v-show="tab === 'prompt'" class="fr-tabs__panel">
@@ -167,9 +234,60 @@
 </template>
 
 <script setup lang="ts">
+import { messageErreur } from '~/utils/collectif'
 const route = useRoute()
 const id = route.params.id as string
 const { get, patch } = useApi()
+const c = useCollectif()
+const { isAdmin } = useAdminAuth()
+const { capacites, charger: chargerCapacites } = useCapacites()
+
+// ─── Le circuit collaboratif ─────────────────────────────────────────────────
+const etat = ref<any>(null)
+const grille = ref<any>(null)
+const propositions = ref<any[] | null>([])
+const signalements = ref<any[] | null>([])
+const evenements = ref<any[] | null>([])
+const suivant = ref<string | null>(null)
+const abonne = ref(false)
+const fichiers = ref<any[]>([])
+const erreurEtat = ref('')
+const erreurGrille = ref('')
+const estGarant = computed(() => !!(etat.value && (etat.value.je_suis_garant || isAdmin.value)))
+
+async function chargerCollectif() {
+  await chargerCapacites()
+  try { etat.value = await c.etat(id) } catch { etat.value = null }
+  try { grille.value = (await c.grille(id)).grille } catch { grille.value = null }
+  await rechargerCollectif()
+  try { fichiers.value = (await get(`/api/ingest/${id}/sources`)).sources || [] } catch { fichiers.value = [] }
+}
+async function rechargerCollectif() {
+  try { propositions.value = (await c.propositions(id)).propositions } catch { propositions.value = null }
+  try { signalements.value = (await c.signalements(id)).signalements } catch { signalements.value = null }
+  try { const j = await c.journalCollection(id); evenements.value = j.evenements; suivant.value = j.suivant } catch { evenements.value = null }
+}
+async function suite(avant: string) { const j = await c.journalCollection(id, { avant }); evenements.value = [...(evenements.value || []), ...j.evenements]; suivant.value = j.suivant }
+async function changerEtat(cible: string) {
+  erreurEtat.value = ''
+  try { etat.value = await c.changerEtat(id, cible); await rechargerCollectif() } catch (e) { erreurEtat.value = messageErreur(e) }
+}
+async function forcerEtat(cible: string, motif: string) {
+  erreurEtat.value = ''
+  try { etat.value = await c.changerEtat(id, cible, true, motif); await rechargerCollectif() } catch (e) { erreurEtat.value = messageErreur(e) }
+}
+async function enregistrerGrille(champs: any) {
+  erreurGrille.value = ''
+  try { grille.value = (await c.majGrille(id, champs)).grille; etat.value = await c.etat(id); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) }
+}
+async function relire() {
+  erreurGrille.value = ''
+  try { grille.value = (await c.relire(id)).grille; etat.value = await c.etat(id); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) }
+}
+async function publierProposition(pid: string) { try { await c.publierProposition(id, pid); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
+async function refuserProposition(pid: string, motif: string) { try { await c.refuserProposition(id, pid, motif); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
+async function traiterSignalement(sid: string, e2: string) { try { await c.traiterSignalement(id, sid, e2); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
+async function abonner(oui: boolean) { try { await c.abonnerCollection(id, oui); abonne.value = oui } catch (e) { erreurGrille.value = messageErreur(e) } }
 
 const collection = ref<any>(null)
 const loadError = ref<string>('')
@@ -178,7 +296,7 @@ const adoptError = ref<string>('')
 const feedbackStats = ref({ satisfaction_rate: 0, positive: 0, negative: 0, total: 0, pending_review: 0 })
 const feedbackItems = ref<any[]>([])
 const loading = ref(true)
-const tab = ref('prompt')
+const tab = ref('consulter')
 
 function sensitivityBadge(s: string) {
   return { public: 'fr-badge--success', internal: 'fr-badge--info', restricted: 'fr-badge--warning', confidential: 'fr-badge--error' }[s] || ''
@@ -230,6 +348,8 @@ onMounted(async () => {
     loading.value = false
     return
   }
+  // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
+  chargerCollectif()
   // Feedback is optional — missing stats shouldn't blank the page.
   try {
     feedbackStats.value = await get(`/api/feedback/${id}/stats`)

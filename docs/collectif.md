@@ -123,3 +123,35 @@ que **3 des 6** collections d'amorce sont au moins `en_controle`.
 
 Sorties réseau à ouvrir côté cluster : `static.data.gouv.fr`, `natinfo.app`,
 `opendata.justice-administrative.fr` (443).
+
+## Les écrans (lot 3, option A)
+
+Front Nuxt 4 + DSFR, `myrag/frontend/` :
+
+- **Onglet « Demandes de la communauté »** (`pages/demandes/index.vue`, `[id].vue`) : seuil
+  affiché (lu dans `/_beta/capacites.json`, repli `/api/config`), formulaire avec
+  dédoublonnage en tapant (`GET /api/demandes?q=`), colonne « Je peux aider » (rôles et
+  coût en temps, `utils/collectif.ts::ROLES`), « Moi aussi » sans rechargement, badge
+  « en sommeil », fiche avec le fil d'avancement et l'abonnement.
+- **Fiche collection** (`pages/c/[id]/index.vue`) : parcours des quatre états en tête
+  (`components/collectif/EtapesCollection.vue`, boutons du garant seul, forçage sous
+  `<details>` pour l'administration avec motif obligatoire), mention « en cours de
+  vérification », onglets **Consulter** (grille de contrôle toujours affichée, même
+  vide, « Je relis cette collection ») / **Signaler un défaut** / **Proposer une
+  modification** (avant/après, justification, source facultative ; publier/refuser
+  visibles du garant seul) / **Historique** (le fil) / **Discussion** (renvoi aux forums,
+  abonnement) / System Prompt.
+- **Page Publier** : « Tout le monde » désactivé tant que la collection n'est pas
+  publiée à tous, avec le pourquoi et le lien vers la fiche.
+- **Guide « Soyez acteurs vous-mêmes »** (`pages/guide/`) : cinq pages Markdown servies
+  par `GET /api/guide`, rendues en DSFR (`marked` + DOMPurify), liées depuis la
+  navigation, le bloc « Comment ça se passe » de l'accueil et chaque écran ; indexées
+  comme collection `guide-soyez-acteurs` (amorce `guide`), ouvertes aux propositions.
+- **Administration → Amorces** (`pages/admin/amorces.vue`) : le catalogue, l'état
+  d'import, le bouton Importer, le critère d'ouverture (3 sur 6).
+- **Règle 5** : `composables/useCapacites.ts` — un drapeau n'est vrai que s'il vaut
+  `true` ; l'onglet des demandes, le bloc de l'accueil et le formulaire de signalement
+  n'apparaissent qu'avec la capacité déclarée.
+
+Tests : `cd myrag/frontend && npm test` (`tests/unit/collectif.test.ts`) ;
+`npx nuxt build` doit passer.
