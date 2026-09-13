@@ -244,6 +244,16 @@ def chunk_by_length(text: str, max_chars: int = 512, overlap: int = 50, sensitiv
             })
             page += 1
 
+        # Sortie par le HAUT de la boucle une fois le texte épuisé. Sans cela, la
+        # dernière position recule de `overlap` caractères puis n'avance plus que d'un
+        # caractère à la fois : la fin du document repart en autant de morceaux qu'il y
+        # a de caractères de recouvrement, chacun un suffixe du précédent. Sur un
+        # document de six lignes, cela faisait 50 morceaux au lieu de 8 — et six d'entre
+        # eux, rigoureusement identiques, se faisaient refuser par l'indexeur avec un
+        # « 409 Conflict » qui ne dit rien de sa cause.
+        if end >= len(text):
+            break
+
         pos = max(pos + 1, end - overlap)
 
     return chunks

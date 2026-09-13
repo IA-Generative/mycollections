@@ -276,3 +276,37 @@ class TestChunkDocument:
         chunks = chunk_document(FAQ_SAMPLE, strategy="auto")
         assert isinstance(chunks, list)
         assert len(chunks) > 0
+
+
+class TestDecoupageParLongueurFinDeTexte:
+    """La fin du texte ne doit pas repartir en morceaux d'un caractère d'écart.
+
+    Symptôme d'origine : une note de six lignes produisait 50 morceaux au lieu d'un,
+    dont six rigoureusement identiques que l'indexeur refusait avec un « 409 Conflict ».
+    La position finale reculait de `overlap` caractères puis n'avançait plus que d'un
+    caractère par tour, chaque morceau étant un suffixe du précédent.
+    """
+
+    def test_texte_plus_court_que_la_fenetre_donne_un_seul_morceau(self):
+        texte = "Une note courte, plus brève que la fenêtre de découpage."
+        morceaux = chunk_by_length(texte, max_chars=512, overlap=50)
+        assert len(morceaux) == 1
+        assert morceaux[0]["content"] == texte
+
+    def test_aucun_morceau_en_double(self):
+        texte = ("Première phrase du document de contrôle. " * 30) + "Fin du document."
+        morceaux = chunk_by_length(texte, max_chars=512, overlap=50)
+        contenus = [m["content"] for m in morceaux]
+        assert len(contenus) == len(set(contenus))
+
+    def test_le_nombre_de_morceaux_reste_proportionne(self):
+        """Sans la sortie de boucle, tout document produisait `overlap` morceaux de
+        queue en plus — indépendamment de sa taille."""
+        texte = "abcdefghij " * 200          # 2200 caractères
+        morceaux = chunk_by_length(texte, max_chars=512, overlap=50)
+        assert len(morceaux) <= 2 + len(texte) // (512 - 50)
+
+    def test_la_fin_du_texte_est_bien_couverte(self):
+        texte = ("Ligne de remplissage. " * 40) + "Le témoin final est ZORGLUB-4712."
+        morceaux = chunk_by_length(texte, max_chars=512, overlap=50)
+        assert any("ZORGLUB-4712" in m["content"] for m in morceaux)
