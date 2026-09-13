@@ -370,6 +370,21 @@ async def maj_grille(name: str, champs: dict, sub_hash: str) -> dict:
     return await lire_grille(name)
 
 
+async def poser_couverture(name: str, couverture: dict, robot: str) -> None:
+    """La couverture réelle constatée à l'import (juridictions, dates, lignes) : écrite
+    par le connecteur, jamais par une personne — la grille la montre telle quelle."""
+    async with async_session() as session:
+        g = await session.get(GrilleControle, name)
+        if not g:
+            g = GrilleControle(collection_name=name)
+            session.add(g)
+        g.couverture_json = json.dumps(couverture, ensure_ascii=False, default=str)
+        g.maj_le = utcnow()
+        journal.ecrire(session, "collection", name, "grille.maj", robot=robot, collection_name=name,
+                       detail={"champs": ["couverture"]})
+        await session.commit()
+
+
 async def relire(name: str, sub_hash: str) -> dict:
     async with async_session() as session:
         g = await session.get(GrilleControle, name)

@@ -1,5 +1,5 @@
 {
-  "_lisez_moi": "Les six premières amorces du lot 0, dans l'ordre de la note ; les autres s'ajoutent ici au lot 5. `connecteur` nomme le code qui saura importer ; tant qu'il n'existe pas, l'import répond 501 en le nommant. Aucun secret ici : les clés vivent dans l'environnement.",
+  "_lisez_moi": "Les six premières amorces du lot 0, dans l'ordre de la note ; les suivantes s'ajoutent ici au lot 5. `connecteur` nomme le code (app/services/amorces) ; `parametres` en règle les sources ; `questions` sont les vingt questions de test posées dans la banque du bac à sable à l'import. Aucun secret ici : NATINFO_API_KEY vit dans l'environnement. Adresses relevées le 2026-09-13 sur data.gouv.fr et opendata.justice-administrative.fr.",
   "amorces": [
     {
       "id": "natinf",
@@ -13,13 +13,161 @@
         "source_licence": "API natinfo.app — reprise de la nomenclature NATINF (ministère de la Justice), Licence Ouverte 2.0",
         "donnees_perso": "Aucune : nomenclature d'infractions, sans personne physique.",
         "fraicheur": "Réimport mensuel ; la nomenclature évolue à chaque texte pénal."
-      }
+      },
+      "parametres": {
+        "url_liste": "https://static.data.gouv.fr/resources/liste-des-infractions-en-vigueur-de-la-nomenclature-natinf/20260906-143226/liste-natinf-juillet2026.csv",
+        "url_api": "https://natinfo.app",
+        "enrichir_max": 0,
+        "_note": "enrichir_max > 0 avec NATINFO_API_KEY : peines et articles lus sur natinfo.app par lots de 50"
+      },
+      "questions": [
+        {
+          "question": "Quel est le libellé de l'infraction NATINF 7987 ?",
+          "expected_answer": "Le libellé exact de la qualification du code 7987 (conduite sans permis).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quelle est la nature (crime, délit, contravention) de l'infraction NATINF 7987 ?",
+          "expected_answer": "Délit.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels articles définissent l'infraction NATINF 11 ?",
+          "expected_answer": "ART.227-3 AL.1 C.PENAL.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels articles répriment l'abandon de famille (non-paiement d'une pension alimentaire) ?",
+          "expected_answer": "ART.227-3 AL.1, ART.227-29 C.PENAL.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quel code NATINF correspond au retrait de la provision d'un chèque avec l'intention de porter atteinte aux droits d'autrui ?",
+          "expected_answer": "NATINF 7.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "La conduite d'un véhicule malgré une suspension du permis est-elle un délit ou une contravention ?",
+          "expected_answer": "Un délit.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels codes NATINF concernent l'usage illicite de stupéfiants ?",
+          "expected_answer": "Les codes dont la qualification porte sur l'usage illicite de stupéfiants (ex. 6047).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quel est le texte de répression de l'outrage à une personne dépositaire de l'autorité publique ?",
+          "expected_answer": "Articles 433-5 et suivants du code pénal (selon la fiche).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quelle est la nature de l'infraction de rébellion ?",
+          "expected_answer": "Délit (art. 433-6 code pénal).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Le refus d'obtempérer à une sommation de s'arrêter : nature et articles ?",
+          "expected_answer": "Délit, art. L.233-1 du code de la route.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels codes NATINF portent sur le port d'arme de catégorie D ?",
+          "expected_answer": "Codes dont la qualification cite les armes de catégorie D (code de la sécurité intérieure).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Existe-t-il un code NATINF pour le séjour irrégulier d'un étranger en France ?",
+          "expected_answer": "Réponse selon la nomenclature en vigueur (codes CESEDA, art. L.621-1 abrogé, aide au séjour).",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels articles définissent le vol simple ?",
+          "expected_answer": "ART.311-1 C.PENAL.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quelle est la différence entre un code NATINF de nature « contravention » et de nature « délit » ?",
+          "expected_answer": "La nature indique la catégorie de l'infraction et donc la juridiction compétente et les peines.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quel code NATINF vise la conduite sous l'empire d'un état alcoolique ?",
+          "expected_answer": "Codes visant l'art. L.234-1 du code de la route.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quels sont les textes de répression du délit de fuite ?",
+          "expected_answer": "ART.434-10 C.PENAL, art. L.231-1 code de la route.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Combien de codes NATINF sont en vigueur dans la liste importée ?",
+          "expected_answer": "Le nombre indiqué dans la couverture de la grille de contrôle.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Le harcèlement moral est-il défini dans le code pénal ou dans le code du travail selon la nomenclature ?",
+          "expected_answer": "Les deux : art. 222-33-2 code pénal et L.1152-1 code du travail selon la fiche.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Quel code NATINF correspond à l'opposition au paiement d'un chèque avec l'intention de porter atteinte aux droits d'autrui ?",
+          "expected_answer": "NATINF 8.",
+          "tags": [
+            "natinf"
+          ]
+        },
+        {
+          "question": "Une infraction obsolète apparaît-elle dans la nomenclature ? Comment le savoir ?",
+          "expected_answer": "La liste ne comporte que les infractions en vigueur ; la date d'obsolescence vient de natinfo.app quand la fiche est enrichie.",
+          "tags": [
+            "natinf"
+          ]
+        }
+      ]
     },
     {
       "id": "ssmsi-delinquance",
       "titre": "Délinquance enregistrée (SSMSI)",
       "description": "Crimes et délits enregistrés par la police et la gendarmerie, par commune, département et indicateur.",
-      "connecteur": "datagouv-tabulaire",
+      "connecteur": "ssmsi-delinquance",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-ssmsi-delinquance",
       "garant_pressenti": "SSMSI, pôle diffusion (à confirmer)",
@@ -27,7 +175,152 @@
         "source_licence": "data.gouv.fr, API tabulaire — jeux du SSMSI, Licence Ouverte 2.0",
         "donnees_perso": "Aucune : agrégats par commune et par indicateur.",
         "fraicheur": "Publication annuelle (série) et mensuelle (indicateurs) ; réimport à chaque livraison."
-      }
+      },
+      "parametres": {
+        "url_departemental": "https://static.data.gouv.fr/resources/bases-statistiques-communale-departementale-et-regionale-de-la-delinquance-enregistree-par-la-police-et-la-gendarmerie-nationales/20260709-120038/donnee-dep-data.gouv-2025-geographie2026-produit-le2026-06-25.csv"
+      },
+      "questions": [
+        {
+          "question": "Combien d'homicides ont été enregistrés dans l'Ain en 2016 ?",
+          "expected_answer": "5 (taux 0,0078 pour mille).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quel est le taux pour mille de cambriolages de logement dans le Rhône en 2024 ?",
+          "expected_answer": "La valeur du tableau « Cambriolages de logement » du département 69, année 2024.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Dans quelle unité de compte sont exprimés les homicides ?",
+          "expected_answer": "Victime.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quels indicateurs de délinquance sont disponibles dans la base départementale ?",
+          "expected_answer": "La liste des indicateurs (homicides, coups et blessures volontaires, vols, cambriolages, escroqueries, stupéfiants…).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Sur quelle période les données départementales sont-elles disponibles ?",
+          "expected_answer": "De 2016 à l'année la plus récente indiquée dans la couverture.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Combien d'habitants comptait le département de l'Aisne en 2016 selon la base ?",
+          "expected_answer": "536 136.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Le nombre de vols de véhicules a-t-il augmenté ou diminué dans le Nord entre 2019 et 2023 ?",
+          "expected_answer": "Comparer les deux valeurs du tableau « Vols de véhicules » du département 59.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quel est le nombre de coups et blessures volontaires enregistrés à Paris (75) en 2023 ?",
+          "expected_answer": "Valeur du tableau du département 75.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Que signifie le taux pour mille ?",
+          "expected_answer": "Le nombre de faits rapporté à 1 000 habitants (population INSEE du millésime).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quelle est la source de ces chiffres ?",
+          "expected_answer": "Le SSMSI, service statistique du ministère de l'Intérieur, sur data.gouv.fr.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Combien d'infractions à la législation sur les stupéfiants (usage) ont été enregistrées dans les Bouches-du-Rhône en 2022 ?",
+          "expected_answer": "Valeur du tableau du département 13.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Les chiffres couvrent-ils la police et la gendarmerie ?",
+          "expected_answer": "Oui, les deux forces.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quel département affiche le taux d'homicides le plus élevé en 2020 ?",
+          "expected_answer": "Comparer les taux 2020 des départements (réponse par lecture des documents).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Combien d'escroqueries ont été enregistrées en Gironde (33) en 2021 ?",
+          "expected_answer": "Valeur du tableau « Escroqueries » du département 33.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quelle est la population de référence utilisée pour la Haute-Savoie en 2023 ?",
+          "expected_answer": "La population INSEE indiquée (millésime) dans le document du département 74.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Peut-on obtenir les chiffres par commune dans cette collection ?",
+          "expected_answer": "Non : cette amorce porte la base départementale ; la base communale est un fichier séparé.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Le nombre de cambriolages dans le Var a-t-il baissé en 2020 ?",
+          "expected_answer": "Comparer 2019 et 2020 dans le tableau du département 83.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Combien de vols sans violence contre des personnes en Seine-Saint-Denis en 2024 ?",
+          "expected_answer": "Valeur du tableau du département 93.",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Quelle est la date de production du fichier importé ?",
+          "expected_answer": "Indiquée dans le nom de la ressource (produit le 2026-06-25).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        },
+        {
+          "question": "Les violences sexuelles sont-elles comptées en victimes ou en infractions ?",
+          "expected_answer": "Selon l'unité de compte affichée pour l'indicateur (victime).",
+          "tags": [
+            "ssmsi-delinquance"
+          ]
+        }
+      ]
     },
     {
       "id": "ta-caa-ceseda",
@@ -41,13 +334,172 @@
         "source_licence": "opendata.justice-administrative.fr — fonds DCE/DCA/DTA, ZIP mensuels XML, Licence Ouverte 2.0",
         "donnees_perso": "Décisions pseudonymisées à la source par le Conseil d'État ; aucune colonne nominative reprise.",
         "fraicheur": "Réimport incrémental par mois, depuis janvier 2024 ; la couverture réelle est consignée à l'import."
-      }
+      },
+      "parametres": {
+        "fonds": [
+          "DCA",
+          "DTA"
+        ],
+        "depuis": "2024-01",
+        "mots_cles": [
+          "CESEDA",
+          "entrée et du séjour des étrangers",
+          "L. 511-1",
+          "obligation de quitter le territoire"
+        ],
+        "codes_publication": null,
+        "max_par_mois": 400,
+        "max_mois_par_run": 2,
+        "_note": "réimport incrémental : chaque appel prend les 2 mois suivants non importés (un ZIP TA ≈ 60 Mio)"
+      },
+      "questions": [
+        {
+          "question": "Une seule condamnation ancienne suffit-elle à caractériser une menace à l'ordre public justifiant un refus de titre de séjour ?",
+          "expected_answer": "Non selon la jurisprudence citée : il faut une menace actuelle.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quel délai de départ volontaire assortit en principe une obligation de quitter le territoire français ?",
+          "expected_answer": "Trente jours (art. L. 612-1 CESEDA).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quels sont les arrêts de la CAA de Lyon de janvier 2024 relatifs au CESEDA dans la collection ?",
+          "expected_answer": "Liste des décisions CAA69 de 2024-01 retenues.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quelle juridiction a rendu la décision n° 22BX02925 et de quel type est-elle ?",
+          "expected_answer": "Cour administrative d'appel de Bordeaux, ordonnance (non-lieu).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Que juge la cour sur l'article 8 de la CEDH en matière de vie privée et familiale dans une OQTF ?",
+          "expected_answer": "Selon les décisions : proportionnalité de l'atteinte à la vie privée et familiale.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quelles décisions traitent d'un refus de regroupement familial ?",
+          "expected_answer": "Décisions dont le texte mentionne le regroupement familial.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Sur quelle période et quelles juridictions la collection porte-t-elle ?",
+          "expected_answer": "Indiqué dans la couverture de la grille : fonds, mois importés, juridictions, dates.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Une décision de la collection annule-t-elle une interdiction de retour sur le territoire français ?",
+          "expected_answer": "Chercher les décisions dont la solution est une annulation d'IRTF.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Qu'est-ce qu'un code de publication C ?",
+          "expected_answer": "Une décision non publiée au recueil, diffusée en open data.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quelle est la solution retenue dans la décision n° 21LY00612 ?",
+          "expected_answer": "La solution indiquée dans l'en-tête de la décision.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Que doit démontrer un étranger malade pour obtenir un titre de séjour pour soins ?",
+          "expected_answer": "L'absence de traitement approprié dans le pays d'origine (art. L. 425-9).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "La cour a-t-elle statué sur un titre de séjour « salarié » refusé pour absence d'autorisation de travail ?",
+          "expected_answer": "Chercher les décisions mentionnant l'autorisation de travail.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quel est l'ECLI de la décision n° 22BX02925 ?",
+          "expected_answer": "L'ECLI indiqué dans l'en-tête, s'il existe.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quels tribunaux administratifs figurent dans la collection ?",
+          "expected_answer": "La liste des codes juridiction TA dans la couverture.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Une OQTF peut-elle être prise contre un parent d'enfant français ?",
+          "expected_answer": "Selon les décisions : protection de l'art. L. 611-3 sous conditions.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quel délai de recours contre une OQTF sans délai de départ volontaire ?",
+          "expected_answer": "Quarante-huit heures (selon la rédaction en vigueur citée).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "La collection contient-elle des décisions du Conseil d'État ?",
+          "expected_answer": "Seulement si le fonds DCE est activé dans les paramètres (couverture).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Quelle décision traite de l'assignation à résidence d'un étranger ?",
+          "expected_answer": "Décisions mentionnant l'assignation à résidence (L. 731-1 et s.).",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Que signifie la mention « en cours de vérification » sur les réponses ?",
+          "expected_answer": "La collection n'est pas encore publiée à tous : ses réponses sont à vérifier.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        },
+        {
+          "question": "Combien de décisions ont été lues et retenues au dernier import ?",
+          "expected_answer": "Les chiffres decisions_lues / decisions_retenues de la couverture.",
+          "tags": [
+            "ta-caa-ceseda"
+          ]
+        }
+      ]
     },
     {
       "id": "rne-elus",
       "titre": "Répertoire national des élus",
       "description": "Élus municipaux, départementaux, régionaux et parlementaires : mandat, collectivité, date d'élection.",
-      "connecteur": "datagouv-tabulaire",
+      "connecteur": "rne-elus",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-rne-elus",
       "garant_pressenti": "Bureau des élections (à confirmer)",
@@ -55,13 +507,183 @@
         "source_licence": "data.gouv.fr, API tabulaire — Répertoire national des élus (ministère de l'Intérieur), Licence Ouverte 2.0",
         "donnees_perso": "Données personnelles d'élus : import limité aux colonnes non nominatives (mandat, collectivité, dates) — les colonnes nom, prénom, naissance et profession ne sont PAS importées.",
         "fraicheur": "Mise à jour continue à la source ; réimport mensuel."
-      }
+      },
+      "parametres": {
+        "fichiers": [
+          {
+            "mandat": "maires",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-155100/elus-maire-mai.csv"
+          },
+          {
+            "mandat": "conseillers_departementaux",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-154909/elus-conseiller-departemental-cd.csv"
+          },
+          {
+            "mandat": "conseillers_regionaux",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-154932/elus-conseiller-regional-cr.csv"
+          },
+          {
+            "mandat": "deputes",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-155035/elus-depute-dep.csv"
+          },
+          {
+            "mandat": "senateurs",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-155016/elus-senateur-sen.csv"
+          },
+          {
+            "mandat": "conseillers_municipaux",
+            "url": "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-154802/elus-conseiller-municipal-cm.csv"
+          }
+        ]
+      },
+      "questions": [
+        {
+          "question": "Depuis quand le maire de L'Abergement-Clémenciat (01001) exerce-t-il sa fonction ?",
+          "expected_answer": "Date de début de la fonction indiquée dans le tableau du département 01.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de conseillers municipaux siègent à Ambérieu-en-Bugey (01004) ?",
+          "expected_answer": "Valeur de la colonne conseillers municipaux du département 01.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de maires compte le département de l'Ain ?",
+          "expected_answer": "Effectif « maires » du document du département 01.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quelle est la part de femmes parmi les conseillers départementaux du Rhône ?",
+          "expected_answer": "Effectifs femmes/hommes du mandat conseillers départementaux, département 69.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Le nom du maire d'une commune figure-t-il dans cette collection ?",
+          "expected_answer": "Non : l'import est limité aux colonnes non nominatives.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quelle est la date de début du mandat des maires élus en 2026 ?",
+          "expected_answer": "2026-03-15 (premier tour) ou date indiquée.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de sénateurs sont rattachés au département du Nord ?",
+          "expected_answer": "Effectif « senateurs » du document du département 59.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de députés pour Paris ?",
+          "expected_answer": "Effectif « deputes » du document du département 75.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quelle commune du Var a le plus grand conseil municipal ?",
+          "expected_answer": "Comparer la colonne conseillers municipaux du département 83.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quelles sont les colonnes écartées à l'import et pourquoi ?",
+          "expected_answer": "Nom, prénom, date de naissance, catégorie socio-professionnelle, nationalité : données personnelles.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de conseillers régionaux pour la région dont dépend la Gironde ?",
+          "expected_answer": "Effectif « conseillers regionaux » du document du département 33.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Une commune a-t-elle un maire dont la fonction a commencé après le début de son mandat ?",
+          "expected_answer": "Comparer les deux dates dans le tableau par commune.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien d'élus municipaux au total dans les Hauts-de-Seine ?",
+          "expected_answer": "Somme des effectifs municipaux du document du département 92.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Peut-on vérifier qu'une personne nommée est élue avec cette collection ?",
+          "expected_answer": "Non : elle ne contient aucun nom. Utiliser le RNE complet sur data.gouv.fr.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quelle est la source et la licence des données ?",
+          "expected_answer": "Ministère de l'Intérieur, RNE sur data.gouv.fr, Licence Ouverte 2.0.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quand les données ont-elles été mises à jour ?",
+          "expected_answer": "Date de la ressource data.gouv.fr (août 2026).",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de communes compte le département de la Manche dans le répertoire ?",
+          "expected_answer": "Nombre de lignes du tableau par commune du département 50.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Combien de maires femmes dans le Finistère ?",
+          "expected_answer": "Effectif femmes du mandat maires, département 29.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "Quels mandats sont couverts par la collection ?",
+          "expected_answer": "Maires, conseillers municipaux, départementaux, régionaux, députés, sénateurs.",
+          "tags": [
+            "rne-elus"
+          ]
+        },
+        {
+          "question": "La collection couvre-t-elle les conseillers des Français de l'étranger ?",
+          "expected_answer": "Non, pas dans cette amorce.",
+          "tags": [
+            "rne-elus"
+          ]
+        }
+      ]
     },
     {
       "id": "sdis-interventions",
       "titre": "Interventions des SDIS",
       "description": "Interventions des services d'incendie et de secours par département, nature et année.",
-      "connecteur": "datagouv-tabulaire",
+      "connecteur": "sdis-interventions",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-sdis-interventions",
       "garant_pressenti": "DGSCGC, bureau des statistiques (à confirmer)",
@@ -69,13 +691,183 @@
         "source_licence": "data.gouv.fr, API tabulaire — statistiques des SIS (DGSCGC), Licence Ouverte 2.0",
         "donnees_perso": "Aucune : agrégats par département et par nature d'intervention.",
         "fraicheur": "Publication annuelle ; réimport à chaque livraison."
-      }
+      },
+      "parametres": {
+        "fichiers": [
+          {
+            "annee": 2019,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20201021-115017/interventions2019.csv"
+          },
+          {
+            "annee": 2020,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20220110-100617/interventions2020.csv"
+          },
+          {
+            "annee": 2021,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20230309-084757/interventions2021.csv"
+          },
+          {
+            "annee": 2022,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20240403-145437/interventions2022.csv"
+          },
+          {
+            "annee": 2023,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20250804-085406/interventions2023.csv"
+          },
+          {
+            "annee": 2024,
+            "url": "https://static.data.gouv.fr/resources/interventions-realisees-par-les-services-d-incendie-et-de-secours/20260702-094350/interventions2024.csv"
+          }
+        ]
+      },
+      "questions": [
+        {
+          "question": "Combien d'interventions les sapeurs-pompiers de l'Ain ont-ils réalisées en 2024 ?",
+          "expected_answer": "45 135.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien d'incendies ont été traités par le BMPM (Bouches-du-Rhône) en 2024 ?",
+          "expected_answer": "4 433.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quel est le nombre total d'interventions de la BSPP à Paris en 2024 ?",
+          "expected_answer": "474 053.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien de secours à personne dans l'Aisne en 2024 ?",
+          "expected_answer": "31 056.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Les interventions totales de l'Allier ont-elles augmenté entre 2019 et 2024 ?",
+          "expected_answer": "Comparer les deux lignes du tableau du SIS 3.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien d'accidents de circulation pour le SIS de l'Ain en 2023 ?",
+          "expected_answer": "Valeur 2023 du tableau du SIS 1.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quelles familles d'interventions sont distinguées ?",
+          "expected_answer": "Incendies, secours à personne, accidents de circulation, risques technologiques, opérations diverses, total.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quelle est la source des données ?",
+          "expected_answer": "DGSCGC, ministère de l'Intérieur, sur data.gouv.fr.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Sur quelles années porte la collection ?",
+          "expected_answer": "2019 à 2024 (couverture).",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quel SIS a réalisé le plus d'interventions en 2024 ?",
+          "expected_answer": "La BSPP (Paris).",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien de risques technologiques traités dans l'Allier en 2024 ?",
+          "expected_answer": "254.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien d'opérations diverses pour le BMPM en 2024 ?",
+          "expected_answer": "11 681.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien d'interventions de secours à personne à Paris en 2022 ?",
+          "expected_answer": "Valeur 2022 du tableau BSPP.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Le nombre d'incendies dans l'Aisne a-t-il baissé en 2024 par rapport à 2023 ?",
+          "expected_answer": "Comparer 2023 et 2024 du tableau SIS 2.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quelle part des interventions représente le secours à personne dans l'Ain en 2024 ?",
+          "expected_answer": "35 396 / 45 135 ≈ 78 %.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quelle est la zone de défense de l'Ain ?",
+          "expected_answer": "Sud-est.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien de départements sont couverts ?",
+          "expected_answer": "Le nombre indiqué dans la couverture (≈ 100 SIS).",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Peut-on obtenir le délai moyen d'intervention ?",
+          "expected_answer": "Non : la base ne comporte que des comptages.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Combien d'accidents de circulation pour le BMPM en 2024 ?",
+          "expected_answer": "7 855.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        },
+        {
+          "question": "Quel est le total d'interventions de l'Aisne en 2024 ?",
+          "expected_answer": "40 675.",
+          "tags": [
+            "sdis-interventions"
+          ]
+        }
+      ]
     },
     {
       "id": "baac",
       "titre": "Accidents corporels de la circulation BAAC 2019–2024",
       "description": "Bulletins d'analyse des accidents corporels : caractéristiques, lieux, véhicules, usagers.",
-      "connecteur": "datagouv-tabulaire",
+      "connecteur": "baac",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-baac",
       "garant_pressenti": "ONISR (à confirmer)",
@@ -83,7 +875,184 @@
         "source_licence": "data.gouv.fr, API tabulaire — bases BAAC de l'ONISR, Licence Ouverte 2.0",
         "donnees_perso": "Usagers décrits sans identité (âge, sexe, gravité) ; aucune colonne nominative.",
         "fraicheur": "Publication annuelle (millésime N-1) ; réimport à chaque millésime."
-      }
+      },
+      "parametres": {
+        "communes_max": 15,
+        "millesimes": [
+          {
+            "annee": 2019,
+            "caracteristiques": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104400/caracteristiques-2019.csv",
+            "usagers": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104232/usagers-2019.csv"
+          },
+          {
+            "annee": 2020,
+            "caracteristiques": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111202/caracteristiques-2020.csv",
+            "usagers": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111817/usagers-2020.csv"
+          },
+          {
+            "annee": 2021,
+            "caracteristiques": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2020/20221024-113743/carcteristiques-2021.csv",
+            "usagers": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2022/20231009-140337/usagers-2021.csv"
+          },
+          {
+            "annee": 2022,
+            "caracteristiques": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-093927/carcteristiques-2022.csv",
+            "usagers": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-094229/usagers-2022.csv"
+          },
+          {
+            "annee": 2023,
+            "caracteristiques": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241028-103125/caract-2023.csv",
+            "usagers": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241023-153328/usagers-2023.csv"
+          },
+          {
+            "annee": 2024,
+            "caracteristiques": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115900/caract-2024.csv",
+            "usagers": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115506/usagers-2024.csv"
+          }
+        ]
+      },
+      "questions": [
+        {
+          "question": "Combien d'accidents corporels ont eu lieu en Haute-Saône (70) en 2024 ?",
+          "expected_answer": "Valeur « Accidents corporels » du document 70, 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien de tués sur les routes de Gironde (33) en 2023 ?",
+          "expected_answer": "Valeur « Tués » du document 33, 2023.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Quelle commune du Rhône (69) a connu le plus d'accidents en 2024 ?",
+          "expected_answer": "Première ligne des communes les plus touchées du document 69, 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Les accidents en agglomération sont-ils plus nombreux qu'hors agglomération dans le Var (83) en 2022 ?",
+          "expected_answer": "Comparer les deux valeurs du document 83, 2022.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien de blessés hospitalisés dans le Nord (59) en 2021 ?",
+          "expected_answer": "Valeur du document 59, 2021.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Quel mois de 2024 a connu le plus d'accidents à Paris (75) ?",
+          "expected_answer": "Le mois au maximum de la répartition mensuelle du document 75, 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Sur quelle période la collection porte-t-elle ?",
+          "expected_answer": "2019 à 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Qu'est-ce qu'un accident corporel au sens du BAAC ?",
+          "expected_answer": "Un accident sur voie publique impliquant au moins un véhicule et au moins une victime.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "La collection contient-elle des données individuelles sur les usagers ?",
+          "expected_answer": "Non : seulement des comptages par département, commune et mois.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien d'accidents corporels en Côte-d'Or (21) en 2020 ?",
+          "expected_answer": "Valeur du document 21, 2020.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Le nombre de tués dans les Bouches-du-Rhône (13) a-t-il baissé entre 2019 et 2024 ?",
+          "expected_answer": "Comparer les documents 13 de 2019 et 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien d'accidents dans le Cantal (15) en 2024 ?",
+          "expected_answer": "Valeur du document 15, 2024.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Quelle est la source des données ?",
+          "expected_answer": "ONISR, bases BAAC sur data.gouv.fr.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien de blessés légers en Seine-Maritime (76) en 2023 ?",
+          "expected_answer": "Valeur du document 76, 2023.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Quelles communes des Alpes-Maritimes (06) sont les plus accidentogènes en 2022 ?",
+          "expected_answer": "Liste des communes les plus touchées du document 06, 2022.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Peut-on connaître l'adresse précise d'un accident ?",
+          "expected_answer": "Non : l'adresse et les coordonnées ne sont pas reprises dans les documents.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien d'accidents hors agglomération dans la Manche (50) en 2021 ?",
+          "expected_answer": "Valeur « hors agglomération » du document 50, 2021.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Quel département compte le plus de tués en 2024 ?",
+          "expected_answer": "Comparer les valeurs « Tués » 2024 des documents départementaux.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Comment les gravités sont-elles définies ?",
+          "expected_answer": "Tué (décès dans les 30 jours), blessé hospitalisé (plus de 24 h), blessé léger.",
+          "tags": [
+            "baac"
+          ]
+        },
+        {
+          "question": "Combien d'accidents à Marseille (13055) en 2024 ?",
+          "expected_answer": "Ligne 13055 des communes les plus touchées du document 13, 2024.",
+          "tags": [
+            "baac"
+          ]
+        }
+      ]
     }
   ]
 }
