@@ -94,3 +94,32 @@ Un événement : `{id, objet_type, objet_id, collection, type, par, detail, cree
 (`test_regle1_usage_frequence.py` … `test_regle5_capacites.py`), plus `test_journal.py`,
 `test_pseudo.py`, `test_doublons.py`, `test_amorces.py`, `test_non_regression.py`.
 `tests/conftest.py` isole la base (SQLite propre par session) et joue le cycle de vie.
+
+## Les amorces (lot 0)
+
+Catalogue : `myrag/app/amorces/catalogue.json` — six entrées, dans l'ordre de la note,
+chacune avec sa source, son garant pressenti, sa grille pré-remplie (source/licence,
+données personnelles, fraîcheur), ses paramètres et ses vingt questions de test.
+Connecteurs : `myrag/app/services/amorces/` (un module par source, registre dans
+`__init__.py`). Import : `POST /api/amorces/{id}/import` (superadmin ; `?synchrone=true`
+pour attendre ; 409 si déjà en cours) ou, depuis le pod,
+`python -m app.services.amorces.cli {id} [--max-documents N]`.
+
+| amorce | source réelle | documents produits | données personnelles |
+|---|---|---|---|
+| `natinf` | liste officielle NATINF (ministère de la Justice, data.gouv.fr) + fiches natinfo.app par lots de 50 si `NATINFO_API_KEY` et `enrichir_max` | un document par tranche de 200 codes, une section par code | aucune |
+| `ssmsi-delinquance` | base départementale SSMSI (csv) | un document par département, un tableau par indicateur | aucune (agrégats) |
+| `ta-caa-ceseda` | ZIP mensuels XML `/DCA/AAAA/MM/CAA_AAAAMM.zip`, `/DTA/…/TA_…zip` | une décision retenue = un document (en-tête + texte intégral) ; filtre par mots-clés et code de publication ; **2 mois par appel**, mémoire des mois faits dans `amorce.detail_json` | pseudonymisées à la source |
+| `rne-elus` | RNE, six fichiers de mandats | un document par département : effectifs par mandat (F/H), par commune dates de mandat/fonction du maire et nombre de conseillers | **colonnes nominatives jamais lues** (nom, prénom, naissance, CSP, nationalité) — la couverture les nomme |
+| `sdis-interventions` | interventions SIS 2019–2024 (csv cp1252) | un document par SIS, années en lignes, familles en colonnes | aucune |
+| `baac` | BAAC 2019–2024 (caractéristiques + usagers) | un document par département et par an : accidents, tués, blessés, en/hors agglo, communes les plus touchées, mois | comptages seuls |
+
+Chaque import est **idempotent** (`SourceFile` nom + empreinte : même contenu ignoré,
+contenu changé = nouvelle version), écrit la **couverture constatée** dans la grille
+(`couverture_json`, robot `amorce:<id>`), pose les vingt questions en banque une seule
+fois, et laisse `import.termine` / `import.echoue` dans le fil. Le critère d'ouverture
+de la section collaborative est servi par `GET /api/amorces` : `ouverture.ouverte` dès
+que **3 des 6** collections d'amorce sont au moins `en_controle`.
+
+Sorties réseau à ouvrir côté cluster : `static.data.gouv.fr`, `natinfo.app`,
+`opendata.justice-administrative.fr` (443).

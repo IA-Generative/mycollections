@@ -145,6 +145,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/etats.py` | Machine à états du collectif — module pur (docs/collectif.md, ADR-0001) |
 | `myrag/app/services/collectif_store.py` | Écritures du collectif + journal (fil d'avancement) |
 | `myrag/app/routers/demandes.py`, `collectif.py`, `amorces.py` | Routes du collectif |
+| `myrag/app/amorces/catalogue.json`, `myrag/app/services/amorces/` | Les six amorces (lot 0) : catalogue, connecteurs, ingestion idempotente, banque de questions, CLI |
 | `myrag/tests/conftest.py` | Base SQLite isolée par session, identités de test, capacités |
 | `myrag/app/services/collection_store.py` | CRUD collections (DB) |
 | `myrag/app/services/job_store.py` | CRUD ingestion jobs (DB) |
@@ -191,6 +192,7 @@ cd myrag && python3 -m pytest tests/unit/ -v
 | `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |
 | `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
 | `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
+| `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
 
 ## Problemes connus
 

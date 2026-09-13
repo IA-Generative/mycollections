@@ -80,7 +80,7 @@ Règles actées :
 - [x] Schéma, machine à états, tests, routes — lot 1 (`lot-1/modele-api`)
 - [ ] Déploiement : Secret `obs-pseudo-salt` copié dans `mycollections`, `CAPACITES_URL`,
       sortie Cilium vers `apps-menu` (8080), `IMAGE_TAG=0.3.0` après fusion
-- [ ] Lot 0 : connecteurs des six amorces (`app/routers/amorces.py::CONNECTEURS`)
+- [x] Lot 0 : connecteurs des six amorces (`app/services/amorces/`, branche `lot-0/amorces`) — sorties réseau à ouvrir : static.data.gouv.fr, natinfo.app, opendata.justice-administrative.fr
 - [ ] Lot 2 : `collectif_store.appliquer_proposition` (Grist, versions de fichier)
 - [ ] Lot 4 : route machine `POST /_beta/messages` côté bus, relais des événements aux abonnés
 - [ ] Lot 6 : canal de lecture du suivi (GRANT SELECT ou route agrégée) — ADR à part
