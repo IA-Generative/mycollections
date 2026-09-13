@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import init_db
 from app.services import capacites
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
-from app.routers import amorces, collectif, demandes
+from app.routers import amorces, collectif, demandes, guide
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -82,6 +82,7 @@ app.include_router(eval_datasets.router, dependencies=AUTH_REQUIRED)
 app.include_router(demandes.router, dependencies=AUTH_REQUIRED)
 app.include_router(collectif.router, dependencies=AUTH_REQUIRED)
 app.include_router(amorces.router, dependencies=AUTH_REQUIRED)
+app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 
 
 @app.get("/api/config")

@@ -60,6 +60,16 @@
                   Mes collections
                 </NuxtLink>
               </li>
+              <li v-if="capacites.demandes" class="fr-nav__item">
+                <NuxtLink to="/demandes" class="fr-nav__link" :aria-current="route.path.startsWith('/demandes') ? 'page' : undefined">
+                  Demandes de la communauté
+                </NuxtLink>
+              </li>
+              <li class="fr-nav__item">
+                <NuxtLink to="/guide" class="fr-nav__link" :aria-current="route.path.startsWith('/guide') ? 'page' : undefined">
+                  Soyez acteurs vous-mêmes
+                </NuxtLink>
+              </li>
               <li v-if="isAdmin" class="fr-nav__item">
                 <NuxtLink to="/admin" class="fr-nav__link" :aria-current="route.path.startsWith('/admin') ? 'page' : undefined">
                   Administration
@@ -117,6 +127,9 @@ const config = useRuntimeConfig()
 const route = useRoute()
 const { loading: authLoading, authError, init: initAuth } = useAuth()
 const { isAdmin } = useAdminAuth()
+// Aucun bouton n'apparaît si le service ne sait pas le faire : l'onglet des demandes
+// n'existe que si capacites.json le déclare.
+const { capacites, charger: chargerCapacites } = useCapacites()
 
 const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
 const openragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
@@ -164,6 +177,7 @@ onMounted(async () => {
     await initAuth()
   }
 
+  chargerCapacites()
   checkServices()
   setInterval(checkServices, 30000)
 })

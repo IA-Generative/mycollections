@@ -81,6 +81,7 @@ Règles actées :
 - [ ] Déploiement : Secret `obs-pseudo-salt` copié dans `mycollections`, `CAPACITES_URL`,
       sortie Cilium vers `apps-menu` (8080), `IMAGE_TAG=0.3.0` après fusion
 - [x] Lot 0 : connecteurs des six amorces (`app/services/amorces/`, branche `lot-0/amorces`) — sorties réseau à ouvrir : static.data.gouv.fr, natinfo.app, opendata.justice-administrative.fr
+- [x] Lot 3 : écrans Nuxt + DSFR (option A), guide en cinq pages, branche `lot-3/ecrans`
 - [ ] Lot 2 : `collectif_store.appliquer_proposition` (Grist, versions de fichier)
 - [ ] Lot 4 : route machine `POST /_beta/messages` côté bus, relais des événements aux abonnés
 - [ ] Lot 6 : canal de lecture du suivi (GRANT SELECT ou route agrégée) — ADR à part

@@ -26,6 +26,17 @@
       </div>
 
       <div class="fr-col-4">
+        <div class="fr-card fr-enlarge-link">
+          <div class="fr-card__body">
+            <div class="fr-card__content">
+              <h3 class="fr-card__title"><NuxtLink to="/admin/amorces">Amorces</NuxtLink></h3>
+              <p class="fr-card__desc">Les collections constituées depuis l'open data ; import rejouable ; critère d'ouverture de la section collaborative</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fr-col-4">
         <div class="fr-card">
           <div class="fr-card__body">
             <div class="fr-card__content">
