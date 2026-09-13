@@ -87,7 +87,9 @@ async def publish_collection(name: str, req: PublishRequest):
     owui_error: str | None = None
     if req.alias_enabled and pub.state == "published":
         try:
-            from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
+            from app.services.owui_client import (
+                OwuiClient, OwuiAdminUnavailable, grants_de_partage,
+            )
             client = OwuiClient()
             # Access control: map visibility_groups (Keycloak group names)
             # onto OWUI's read/write group_ids. V1 passes names through as-is;
@@ -100,17 +102,27 @@ async def publish_collection(name: str, req: PublishRequest):
                     "read":  {"group_ids": req.visibility_groups, "user_ids": []},
                     "write": {"group_ids": req.visibility_groups, "user_ids": []},
                 }
-            # Route through the pipelines container's openrag manifold
-            # (id "openrag.<col>") rather than the direct OpenRAG provider
-            # ("openrag-<col>"). The pipeline appends source links to the
-            # response — the direct provider can't because OWUI ignores
-            # OpenRAG's non-standard `extra` field.
+            # Forme des socles récents (>= 0.11). Sans elle, la collection publiée
+            # n'est visible QUE du compte qui porte la clé d'administration : elle
+            # apparaît dans l'interface d'administration et nulle part ailleurs, sans
+            # qu'aucun message ne le signale.
+            grants = grants_de_partage(req.visibility, req.visibility_groups)
+            # La fiche RECOUVRE le modele `openrag-<col>` que le socle recoit deja de sa
+            # connexion OpenRAG : d'ou `base_model_id` absent. Elle ne cree pas un
+            # modele, elle le NOMME et le PARTAGE — sans elle, la collection reste
+            # reservee a l'administration du socle.
+            #
+            # Elle designait auparavant `openrag.<col>`, servi par le conteneur
+            # « pipelines » d'OpenWebUI, qui ajoute les liens vers les documents cites.
+            # Ce conteneur n'est pas deploye partout ; quand il l'est, c'est ici que se
+            # remet son identifiant — au prix d'une chaine que le controle d'acces devra
+            # pouvoir suivre.
             owui_result = await client.upsert_model(
                 model_id=f"openrag-{name}",
                 name=pub.alias_name,
                 description=req.alias_description,
-                base_model_id=f"openrag.{name}",
                 access_control=ac,
+                access_grants=grants,
             )
         except OwuiAdminUnavailable as e:
             owui_error = str(e)
@@ -128,6 +140,25 @@ async def publish_collection(name: str, req: PublishRequest):
     return result
 
 
+async def _retirer_du_socle(name: str) -> str | None:
+    """Retire le modèle publié dans Open WebUI. Best-effort : rend le motif d'échec.
+
+    Sans ce retrait, dépublier ne dépubliait rien du côté de l'assistant : l'alias
+    restait offert aux utilisateurs, pointant une collection désormais vide — ou
+    effacée. Le seul symptôme visible était une réponse vide.
+    """
+    try:
+        from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
+        try:
+            client = OwuiClient()
+        except OwuiAdminUnavailable as e:
+            return str(e)
+        await client.delete_model(f"openrag-{name}")
+        return None
+    except Exception as e:  # noqa: BLE001 — le retrait ne doit jamais bloquer l'appelant
+        return f"Retrait du socle echoue : {e}"
+
+
 @router.post("/{name}/unpublish")
 async def unpublish_collection(name: str):
     async with async_session() as session:
@@ -140,7 +171,10 @@ async def unpublish_collection(name: str):
             collection_name=name, action="disabled", acted_by="admin",
         ))
         await session.commit()
-        return {"state": pub.state, "collection": name}
+
+    erreur = await _retirer_du_socle(name)
+    return {"state": "disabled", "collection": name,
+            "owui": {"removed": erreur is None, "error": erreur}}
 
 
 @router.post("/{name}/archive")

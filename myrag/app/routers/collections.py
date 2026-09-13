@@ -316,6 +316,14 @@ async def purge_collection_endpoint(name: str, user: CurrentUser = Depends(curre
             status_code=409,
             detail=f"Collection '{name}' must be archived before it can be purged",
         )
+
+    # L'alias publié dans le socle survivait à la suppression : les utilisateurs
+    # continuaient de le voir offert, pointant une collection qui n'existe plus.
+    from app.routers.publication import _retirer_du_socle
+    erreur = await _retirer_du_socle(name)
+    if erreur:
+        log.warning("purge de '%s' : %s", name, erreur)
+    result["owui"] = {"removed": erreur is None, "error": erreur}
     return result
 
 
