@@ -70,6 +70,19 @@ class Settings(BaseSettings):
     # Data directory
     data_dir: str = Field(default="/app/data")
 
+    # ─── Le collectif (ADR-0001) ─────────────────────────────────────────────────
+    # Sel du condensé des identités (HMAC-SHA256 du `sub`). LE MÊME que celui du bus
+    # de la bêta (Secret `obs-pseudo-salt`) : un abonné a le même condensé ici et dans
+    # la cloche du menu. Vide ⇒ les routes collaboratives répondent 503 plutôt que
+    # d'écrire une identité en clair. En dev : MYRAG_PSEUDO_SEL=dev-sel.
+    myrag_pseudo_sel: str = Field(default="")
+    # Où lire capacites.json du menu commun (service interne du cluster). Vide ⇒
+    # drapeaux à false et seuil au défaut : rien ne s'affiche, rien ne s'écrit.
+    capacites_url: str = Field(default="")
+    seuil_chantier_defaut: int = Field(default=5)
+    # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
+    sommeil_jours: int = Field(default=30)
+
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
 
 

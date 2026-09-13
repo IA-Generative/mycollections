@@ -11,6 +11,10 @@ from app.database import async_session
 from app.models.db import (
     Collection,
     utcnow,
+    Evenement,
+    GrilleControle,
+    Proposition,
+    Signalement,
     EvalDataset,
     EvalRun,
     Feedback,
@@ -178,6 +182,8 @@ async def purge_collection(name: str) -> dict:
         for model in (
             SourceFile, EvalRun, EvalDataset, Feedback,
             IngestJob, PublicationHistory, Publication,
+            # Le collectif — une table oubliée ici laisse des orphelins.
+            Proposition, Signalement, GrilleControle, Evenement,
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)
@@ -188,6 +194,10 @@ async def purge_collection(name: str) -> dict:
             await session.delete(c)
             counts["collections"] = 1
         await session.commit()
+
+    # Abonnements (clé composite, pas de collection_name) et demande d'origine.
+    from app.services.collectif_store import delier_collection
+    await delier_collection(name)
 
     return {
         "status": "purged",

@@ -275,6 +275,11 @@ async def create_collection_endpoint(
     data["system_prompt"] = system_prompt
     data["created_by"] = user.sub  # garantit l'accès du créateur à sa collection
     collection = await db_create_collection(data)
+    # Circuit collaboratif : la collection naît « amorcée », son créateur en est le
+    # garant, sa grille de contrôle existe (vide), le journal commence.
+    from app.services import collectif_store
+    await collectif_store.initialiser_collection(req.name, user.sub)
+    collection = await db_get_collection(req.name) or collection
 
     # Provisionne l'accès (créateur gestionnaire + groupes lecteurs autorisés).
     # Best-effort : ne fait jamais échouer la création.

@@ -1,0 +1,89 @@
+{
+  "_lisez_moi": "Les six premières amorces du lot 0, dans l'ordre de la note ; les autres s'ajoutent ici au lot 5. `connecteur` nomme le code qui saura importer ; tant qu'il n'existe pas, l'import répond 501 en le nommant. Aucun secret ici : les clés vivent dans l'environnement.",
+  "amorces": [
+    {
+      "id": "natinf",
+      "titre": "Codes NATINF",
+      "description": "Nomenclature des infractions (NATINF) : code, libellé, texte d'incrimination, peine encourue.",
+      "connecteur": "natinfo",
+      "source_url": "https://natinfo.app",
+      "collection": "amorce-natinf",
+      "garant_pressenti": "Bureau de la législation pénale (à confirmer)",
+      "grille": {
+        "source_licence": "API natinfo.app — reprise de la nomenclature NATINF (ministère de la Justice), Licence Ouverte 2.0",
+        "donnees_perso": "Aucune : nomenclature d'infractions, sans personne physique.",
+        "fraicheur": "Réimport mensuel ; la nomenclature évolue à chaque texte pénal."
+      }
+    },
+    {
+      "id": "ssmsi-delinquance",
+      "titre": "Délinquance enregistrée (SSMSI)",
+      "description": "Crimes et délits enregistrés par la police et la gendarmerie, par commune, département et indicateur.",
+      "connecteur": "datagouv-tabulaire",
+      "source_url": "https://www.data.gouv.fr/",
+      "collection": "amorce-ssmsi-delinquance",
+      "garant_pressenti": "SSMSI, pôle diffusion (à confirmer)",
+      "grille": {
+        "source_licence": "data.gouv.fr, API tabulaire — jeux du SSMSI, Licence Ouverte 2.0",
+        "donnees_perso": "Aucune : agrégats par commune et par indicateur.",
+        "fraicheur": "Publication annuelle (série) et mensuelle (indicateurs) ; réimport à chaque livraison."
+      }
+    },
+    {
+      "id": "ta-caa-ceseda",
+      "titre": "Jurisprudence TA/CAA — CESEDA (2024 →)",
+      "description": "Décisions des tribunaux administratifs et cours administratives d'appel filtrées sur le CESEDA, depuis les ZIP XML mensuels.",
+      "connecteur": "justice-administrative",
+      "source_url": "https://opendata.justice-administrative.fr",
+      "collection": "amorce-ta-caa-ceseda",
+      "garant_pressenti": "Direction des étrangers, bureau du contentieux (à confirmer)",
+      "grille": {
+        "source_licence": "opendata.justice-administrative.fr — fonds DCE/DCA/DTA, ZIP mensuels XML, Licence Ouverte 2.0",
+        "donnees_perso": "Décisions pseudonymisées à la source par le Conseil d'État ; aucune colonne nominative reprise.",
+        "fraicheur": "Réimport incrémental par mois, depuis janvier 2024 ; la couverture réelle est consignée à l'import."
+      }
+    },
+    {
+      "id": "rne-elus",
+      "titre": "Répertoire national des élus",
+      "description": "Élus municipaux, départementaux, régionaux et parlementaires : mandat, collectivité, date d'élection.",
+      "connecteur": "datagouv-tabulaire",
+      "source_url": "https://www.data.gouv.fr/",
+      "collection": "amorce-rne-elus",
+      "garant_pressenti": "Bureau des élections (à confirmer)",
+      "grille": {
+        "source_licence": "data.gouv.fr, API tabulaire — Répertoire national des élus (ministère de l'Intérieur), Licence Ouverte 2.0",
+        "donnees_perso": "Données personnelles d'élus : import limité aux colonnes non nominatives (mandat, collectivité, dates) — les colonnes nom, prénom, naissance et profession ne sont PAS importées.",
+        "fraicheur": "Mise à jour continue à la source ; réimport mensuel."
+      }
+    },
+    {
+      "id": "sdis-interventions",
+      "titre": "Interventions des SDIS",
+      "description": "Interventions des services d'incendie et de secours par département, nature et année.",
+      "connecteur": "datagouv-tabulaire",
+      "source_url": "https://www.data.gouv.fr/",
+      "collection": "amorce-sdis-interventions",
+      "garant_pressenti": "DGSCGC, bureau des statistiques (à confirmer)",
+      "grille": {
+        "source_licence": "data.gouv.fr, API tabulaire — statistiques des SIS (DGSCGC), Licence Ouverte 2.0",
+        "donnees_perso": "Aucune : agrégats par département et par nature d'intervention.",
+        "fraicheur": "Publication annuelle ; réimport à chaque livraison."
+      }
+    },
+    {
+      "id": "baac",
+      "titre": "Accidents corporels de la circulation BAAC 2019–2024",
+      "description": "Bulletins d'analyse des accidents corporels : caractéristiques, lieux, véhicules, usagers.",
+      "connecteur": "datagouv-tabulaire",
+      "source_url": "https://www.data.gouv.fr/",
+      "collection": "amorce-baac",
+      "garant_pressenti": "ONISR (à confirmer)",
+      "grille": {
+        "source_licence": "data.gouv.fr, API tabulaire — bases BAAC de l'ONISR, Licence Ouverte 2.0",
+        "donnees_perso": "Usagers décrits sans identité (âge, sexe, gravité) ; aucune colonne nominative.",
+        "fraicheur": "Publication annuelle (millésime N-1) ; réimport à chaque millésime."
+      }
+    }
+  ]
+}
