@@ -131,12 +131,13 @@ async def lister(moi: Identite = Depends(identite), etat: str | None = Query(Non
     demandes = await store.lister_demandes(moi.hash, etat)
     if q and q.strip():
         demandes = doublons.candidats(q.strip(), [d for d in demandes if d["etat"] != "close"])
-    return {"demandes": demandes, "seuil_chantier": capacites.seuil_chantier()}
+    return {"demandes": demandes, "seuil_chantier": (await capacites.lire_async())["seuil_chantier"]}
 
 
 @router.post("", status_code=201)
 async def deposer(entree: DemandeEntree, moi: Identite = Depends(identite)):
-    demande = await store.creer_demande(entree.model_dump(), moi.hash, capacites.seuil_chantier())
+    seuil = int((await capacites.lire_async())["seuil_chantier"])
+    demande = await store.creer_demande(entree.model_dump(), moi.hash, seuil)
     return {"demande": demande}
 
 

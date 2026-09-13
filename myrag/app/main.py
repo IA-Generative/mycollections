@@ -95,7 +95,7 @@ async def get_config():
         # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,
         # jamais bloquant). L'écran lit aussi /_beta/capacites.json en même origine ;
         # ceci est son repli, et la valeur que le SERVEUR applique.
-        **{k: v for k, v in capacites.lire().items() if k in ("demandes", "signalements", "seuil_chantier")},
+        **{k: v for k, v in (await capacites.lire_async()).items() if k in ("demandes", "signalements", "seuil_chantier")},
     }
 
 

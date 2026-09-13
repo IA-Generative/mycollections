@@ -33,7 +33,7 @@ async def identite(user: CurrentUser = Depends(current_user)) -> Identite:
 
 def capacite(nom: str):
     async def _dep() -> None:
-        if not capacites.activee(nom):
+        if (await capacites.lire_async()).get(nom) is not True:
             raise HTTPException(status_code=404, detail=f"Fonction désactivée : « {nom} » n'est pas déclarée dans capacites.json")
     return _dep
 

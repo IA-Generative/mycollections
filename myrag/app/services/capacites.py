@@ -10,6 +10,7 @@ Un drapeau à `false` ne se contente pas de cacher un bouton : la route répond 
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -69,6 +70,11 @@ def _lire_depuis_le_menu() -> dict:
 # Le point d'appel des routes — et la couture que les tests remplacent. Les tests du
 # lecteur lui-même appellent `_lire_depuis_le_menu`.
 lire = _lire_depuis_le_menu
+
+
+async def lire_async() -> dict:
+    """La même lecture, hors de la boucle d'événements : un menu lent ne fige pas l'API."""
+    return await asyncio.to_thread(lambda: lire())
 
 
 def oublier() -> None:
