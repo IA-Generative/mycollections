@@ -16,7 +16,7 @@
               </div>
               <div class="fr-header__service">
                 <NuxtLink to="/" class="fr-header__service-title">
-                  Mes collections <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">Beta</span>
+                  Mes collections
                 </NuxtLink>
                 <p class="fr-header__service-tagline">Recherche augmentee dans vos collections documentaires</p>
               </div>
@@ -37,21 +37,13 @@
                       OpenRAG
                     </span>
                   </li>
-                  <li v-if="user">
-                    <span class="myrag-status" :title="getUserName()">
-                      <span class="fr-icon-user-line" aria-hidden="true" style="font-size:0.9rem;"></span>
-                      {{ getUserName() }}
-                    </span>
-                  </li>
+                  <!-- Le nom et « Se déconnecter » sont portés par le menu commun de la
+                       bêta (bulle en haut à droite, sortie GET /deconnexion) : une seule
+                       commande de compte à l'écran. -->
                   <li v-if="isAdmin">
                     <NuxtLink to="/admin" class="fr-btn fr-icon-settings-5-line fr-btn--sm">
                       Admin
                     </NuxtLink>
-                  </li>
-                  <li v-if="user">
-                    <button class="fr-btn fr-btn--sm fr-icon-logout-box-r-line fr-btn--tertiary-no-outline" @click="logout">
-                      Se deconnecter
-                    </button>
                   </li>
                 </ul>
               </div>
@@ -111,7 +103,7 @@
           </div>
           <div class="fr-footer__content">
             <p class="fr-footer__content-desc">
-              Mes collections (beta) — recherche et analyse documentaire assistee par IA.
+              Mes collections — recherche et analyse documentaire assistée par IA. Version bêta.
             </p>
           </div>
         </div>
@@ -123,7 +115,7 @@
 <script setup lang="ts">
 const config = useRuntimeConfig()
 const route = useRoute()
-const { user, loading: authLoading, authError, init: initAuth, logout, getUserName } = useAuth()
+const { loading: authLoading, authError, init: initAuth } = useAuth()
 const { isAdmin } = useAdminAuth()
 
 const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
