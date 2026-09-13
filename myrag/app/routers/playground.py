@@ -357,8 +357,20 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
         if name and name not in source_names:
             source_names.append(name)
 
+    # Règle 3 : une collection non publiée à tous répond avec la mention.
+    mention = None
+    try:
+        from app.services.collectif_store import fiche
+        from app.services.etats import mention_verification
+        mention = mention_verification((await fiche(collection))["etat_collab"])
+    except Exception:  # noqa: BLE001 — fiche absente : pas de mention, pas de panne
+        mention = None
+    if mention:
+        content = f"⚠ {mention}\n\n{content}"
+
     return {
         "response": content,
+        "mention": mention,
         "sources": sources,
         "source_names": source_names,
         "model": model,

@@ -8,7 +8,9 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import init_db
+from app.services import capacites
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
+from app.routers import amorces, collectif, demandes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -76,6 +78,10 @@ app.include_router(playground.router, dependencies=AUTH_REQUIRED)
 app.include_router(playground_bank.router, dependencies=AUTH_REQUIRED)
 app.include_router(qr_cache_router.router, dependencies=AUTH_REQUIRED)
 app.include_router(eval_datasets.router, dependencies=AUTH_REQUIRED)
+# Le collectif (ADR-0001) : demandes, circuit d'une collection, amorces.
+app.include_router(demandes.router, dependencies=AUTH_REQUIRED)
+app.include_router(collectif.router, dependencies=AUTH_REQUIRED)
+app.include_router(amorces.router, dependencies=AUTH_REQUIRED)
 
 
 @app.get("/api/config")
@@ -86,6 +92,10 @@ async def get_config():
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
         "drive_url": settings.drive_url,
+        # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,
+        # jamais bloquant). L'écran lit aussi /_beta/capacites.json en même origine ;
+        # ceci est son repli, et la valeur que le SERVEUR applique.
+        **{k: v for k, v in capacites.lire().items() if k in ("demandes", "signalements", "seuil_chantier")},
     }
 
 

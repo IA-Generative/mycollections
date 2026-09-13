@@ -5,10 +5,12 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from app.auth import CurrentUser, current_user
 from app.config import settings
+from app.services.collectif_store import consigner
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
 from app.security_utils import assert_public_http_url, ssrf_request_guard
 
@@ -144,7 +146,7 @@ async def search_legifrance(req: SearchLegifranceRequest):
 
 
 @router.post("/legifrance/add")
-async def add_source(req: AddSourceByIdRequest):
+async def add_source(req: AddSourceByIdRequest, user: CurrentUser = Depends(current_user)):
     """Add a Legifrance source to a collection.
 
     This registers the source for tracking. The actual fetch + indexation
@@ -160,6 +162,8 @@ async def add_source(req: AddSourceByIdRequest):
         "source_type": "legifrance",
         "source_url": req.legifrance_id,
     })
+    await consigner("synchronisation", req.collection, "source.enregistree", user.sub,
+                    collection_name=req.collection, detail={"source": "legifrance", "id": req.legifrance_id})
 
     return {
         "status": "registered",
@@ -356,6 +360,7 @@ async def _ingest_downloaded_files(
 async def add_drive_source(
     req: AddDriveSourceRequest,
     authorization: str | None = Header(default=None),
+    user: CurrentUser = Depends(current_user),
 ):
     """Register a Drive folder as the source of a collection and kick off the
     initial import. Downloads every file synchronously in this call using
@@ -441,6 +446,9 @@ async def add_drive_source(
     task = asyncio.create_task(_ingest_downloaded_files(req.collection, downloaded))
     loop = asyncio.get_running_loop()
     loop._drive_import_tasks = getattr(loop, "_drive_import_tasks", []) + [task]
+    await consigner("synchronisation", req.collection, "synchro.terminee", user.sub,
+                    collection_name=req.collection,
+                    detail={"source": "drive", "fichiers": len(downloaded), "octets": total_bytes})
 
     return {
         "status": "registered",
@@ -457,6 +465,7 @@ async def add_drive_source(
 async def sync_drive_source(
     collection: str,
     authorization: str | None = Header(default=None),
+    user: CurrentUser = Depends(current_user),
 ):
     """Delta-sync: re-ingest files modified since the last sync. Uses the
     caller's user token for impersonation (same ACL as /drive/add)."""
@@ -494,6 +503,8 @@ async def sync_drive_source(
 
     cfg["last_sync_at"] = utcnow().isoformat()
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
+    await consigner("synchronisation", collection, "synchro.terminee", user.sub, collection_name=collection,
+                    detail={"source": "drive", "fichiers": len(updated), "jobs": len(job_ids)})
 
     return {
         "status": "synced",

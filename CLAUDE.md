@@ -74,6 +74,7 @@ docker build -t myrag:beta myrag/ && docker run -d --name myrag-test \
   -e KEYCLOAK_URL=http://host.docker.internal:8082 \
   -e KEYCLOAK_REALM=openwebui \
   -e KEYCLOAK_ADMIN_PASSWORD=xxx \
+  -e MYRAG_PSEUDO_SEL=dev-sel \
   --network openrag_default myrag:beta
 
 # 4. Demarrer le frontend (dev mode)
@@ -140,7 +141,11 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 |---------|-------------|
 | `myrag/app/main.py` | FastAPI app + lifespan (init DB) |
 | `myrag/app/database.py` | SQLAlchemy engine (SQLite/PostgreSQL) |
-| `myrag/app/models/db.py` | 8 tables : collections, publications, jobs, feedback, eval, source_files |
+| `myrag/app/models/db.py` | 16 tables : les 8 historiques + le collectif (demande, soutien, abonnement, proposition, signalement, grille_controle, evenement, amorce) |
+| `myrag/app/services/etats.py` | Machine à états du collectif — module pur (docs/collectif.md, ADR-0001) |
+| `myrag/app/services/collectif_store.py` | Écritures du collectif + journal (fil d'avancement) |
+| `myrag/app/routers/demandes.py`, `collectif.py`, `amorces.py` | Routes du collectif |
+| `myrag/tests/conftest.py` | Base SQLite isolée par session, identités de test, capacités |
 | `myrag/app/services/collection_store.py` | CRUD collections (DB) |
 | `myrag/app/services/job_store.py` | CRUD ingestion jobs (DB) |
 | `myrag/app/services/feedback_store.py` | CRUD feedback (DB) |
@@ -182,6 +187,10 @@ cd myrag && python3 -m pytest tests/unit/ -v
 | `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
 | `AUTH_ENABLED` | `true` | Activer l'auth Keycloak sur le frontend |
+| `MYRAG_PSEUDO_SEL` | `` | Sel HMAC des identités du collectif (le même que `obs-pseudo-salt` du bus) ; vide ⇒ routes du collectif en 503. En dev : `dev-sel` |
+| `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |
+| `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
+| `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
 
 ## Problemes connus
 

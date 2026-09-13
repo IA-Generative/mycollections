@@ -2,12 +2,20 @@
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth import CurrentUser, current_user
 from app.database import async_session
-from app.models.db import Publication, PublicationHistory, utcnow
+from app.models.db import Collection, Publication, PublicationHistory, utcnow
+from app.services import collectif_store, etats
 from app.services.collection_store import get_or_create_collection
+
+MESSAGE_VERIFICATION = (
+    "Cette collection est en cours de vérification : elle ne peut être partagée qu'avec "
+    "son groupe. Publier à tous demande qu'elle soit d'abord « publiée à tous » dans son "
+    "circuit de contrôle."
+)
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
 
@@ -36,13 +44,21 @@ async def get_publication_status(name: str):
 
 
 @router.post("/{name}/publish")
-async def publish_collection(name: str, req: PublishRequest):
+async def publish_collection(name: str, req: PublishRequest, user: CurrentUser = Depends(current_user)):
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 
     now = utcnow()
 
     async with async_session() as session:
+        # Règle 3 : une collection qui n'est pas « publiée à tous » n'est jamais servie
+        # hors de son groupe. Un brouillon peut tout dire, il ne sert rien.
+        col = await session.get(Collection, name)
+        etat_collab = (col.etat_collab if col else None) or "amorcee"
+        mention = etats.mention_verification(etat_collab)
+        if mention and req.visibility == "all" and req.state != "draft":
+            raise HTTPException(status_code=422, detail=MESSAGE_VERIFICATION)
+
         pub = await session.get(Publication, name)
         if not pub:
             pub = Publication(collection_name=name)
@@ -58,7 +74,8 @@ async def publish_collection(name: str, req: PublishRequest):
         pub.widget_enabled = req.widget_enabled
         pub.browser_enabled = req.browser_enabled
         pub.published_at = now
-        pub.published_by = req.published_by or "admin"
+        # L'identité vient du jeton, jamais du client (le champ reste accepté pour le wizard).
+        pub.published_by = user.username or user.sub or req.published_by or "admin"
 
         # History entry
         history = PublicationHistory(
@@ -117,10 +134,12 @@ async def publish_collection(name: str, req: PublishRequest):
             # Ce conteneur n'est pas deploye partout ; quand il l'est, c'est ici que se
             # remet son identifiant — au prix d'une chaine que le controle d'acces devra
             # pouvoir suivre.
+            # Tant que la collection n'est pas publiée à tous, le socle le dit.
+            description = f"⚠ {mention} — {req.alias_description}".rstrip(" —") if mention else req.alias_description
             owui_result = await client.upsert_model(
                 model_id=f"openrag-{name}",
                 name=pub.alias_name,
-                description=req.alias_description,
+                description=description,
                 access_control=ac,
                 access_grants=grants,
             )
@@ -131,7 +150,13 @@ async def publish_collection(name: str, req: PublishRequest):
         except Exception as e:
             owui_error = f"Publication OWUI echouee : {e}"
 
+    await collectif_store.consigner(
+        "collection", name, "publication.publiee" if pub.state == "published" else "publication.brouillon",
+        user.sub, collection_name=name,
+        detail={"visibility": pub.visibility, "alias": pub.alias_enabled, "owui": owui_result is not None},
+    )
     result = pub.to_dict()
+    result["mention"] = mention
     result["owui"] = {
         "synced": owui_result is not None,
         "error": owui_error,
@@ -160,7 +185,7 @@ async def _retirer_du_socle(name: str) -> str | None:
 
 
 @router.post("/{name}/unpublish")
-async def unpublish_collection(name: str):
+async def unpublish_collection(name: str, user: CurrentUser = Depends(current_user)):
     async with async_session() as session:
         pub = await session.get(Publication, name)
         if not pub:
@@ -173,12 +198,14 @@ async def unpublish_collection(name: str):
         await session.commit()
 
     erreur = await _retirer_du_socle(name)
+    await collectif_store.consigner("collection", name, "publication.retiree", user.sub, collection_name=name,
+                                    detail={"owui_retire": erreur is None})
     return {"state": "disabled", "collection": name,
             "owui": {"removed": erreur is None, "error": erreur}}
 
 
 @router.post("/{name}/archive")
-async def archive_collection(name: str):
+async def archive_collection(name: str, user: CurrentUser = Depends(current_user)):
     """Archive a collection: hide it from the default catalog and disable any
     active publication. Reversible via /unarchive. Data is retained.
     """
@@ -199,6 +226,7 @@ async def archive_collection(name: str):
         ))
         await session.commit()
 
+    await collectif_store.consigner("collection", name, "collection.archivee", user.sub, collection_name=name)
     return {
         "collection": name,
         "archived_at": result["archived_at"],
@@ -207,7 +235,7 @@ async def archive_collection(name: str):
 
 
 @router.post("/{name}/unarchive")
-async def unarchive_collection_endpoint(name: str):
+async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
     """Restore an archived collection. Publication state is NOT auto-restored:
     the admin must re-publish explicitly if needed.
     """
@@ -226,6 +254,7 @@ async def unarchive_collection_endpoint(name: str):
         ))
         await session.commit()
 
+    await collectif_store.consigner("collection", name, "collection.desarchivee", user.sub, collection_name=name)
     return {"collection": name, "archived_at": None}
 
 
