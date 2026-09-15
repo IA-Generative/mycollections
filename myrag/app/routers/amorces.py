@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.amorces import charger_catalogue, entree
 from app.routers._collectif_commun import Identite, identite
 from app.services import collectif_store as store
-from app.services.amorces import CONNECTEURS
+from app.services.amorces import CONNECTEURS, ingestion
 from app.services.amorces.banque import poser_questions
 from app.services.collection_store import create_collection as db_create_collection
 from app.services.collection_store import get_collection as db_get_collection
@@ -67,9 +67,11 @@ async def _preparer(e: dict) -> str:
     return name
 
 
-async def _executer(ident: str, e: dict, name: str) -> dict:
+async def _executer(ident: str, e: dict, name: str, *, depuis_zero: bool = False) -> dict:
+    """`depuis_zero` : après une purge, ce que l'import précédent disait avoir fait
+    (les mois déjà importés de la justice administrative) ne compte plus."""
     connecteur = CONNECTEURS[e["connecteur"]]
-    precedent = (await store.etats_des_amorces()).get(ident) or {}
+    precedent = {} if depuis_zero else ((await store.etats_des_amorces()).get(ident) or {})
     contexte = {}
     if e["connecteur"] == "justice-administrative":
         contexte["deja_importes"] = (precedent.get("detail") or {}).get("couverture", {}).get("mois_importes", [])
@@ -90,7 +92,8 @@ async def _executer(ident: str, e: dict, name: str) -> dict:
 
 
 @router.post("/{ident}/import")
-async def importer(ident: str, moi: Identite = Depends(identite), synchrone: bool = Query(False)):
+async def importer(ident: str, moi: Identite = Depends(identite), synchrone: bool = Query(False),
+                   purger: bool = Query(False, description="Vider la partition et réindexer tout")):
     if not moi.superadmin:
         raise HTTPException(status_code=403, detail="L'import d'une amorce est réservé à l'administration")
     e = entree(ident)
@@ -105,13 +108,18 @@ async def importer(ident: str, moi: Identite = Depends(identite), synchrone: boo
     if etat.get("etat_import") == "en_cours":
         raise HTTPException(status_code=409, detail=f"L'import de {ident} est déjà en cours")
     await store.marquer_amorce(ident, "en_cours", collection_name=name)
+    if purger:
+        # OpenRAG n'efface pas les morceaux d'un document : sans purge, un nouveau
+        # découpage s'ajouterait aux anciens morceaux au lieu de les remplacer.
+        await ingestion.purger(name)
+        await store.consigner("collection", name, "import.purge", robot=f"amorce:{ident}", collection_name=name)
     if synchrone:
         try:
-            resultat = await _executer(ident, e, name)
+            resultat = await _executer(ident, e, name, depuis_zero=purger)
         except Exception as ex:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"Import de {ident} échoué : {ex}")
         return {"amorce": ident, "collection": name, "etat_import": "termine", "resultat": resultat}
-    tache = asyncio.create_task(_executer(ident, e, name))
+    tache = asyncio.create_task(_executer(ident, e, name, depuis_zero=purger))
     _taches.append(tache)
     tache.add_done_callback(lambda t: _taches.remove(t) if t in _taches else None)
     return {"amorce": ident, "collection": name, "etat_import": "en_cours"}
