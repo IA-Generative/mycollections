@@ -248,6 +248,19 @@ async def generate_eval_dataset(collection: str):
     return dataset
 
 
+_LIEN_OPENRAG_RE = re.compile(r"https?://[^\s)\]\"']+/(?:static|extract)/(\d+)")
+
+
+def relier_au_proxy(texte: str) -> str:
+    """Un lien OpenRAG (`…/static/<id>` ou `…/extract/<id>`) devient un lien de
+    même origine vers notre proxy : `/api/openrag/extract/<id>`. Le morceau et le
+    document portent le même identifiant chez OpenRAG ; `/static` exige une
+    session de son SSO que le navigateur n'a pas, `/extract` accepte le jeton."""
+    if not texte:
+        return texte
+    return _LIEN_OPENRAG_RE.sub(lambda m: f"/api/openrag/extract/{m.group(1)}", texte)
+
+
 @router.post("/{collection}/chat")
 async def playground_chat(collection: str, req: PlaygroundChatRequest):
     """Quick RAG chat test against a collection.
@@ -356,6 +369,12 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
         name = s.get("original_filename") or s.get("filename") or ""
         if name and name not in source_names:
             source_names.append(name)
+
+    # Les liens que le modèle écrit lui-même dans la réponse (« Sources : … »)
+    # visent l'API publique d'OpenRAG : ouverts dans le navigateur, ils passent par
+    # le SSO d'OpenRAG puis finissent en « User does not have access to this
+    # file ». On les ramène sur notre proxy, qui porte le jeton.
+    content = relier_au_proxy(content)
 
     # Règle 3 : une collection non publiée à tous répond avec la mention.
     mention = None
