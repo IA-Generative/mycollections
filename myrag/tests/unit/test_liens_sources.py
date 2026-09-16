@@ -62,3 +62,15 @@ def test_une_source_prend_le_titre_de_sa_section():
     assert s["titre_document"] == "Délinquance enregistrée — département 04"
     assert situer_source({"content": "# Seul le document\n\ntexte"})["libelle"] == "Seul le document"
     assert "libelle" not in situer_source({"content": "[CONTEXT] rien de structuré"})
+
+
+def test_le_libelle_survit_au_resume_qu_openrag_ajoute():
+    """Un morceau rendu par /search commence par « [CONTEXT] … [CHUNK_START] » :
+    les puces du repli affichaient le nom de fichier brut faute de lire plus loin."""
+    contenu = ("[CONTEXT]\n\nCe document présente la définition juridique du délit d'achat…\n\n"
+               "* filename: natinf-07742-08552--106.md\n\n[CHUNK_START]\n\n"
+               "# Nomenclature NATINF — codes 7742 à 8552\n"
+               "## NATINF 7987 — ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME\n\n- Nature : Délit")
+    s = situer_source({"content": contenu})
+    assert s["libelle"] == "NATINF 7987 — ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME"
+    assert s["titre_document"] == "Nomenclature NATINF — codes 7742 à 8552"
