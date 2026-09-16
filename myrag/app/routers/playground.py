@@ -248,6 +248,43 @@ async def generate_eval_dataset(collection: str):
     return dataset
 
 
+# Le pied « Sources : 1. [fichier](url) … » qu'OpenRAG ajoute à la réponse : les
+# mêmes fichiers que `sources`, en noms bruts. Les puces les portent déjà, lisibles.
+_PIED_SOURCES_RE = re.compile(
+    r"\n+(?:-{3,}[ \t]*\n+)?\**[ \t]*Sources?[ \t]*:?[ \t]*\**[ \t]*\n+"
+    r"(?:[ \t]*(?:\d+[.)]|[-*])[ \t]*\[[^\]]*\]\([^)]*\)[ \t]*\n?)+[ \t]*$",
+    re.IGNORECASE,
+)
+
+
+def retirer_le_pied_sources(texte: str) -> str:
+    """Retire la liste « Sources : » en fin de réponse — elle doublonne les puces."""
+    if not texte:
+        return texte
+    return _PIED_SOURCES_RE.sub("", texte).rstrip()
+
+
+def situer_source(s: dict) -> dict:
+    """Un libellé lisible pour une source : le titre de sa section (qui porte le
+    département, le code, l'année…), à défaut celui du document, à défaut rien —
+    le front retombe alors sur le nom de fichier. Les morceaux des amorces
+    commencent par `# <document>` puis `## <section>` (ingestion.situer)."""
+    titre_doc = titre_section = ""
+    for ligne in (s.get("content") or "").splitlines()[:4]:
+        if ligne.startswith("## ") and not titre_section:
+            titre_section = ligne[3:].strip()
+        elif ligne.startswith("# ") and not titre_doc:
+            titre_doc = ligne[2:].strip()
+    if titre_doc:
+        s["titre_document"] = titre_doc
+    if titre_section:
+        s["titre_section"] = titre_section
+    libelle = titre_section or titre_doc
+    if libelle:
+        s["libelle"] = libelle
+    return s
+
+
 _LIEN_OPENRAG_RE = re.compile(r"https?://[^\s)\]\"']+/(?:static|extract)/(\d+)")
 
 
@@ -374,7 +411,9 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
     # visent l'API publique d'OpenRAG : ouverts dans le navigateur, ils passent par
     # le SSO d'OpenRAG puis finissent en « User does not have access to this
     # file ». On les ramène sur notre proxy, qui porte le jeton.
-    content = relier_au_proxy(content)
+    content = relier_au_proxy(retirer_le_pied_sources(content))
+    for s in sources:
+        situer_source(s)
 
     # Règle 3 : une collection non publiée à tous répond avec la mention.
     mention = None

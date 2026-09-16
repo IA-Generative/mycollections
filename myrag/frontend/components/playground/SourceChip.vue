@@ -5,7 +5,7 @@
     <a v-if="href"
        :href="href" target="_blank" rel="noopener"
        class="fr-tag fr-tag--sm myrag-source-chip"
-       :title="fullName">
+       :title="titre">
       <span class="fr-icon-file-line" aria-hidden="true" style="margin-right:0.3rem;"></span>
       {{ label }}<span v-if="page" class="myrag-source-chip__page">&nbsp;·&nbsp;p. {{ page }}</span>
     </a>
@@ -16,7 +16,7 @@
     <!-- Hover preview: chunk content + quick links. chunk.content comes
          straight from the /chat payload, so no extra fetch is needed. -->
     <span v-if="showPreview && previewText" class="myrag-source-chip__popover" role="tooltip">
-      <span class="myrag-source-chip__popover-title">{{ fullName || 'Extrait' }}</span>
+      <span class="myrag-source-chip__popover-title">{{ titre || 'Extrait' }}</span>
       <span class="myrag-source-chip__popover-body">{{ previewText }}</span>
       <span class="myrag-source-chip__popover-hint">
         <span v-if="href">Clique la puce &rarr; extrait complet</span>
@@ -37,6 +37,11 @@ const props = defineProps<{
   source: {
     original_filename?: string
     filename?: string
+    /** Libellé lisible posé par l'API (titre de la section du morceau) —
+     *  « Homicides (unité : Victime) — département 04 » plutôt que le nom
+     *  de fichier. Absent pour les collections ordinaires : repli prettyName. */
+    libelle?: string
+    titre_document?: string
     file_url?: string
     chunk_url?: string
     page?: number | string
@@ -46,7 +51,8 @@ const props = defineProps<{
 
 const showPreview = ref(false)
 const fullName = computed(() => props.source.original_filename || props.source.filename || '')
-const label = computed(() => prettyName(fullName.value) || 'Source')
+const label = computed(() => props.source.libelle || prettyName(fullName.value) || 'Source')
+const titre = computed(() => props.source.titre_document || fullName.value)
 const page = computed(() => props.source.page)
 const href = computed(() => proxiedSourceUrl(props.source.chunk_url || props.source.file_url))
 /** Separate link for the original document (file_url), shown in the popover

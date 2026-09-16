@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from app.routers.playground import relier_au_proxy
+from app.routers.playground import relier_au_proxy, retirer_le_pied_sources, situer_source
 
 
 def test_les_liens_de_la_reponse_sont_ramenes_sur_le_proxy():
@@ -46,3 +46,19 @@ async def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch
     r = await m.openrag_static_proxy("42")
     assert r.status_code == 200 and b"8302" in r.body and b"kcContext" not in r.body
     assert any("/extract/42" in u for u in appels), "le morceau est servi à la place de la page de connexion"
+
+
+def test_le_pied_sources_est_retire_de_la_reponse():
+    texte = ("Les homicides sont exprimés en unité : Victime.\n\n---\n\n**Sources :**\n\n"
+             "1. [ssmsi_04.md](https://api.openrag/static/1)\n2. [ssmsi_48.md](https://api.openrag/static/2)\n")
+    assert retirer_le_pied_sources(texte) == "Les homicides sont exprimés en unité : Victime."
+    assert retirer_le_pied_sources("Réponse sans pied.\n\nSources : voir le rapport.") == "Réponse sans pied.\n\nSources : voir le rapport.", \
+        "une phrase qui parle de sources n'est pas un pied"
+
+
+def test_une_source_prend_le_titre_de_sa_section():
+    s = situer_source({"content": "# Délinquance enregistrée — département 04\n## Homicides (unité : Victime) — département 04\n\n| année |"})
+    assert s["libelle"] == "Homicides (unité : Victime) — département 04"
+    assert s["titre_document"] == "Délinquance enregistrée — département 04"
+    assert situer_source({"content": "# Seul le document\n\ntexte"})["libelle"] == "Seul le document"
+    assert "libelle" not in situer_source({"content": "[CONTEXT] rien de structuré"})
