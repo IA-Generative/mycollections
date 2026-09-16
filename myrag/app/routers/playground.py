@@ -81,6 +81,34 @@ class PlaygroundChatRequest(BaseModel):
     temperature: float = 0.1
 
 
+#: Ce qu'on garde d'un morceau injecté en contexte : de quoi répondre sans noyer
+#: le modèle ni faire exploser la fenêtre quand cinq morceaux arrivent ensemble.
+_EXTRAIT_MAX_CARS = 2000
+
+
+async def _morceaux_par_recherche(
+    client: OpenRAGClient, collection: str, question: str, top_k: int = 5
+) -> list[dict]:
+    """Les morceaux les plus proches de la question, au format « source » du chat.
+
+    Le RAG du chat rend parfois zéro source là où la recherche trouve le bon
+    morceau : c'est notre seconde chance, et elle rend de VRAIES sources — les
+    puces et leurs liens marchent comme après une réponse ordinaire.
+    """
+    try:
+        resultat = await client.search(collection, question, top_k=top_k)
+    except Exception:  # noqa: BLE001 — pas de recherche, pas de repli : on continue
+        return []
+    morceaux = []
+    for d in (resultat or {}).get("documents") or []:
+        metadonnees = d.get("metadata") or {}
+        contenu = d.get("content") or metadonnees.get("content") or ""
+        if not contenu:
+            continue
+        morceaux.append({**{k: v for k, v in metadonnees.items() if k != "content"}, "content": contenu})
+    return morceaux
+
+
 async def _get_collection_sample(
     client: OpenRAGClient, collection: str, max_files: int = 5
 ) -> list[dict]:
@@ -355,8 +383,46 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
         except (json.JSONDecodeError, AttributeError):
             pass
 
-    # Step 2: If no sources found, fallback — list files and use filenames as context
+    # Étape 2a : aucune source ? On cherche nous-mêmes avant d'abandonner.
+    #
+    # Le RAG d'OpenRAG écarte les morceaux sous son seuil de similarité : une
+    # question posée par IDENTIFIANT NU (« NATINF 7987 », « département 69 »)
+    # n'y survit pas, alors que /search classe le bon morceau en tête — mesuré
+    # sur l'amorce NATINF (0 source par le chat, morceau exact en 1er par la
+    # recherche). On rejoue donc la question en recherche et on injecte les
+    # morceaux trouvés comme CONTEXTE, en donnée délimitée.
     fallback_used = False
+    repli_recherche = False
+    if not sources:
+        morceaux = await _morceaux_par_recherche(client, collection, req.question)
+        if morceaux:
+            fallback_used = repli_recherche = True
+            sources = morceaux
+            extraits = wrap_untrusted(
+                "\n\n---\n\n".join(
+                    neutralize_for_prompt(m.get("content") or "", max_len=_EXTRAIT_MAX_CARS)
+                    for m in morceaux
+                ),
+                label="DOCUMENTS",
+            )
+            messages_repli = [
+                {"role": "system", "content": (system_prompt + "\n\n" if system_prompt else "") + (
+                    "Réponds à la question en te fondant UNIQUEMENT sur les documents fournis ci-dessous. "
+                    "Si la réponse ne s'y trouve pas, dis-le simplement."
+                )},
+                {"role": "user", "content": f"{extraits}\n\n{req.question}"},
+            ]
+            try:
+                resultat_repli = await client.chat(
+                    model=model, messages=messages_repli,
+                    temperature=req.temperature, max_tokens=_CHAT_MAX_TOKENS,
+                )
+                if resultat_repli.get("choices"):
+                    content = resultat_repli["choices"][0].get("message", {}).get("content", "") or content
+            except Exception:  # noqa: BLE001 — le repli ne casse jamais la réponse
+                pass
+
+    # Étape 2b : toujours rien ? Les noms de fichiers, pour au moins décrire la collection.
     if not sources:
         sample_files = await _get_collection_sample(client, collection)
         if sample_files:
@@ -434,4 +500,5 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest):
         "model": model,
         "system_prompt_used": bool(system_prompt),
         "fallback_used": fallback_used,
+        "repli_recherche": repli_recherche,
     }

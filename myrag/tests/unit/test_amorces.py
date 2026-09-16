@@ -1,5 +1,7 @@
 """Les amorces : un catalogue versionné, un import idempotent, un connecteur nommé."""
 
+import pytest
+
 from tests.conftest import SUPERADMIN, personne
 
 
@@ -94,3 +96,41 @@ def test_le_critere_d_ouverture_compte_les_amorces_en_controle(client, en_tant_q
     assert ouverture["en_controle"] == 3 and ouverture["ouverte"] is True
     for i in ids:
         purger(f"amorce-{i}")
+
+
+# ─── La banque de questions suit le catalogue (0.3.3) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_la_banque_se_met_a_jour_quand_le_catalogue_change(creer_collection, nom):
+    """Une réponse attendue fausse se corrigeait dans le dépôt sans jamais
+    atteindre la collection en service : le jeu ne se créait qu'une fois."""
+    from app.services.amorces.banque import NOM_JEU, poser_questions
+    import json as _json
+    from sqlalchemy import select
+    from app.database import async_session
+    from app.models.db import EvalDataset
+
+    creer_collection(nom)
+    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "faux"}]) == 1
+    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "juste"},
+                                       {"question": "Q2 ?", "expected_answer": "b"}]) == 2
+
+    async with async_session() as session:
+        jeux = (await session.execute(
+            select(EvalDataset).where(EvalDataset.collection_name == nom)
+        )).scalars().all()
+    assert len(jeux) == 1, "un seul jeu, mis à jour — jamais un doublon"
+    questions = _json.loads(jeux[0].questions_json)
+    assert [q["expected_answer"] for q in questions] == ["juste", "b"]
+    assert jeux[0].name == NOM_JEU
+
+
+def test_les_reponses_attendues_de_natinf_collent_a_la_source():
+    """Le libellé de NATINF 7987 disait « conduite sans permis » ; la nomenclature
+    dit « achat en connaissance de cause de produits de la pêche maritime »."""
+    from app.amorces import entree
+    questions = {q["question"]: q["expected_answer"] for q in entree("natinf")["questions"]}
+    assert "PECHE MARITIME" in questions["Quel est le libellé de l'infraction NATINF 7987 ?"]
+    assert "conduite sans permis" not in " ".join(questions.values())
+    assert "6047" not in " ".join(questions.values()), "ce code n'existe pas dans la nomenclature importée"
