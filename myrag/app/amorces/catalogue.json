@@ -23,7 +23,7 @@
       "questions": [
         {
           "question": "Quel est le libellé de l'infraction NATINF 7987 ?",
-          "expected_answer": "Le libellé exact de la qualification du code 7987 (conduite sans permis).",
+          "expected_answer": "ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME ET DE L'AQUACULTURE MARINE DE TAILLE, CALIBRE OU POIDS PROHIBE.",
           "tags": [
             "natinf"
           ]
@@ -58,21 +58,21 @@
         },
         {
           "question": "La conduite d'un véhicule malgré une suspension du permis est-elle un délit ou une contravention ?",
-          "expected_answer": "Un délit.",
+          "expected_answer": "Un délit — NATINF 5707, défini par l'ART.L.224-16 §I C.ROUTE.",
           "tags": [
             "natinf"
           ]
         },
         {
           "question": "Quels codes NATINF concernent l'usage illicite de stupéfiants ?",
-          "expected_answer": "Les codes dont la qualification porte sur l'usage illicite de stupéfiants (ex. 6047).",
+          "expected_answer": "Les codes dont la qualification porte sur l'usage illicite de stupéfiants : 26398 (par dépositaire de l'autorité publique), 26399 (par personne chargée d'une mission de service public), 26528 (personnel d'une entreprise de transport terrestre).",
           "tags": [
             "natinf"
           ]
         },
         {
           "question": "Quel est le texte de répression de l'outrage à une personne dépositaire de l'autorité publique ?",
-          "expected_answer": "Articles 433-5 et suivants du code pénal (selon la fiche).",
+          "expected_answer": "ART.433-5 C.PENAL (ex. NATINF 20719, outrage commis en réunion : réprimé par ART.433-5 AL.4 et ART.433-22 C.PENAL).",
           "tags": [
             "natinf"
           ]
@@ -99,15 +99,15 @@
           ]
         },
         {
-          "question": "Existe-t-il un code NATINF pour le séjour irrégulier d'un étranger en France ?",
-          "expected_answer": "Réponse selon la nomenclature en vigueur (codes CESEDA, art. L.621-1 abrogé, aide au séjour).",
+          "question": "Existe-t-il un code NATINF pour l'aide au séjour irrégulier d'un étranger en France ?",
+          "expected_answer": "Oui : NATINF 16 — AIDE A L'ENTREE, A LA CIRCULATION OU AU SEJOUR IRREGULIERS D'UN ETRANGER EN FRANCE, définie par l'ART.L.823-1 C.E.S.E.D.A.",
           "tags": [
             "natinf"
           ]
         },
         {
           "question": "Quels articles définissent le vol simple ?",
-          "expected_answer": "ART.311-1 C.PENAL.",
+          "expected_answer": "ART.311-1, ART.311-3 C.PENAL (NATINF 7151 — VOL).",
           "tags": [
             "natinf"
           ]
@@ -128,14 +128,14 @@
         },
         {
           "question": "Quels sont les textes de répression du délit de fuite ?",
-          "expected_answer": "ART.434-10 C.PENAL, art. L.231-1 code de la route.",
+          "expected_answer": "NATINF 42 : ART.434-10 AL.1 C.PENAL et ART.L.231-1 C.ROUTE.",
           "tags": [
             "natinf"
           ]
         },
         {
           "question": "Combien de codes NATINF sont en vigueur dans la liste importée ?",
-          "expected_answer": "Le nombre indiqué dans la couverture de la grille de contrôle.",
+          "expected_answer": "17 163 codes (chiffre repris dans la couverture constatée de la grille de contrôle).",
           "tags": [
             "natinf"
           ]
