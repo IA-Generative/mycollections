@@ -296,13 +296,19 @@ def situer_source(s: dict) -> dict:
     """Un libellé lisible pour une source : le titre de sa section (qui porte le
     département, le code, l'année…), à défaut celui du document, à défaut rien —
     le front retombe alors sur le nom de fichier. Les morceaux des amorces
-    commencent par `# <document>` puis `## <section>` (ingestion.situer)."""
+    commencent par `# <document>` puis `## <section>` (ingestion.situer).
+
+    ⚠ Le morceau rendu par /search porte d'abord le résumé qu'OpenRAG lui ajoute
+    (`[CONTEXT] … [CHUNK_START]`) : les titres arrivent APRÈS. On lit donc au-delà,
+    et on s'arrête au premier titre de chaque niveau."""
     titre_doc = titre_section = ""
-    for ligne in (s.get("content") or "").splitlines()[:4]:
+    for ligne in (s.get("content") or "").splitlines()[:40]:
         if ligne.startswith("## ") and not titre_section:
             titre_section = ligne[3:].strip()
         elif ligne.startswith("# ") and not titre_doc:
             titre_doc = ligne[2:].strip()
+        if titre_doc and titre_section:
+            break
     if titre_doc:
         s["titre_document"] = titre_doc
     if titre_section:
