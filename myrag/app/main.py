@@ -281,8 +281,15 @@ async def openrag_static_proxy(filepath: str):
     reject_path_traversal(filepath, field="filepath")
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/static/{filepath}"
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
         upstream = await client.get(url, headers=headers)
+    # /static ignore le jeton et renvoie vers son SSO (302 /auth/login) — suivi,
+    # c'était une page Keycloak servie en 200 au lieu du document. Le morceau
+    # porte le même identifiant : on le rend à la place, plutôt qu'une page de
+    # connexion à un service que l'utilisateur ne connaît pas.
+    if upstream.status_code in (301, 302, 303, 307, 308) or \
+            upstream.headers.get("content-type", "").startswith("text/html"):
+        return await openrag_extract_proxy(filepath)
     # Preserve content-disposition so browsers can hint a filename on save.
     resp_headers = {}
     if "content-disposition" in upstream.headers:
