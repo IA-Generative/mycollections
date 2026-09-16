@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # OpenRAG
     openrag_url: str = Field(default="http://openrag:8080")
     openrag_admin_token: str = Field(default="")
+    # L'adresse à laquelle un SI joint OpenRAG (bloc « Où interroger » des fiches).
+    # Vide : on reprend openrag_url si elle est déjà publique (https).
+    openrag_public_url: str = Field(default="")
 
     # Keycloak
     keycloak_url: str = Field(default="http://keycloak:8080")

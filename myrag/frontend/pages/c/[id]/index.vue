@@ -44,6 +44,25 @@
           <p v-if="etat && etat.mention" class="collectif-mention fr-mb-1w">⚠ {{ etat.mention }} — servie à son groupe seulement</p>
           <p class="fr-text--lg">{{ collection.description || 'Pas de description' }}</p>
 
+          <!-- Où interroger : servi par l'API seulement quand la collection est
+               publiée à tous — on ne promet rien qui ne soit pas servi. -->
+          <div v-if="collection.acces" class="fr-callout fr-callout--green-emeraude fr-mb-3w">
+            <h3 class="fr-callout__title fr-h6">Où interroger cette collection</h3>
+            <p class="fr-callout__text fr-text--sm">
+              Ici, dans le bac à sable, pour l'essayer — mais aussi :
+            </p>
+            <ul class="fr-text--sm">
+              <li><strong>dans l'agent conversationnel de MirAI Next</strong>, en choisissant le modèle
+                <code>{{ collection.acces.assistant.model_id }}</code> ;</li>
+              <li v-if="collection.acces.api"><strong>par l'API, depuis vos SI</strong> :
+                <code>POST {{ collection.acces.api.chat }}</code> avec <code>"model": "{{ collection.acces.api.model }}"</code>
+                (format OpenAI), ou <code>GET {{ collection.acces.api.search }}</code> pour la recherche seule —
+                sur clé d'API à demander à l'équipe de la bêta ;</li>
+              <li><strong>dans vos outils bureautiques</strong> : greffon LibreOffice à venir.</li>
+            </ul>
+            <p class="fr-text--sm fr-mb-0"><NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Le guide : interroger depuis vos SI</NuxtLink></p>
+          </div>
+
           <!-- Badges -->
           <div class="fr-mt-2w fr-mb-4w">
             <span class="fr-badge fr-badge--info">{{ collection.strategy }}</span>

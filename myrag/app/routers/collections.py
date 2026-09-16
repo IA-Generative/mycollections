@@ -312,6 +312,24 @@ async def check_name_endpoint(name: str, user: CurrentUser = Depends(current_use
     return {"available": True}
 
 
+def acces_a_la_collection(collection: dict) -> dict | None:
+    """Où une collection publiée à tous s'interroge, au-delà du bac à sable :
+    l'assistant de MirAI Next (le modèle `openrag-<nom>`), et l'API d'OpenRAG
+    depuis un SI (même modèle, clé d'API). None tant qu'elle n'est pas publiée à
+    tous : rien n'est promis qui ne soit pas servi."""
+    pub = collection.get("publication") or {}
+    servie = pub.get("state") == "published" and pub.get("visibility") == "all"
+    if collection.get("etat_collab") != "publiee_tous" and not servie:
+        return None
+    modele = f"openrag-{collection['name']}"
+    url = settings.openrag_public_url or (settings.openrag_url if settings.openrag_url.startswith("https://") else "")
+    acces = {"assistant": {"model_id": modele}, "api": None}
+    if url:
+        acces["api"] = {"url": url.rstrip("/"), "model": modele,
+                        "chat": f"{url.rstrip('/')}/v1/chat/completions", "search": f"{url.rstrip('/')}/search"}
+    return acces
+
+
 @router.get("/{name}")
 async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
     collection = await db_get_collection(name)
@@ -324,6 +342,7 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
     collection["publication"] = (
         (await _etats_de_partage([name])).get(name) or {"state": "draft", "targets": []}
     )
+    collection["acces"] = acces_a_la_collection(collection)
     return collection
 
 
