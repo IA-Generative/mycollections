@@ -8,6 +8,11 @@
     </nav>
 
     <h1 class="fr-h3">Catalogue des collections existantes</h1>
+    <p class="fr-text--sm fr-mb-3w">
+      Une collection <strong>publiée à tous</strong> s'interroge ici, dans son bac à sable, mais aussi dans
+      l'agent conversationnel de MirAI Next et par l'API depuis vos SI — le détail est sur sa fiche.
+      <NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Interroger depuis vos SI</NuxtLink>.
+    </p>
     <p class="fr-text--lg fr-mb-2w">Avant de creer une collection, verifiez qu'elle n'existe pas deja.</p>
 
     <div class="fr-callout fr-callout--brown-caramel fr-mb-4w">

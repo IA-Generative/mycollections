@@ -1,13 +1,13 @@
-"""Le guide « Soyez acteurs vous-mêmes » : cinq pages, chacune finie par le geste et un exemple."""
+"""Le guide « Soyez acteurs vous-mêmes » : six pages, chacune finie par le geste et un exemple."""
 
 from app.routers.guide import pages
 from tests.conftest import personne
 
 ATTENDUES = ["dire-ce-qui-manque", "rassembler-cinq-collegues-et-un-garant", "amorcer-depuis-ce-qui-existe",
-             "verifier-avant-de-publier", "entretenir"]
+             "verifier-avant-de-publier", "entretenir", "interroger-depuis-vos-si"]
 
 
-def test_cinq_pages_dans_l_ordre():
+def test_six_pages_dans_l_ordre():
     assert [p["slug"] for p in pages()] == ATTENDUES
 
 
@@ -27,7 +27,7 @@ def test_les_exemples_citent_les_six_premiers_jeux():
 def test_les_routes_servent_le_guide(client, en_tant_que):
     en_tant_que(personne(1))
     liste = client.get("/api/guide").json()
-    assert liste["titre"] == "Soyez acteurs vous-mêmes" and len(liste["pages"]) == 5 and "markdown" not in liste["pages"][0]
+    assert liste["titre"] == "Soyez acteurs vous-mêmes" and len(liste["pages"]) == 6 and "markdown" not in liste["pages"][0]
     page = client.get("/api/guide/entretenir").json()
     assert page["titre"] == "Entretenir" and page["markdown"].startswith("# Entretenir")
     assert client.get("/api/guide/inconnue").status_code == 404
