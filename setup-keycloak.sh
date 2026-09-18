@@ -12,7 +12,7 @@ REDIRECT_URI="${OPENRAG_REDIRECT_URI:-http://localhost:8180/auth/callback}"
 POST_LOGOUT_URI="${OPENRAG_POST_LOGOUT_URI:-http://localhost:3042}"
 SYNC_CLIENT_ID="openrag-sync"
 TEST_USER="testuser"
-TEST_PASSWORD="testpass123"
+TEST_PASSWORD="${TEST_PASSWORD:?TEST_PASSWORD should be defined.}"
 
 echo "=== Authenticating to Keycloak at $KC_URL ==="
 KC_TOKEN=$(curl -sf -X POST "$KC_URL/realms/master/protocol/openid-connect/token" \
