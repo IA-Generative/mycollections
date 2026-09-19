@@ -97,6 +97,21 @@ async def graph_config():
     }
 
 
+async def _exiger_gestionnaire(collection: str, user: CurrentUser) -> dict | None:
+    """Refuse (403) quiconque ne gère pas la collection ; renvoie sa fiche, ou None si elle n'en a pas.
+
+    Une partition sans fiche reste reconstructible par un superadmin ou un membre de
+    ``<collection>-admin`` : même tolérance que pour le prompt système.
+    """
+    fiche = await get_collection(collection)
+    if not access.can_write(
+        name=collection, created_by=(fiche or {}).get("created_by"),
+        user_groups=user.groups, user_sub=user.sub,
+    ):
+        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
+    return fiche
+
+
 class GraphImportRequest(BaseModel):
     nodes: list[dict]
     edges: list[dict] = []
@@ -111,14 +126,9 @@ async def import_graph(
     Réservé aux gestionnaires de la collection. Le graphe importé est protégé :
     ``POST /{collection}/build`` refuse de l'écraser sans ``force=true``.
     """
-    fiche = await get_collection(collection)
+    fiche = await _exiger_gestionnaire(collection, user)
     if not fiche:
         raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
-    if not access.can_write(
-        name=collection, created_by=fiche.get("created_by"),
-        user_groups=user.groups, user_sub=user.sub,
-    ):
-        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     try:
         graph = _builder.import_graph(collection, req.model_dump(), imported_by=user.sub)
     except GraphImportError as e:
@@ -137,9 +147,16 @@ async def import_graph(
 async def build_graph(
     collection: str,
     force: bool = Query(False, description="Écraser un graphe importé"),
+    user: CurrentUser = Depends(current_user),
 ):
-    """Build or rebuild the graph for a collection from its indexed chunks."""
+    """Build or rebuild the graph for a collection from its indexed chunks.
+
+    Réservé aux gestionnaires : la reconstruction remplace le graphe sur disque, et
+    ``force=true`` écrase même un graphe importé.
+    """
     from app.services.openrag_client import OpenRAGClient
+
+    await _exiger_gestionnaire(collection, user)
 
     if _builder.is_imported(collection) and not force:
         raise HTTPException(
@@ -207,8 +224,12 @@ async def summarize_articles(
     llm_url: str = Query("", description="LLM API URL (default: Scaleway)"),
     llm_api_key: str = Query("", description="LLM API key"),
     llm_model: str = Query("", description="LLM model name"),
+    user: CurrentUser = Depends(current_user),
 ):
     """Generate AI summaries for long articles in the graph.
+
+    Réservé aux gestionnaires : la route réécrit le graphe sur disque et fait appeler par le
+    serveur l'adresse ``llm_url`` fournie par l'appelant.
 
     Uses the collection's ai_summary_enabled and ai_summary_threshold settings.
     Override threshold via query param.
@@ -216,9 +237,7 @@ async def summarize_articles(
     Articles longer get a 3-5 sentence AI summary with a 'Resume par l'IA' badge.
     Requires LLM access (Scaleway or OpenAI-compatible endpoint).
     """
-    from app.services.collection_store import get_collection
-
-    config = await get_collection(collection)
+    config = await _exiger_gestionnaire(collection, user)
     if config and not config.get("ai_summary_enabled") and threshold is None:
         return {
             "status": "disabled",
