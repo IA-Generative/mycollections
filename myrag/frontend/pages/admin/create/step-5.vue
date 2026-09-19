@@ -54,8 +54,11 @@
               </div>
               <div v-if="form.alias_enabled" class="fr-fieldset__element fr-ml-4w">
                 <div class="fr-input-group">
-                  <label class="fr-label">Nom affiche dans Open WebUI</label>
-                  <input class="fr-input" v-model="form.alias_name" :placeholder="`MirAI ${collection}`" />
+                  <label class="fr-label" for="nom-fiche">
+                    Nom dans l'assistant
+                    <span class="fr-hint-text">Laissez vide : c'est le titre de la collection.</span>
+                  </label>
+                  <input id="nom-fiche" class="fr-input" v-model="form.alias_name" :placeholder="titre" />
                 </div>
               </div>
               <div class="fr-fieldset__element">
@@ -222,6 +225,7 @@
 <script setup lang="ts">
 const route = useRoute()
 const collection = route.query.collection as string
+const { titre } = useTitreCollection(collection)
 const { get, post, baseUrl: myragUrl } = useApi()
 
 const config = ref<any>(null)
@@ -241,7 +245,7 @@ const groupError = ref('')
 
 const form = ref({
   alias_enabled: true,
-  alias_name: collection ? `📚 ${collection}` : '',
+  alias_name: '',
   tool_enabled: true,
   embed_enabled: false,
   visibility: 'group',
@@ -325,7 +329,7 @@ async function publish() {
   try {
     await post(`/api/collections/${collection}/publish`, {
       ...form.value,
-      alias_name: form.value.alias_name || `📚 ${collection}`,
+      alias_name: form.value.alias_name.trim(),
     })
     result.value = 'Collection publiee avec succes !'
     resultClass.value = 'fr-alert--success'

@@ -131,6 +131,9 @@ class Publication(Base):
     state: Mapped[str] = mapped_column(String(50), default="draft")
     alias_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     alias_name: Mapped[str] = mapped_column(String(255), default="")
+    # Saisie à la publication. Elle n'était PAS gardée : le champ revenait vide à chaque
+    # ouverture de la page, et une republication l'effaçait de la fiche du modèle.
+    alias_description: Mapped[str] = mapped_column(Text, default="", server_default="")
     tool_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     embed_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     visibility: Mapped[str] = mapped_column(String(50), default="group")
@@ -146,6 +149,7 @@ class Publication(Base):
             "state": self.state,
             "alias_enabled": self.alias_enabled,
             "alias_name": self.alias_name,
+            "alias_description": self.alias_description or "",
             "tool_enabled": self.tool_enabled,
             "embed_enabled": self.embed_enabled,
             "visibility": self.visibility,

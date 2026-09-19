@@ -18,6 +18,14 @@
       <p>{{ message.texte }}</p>
     </div>
 
+    <div v-if="resyncConseillee" class="fr-callout fr-callout--blue-ecume fr-mb-3w">
+      <p class="fr-callout__text fr-text--sm">
+        Le catalogue est à jour. <strong>Mon assistant</strong>, lui, montre encore les anciennes étiquettes :
+        la catégorie d'une collection y est l'étiquette de son modèle.
+      </p>
+      <button class="fr-btn fr-btn--sm" :disabled="occupe" @click="resynchroniser">Mettre à jour l'assistant</button>
+    </div>
+
     <!-- ─── Les catégories ─────────────────────────────────────────────────── -->
     <h2 class="fr-h5">Les catégories</h2>
     <div class="fr-table fr-mb-2w">
@@ -200,6 +208,7 @@ const categories = ref<Categorie[]>([])
 const collections = ref<Collection[]>([])
 const message = ref<{ ok: boolean; texte: string } | null>(null)
 const occupe = ref(false)
+const resyncConseillee = ref(false)
 
 const nouveau = ref({ libelle: '', description: '' })
 const edition = ref<{ cle: string; libelle: string; description: string } | null>(null)
@@ -278,7 +287,8 @@ function editer(cat: Categorie) {
 function enregistrerEdition() {
   return faire(async () => {
     const e = edition.value!
-    await api.modifier(e.cle, { libelle: e.libelle.trim(), description: e.description.trim() })
+    const r = await api.modifier(e.cle, { libelle: e.libelle.trim(), description: e.description.trim() })
+    if (r.resync_conseillee) resyncConseillee.value = true
     edition.value = null
     return `Catégorie « ${e.libelle.trim()} » enregistrée.`
   })
@@ -288,6 +298,7 @@ function supprimer() {
   return faire(async () => {
     const cat = aSupprimer.value!
     const r = await api.supprimer(cat.cle)
+    if (r.resync_conseillee) resyncConseillee.value = true
     aSupprimer.value = null
     return `Catégorie « ${cat.libelle} » supprimée — ${r.collections_declassees} collection(s) repassée(s) sous « ${NON_CLASSEES} ».`
   })
@@ -307,8 +318,19 @@ function enregistrerClassement() {
   return faire(async () => {
     const affectations = Object.fromEntries(Object.entries(brouillon.value).map(([n, cle]) => [n, cle || null]))
     const r = await api.affecter(affectations)
+    if (r.resync_conseillee) resyncConseillee.value = true
     brouillon.value = {}
     return `${r.changees.length} collection(s) reclassée(s).`
+  })
+}
+
+function resynchroniser() {
+  return faire(async () => {
+    const r = await api.resynchroniser()
+    resyncConseillee.value = r.echecs.length > 0
+    return r.echecs.length
+      ? `${r.fiches.length} fiche(s) mise(s) à jour, ${r.echecs.length} en échec : ${r.echecs.map((e: any) => e.collection).join(', ')}.`
+      : `${r.fiches.length} fiche(s) de l'assistant mise(s) à jour.`
   })
 }
 

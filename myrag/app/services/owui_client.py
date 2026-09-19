@@ -70,7 +70,8 @@ TAG_MES_COLLECTIONS = "Mes collections"
 
 
 def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = "",
-                    system_prompt: str = "", suggestions_fournies: bool = False) -> dict:
+                    system_prompt: str = "", suggestions_fournies: bool = False,
+                    tags_geres: set[str] | None = None) -> dict:
     """Ce qu'on envoie au socle : la fiche VOULUE, sans rien effacer de ce qu'on ne gère pas.
 
     Republier une collection réécrivait la fiche entière : le prompt système réglé dans
@@ -80,9 +81,11 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
     - `params` : ceux de la fiche existante ; `system` n'est remplacé que si un prompt
       est FOURNI (un prompt vide ne veut pas dire « effacer »).
     - `meta` : les clés que Mes collections ne gère pas sont gardées ; une description
-      vide ne remplace pas une description rédigée ; les étiquettes posées ailleurs
-      restent, « Mes collections » s'y ajoute ; les suggestions ne sont remplacées que
-      si l'appelant en fournit.
+      vide ne remplace pas une description rédigée (une mention « ⚠ … » posée par une
+      publication précédente n'en est pas une) ; les étiquettes posées ailleurs restent,
+      les nôtres — `tags_geres` : « Mes collections » et les libellés de catégorie —
+      sont remplacées par celles d'aujourd'hui ; les suggestions ne sont remplacées
+      que si l'appelant en fournit.
     Fonction pure : ni réseau ni horloge.
     """
     fiche = {**voulue, "meta": dict(voulue.get("meta") or {}), "params": dict(voulue.get("params") or {})}
@@ -95,15 +98,16 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
 
     meta = {k: v for k, v in meta_avant.items() if k not in _META_GERE}
     meta.update(fiche["meta"])
-    if not description and meta_avant.get("description"):
+    if not description and meta_avant.get("description") and not str(meta_avant["description"]).startswith("⚠"):
         meta["description"] = meta_avant["description"]
     if not suggestions_fournies and meta_avant.get("suggestion_prompts"):
         meta["suggestion_prompts"] = meta_avant["suggestion_prompts"]
     if meta_avant.get("profile_image_url"):
         meta["profile_image_url"] = meta_avant["profile_image_url"]
     noms = [t.get("name") for t in meta.get("tags") or [] if isinstance(t, dict)]
+    geres = set(tags_geres or ()) | {TAG_MES_COLLECTIONS} | set(noms)
     autres = [t for t in meta_avant.get("tags") or []
-              if isinstance(t, dict) and t.get("name") and t.get("name") not in noms]
+              if isinstance(t, dict) and t.get("name") and t.get("name") not in geres]
     meta["tags"] = autres + list(meta.get("tags") or [])
     fiche["meta"] = meta
     return fiche
@@ -173,6 +177,9 @@ class OwuiClient:
         access_control: dict | None = None,
         access_grants: list[dict] | None = None,
         suggestion_prompts: list[str] | None = None,
+        tags: list[str] | None = None,
+        tags_geres: set[str] | None = None,
+        description_par_defaut: str = "",
     ) -> dict:
         """Create or update an OWUI Model.
 
@@ -187,12 +194,14 @@ class OwuiClient:
             "id": model_id,
             "name": name,
             "meta": {
-                "description": description or f"Collection MyRAG {model_id}",
+                "description": description or description_par_defaut or f"Collection MyRAG {model_id}",
                 "profile_image_url": "/static/favicon.png",
                 "suggestion_prompts": [
                     {"content": p} for p in (suggestion_prompts or [])
                 ],
-                "tags": [{"name": TAG_MES_COLLECTIONS}],
+                # La catégorie d'abord (le sélecteur de l'assistant filtre par étiquette),
+                # puis la marque de provenance, qui sert à retrouver NOS fiches.
+                "tags": [{"name": t} for t in dict.fromkeys([*(tags or []), TAG_MES_COLLECTIONS]) if t],
                 "capabilities": {"vision": False, "usage": False, "citations": True},
             },
             "params": (
@@ -215,7 +224,7 @@ class OwuiClient:
             "is_active": True,
         }
         body = fusionner_fiche(existante, body, description=description, system_prompt=system_prompt,
-                               suggestions_fournies=suggestion_prompts is not None)
+                               suggestions_fournies=suggestion_prompts is not None, tags_geres=tags_geres)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             # Update first — succeeds only if the model already exists.

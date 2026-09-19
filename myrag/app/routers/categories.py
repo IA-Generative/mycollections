@@ -66,13 +66,16 @@ async def affecter(req: Affectations, moi: Identite = Depends(exiger_superadmin)
         bilan = await store.affecter(req.affectations, moi.hash)
     except store.Introuvable as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return {**bilan, "categories": await store.lister()}
+    # Le classement est l'étiquette des fiches de l'assistant : on le DIT, on ne le rejoue pas
+    # d'office (le socle peut être lent, et l'administration classe souvent en plusieurs fois).
+    return {**bilan, "categories": await store.lister(), "resync_conseillee": bool(bilan["changees"])}
 
 
 @router.patch("/{cle}")
 async def modifier(cle: str, req: ModifierCategorie, moi: Identite = Depends(exiger_superadmin)):
     try:
-        return {"categorie": await store.modifier(cle, libelle=req.libelle, description=req.description)}
+        return {"categorie": await store.modifier(cle, libelle=req.libelle, description=req.description),
+                "resync_conseillee": req.libelle is not None}
     except store.Introuvable:
         raise HTTPException(status_code=404, detail=f"Catégorie inconnue : {cle}")
 
@@ -80,6 +83,7 @@ async def modifier(cle: str, req: ModifierCategorie, moi: Identite = Depends(exi
 @router.delete("/{cle}")
 async def supprimer(cle: str, moi: Identite = Depends(exiger_superadmin)):
     try:
-        return {"supprimee": cle, "collections_declassees": await store.supprimer(cle)}
+        declassees = await store.supprimer(cle)
+        return {"supprimee": cle, "collections_declassees": declassees, "resync_conseillee": declassees > 0}
     except store.Introuvable:
         raise HTTPException(status_code=404, detail=f"Catégorie inconnue : {cle}")
