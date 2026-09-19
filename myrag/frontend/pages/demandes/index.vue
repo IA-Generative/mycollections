@@ -8,7 +8,10 @@
         <NuxtLink to="/guide" class="fr-link">Comment ça se passe ?</NuxtLink>
       </p>
       <p class="fr-text--sm" style="color:var(--text-mention-grey)">
-        Seuil de chantier : <strong>{{ capacites.seuil_chantier }} soutiens et un garant</strong> — un paramètre de la plateforme, figé sur chaque demande à sa création.
+        <strong>Quand une demande devient-elle un chantier ?</strong>
+        Quand <strong>{{ capacites.seuil_chantier }} collègues</strong> l’ont soutenue — la preuve que le besoin est partagé —
+        et qu’<strong>un garant</strong> s’est proposé : la personne qui veille à ce que les données restent justes et à jour (environ deux heures par mois).
+        Ce nombre est fixé au dépôt de la demande : s’il change plus tard, les demandes déjà ouvertes gardent le leur.
       </p>
     </div>
 
