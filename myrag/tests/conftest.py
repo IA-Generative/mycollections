@@ -36,7 +36,7 @@ from app.auth import CurrentUser, current_user  # noqa: E402
 TABLES_PAR_COLLECTION = (
     "source_files", "eval_runs", "eval_datasets", "feedback", "ingest_jobs",
     "publication_history", "publications",
-    "proposition", "signalement", "grille_controle", "evenement",
+    "proposition", "signalement", "grille_controle", "evenement", "usage_question",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/myrag/superadmin"])

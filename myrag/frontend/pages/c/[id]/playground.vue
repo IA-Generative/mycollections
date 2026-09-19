@@ -247,6 +247,9 @@ function trunc(s: string, n: number): string {
 
 onMounted(() => {
   bank.autoSeedIfEmpty()
+  // « Poser cette question » depuis l'accueil : la question arrive saisie, il reste à l'envoyer.
+  const q = String(route.query.q || '').trim()
+  if (q && !draft.value) draft.value = q.slice(0, 500)
 })
 </script>
 
