@@ -103,11 +103,11 @@ def test_check_name_autoritaire(mock_cls, app_client):
     client.post("/api/collections", json={"name": "victor"})
 
     # déjà en base
-    assert client.get("/api/collections/check-name", params={"name": "victor"}).json() == {
-        "available": False, "reason": "db"}
+    rep = client.get("/api/collections/check-name", params={"name": "victor"}).json()
+    assert (rep["available"], rep["reason"]) == (False, "db") and rep["message"]
     # partition OpenRAG seulement
-    assert client.get("/api/collections/check-name", params={"name": "occupee"}).json() == {
-        "available": False, "reason": "partition"}
+    rep = client.get("/api/collections/check-name", params={"name": "occupee"}).json()
+    assert (rep["available"], rep["reason"]) == (False, "partition")
     # libre
     assert client.get("/api/collections/check-name", params={"name": "tout-neuf"}).json() == {
         "available": True}

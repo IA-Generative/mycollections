@@ -24,7 +24,8 @@ def client():
 @pytest.fixture
 def collection_name(request):
     """Unique collection name per test; auto-cleaned after."""
-    name = f"pytest-{request.node.name}"[:60]
+    # Un identifiant valide (app.services.nommage) : tirets, ≤ 40 caractères.
+    name = ("py-" + request.node.name.lower().replace("_", "-"))[:40].strip("-")
 
     async def _purge():
         import sqlite3

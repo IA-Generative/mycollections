@@ -48,20 +48,32 @@
     </div>
 
     <div class="fr-col-8">
-      <div class="fr-input-group" :class="nameStatus === 'taken' ? 'fr-input-group--error' : nameStatus === 'available' ? 'fr-input-group--valid' : ''">
+      <div class="fr-input-group">
+        <label class="fr-label" for="titre">
+          Titre de la collection *
+          <span class="fr-hint-text">Ce que liront vos collègues, au catalogue et dans l'assistant — par exemple « Codes NATINF ».</span>
+        </label>
+        <input id="titre" class="fr-input" v-model="form.titre" maxlength="255" placeholder="Un titre qui dit ce qu'elle contient"
+               @input="surTitre" />
+      </div>
+
+      <div class="fr-input-group fr-mt-2w" :class="nameStatus === 'taken' ? 'fr-input-group--error' : nameStatus === 'available' ? 'fr-input-group--valid' : ''">
         <label class="fr-label" for="name">
-          Nom de la collection *
-          <span class="fr-hint-text">Identifiant unique, en minuscules, sans espaces (ex: droit-etrangers, faq-rh, doc-technique-v2)</span>
+          Identifiant *
+          <span class="fr-hint-text">
+            Proposé d'après le titre, modifiable. C'est ce que taperont les applications :
+            <code>openrag-{{ form.name || 'identifiant' }}</code>. Il ne changera plus.
+          </span>
         </label>
         <div style="display:flex;gap:0.5rem;align-items:flex-start;">
-          <input id="name" class="fr-input" v-model="form.name" placeholder="un-nom-clair-et-unique"
-                 @blur="checkDuplicates" @input="nameStatus = ''" style="flex:1;" />
+          <input id="name" class="fr-input" v-model="form.name" placeholder="codes-natinf"
+                 @blur="checkDuplicates" @input="identifiantTouche = true; nameStatus = ''; programmerVerification()" style="flex:1;" />
           <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="checkNameAvailability" :disabled="!form.name.trim()">
             Verifier
           </button>
         </div>
-        <p v-if="nameStatus === 'available'" class="fr-valid-text">✓ Ce nom est disponible</p>
-        <p v-if="nameStatus === 'taken'" class="fr-error-text">Ce nom est deja utilise</p>
+        <p v-if="nameStatus === 'available'" class="fr-valid-text">✓ Cet identifiant est disponible</p>
+        <p v-if="nameStatus === 'taken'" class="fr-error-text">{{ messageRefus || 'Cet identifiant est déjà pris' }}</p>
         <div v-if="nameSuggestion" class="fr-mt-1w" style="display:flex;align-items:center;gap:0.5rem;">
           <span class="fr-text--sm" style="color:#666;">Suggestion :</span>
           <code class="fr-text--sm">{{ nameSuggestion }}</code>
@@ -222,7 +234,7 @@
 
       <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
         <NuxtLink to="/admin/create" class="fr-btn fr-btn--secondary">← Precedent</NuxtLink>
-        <button class="fr-btn" @click="createAndNext" :disabled="creating || !form.name.trim()">
+        <button class="fr-btn" @click="createAndNext" :disabled="creating || !form.name.trim() || !form.titre.trim() || nameStatus === 'taken'">
           {{ creating ? 'Creation...' : 'Suivant →' }}
         </button>
       </div>
@@ -233,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { slugifyCollectionName, isConflictError } from '~/utils/collectionName'
+import { slugifyCollectionName, isConflictError, deriverIdentifiant, motifRefus, REGLES_PAR_DEFAUT, type ReglesNommage } from '~/utils/collectionName'
 
 const route = useRoute()
 const router = useRouter()
@@ -316,7 +328,7 @@ function applyProfile() {
 const initProfile = profiles.find(p => p.key === (defaultProfile[source] || 'generique'))
 
 const form = ref({
-  name: '', description: '',
+  titre: '', name: '', description: '',
   strategy: initProfile?.strategy || 'auto',
   sensitivity: 'public',
   prompt_template: initProfile?.prompt || 'generic',
@@ -334,32 +346,59 @@ const error = ref('')
 const duplicateWarning = ref<any>(null)
 const nameStatus = ref('')  // '' | 'available' | 'taken'
 const nameSuggestion = ref('')
+const messageRefus = ref('')
+const regles = ref<ReglesNommage>(REGLES_PAR_DEFAUT)
+/** Tant que l'identifiant n'a pas été retouché à la main, il suit le titre. */
+const identifiantTouche = ref(false)
+let minuterie: ReturnType<typeof setTimeout> | null = null
 
-function suggestName(name: string): string {
-  // Suggestion best-effort à partir de la liste locale (juste une aide).
-  let suffix = 2
-  while (allCollections.value.some(c => c.name.toLowerCase() === `${name}-v${suffix}`)) {
-    suffix++
-  }
-  return `${name}-v${suffix}`
+function surTitre() {
+  if (identifiantTouche.value) return
+  form.value.name = deriverIdentifiant(form.value.titre, regles.value.max)
+  nameStatus.value = ''
+  programmerVerification()
 }
 
-async function checkNameAvailability() {
+/** Vérifie seul, une demi-seconde après la dernière frappe. */
+function programmerVerification() {
+  if (minuterie) clearTimeout(minuterie)
+  // Pas de réécriture du champ pendant la frappe (un tiret final disparaîtrait sous les doigts).
+  minuterie = setTimeout(() => {
+    if (form.value.name.trim() && !form.value.name.endsWith('-')) checkNameAvailability(false)
+  }, 500)
+}
+
+/** Un identifiant pris : on ne propose PAS `-v2` (c'est exactement le genre de nom qu'on ne
+ *  veut plus) — on invite à préciser le contenu. */
+function suggestName(_name: string): string {
+  return ''
+}
+
+async function checkNameAvailability(reecrire: boolean | Event = true) {
   if (!form.value.name.trim()) return
   const name = slugifyCollectionName(form.value.name)
-  form.value.name = name  // normalize
+  if (reecrire !== false) form.value.name = name  // normalize
 
   // Vérif AUTORITAIRE côté serveur : la liste locale est filtrée par groupe, donc
   // un nom déjà pris mais invisible y paraîtrait « disponible » puis échouerait
   // en 409 à la création.
+  // D'abord les règles de forme, sans aller au serveur (il reste l'autorité à la création).
+  const motif = motifRefus(name, regles.value)
+  if (motif) {
+    nameStatus.value = 'taken'
+    messageRefus.value = regles.value.motifs[motif] || 'Identifiant refusé.'
+    return
+  }
   try {
-    const { available } = await get('/api/collections/check-name', { name })
+    const { available, message } = await get('/api/collections/check-name', { name })
     if (available) {
       nameStatus.value = 'available'
       nameSuggestion.value = ''
+      messageRefus.value = ''
     } else {
       nameStatus.value = 'taken'
-      nameSuggestion.value = suggestName(name)
+      messageRefus.value = (message || 'Cet identifiant est déjà pris.') + ' Précisez le contenu (un périmètre, une année, un service).'
+      nameSuggestion.value = ''
     }
   } catch {
     // En cas d'échec de la vérif, on ne bloque pas : la création reste protégée
@@ -418,8 +457,7 @@ async function createAndNext() {
       // Nom déjà pris (ex. collection invisible car cloisonnée) : on guide vers
       // un autre nom au lieu d'afficher l'erreur API brute, et on reste sur l'étape.
       nameStatus.value = 'taken'
-      nameSuggestion.value = suggestName(form.value.name)
-      error.value = `Le nom « ${form.value.name} » est déjà pris. Choisissez-en un autre (suggestion : ${nameSuggestion.value}).`
+      error.value = `L'identifiant « ${form.value.name} » est déjà pris. Précisez le contenu (un périmètre, une année, un service).`
     } else {
       error.value = e.message
     }
@@ -428,6 +466,11 @@ async function createAndNext() {
 }
 
 onMounted(async () => {
+  // Les règles d'identifiant du serveur (préfixes refusés réglables) — demandées À PART : la
+  // liste des collections, elle, attend OpenRAG et peut tarder.
+  get('/api/collections/regles-nommage')
+    .then((r) => { regles.value = { ...REGLES_PAR_DEFAUT, ...r } })
+    .catch(() => {})
   try {
     const [tplData, colData] = await Promise.all([
       get('/api/collections/templates'),

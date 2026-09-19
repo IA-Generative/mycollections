@@ -121,7 +121,12 @@ def creer_collection(client, en_tant_que):
 @pytest.fixture
 def nom(request, purger):
     """Un nom de collection unique par test, purgé après."""
-    n = ("t-" + request.node.name.lower().replace("_", "-").replace("[", "-").replace("]", ""))[:60]
+    # ≤ 40 caractères, comme tout identifiant (app.services.nommage) : le début du nom du test
+    # pour se repérer, une empreinte pour ne pas se marcher dessus entre tests voisins.
+    import hashlib
+    import re
+    brut = re.sub(r"[^a-z0-9]+", "-", request.node.name.lower()).strip("-")
+    n = f"t-{brut[:30].strip('-')}-{hashlib.sha1(request.node.name.encode()).hexdigest()[:6]}"
     purger(n)
     yield n
     purger(n)
