@@ -144,3 +144,18 @@ def test_si_la_fiche_est_illisible_on_n_ecrit_rien(monkeypatch, panne):
     with pytest.raises((httpx.HTTPStatusError, httpx.TransportError)):
         _republier()
     assert envois == []
+
+
+def test_resynchroniser_une_fiche_restreinte_ne_l_ouvre_pas(monkeypatch):
+    restreinte = {**EXISTANTE, "access_grants": [{"id": "g1", "principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}]}
+    envois = _socle(monkeypatch, httpx.Response(200, json=restreinte))
+    _republier(access_grants=[{"principal_type": "user", "principal_id": "*", "permission": "read"}], garder_les_droits=True)
+    assert envois[0]["access_grants"] == [{"principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}]
+
+
+def test_resynchroniser_ne_cree_jamais_une_fiche(monkeypatch):
+    from app.services.owui_client import FicheAbsente
+    envois = _socle(monkeypatch, httpx.Response(404, json={"detail": "absent"}))
+    with pytest.raises(FicheAbsente):
+        _republier(garder_les_droits=True)
+    assert envois == []
