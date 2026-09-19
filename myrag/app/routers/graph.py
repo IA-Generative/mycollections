@@ -1,9 +1,13 @@
 """Graph router — article reference graph API + viewer."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
-from app.services.graph_builder import GraphBuilder
+from app.auth import CurrentUser, current_user
+from app.services import access
+from app.services.collection_store import get_collection, update_collection
+from app.services.graph_builder import GraphBuilder, GraphImportError
 
 router = APIRouter(prefix="/graph", tags=["Graph"])
 
@@ -93,10 +97,55 @@ async def graph_config():
     }
 
 
+class GraphImportRequest(BaseModel):
+    nodes: list[dict]
+    edges: list[dict] = []
+
+
+@router.put("/{collection}")
+async def import_graph(
+    collection: str, req: GraphImportRequest, user: CurrentUser = Depends(current_user)
+):
+    """Dépose un graphe construit hors de MyRAG (même forme que ``graph.json``).
+
+    Réservé aux gestionnaires de la collection. Le graphe importé est protégé :
+    ``POST /{collection}/build`` refuse de l'écraser sans ``force=true``.
+    """
+    fiche = await get_collection(collection)
+    if not fiche:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
+    if not access.can_write(
+        name=collection, created_by=fiche.get("created_by"),
+        user_groups=user.groups, user_sub=user.sub,
+    ):
+        raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
+    try:
+        graph = _builder.import_graph(collection, req.model_dump(), imported_by=user.sub)
+    except GraphImportError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if not fiche.get("graph_enabled"):
+        await update_collection(collection, {"graph_enabled": True})
+    return {
+        "status": "imported",
+        "collection": collection,
+        "nodes": graph.number_of_nodes(),
+        "edges": graph.number_of_edges(),
+    }
+
+
 @router.post("/{collection}/build")
-async def build_graph(collection: str):
+async def build_graph(
+    collection: str,
+    force: bool = Query(False, description="Écraser un graphe importé"),
+):
     """Build or rebuild the graph for a collection from its indexed chunks."""
     from app.services.openrag_client import OpenRAGClient
+
+    if _builder.is_imported(collection) and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Le graphe de '{collection}' a été importé ; force=true pour le reconstruire.",
+        )
 
     client = OpenRAGClient()
 

@@ -3,6 +3,7 @@
 import json
 import math
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import networkx as nx
@@ -86,6 +87,61 @@ def build_graph_from_chunks(chunks: list[dict]) -> nx.DiGraph:
     return graph
 
 
+#: Garde-fous d'un graphe importé : au-delà, le visualiseur et le JSON ne suivent plus.
+MAX_IMPORT_NODES = 20_000
+MAX_IMPORT_EDGES = 200_000
+
+
+class GraphImportError(ValueError):
+    """Le graphe fourni est mal formé ; le message dit quoi corriger."""
+
+
+def graph_from_import(data: dict) -> nx.DiGraph:
+    """Valide un graphe ``{"nodes": [...], "edges": [...]}`` fourni de l'extérieur.
+
+    Même forme que ``graph.json`` : chaque nœud porte un ``id`` unique, chaque arête
+    un ``source`` et un ``target`` qui désignent des nœuds présents. ``referenced_by``
+    est recalculé à partir des arêtes : on ne fait pas confiance à une liste fournie.
+    """
+    nodes, edges = data.get("nodes"), data.get("edges")
+    if not isinstance(nodes, list) or not nodes:
+        raise GraphImportError("« nodes » doit être une liste non vide")
+    if not isinstance(edges, list):
+        raise GraphImportError("« edges » doit être une liste")
+    if len(nodes) > MAX_IMPORT_NODES or len(edges) > MAX_IMPORT_EDGES:
+        raise GraphImportError(
+            f"graphe trop grand : {MAX_IMPORT_NODES} nœuds et {MAX_IMPORT_EDGES} arêtes au plus"
+        )
+
+    graph = nx.DiGraph()
+    for node in nodes:
+        node_id = node.get("id") if isinstance(node, dict) else None
+        if not isinstance(node_id, str) or not node_id.strip():
+            raise GraphImportError("chaque nœud doit porter un « id » texte non vide")
+        if node_id in graph:
+            raise GraphImportError(f"identifiant de nœud en double : {node_id}")
+        attrs = {k: v for k, v in node.items() if k != "id"}
+        attrs.setdefault("label", node_id)
+        attrs.setdefault("entity_type", "article")
+        attrs["referenced_by"] = []
+        graph.add_node(node_id, **attrs)
+
+    for edge in edges:
+        source = edge.get("source") if isinstance(edge, dict) else None
+        target = edge.get("target") if isinstance(edge, dict) else None
+        if source not in graph or target not in graph:
+            raise GraphImportError(f"arête vers un nœud absent : {source} → {target}")
+        if source == target:
+            continue
+        attrs = {k: v for k, v in edge.items() if k not in ("source", "target")}
+        attrs.setdefault("description", "cite")
+        attrs.setdefault("weight", 1.0)
+        graph.add_edge(source, target, **attrs)
+        if source not in graph.nodes[target]["referenced_by"]:
+            graph.nodes[target]["referenced_by"].append(source)
+    return graph
+
+
 class GraphBuilder:
     """Manages graphs per collection with persistence."""
 
@@ -121,6 +177,9 @@ class GraphBuilder:
             "nodes": [],
             "edges": [],
         }
+        if graph.graph:
+            # Provenance du graphe (import externe…) : doit survivre à un aller-retour disque.
+            data["meta"] = dict(graph.graph)
 
         for node_id, attrs in graph.nodes(data=True):
             data["nodes"].append({"id": node_id, **attrs})
@@ -138,6 +197,7 @@ class GraphBuilder:
 
         data = json.loads(path.read_text())
         graph = nx.DiGraph()
+        graph.graph.update(data.get("meta") or {})
 
         for node in data.get("nodes", []):
             node_id = node.pop("id")
@@ -150,6 +210,26 @@ class GraphBuilder:
 
         self._graphs[collection] = graph
         return graph
+
+    def import_graph(self, collection: str, data: dict, imported_by: str = "") -> nx.DiGraph:
+        """Remplace le graphe d'une collection par un graphe construit ailleurs.
+
+        Sert aux corpus dont les renvois sont connus à la source (liens Légifrance,
+        par exemple) et que ``build`` ne saurait pas reconstruire depuis les morceaux.
+        """
+        graph = graph_from_import(data)
+        graph.graph.update({
+            "origin": "import",
+            "imported_by": imported_by,
+            "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+        self._graphs[collection] = graph
+        self.save(collection)
+        return graph
+
+    def is_imported(self, collection: str) -> bool:
+        graph = self.get(collection)
+        return bool(graph is not None and graph.graph.get("origin") == "import")
 
     def get_subgraph(
         self, collection: str, article_ids: list[str], depth: int = 1
