@@ -29,6 +29,17 @@
         <div class="fr-card fr-enlarge-link">
           <div class="fr-card__body">
             <div class="fr-card__content">
+              <h3 class="fr-card__title"><NuxtLink to="/admin/categories">Catégories</NuxtLink></h3>
+              <p class="fr-card__desc">Les rubriques du catalogue, leur ordre, et le classement de chaque collection — appliqué tout de suite</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fr-col-4">
+        <div class="fr-card fr-enlarge-link">
+          <div class="fr-card__body">
+            <div class="fr-card__content">
               <h3 class="fr-card__title"><NuxtLink to="/admin/amorces">Amorces</NuxtLink></h3>
               <p class="fr-card__desc">Les collections constituées depuis l'open data ; import rejouable ; critère d'ouverture de la section collaborative</p>
             </div>
@@ -89,7 +100,10 @@
         </thead>
         <tbody>
           <tr v-for="col in collections" :key="col.name">
-            <td><NuxtLink :to="`/c/${col.name}`">{{ col.name }}</NuxtLink></td>
+            <td>
+              <NuxtLink :to="`/c/${col.name}`">{{ titreDe(col) }}</NuxtLink><br />
+              <code class="fr-text--xs" style="color:var(--text-mention-grey);">{{ col.name }}</code>
+            </td>
             <td>{{ col.strategy }}</td>
             <td><span class="fr-badge fr-badge--sm">{{ col.sensitivity }}</span></td>
             <td>{{ col.graph_enabled ? '✅' : '—' }}</td>
@@ -129,6 +143,8 @@
 </template>
 
 <script setup lang="ts">
+import { titreDe } from '~/utils/catalogue'
+
 definePageMeta({ middleware: 'admin-only' })
 const { get, post } = useApi()
 

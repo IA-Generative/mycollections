@@ -8,6 +8,7 @@
       "connecteur": "natinfo",
       "source_url": "https://natinfo.app",
       "collection": "amorce-natinf",
+      "categorie": "securite-delinquance",
       "garant_pressenti": "Bureau de la législation pénale (à confirmer)",
       "grille": {
         "source_licence": "API natinfo.app — reprise de la nomenclature NATINF (ministère de la Justice), Licence Ouverte 2.0",
@@ -170,6 +171,7 @@
       "connecteur": "ssmsi-delinquance",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-ssmsi-delinquance",
+      "categorie": "securite-delinquance",
       "garant_pressenti": "SSMSI, pôle diffusion (à confirmer)",
       "grille": {
         "source_licence": "data.gouv.fr, API tabulaire — jeux du SSMSI, Licence Ouverte 2.0",
@@ -329,6 +331,7 @@
       "connecteur": "justice-administrative",
       "source_url": "https://opendata.justice-administrative.fr",
       "collection": "amorce-ta-caa-ceseda",
+      "categorie": "droit-etrangers",
       "garant_pressenti": "Direction des étrangers, bureau du contentieux (à confirmer)",
       "grille": {
         "source_licence": "opendata.justice-administrative.fr — fonds DCE/DCA/DTA, ZIP mensuels XML, Licence Ouverte 2.0",
@@ -502,6 +505,7 @@
       "connecteur": "rne-elus",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-rne-elus",
+      "categorie": "elus-vie-publique",
       "garant_pressenti": "Bureau des élections (à confirmer)",
       "grille": {
         "source_licence": "data.gouv.fr, API tabulaire — Répertoire national des élus (ministère de l'Intérieur), Licence Ouverte 2.0",
@@ -686,6 +690,7 @@
       "connecteur": "sdis-interventions",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-sdis-interventions",
+      "categorie": "securite-civile-routiere",
       "garant_pressenti": "DGSCGC, bureau des statistiques (à confirmer)",
       "grille": {
         "source_licence": "data.gouv.fr, API tabulaire — statistiques des SIS (DGSCGC), Licence Ouverte 2.0",
@@ -870,6 +875,7 @@
       "connecteur": "baac",
       "source_url": "https://www.data.gouv.fr/",
       "collection": "amorce-baac",
+      "categorie": "securite-civile-routiere",
       "garant_pressenti": "ONISR (à confirmer)",
       "grille": {
         "source_licence": "data.gouv.fr, API tabulaire — bases BAAC de l'ONISR, Licence Ouverte 2.0",
@@ -1061,6 +1067,7 @@
       "connecteur": "guide",
       "source_url": "/guide",
       "collection": "guide-soyez-acteurs",
+      "categorie": "guides-demonstrations",
       "garant_pressenti": "Équipe de la bêta MirAI",
       "grille": {
         "source_licence": "Rédigé par l'équipe de la bêta ; réutilisable librement dans le ministère.",

@@ -3,12 +3,12 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">System Prompt</a></li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">System Prompt — {{ id }}</h1>
+    <h1 class="fr-h3">System Prompt — {{ titre }}</h1>
 
     <div class="fr-grid-row fr-grid-row--gutters">
       <!-- Left: Editor -->
@@ -75,6 +75,7 @@
 <script setup lang="ts">
 const route = useRoute()
 const id = route.params.id as string
+const { titre } = useTitreCollection(id)
 const { get, patch } = useApi()
 
 const prompt = ref('')

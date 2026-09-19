@@ -25,7 +25,7 @@
 
     <!-- Search + toggle -->
     <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
-      <div class="fr-col-12 fr-col-md-8">
+      <div class="fr-col-12 fr-col-md-5">
         <div class="fr-search-bar" role="search">
           <label class="fr-label" for="search">Rechercher une collection</label>
           <input class="fr-input" id="search" type="search" v-model="search"
@@ -33,7 +33,15 @@
           <button class="fr-btn" @click="">Rechercher</button>
         </div>
       </div>
-      <div class="fr-col-12 fr-col-md-4" style="display:flex;align-items:flex-end;">
+      <div class="fr-col-12 fr-col-md-4">
+        <label class="fr-sr-only" for="filtre-categorie">Catégorie</label>
+        <select id="filtre-categorie" class="fr-select" v-model="categorieChoisie">
+          <option value="">Toutes les catégories</option>
+          <option v-for="c in categories" :key="c.cle" :value="c.cle">{{ c.libelle }}</option>
+          <option value="__aucune__">{{ NON_CLASSEES }}</option>
+        </select>
+      </div>
+      <div class="fr-col-12 fr-col-md-3" style="display:flex;align-items:flex-end;">
         <div class="fr-toggle">
           <input type="checkbox" class="fr-toggle__input" id="show-archived" v-model="showArchived" @change="loadCollections" />
           <label class="fr-toggle__label" for="show-archived">Afficher les archivees</label>
@@ -61,10 +69,20 @@
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="col in filtered" :key="col.name" :style="col.archived_at ? 'opacity:0.65;' : ''">
+          <tbody v-for="groupe in groupes" :key="groupe.cle || '__aucune__'">
+            <tr>
+              <th colspan="6" scope="colgroup" style="background:var(--background-alt-grey);text-align:left;">
+                {{ groupe.libelle }}
+                <span class="fr-text--xs" style="font-weight:400;color:var(--text-mention-grey);">
+                  — {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
+                </span>
+              </th>
+            </tr>
+            <tr v-for="col in groupe.collections" :key="col.name" :style="col.archived_at ? 'opacity:0.65;' : ''">
               <td>
-                <NuxtLink :to="`/c/${col.name}`" class="fr-link">{{ col.name }}</NuxtLink>
+                <NuxtLink :to="`/c/${col.name}`" class="fr-link">{{ titreDe(col) }}</NuxtLink>
+                <br />
+                <code class="fr-text--xs" style="color:var(--text-mention-grey);" title="Identifiant technique : ce que tapent les applications (openrag-…)">{{ col.name }}</code>
               </td>
               <td>{{ col.description || '—' }}</td>
               <td>
@@ -87,7 +105,7 @@
                 <div v-if="col.contact_name">
                   {{ col.contact_name }}
                   <br v-if="col.contact_email" />
-                  <a v-if="col.contact_email" :href="`mailto:${col.contact_email}?subject=Collection MyRAG : ${col.name}`"
+                  <a v-if="col.contact_email" :href="`mailto:${col.contact_email}?subject=Collection : ${titreDe(col)} (${col.name})`"
                      class="fr-link fr-text--sm">
                     {{ col.contact_email }}
                   </a>
@@ -119,7 +137,10 @@
         </table>
       </div>
 
-      <p class="fr-text--sm fr-mt-2w">{{ filtered.length }} collection(s) trouvee(s)</p>
+      <p class="fr-text--sm fr-mt-2w">
+        {{ filtered.length }} collection(s) trouvee(s)
+        <template v-if="isAdmin"> — <NuxtLink to="/admin/categories" class="fr-link fr-text--sm">Régler les catégories et le classement</NuxtLink></template>
+      </p>
     </div>
 
     <div class="fr-btns-group fr-mt-4w">
@@ -141,7 +162,7 @@
               <div class="fr-modal__content">
                 <h1 id="purge-title" class="fr-modal__title">
                   <span class="fr-icon-warning-fill" aria-hidden="true"></span>
-                  Purger definitivement {{ purgeTarget.name }} ?
+                  Purger definitivement « {{ titreDe(purgeTarget) }} » ?
                 </h1>
                 <p>Cette action est <strong>irreversible</strong>. Elle supprime :</p>
                 <ul>
@@ -151,7 +172,7 @@
                 </ul>
                 <div class="fr-input-group" :class="purgeError ? 'fr-input-group--error' : ''">
                   <label class="fr-label" for="purge-confirm">
-                    Pour confirmer, tapez le nom de la collection : <strong>{{ purgeTarget.name }}</strong>
+                    Pour confirmer, tapez l'identifiant de la collection : <strong>{{ purgeTarget.name }}</strong>
                   </label>
                   <input class="fr-input" id="purge-confirm" type="text" v-model="purgeConfirm"
                          @keyup.enter="confirmPurge" />
@@ -180,9 +201,16 @@
 </template>
 
 <script setup lang="ts">
-const { get, post, del } = useApi()
+import type { Categorie, Collection } from '~/types/collection'
+import { NON_CLASSEES, filtrerCollections, grouperParCategorie, titreDe } from '~/utils/catalogue'
 
-const collections = ref<any[]>([])
+const { get, post, del } = useApi()
+const { isAdmin } = useAdminAuth()
+const { lister: listerCategories } = useCategories()
+
+const collections = ref<Collection[]>([])
+const categories = ref<Categorie[]>([])
+const categorieChoisie = ref('')
 const search = ref('')
 const showArchived = ref(false)
 
@@ -192,16 +220,15 @@ const purgeError = ref('')
 const purging = ref(false)
 
 const filtered = computed(() => {
-  if (!search.value.trim()) return collections.value
-  const q = search.value.toLowerCase()
-  return collections.value.filter(c =>
-    c.name?.toLowerCase().includes(q) ||
-    c.description?.toLowerCase().includes(q) ||
-    c.contact_name?.toLowerCase().includes(q) ||
-    c.source?.type?.toLowerCase().includes(q) ||
-    c.legifrance_source_id?.toLowerCase().includes(q)
-  )
+  const connues = new Set(categories.value.map(c => c.cle))
+  const parRubrique = collections.value.filter((c) => {
+    if (!categorieChoisie.value) return true
+    if (categorieChoisie.value === '__aucune__') return !c.categorie || !connues.has(c.categorie)
+    return c.categorie === categorieChoisie.value
+  })
+  return filtrerCollections(parRubrique, search.value)
 })
+const groupes = computed(() => grouperParCategorie(filtered.value, categories.value))
 
 function stateBadge(state: string) {
   return {
@@ -228,7 +255,7 @@ async function loadCollections() {
 }
 
 async function onArchive(col: any) {
-  if (!confirm(`Archiver la collection "${col.name}" ? Elle sera depubliee et masquee du catalogue. Reversible.`)) return
+  if (!confirm(`Archiver la collection « ${titreDe(col)} » (${col.name}) ? Elle sera depubliee et masquee du catalogue. Reversible.`)) return
   try {
     await post(`/api/collections/${col.name}/archive`)
     await loadCollections()
@@ -267,5 +294,8 @@ async function confirmPurge() {
   }
 }
 
-onMounted(loadCollections)
+onMounted(async () => {
+  await loadCollections()
+  try { categories.value = await listerCategories() } catch (e) { console.error(e) }
+})
 </script>

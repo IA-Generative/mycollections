@@ -31,6 +31,13 @@ async def identite(user: CurrentUser = Depends(current_user)) -> Identite:
         raise HTTPException(status_code=401, detail="Jeton sans identité exploitable")
 
 
+async def exiger_superadmin(moi: Identite = Depends(identite)) -> Identite:
+    """Dépendance des gestes d'administration : 403 pour tout autre que `/myrag/superadmin`."""
+    if not moi.superadmin:
+        raise HTTPException(status_code=403, detail="Geste réservé à l'administration")
+    return moi
+
+
 def capacite(nom: str):
     async def _dep() -> None:
         if (await capacites.lire_async()).get(nom) is not True:

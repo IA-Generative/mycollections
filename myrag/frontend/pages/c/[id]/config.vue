@@ -3,12 +3,12 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">Configuration</a></li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">Configuration — {{ id }}</h1>
+    <h1 class="fr-h3">Configuration — {{ titre }}</h1>
 
     <div v-if="loading" class="fr-callout"><p>Chargement...</p></div>
 
@@ -32,6 +32,19 @@
         <NuxtLink :to="`/c/${id}/publish`" class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w">
           {{ estServie ? 'Modifier le partage' : 'Publier la collection' }}
         </NuxtLink>
+      </div>
+
+      <!-- Titre affiché -->
+      <div class="fr-input-group">
+        <label class="fr-label" for="titre-affiche">
+          Titre affiché
+          <span class="fr-hint-text">
+            Ce que lisent vos collègues au catalogue et dans l'assistant — par exemple « Codes NATINF ».
+            L'identifiant technique <code>{{ id }}</code>, lui, ne change pas : c'est celui que tapent les applications.
+          </span>
+        </label>
+        <input id="titre-affiche" class="fr-input" type="text" maxlength="255" v-model="form.titre"
+               :placeholder="titre" />
       </div>
 
       <!-- Description -->
@@ -179,6 +192,7 @@
 <script setup lang="ts">
 const route = useRoute()
 const id = route.params.id as string
+const { titre, retenir } = useTitreCollection(id, { charger: false })
 const { get, post, patch } = useApi()
 const { user } = useAuth()
 
@@ -217,6 +231,7 @@ const currentProfileDesc = computed(() => {
 })
 
 const form = ref({
+  titre: '',
   description: '',
   strategy: 'auto',
   sensitivity: 'public',
@@ -261,7 +276,9 @@ onMounted(async () => {
   try {
     const config = await get(`/api/collections/${id}`)
     partage.value = config.publication || { state: 'draft', targets: [] }
+    retenir(config)
     form.value = {
+      titre: config.titre || '',
       description: config.description || '',
       strategy: config.strategy || 'auto',
       sensitivity: config.sensitivity || 'public',
@@ -356,6 +373,7 @@ async function save() {
     } else {
       await patch(`/api/collections/${id}`, form.value)
     }
+    retenir({ name: id, titre: form.value.titre })
     savedMsg.value = 'Configuration sauvegardee. Retour a la liste dans un instant…'
     savedClass.value = 'fr-alert--success'
     // Leave the success banner visible briefly, then send the user back

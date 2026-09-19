@@ -4,7 +4,7 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">{{ id }}</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">{{ titre }}</a></li>
       </ol>
     </nav>
 
@@ -40,7 +40,11 @@
       <div class="fr-grid-row fr-grid-row--gutters">
         <!-- Left: collection info -->
         <div class="fr-col-8">
-          <h1 class="fr-h2">{{ collection.name }}</h1>
+          <h1 class="fr-h2 fr-mb-1w">{{ titre }}</h1>
+          <p class="fr-text--sm fr-mb-2w" style="color:var(--text-mention-grey);">
+            Identifiant : <code title="Ce que tapent les applications : openrag-…">{{ collection.name }}</code>
+            <template v-if="libelleCategorie"> · {{ libelleCategorie }}</template>
+          </p>
           <p v-if="etat && etat.mention" class="collectif-mention fr-mb-1w">⚠ {{ etat.mention }} — servie à son groupe seulement</p>
           <p class="fr-text--lg">{{ collection.description || 'Pas de description' }}</p>
 
@@ -309,6 +313,8 @@ async function traiterSignalement(sid: string, e2: string) { try { await c.trait
 async function abonner(oui: boolean) { try { await c.abonnerCollection(id, oui); abonne.value = oui } catch (e) { erreurGrille.value = messageErreur(e) } }
 
 const collection = ref<any>(null)
+const { titre, retenir } = useTitreCollection(id, { charger: false })
+const libelleCategorie = ref('')
 const loadError = ref<string>('')
 const adopting = ref(false)
 const adoptError = ref<string>('')
@@ -361,11 +367,17 @@ async function adoptCollection() {
 onMounted(async () => {
   try {
     collection.value = await get(`/api/collections/${id}`)
+    retenir(collection.value)
   } catch (e: any) {
     loadError.value = e?.message || 'erreur de chargement'
     collection.value = null
     loading.value = false
     return
+  }
+  if (collection.value?.categorie) {
+    useCategories().lister()
+      .then((cats) => { libelleCategorie.value = cats.find(k => k.cle === collection.value.categorie)?.libelle || '' })
+      .catch(() => {})
   }
   // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
   chargerCollectif()

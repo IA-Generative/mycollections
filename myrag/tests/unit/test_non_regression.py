@@ -11,7 +11,9 @@ import pytest
 from tests.conftest import TABLES_PAR_COLLECTION, personne
 
 TABLES_HISTORIQUES = {
-    "collections": {"name", "scope", "scope_groups_json", "created_by", "archived_at", "system_prompt"},
+    "collections": {"name", "scope", "scope_groups_json", "created_by", "archived_at", "system_prompt",
+                    "titre", "categorie"},
+    "categories": {"cle", "libelle", "description", "ordre"},
     "publications": {"collection_name", "state", "visibility"},
     "publication_history": {"collection_name", "action", "acted_by"},
     "ingest_jobs": {"job_id", "collection_name", "status"},

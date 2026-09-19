@@ -33,9 +33,14 @@ async def view_article(collection: str, article_id: str):
     # Get incoming references (articles that cite this one)
     referenced_by = node.get("referenced_by", [])
 
+    from app.services.collection_store import get_collection
+    from app.services.nommage import titre_de
+
+    fiche = await get_collection(collection)
     template = _env.get_template("article_view.html")
     html = template.render(
         collection=collection,
+        collection_titre=titre_de(fiche or {"name": collection}),
         article_id=article_id,
         content=node.get("content_preview", ""),
         livre=node.get("livre", ""),

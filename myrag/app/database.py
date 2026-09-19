@@ -34,6 +34,7 @@ class Base(DeclarativeBase):
 
 async def init_db():
     """Create all tables + lightweight in-place migrations. Called on startup."""
+    import app.models.db  # noqa: F401 — sans cet import, create_all ne connaît aucune table
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_add_archived_at(conn)
@@ -48,6 +49,66 @@ async def init_db():
         )
         await _migrate_add_column(conn, "demande_id", "VARCHAR(36)", "VARCHAR(36)")
         await _retro_remplir_etat_collab(conn)
+        # Titre affiché et catégorie (l'identifiant technique ne se lit plus à l'écran).
+        await _migrate_add_column(conn, "titre", "VARCHAR(255) DEFAULT ''", "VARCHAR(255) DEFAULT ''")
+        await _migrate_add_column(conn, "categorie", "VARCHAR(64)", "VARCHAR(64)")
+        await _retro_remplir_titres(conn)
+        await _semer_categories(conn)
+
+
+async def _retro_remplir_titres(conn):
+    """Donne un titre lisible aux collections qui n'en ont pas.
+
+    Trois sources, de la plus sûre à la moins sûre : le catalogue des amorces (titre
+    rédigé), le nom posé à la publication (débarrassé de ses marques), l'identifiant
+    (préfixe de provenance retiré). Idempotent : ne touche que les titres vides — un
+    titre saisi n'est jamais écrasé.
+    """
+    from sqlalchemy import text
+
+    from app.amorces import charger_catalogue
+    from app.services.nommage import titre_depuis_alias, titre_depuis_nom
+
+    sans_titre = [r[0] for r in (await conn.execute(text(
+        "SELECT name FROM collections WHERE titre IS NULL OR titre = ''"
+    ))).fetchall()]
+    if not sans_titre:
+        return
+    du_catalogue = {e["collection"]: e.get("titre", "") for e in charger_catalogue()}
+    alias = {r[0]: r[1] for r in (await conn.execute(text(
+        "SELECT collection_name, alias_name FROM publications"
+    ))).fetchall()}
+    for name in sans_titre:
+        titre = (du_catalogue.get(name) or titre_depuis_alias(alias.get(name), name)
+                 or titre_depuis_nom(name))
+        await conn.execute(text("UPDATE collections SET titre = :t WHERE name = :n"),
+                           {"t": titre[:255], "n": name})
+
+
+async def _semer_categories(conn):
+    """Au premier démarrage seulement (table vide) : les rubriques de départ, et le
+    classement que le catalogue des amorces propose. Ensuite, tout se règle à l'écran
+    d'administration — un redémarrage ne reclasse jamais rien."""
+    from sqlalchemy import text
+
+    from app.amorces import charger_catalogue
+    from app.services.categorie_store import CATEGORIES_DE_DEPART
+
+    if (await conn.execute(text("SELECT COUNT(*) FROM categories"))).scalar():
+        return
+    for ordre, (cle, libelle, description) in enumerate(CATEGORIES_DE_DEPART, start=1):
+        await conn.execute(
+            text("INSERT INTO categories (cle, libelle, description, ordre, cree_le) "
+                 "VALUES (:c, :l, :d, :o, CURRENT_TIMESTAMP)"),
+            {"c": cle, "l": libelle, "d": description, "o": ordre * 10},
+        )
+    cles = {c[0] for c in CATEGORIES_DE_DEPART}
+    for e in charger_catalogue():
+        if e.get("categorie") in cles:
+            await conn.execute(
+                text("UPDATE collections SET categorie = :c WHERE name = :n AND categorie IS NULL"),
+                {"c": e["categorie"], "n": e["collection"]},
+            )
 
 
 async def _retro_remplir_etat_collab(conn):
