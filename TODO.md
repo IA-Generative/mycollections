@@ -6,27 +6,17 @@ suivre sans le perdre.
 
 ---
 
-## Bugs connus (pre-existants a la mise en prod 2026-04-19)
-
-### P3 — Playground crash sur `/api/playground/{n}/chat`
-
-`OpenRAGClient` n'a pas de methode `chat()`. Les appels dans
-[playground.py](myrag/app/routers/playground.py) (lignes 122, 212, 266)
-font un `client.chat(...)` qui crashe en 500. Bloque :
-- le wizard etape 4 (test d'eval)
-- tout le tab Playground sur la fiche collection
-
-Fix : implementer `OpenRAGClient.chat()` en wrappant un POST vers
-`/v1/chat/completions` d'OpenRAG avec `model=openrag-{partition}`.
+## Bugs connus
 
 ### P5 — `POST /graph/{name}/build` renvoie 404 "No documents in collection"
 
-Meme apres indexation OK. Viewer Cytoscape tourne a vide. Pas critique
+*Constat d'avril 2026, a reverifier.* Meme apres indexation OK. Viewer Cytoscape tourne a vide. Pas critique
 (le graph n'est pas un feature critique sur la premiere vague), mais a
 fixer avant d'annoncer la fonctionnalite.
 
 ### P2 — Chunker `article` renvoie 0 chunk sur MD simple
 
+*Toujours vrai : `chunk_by_article` rend une liste vide quand aucun en-tete d'article n'est trouve.*
 Crashe l'upload quand la strategy est `article`. Workaround actuel :
 wizard force `auto`. A corriger dans
 [chunker.py](myrag/app/services/chunker.py) pour que `article` tombe
@@ -38,6 +28,11 @@ marqueurs article.
 ## Ameliorations UX
 
 ### Compteur d'interrogations par collection
+
+*En partie fait : le bac a sable enregistre chaque question (une collection, un instant, un
+condense — jamais le texte), et l'accueil en tire le bilan « ce que vos collections ont rendu
+possible ». Ce compte sous-estime l'usage : l'assistant et l'API d'OpenRAG n'y passent pas. Ce
+qui suit reste la piste pour compter l'usage complet.*
 
 Afficher sur chaque fiche collection (page `/c/{id}`) le nombre de
 requetes RAG qu'a recues son corpus. Aujourd'hui OpenRAG n'expose aucun
@@ -66,8 +61,7 @@ Limites :
 
 ### Flux "adopter une collection orpheline"
 
-Le badge "sans fiche" est en place sur la home. Le backend sait adopter
-(commit 716b4ac). Reste cote frontend : sur une carte orpheline, CTA
+Le badge "sans fiche" est en place sur les cartes de collection. Le backend sait adopter. Reste cote frontend : sur une carte orpheline, CTA
 explicite "Adopter cette collection" qui ouvre un formulaire pre-rempli
 (nom = partition, strategy = auto, sensitivity = public) pour creer
 la fiche en un clic, plutot que de passer par le wizard complet.
@@ -83,17 +77,16 @@ l'utilisateur).
 
 ---
 
-## Plan d'integration global (Lots 1-5, avril 2026)
+## Plan d'integration global (lots 1 a 5)
 
-Plan complet dans la memoire projet (`project_integration_plan.md`).
-Suivi synthetique ici :
+Suivi synthetique :
 
 | Lot | Contenu | Statut |
 |-----|---------|--------|
 | Lot 1 — Auth | OIDC middleware, sync Keycloak groups, OWUI config | Fait |
 | Lot 2 — Admin | Profils d'indexation par partition, eval Q&A + override | Partiel (eval OK, override = cache semantique a faire) |
 | Lot 3 — Drive | Connecteur Drive + liens dans les sources | Fait (picker + sync download OK) |
-| Lot 4 — Feedback | Forwarder OWUI feedback, promotion review → Q&A | A faire |
+| Lot 4 — Feedback | Remontee des avis OWUI, promotion review → Q&A | Fait (tirage periodique depuis la base d'OWUI, idempotent) |
 | Lot 5 — Comms+ERI | Annonces/sondages, endpoints ERI pour OWUI | A faire |
 
 ### Q&A override comme cache semantique (Lot 2)
@@ -102,13 +95,6 @@ Agit comme un cache semantique verifie **avant** la pipeline RAG. Si une
 question tres proche d'une Q&A validee par l'admin arrive, servir
 directement la reponse validee au lieu de regenerer via LLM. Gain :
 qualite constante sur les questions frequentes + reduction cout LLM.
-
-### Forwarder feedback OWUI (Lot 4)
-
-OWUI n'a pas de webhook natif pour les ratings (+1/-1 sur les messages).
-Il faut une pipeline custom OWUI ou un cron qui poll la DB OWUI et
-push vers MyRAG. A prototyper apres ouverture aux utilisateurs (sinon
-pas de feedback a forwarder).
 
 ### Annonces + sondages (Lot 5)
 
@@ -120,16 +106,22 @@ module admin cote MyRAG pour rediger/planifier les annonces.
 
 ## QA et mise en production
 
-### 12 parcours utilisateur a valider en prod
+### Parcours utilisateur a valider en navigateur
 
-Avant d'ouvrir aux utilisateurs finaux, rejouer manuellement en
-navigateur les 12 parcours du wizard + admin sur
-`https://mycollections.fake-domain.name`. Liste exhaustive a redresser
-(actuellement informelle).
+Avant chaque ouverture a de nouveaux utilisateurs, rejouer a la main les
+parcours du wizard et de l'administration. La liste est a ecrire : elle
+est aujourd'hui informelle.
+
+### Scenario de bout en bout, connecte, pour le bac a sable
+
+Le survol d'une puce de source, l'ouverture de la fenetre de lecture et
+les exports ne sont couverts par aucun scenario automatise connecte au
+SSO. Ils ont ete verifies a la main et sur une page d'essai locale
+(voir `docs/sources.md`).
 
 ### Backup automatise de la DB `myrag` (PostgreSQL)
 
 Actuellement aucune sauvegarde programmee. A minima :
-- Dump quotidien via CronJob K8s vers le bucket Object Storage Scaleway
+- Dump quotidien via CronJob Kubernetes vers un stockage objet
 - Retention 30 jours
-- Restoration test trimestrielle
+- Test de restauration trimestriel
