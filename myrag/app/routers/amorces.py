@@ -12,7 +12,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.amorces import charger_catalogue, entree
-from app.routers._collectif_commun import Identite, identite
+from app.routers._collectif_commun import Identite, exiger_superadmin, identite
 from app.services import collectif_store as store
 from app.services.amorces import CONNECTEURS, ingestion
 from app.services.amorces.banque import poser_questions
@@ -52,12 +52,19 @@ async def lister(moi: Identite = Depends(identite)):
             "ouverture": await _ouverture(catalogue, collections)}
 
 
+async def _categorie_connue(cle: str | None) -> str | None:
+    """La rubrique que propose le catalogue, si l'administration ne l'a pas retirée."""
+    from app.services import categorie_store
+    return cle if cle and any(c["cle"] == cle for c in await categorie_store.lister()) else None
+
+
 async def _preparer(e: dict) -> str:
     """Crée la collection amorcée, sa grille pré-remplie et sa banque de questions — idempotent."""
     name = e["collection"]
     if not await db_get_collection(name):
         await db_create_collection({
-            "name": name, "description": e.get("description", ""), "scope": "group",
+            "name": name, "titre": e.get("titre", ""), "categorie": await _categorie_connue(e.get("categorie")),
+            "description": e.get("description", ""), "scope": "group",
             "scope_groups_json": "[]", "created_by": "", "source_type": e.get("connecteur", ""),
             "source_url": e.get("source_url", ""),
         })
@@ -92,10 +99,8 @@ async def _executer(ident: str, e: dict, name: str, *, depuis_zero: bool = False
 
 
 @router.post("/{ident}/import")
-async def importer(ident: str, moi: Identite = Depends(identite), synchrone: bool = Query(False),
+async def importer(ident: str, moi: Identite = Depends(exiger_superadmin), synchrone: bool = Query(False),
                    purger: bool = Query(False, description="Vider la partition et réindexer tout")):
-    if not moi.superadmin:
-        raise HTTPException(status_code=403, detail="L'import d'une amorce est réservé à l'administration")
     e = entree(ident)
     if not e:
         raise HTTPException(status_code=404, detail=f"Amorce inconnue : {ident}")

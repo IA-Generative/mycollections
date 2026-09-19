@@ -17,7 +17,7 @@
         <tbody>
           <tr v-for="a in amorces" :key="a.id">
             <td><strong>{{ a.titre }}</strong><div class="fr-text--xs" style="color:var(--text-mention-grey);max-width:40ch">{{ a.description }}</div>
-              <NuxtLink v-if="a.collection_name" :to="`/c/${a.collection_name}`" class="fr-link fr-text--xs">{{ a.collection_name }}</NuxtLink></td>
+              <NuxtLink v-if="a.collection_name" :to="`/c/${a.collection_name}`" class="fr-link fr-text--xs" title="Identifiant technique de la collection"><code>{{ a.collection_name }}</code></NuxtLink></td>
             <td class="fr-text--sm">{{ a.garant_pressenti }}</td>
             <td><span v-if="a.etat_collab" class="fr-badge fr-badge--sm fr-badge--info">{{ libelleEtat(a.etat_collab) }}</span><span v-else class="fr-text--xs" style="color:var(--text-mention-grey)">pas encore créée</span></td>
             <td class="fr-text--sm">

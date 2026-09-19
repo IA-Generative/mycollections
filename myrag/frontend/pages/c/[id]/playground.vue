@@ -3,7 +3,7 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ id }}</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">Tester</a></li>
       </ol>
     </nav>
@@ -128,6 +128,7 @@ import { useBank, type BankItem } from '~/composables/useBank'
 
 const route = useRoute()
 const id = route.params.id as string
+const { titre } = useTitreCollection(id)
 const { post } = useApi()
 
 const { messages, isLoading, sendMessage, reset: resetChat } = useChat(id)

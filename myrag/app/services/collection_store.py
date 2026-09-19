@@ -78,8 +78,10 @@ async def create_collection(data: dict) -> dict:
 
 
 async def update_collection(name: str, updates: dict) -> dict | None:
+    # `categorie` n'y est pas, exprès : le classement est un geste d'administration
+    # (PUT /api/categories/affectations), pas un réglage du propriétaire.
     allowed = {
-        "description", "strategy", "sensitivity", "scope",
+        "titre", "description", "strategy", "sensitivity", "scope",
         "graph_enabled", "ai_summary_enabled", "ai_summary_threshold",
         "contact_name", "contact_email", "prompt_template",
         "system_prompt", "source_type", "source_url", "source_config_json",

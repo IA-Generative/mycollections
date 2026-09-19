@@ -36,6 +36,12 @@ class Collection(Base):
     __tablename__ = "collections"
 
     name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    # Ce que lit une personne : « Codes NATINF ». `name` reste l'identifiant technique
+    # (partition OpenRAG, modèle `openrag-<name>`, URL). Vide = repli sur le nom
+    # (app.services.nommage.titre_de). La catégorie ne se pose que par
+    # PUT /api/categories/affectations (superadmin) ; NULL = « Non classées ».
+    titre: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    categorie: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     description: Mapped[str] = mapped_column(Text, default="")
     strategy: Mapped[str] = mapped_column(String(50), default="auto")
     sensitivity: Mapped[str] = mapped_column(String(50), default="public")
@@ -70,6 +76,8 @@ class Collection(Base):
     def to_dict(self) -> dict:
         return {
             "name": self.name,
+            "titre": self.titre or "",
+            "categorie": self.categorie,
             "etat_collab": self.etat_collab,
             "garant": bool(self.garant_hash),
             "garant_pressenti": self.garant_pressenti or "",
@@ -92,6 +100,27 @@ class Collection(Base):
             "created_at": self.created_at.isoformat() if self.created_at else "",
             "updated_at": self.updated_at.isoformat() if self.updated_at else "",
             "archived_at": self.archived_at.isoformat() if self.archived_at else None,
+        }
+
+
+class Categorie(Base):
+    """Une rubrique du catalogue. Une collection en a une seule (collections.categorie)
+    ou aucune ; la liste et l'ordre se règlent à chaud par un superadmin."""
+
+    __tablename__ = "categories"
+
+    cle: Mapped[str] = mapped_column(String(64), primary_key=True)
+    libelle: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    ordre: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "cle": self.cle,
+            "libelle": self.libelle,
+            "description": self.description or "",
+            "ordre": self.ordre or 0,
         }
 
 

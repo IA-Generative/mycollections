@@ -112,92 +112,49 @@
       </div>
 
       <div v-else class="fr-grid-row fr-grid-row--gutters">
-        <div v-for="col in collections" :key="col.name" class="fr-col-12 fr-col-md-6 fr-col-lg-4">
-          <div style="border:1px solid var(--border-default-grey);border-radius:8px;padding:1.25rem;display:flex;flex-direction:column;height:100%;min-height:280px;">
-            <h3 class="fr-h6 fr-mb-1w" style="margin:0;line-height:1.3;min-height:2.6em;">
-              {{ col.name }}
-            </h3>
-            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
-              <span class="fr-badge fr-badge--sm" :class="stateBadge(col.publication?.state)">
-                {{ stateLabel(col.publication?.state) }}
-              </span>
-              <span class="fr-badge fr-badge--sm" :class="sensitivityBadge(col.sensitivity)">
-                {{ col.sensitivity }}
-              </span>
-              <span class="fr-badge fr-badge--sm fr-badge--info">{{ col.strategy }}</span>
-              <span v-if="col.graph_enabled" class="fr-badge fr-badge--sm fr-badge--new">graph</span>
-              <span v-if="col.etat_collab && col.etat_collab !== 'publiee_tous'" class="fr-badge fr-badge--sm fr-badge--warning fr-badge--no-icon" title="Non publiée à tous : servie à son groupe seulement, réponses en cours de vérification.">
-                {{ libelleEtat(col.etat_collab) }}
-              </span>
-              <span v-if="col.orphan" class="fr-badge fr-badge--sm fr-badge--warning" title="Partition OpenRAG sans fiche MyRAG — ouvrez la collection pour l'adopter.">
-                sans fiche
-              </span>
-            </div>
-
-            <p class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);font-style:italic;" v-if="col.orphan">
-              Collection importee depuis OpenRAG, pas encore decrite dans Mes collections.
-            </p>
-            <p v-else class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);">
-              {{ col.description || 'Pas de description' }}
-            </p>
-            <p v-if="col.file_count" class="fr-text--xs fr-mb-2w" style="color:var(--text-mention-grey);">
-              📊 {{ col.file_count }} document{{ col.file_count > 1 ? 's' : '' }} indexe{{ col.file_count > 1 ? 's' : '' }}
-            </p>
-
-            <p v-if="col.contact_name" class="fr-text--xs fr-mb-2w" style="color:var(--text-mention-grey);">
-              📧 {{ col.contact_name }}
-              <a v-if="col.contact_email" :href="`mailto:${col.contact_email}`" class="fr-link fr-text--xs">
-                {{ col.contact_email }}
-              </a>
-            </p>
-
-            <div style="margin-top:auto;display:flex;flex-direction:column;gap:0.5rem;">
-              <NuxtLink :to="`/c/${col.name}/playground`"
-                        class="fr-btn fr-btn--icon-left fr-icon-chat-3-line"
-                        style="width:100%;justify-content:center;">
-                Tester le RAG
-              </NuxtLink>
-              <p class="fr-text--xs fr-mb-0" style="color:var(--text-mention-grey);text-align:center;">
-                Playground avec debug et sources
-              </p>
-
-              <NuxtLink :to="`/c/${col.name}`"
-                        class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-eye-line"
-                        style="width:100%;justify-content:center;">
-                Voir la collection
-              </NuxtLink>
-
-              <div style="display:flex;justify-content:flex-end;margin-top:0.25rem;">
-                <NuxtLink :to="`/c/${col.name}/config`"
-                          class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-btn--icon-left fr-icon-edit-line">
-                  Configurer
-                </NuxtLink>
-              </div>
-            </div>
+        <div v-if="collections.length > 3" class="fr-col-12">
+          <div class="fr-search-bar" role="search" style="max-width:32rem;">
+            <label class="fr-label" for="recherche-accueil">Rechercher une collection</label>
+            <input id="recherche-accueil" v-model="recherche" class="fr-input" type="search"
+                   placeholder="Un thème, un sigle, un service…" />
+            <button class="fr-btn" type="button">Rechercher</button>
           </div>
         </div>
+        <p v-if="recherche && !groupes.length" class="fr-col-12 fr-text--sm">
+          Aucune collection pour « {{ recherche }} ».
+          <NuxtLink to="/admin/catalog" class="fr-link fr-text--sm">Voir le catalogue complet</NuxtLink>
+        </p>
+        <template v-for="groupe in groupes" :key="groupe.cle || '__aucune__'">
+          <div class="fr-col-12 fr-mt-2w">
+            <h3 class="fr-h5 fr-mb-0">
+              {{ groupe.libelle }}
+              <span class="fr-text--sm" style="font-weight:400;color:var(--text-mention-grey);">({{ groupe.collections.length }})</span>
+            </h3>
+            <p v-if="groupe.description" class="fr-text--sm fr-mb-0" style="color:var(--text-mention-grey);">{{ groupe.description }}</p>
+          </div>
+          <div v-for="col in groupe.collections" :key="col.name" class="fr-col-12 fr-col-md-6 fr-col-lg-4">
+            <CarteCollection :col="col" />
+          </div>
+        </template>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { libelleEtat } from '~/utils/collectif'
+import type { Categorie, Collection } from '~/types/collection'
+import { filtrerCollections, grouperParCategorie } from '~/utils/catalogue'
+
 const { get } = useApi()
 const { isAdmin } = useAdminAuth()
 const { capacites } = useCapacites()
-const collections = ref<any[]>([])
+const { lister: listerCategories } = useCategories()
+const collections = ref<Collection[]>([])
+const categories = ref<Categorie[]>([])
+const recherche = ref('')
 const loading = ref(true)
 
-function stateBadge(state: string) {
-  return { draft: 'fr-badge--grey', published: 'fr-badge--success', disabled: 'fr-badge--warning' }[state] || 'fr-badge--grey'
-}
-function stateLabel(state: string) {
-  return { draft: 'Brouillon', published: 'Publie', disabled: 'Desactive', archived: 'Archive' }[state] || 'Brouillon'
-}
-function sensitivityBadge(s: string) {
-  return { public: 'fr-badge--green-emeraude', internal: 'fr-badge--yellow-tournesol', restricted: 'fr-badge--orange-terre-battue', confidential: 'fr-badge--pink-macaron' }[s] || ''
-}
+const groupes = computed(() => grouperParCategorie(filtrerCollections(collections.value, recherche.value), categories.value))
 
 onMounted(async () => {
   try {
@@ -205,5 +162,7 @@ onMounted(async () => {
     collections.value = data.collections || []
   } catch (e) {}
   loading.value = false
+  // Sans les rubriques, le catalogue reste lisible : tout tombe dans « Non classées ».
+  try { categories.value = await listerCategories() } catch (e) {}
 })
 </script>

@@ -73,6 +73,7 @@ async def _provision_collection_access(
 
 class CreateCollectionRequest(BaseModel):
     name: str
+    titre: str = ""
     description: str = ""
     strategy: str = "auto"
     sensitivity: str = "public"
@@ -223,7 +224,8 @@ async def list_collections_endpoint(
                     # was ever created for it. Flagged so the UI can surface
                     # "adoptable" cards without fabricating a description from
                     # raw filenames (which read as junk to end users).
-                    collections.append({"name": name, "description": "", "strategy": "auto",
+                    collections.append({"name": name, "titre": "", "categorie": None,
+                                        "description": "", "strategy": "auto",
                                         "sensitivity": "public", "scope": "group",
                                         "orphan": True})
                     known_names.add(name)

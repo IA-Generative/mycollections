@@ -50,7 +50,7 @@
 </head>
 <body>
     <div class="breadcrumb">
-        <a href="/graph?corpus_id={{ collection }}">{{ collection }}</a> &gt;
+        <a href="/graph?corpus_id={{ collection }}">{{ collection_titre or collection }}</a> &gt;
         {% if livre %}Livre {{ livre }} &gt;{% endif %}
         {% if titre %}Titre {{ titre }} &gt;{% endif %}
         {% if chapitre %}Chapitre {{ chapitre }} &gt;{% endif %}

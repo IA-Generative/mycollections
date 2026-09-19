@@ -81,6 +81,16 @@ export function useApi() {
     return resp.json()
   }
 
+  async function put<T = any>(path: string, body?: any): Promise<T> {
+    const resp = await fetchWithAuth(`${baseUrl}${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
+    return resp.json()
+  }
+
   async function del<T = any>(path: string): Promise<T> {
     const resp = await fetchWithAuth(`${baseUrl}${path}`, { method: 'DELETE' })
     if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
@@ -102,5 +112,5 @@ export function useApi() {
     return resp.json()
   }
 
-  return { get, post, patch, del, uploadFile, baseUrl }
+  return { get, post, patch, put, del, uploadFile, baseUrl }
 }
