@@ -98,7 +98,7 @@ def test_un_nouveau_titre_atteint_la_fiche_a_la_resynchronisation(client, en_tan
 
 
 def test_une_fiche_qui_echoue_n_arrete_pas_les_autres(client, en_tant_que, creer_collection, nom, purger):
-    autre = nom[:50] + "-bis"
+    autre = nom[:34].rstrip("-") + "-bis"  # ≤ 40 caractères : un identifiant valide
     purger(autre)
     creer_collection(nom); _publier(client, nom)
     creer_collection(autre); _publier(client, autre)
