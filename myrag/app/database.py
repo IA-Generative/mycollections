@@ -52,6 +52,8 @@ async def init_db():
         # Titre affiché et catégorie (l'identifiant technique ne se lit plus à l'écran).
         await _migrate_add_column(conn, "titre", "VARCHAR(255) DEFAULT ''", "VARCHAR(255) DEFAULT ''")
         await _migrate_add_column(conn, "categorie", "VARCHAR(64)", "VARCHAR(64)")
+        await _migrate_add_column(conn, "alias_description", "TEXT DEFAULT ''", "TEXT DEFAULT ''",
+                                  table="publications")
         await _retro_remplir_titres(conn)
         await _semer_categories(conn)
 

@@ -10,6 +10,7 @@ from app.database import async_session
 from app.models.db import Collection, Publication, PublicationHistory, utcnow
 from app.services import collectif_store, etats
 from app.services.collection_store import get_or_create_collection
+from app.services.nommage import titre_de
 
 MESSAGE_VERIFICATION = (
     "Cette collection est en cours de vérification : elle ne peut être partagée qu'avec "
@@ -66,7 +67,14 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
 
         pub.state = req.state if req.state == "draft" else "published"
         pub.alias_enabled = req.alias_enabled
-        pub.alias_name = req.alias_name or f"📚 {name}"
+        # Le nom de la fiche dans l'assistant : celui qu'on saisit, sinon le TITRE de la
+        # collection — plus jamais l'identifiant précédé d'un pictogramme.
+        # N'est GARDÉ que s'il diffère du titre : sinon un titre corrigé plus tard
+        # n'atteindrait jamais la fiche (fiche_assistant.nom_de_fiche retombe sur le titre).
+        titre = titre_de(col.to_dict() if col else {"name": name})
+        saisi = req.alias_name.strip()
+        pub.alias_name = "" if saisi == titre else saisi
+        pub.alias_description = req.alias_description.strip()
         pub.tool_enabled = req.tool_enabled
         pub.embed_enabled = req.embed_enabled
         pub.visibility = req.visibility
@@ -104,45 +112,13 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     owui_error: str | None = None
     if req.alias_enabled and pub.state == "published":
         try:
-            from app.services.owui_client import (
-                OwuiClient, OwuiAdminUnavailable, grants_de_partage,
-            )
-            client = OwuiClient()
-            # Access control: map visibility_groups (Keycloak group names)
-            # onto OWUI's read/write group_ids. V1 passes names through as-is;
-            # if OWUI uses sub-based group ids, the group list silently matches
-            # nothing (the model stays restricted, not public). Fine for V1,
-            # to revisit when we wire KC group id resolution.
-            ac = None
-            if req.visibility == "group" and req.visibility_groups:
-                ac = {
-                    "read":  {"group_ids": req.visibility_groups, "user_ids": []},
-                    "write": {"group_ids": req.visibility_groups, "user_ids": []},
-                }
-            # Forme des socles récents (>= 0.11). Sans elle, la collection publiée
-            # n'est visible QUE du compte qui porte la clé d'administration : elle
-            # apparaît dans l'interface d'administration et nulle part ailleurs, sans
-            # qu'aucun message ne le signale.
-            grants = grants_de_partage(req.visibility, req.visibility_groups)
-            # La fiche RECOUVRE le modele `openrag-<col>` que le socle recoit deja de sa
-            # connexion OpenRAG : d'ou `base_model_id` absent. Elle ne cree pas un
-            # modele, elle le NOMME et le PARTAGE — sans elle, la collection reste
-            # reservee a l'administration du socle.
-            #
-            # Elle designait auparavant `openrag.<col>`, servi par le conteneur
-            # « pipelines » d'OpenWebUI, qui ajoute les liens vers les documents cites.
-            # Ce conteneur n'est pas deploye partout ; quand il l'est, c'est ici que se
-            # remet son identifiant — au prix d'une chaine que le controle d'acces devra
-            # pouvoir suivre.
-            # Tant que la collection n'est pas publiée à tous, le socle le dit.
-            description = f"⚠ {mention} — {req.alias_description}".rstrip(" —") if mention else req.alias_description
-            owui_result = await client.upsert_model(
-                model_id=f"openrag-{name}",
-                name=pub.alias_name,
-                description=description,
-                access_control=ac,
-                access_grants=grants,
-            )
+            from app.services.owui_client import OwuiAdminUnavailable
+            from app.services.fiche_assistant import synchroniser_fiche
+            # Tout ce qui part au socle se décide à UN endroit (nom = titre, étiquette =
+            # catégorie, portée, mention de vérification) : la resynchronisation l'appelle
+            # aussi. La fiche RECOUVRE le modèle `openrag-<col>` reçu de la connexion
+            # OpenRAG — `base_model_id` absent, cf. owui_client.upsert_model.
+            owui_result = await synchroniser_fiche(name)
         except OwuiAdminUnavailable as e:
             owui_error = str(e)
         except PermissionError as e:
@@ -157,6 +133,7 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     )
     result = pub.to_dict()
     result["mention"] = mention
+    result["nom_fiche"] = (owui_result or {}).get("nom") or pub.alias_name or titre
     result["owui"] = {
         "synced": owui_result is not None,
         "error": owui_error,

@@ -15,5 +15,7 @@ export function useCategories() {
     supprimer: (cle: string) => del(`/api/categories/${cle}`),
     ordonner: (cles: string[]) => put('/api/categories/ordre', { cles }),
     affecter: (affectations: Record<string, string | null>) => put('/api/categories/affectations', { affectations }),
+    /** Repose les fiches de l'assistant (nom = titre, étiquette = catégorie). `aSec` : ne rien écrire. */
+    resynchroniser: (aSec = false) => post(`/api/publications/resynchroniser${aSec ? '?a_sec=true' : ''}`),
   }
 }

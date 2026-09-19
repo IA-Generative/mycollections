@@ -34,8 +34,11 @@
             </div>
             <div v-if="form.alias_enabled" class="fr-fieldset__element fr-ml-4w">
               <div class="fr-input-group">
-                <label class="fr-label">Nom du modele</label>
-                <input class="fr-input" v-model="form.alias_name" :placeholder="`MirAI ${id}`" />
+                <label class="fr-label" for="nom-fiche">
+                  Nom dans l'assistant
+                  <span class="fr-hint-text">Laissez vide : c'est le titre de la collection, et il suivra ses corrections.</span>
+                </label>
+                <input id="nom-fiche" class="fr-input" v-model="form.alias_name" :placeholder="titre" />
               </div>
               <div class="fr-input-group fr-mt-1w">
                 <label class="fr-label">Description</label>
@@ -230,7 +233,7 @@ onMounted(async () => {
     pub.value = await get(`/api/collections/${id}/publication`)
     if (pub.value) {
       form.value.alias_enabled = pub.value.alias_enabled
-      form.value.alias_name = pub.value.alias_name || `MirAI ${id}`
+      form.value.alias_name = pub.value.alias_name || ''
       form.value.alias_description = pub.value.alias_description || ''
       form.value.tool_enabled = pub.value.tool_enabled
       form.value.tool_methods = pub.value.tool_methods || [...allMethods]
