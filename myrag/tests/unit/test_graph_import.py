@@ -127,3 +127,62 @@ class TestImportEndpoint:
         client.put("/graph/grimp-ceseda", json=GRAPHE)
         r = client.post("/graph/grimp-ceseda/build")
         assert r.status_code == 409 and "force=true" in r.json()["detail"]
+
+
+class TestBuildAndSummarizeAreReservedToManagers:
+    """Ces deux routes réécrivent le graphe sur disque : elles étaient ouvertes à tous."""
+
+    def test_non_manager_cannot_rebuild(self, app_client):
+        app, client = app_client
+        _create(app, client, "grimp-ceseda")
+        _as(app, LECTEUR)
+        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
+            r = client.post("/graph/grimp-ceseda/build")
+        assert r.status_code == 403
+        mock_cls.assert_not_called()
+
+    def test_non_manager_cannot_force_over_an_imported_graph(self, app_client, tmp_path):
+        app, client = app_client
+        _create(app, client, "grimp-ceseda")
+        _as(app, GESTIONNAIRE)
+        client.put("/graph/grimp-ceseda", json=GRAPHE)
+        avant = (tmp_path / "grimp-ceseda" / "graph.json").read_text()
+        _as(app, LECTEUR)
+        assert client.post("/graph/grimp-ceseda/build", params={"force": "true"}).status_code == 403
+        assert (tmp_path / "grimp-ceseda" / "graph.json").read_text() == avant
+
+    def test_manager_can_force_a_rebuild(self, app_client):
+        app, client = app_client
+        _create(app, client, "grimp-ceseda")
+        _as(app, GESTIONNAIRE)
+        client.put("/graph/grimp-ceseda", json=GRAPHE)
+        documents = [{"content": "Voir l'article L. 423-1.", "metadata": {"filename": "Article-L423-3.md"}},
+                     {"content": "Conjoint de Français.", "metadata": {"filename": "Article-L423-1.md"}}]
+        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
+            mock_cls.return_value.search = AsyncMock(return_value={"documents": documents})
+            r = client.post("/graph/grimp-ceseda/build", params={"force": "true"})
+        assert r.status_code == 200, r.text
+        assert r.json()["nodes"] == 2
+
+    def test_superadmin_can_rebuild_a_partition_without_a_fiche(self, app_client):
+        app, client = app_client
+        _as(app, SUPERADMIN)
+        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
+            mock_cls.return_value.search = AsyncMock(return_value={"documents": []})
+            r = client.post("/graph/grimp-sans-fiche/build")
+        assert r.status_code == 404 and "No documents" in r.json()["detail"]
+
+    def test_non_manager_cannot_summarize(self, app_client):
+        app, client = app_client
+        _create(app, client, "grimp-ceseda")
+        _as(app, LECTEUR)
+        r = client.post("/graph/grimp-ceseda/summarize", params={"llm_url": "http://exemple.invalid"})
+        assert r.status_code == 403
+
+    def test_manager_reaches_summarize(self, app_client):
+        app, client = app_client
+        _create(app, client, "grimp-ceseda")
+        _as(app, GESTIONNAIRE)
+        r = client.post("/graph/grimp-ceseda/summarize")
+        assert r.status_code == 200 and r.json()["status"] == "disabled"
+
