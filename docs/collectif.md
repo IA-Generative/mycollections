@@ -87,6 +87,8 @@ Un événement : `{id, objet_type, objet_id, collection, type, par, detail, cree
 | `CAPACITES_URL` | vide | `http://apps-menu.apps-menu.svc.cluster.local/_beta/capacites.json` en bêta |
 | `SEUIL_CHANTIER_DEFAUT` | 5 | repli si le menu ne répond pas |
 | `SOMMEIL_JOURS` | 30 | seuil du « en sommeil » |
+| `BUS_URL` | vide (⇒ pas de relais) | adresse du menu commun, `http://apps-menu.apps-menu.svc.cluster.local` en bêta ; le fil part en `POST /_beta/messages` |
+| `BUS_SECRET` | vide (⇒ `/api/bus` rend 503) | secret partagé `X-Bus-Secret`, le même que le Secret `bus-secret` du menu |
 
 ## Tests
 
