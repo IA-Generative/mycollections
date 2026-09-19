@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # Graph
     graphrag_viewer_url: str = Field(default="")
     myrag_group_root: str = Field(default="/myrag")
+    # Préfixes refusés à la création d'une collection (séparés par des virgules) : ils disent
+    # d'où vient la collection, pas ce qu'elle contient — et l'identifiant est ce que tapent
+    # les applications (`openrag-<identifiant>`).
+    myrag_prefixes_bannis: str = Field(default="demo-,amorce-,rag-,test-")
 
     # Public URL (for iframe links)
     myrag_public_url: str = Field(default="http://localhost:8200")

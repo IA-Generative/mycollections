@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.auth import CurrentUser, current_user
-from app.services import access
+from app.services import access, nommage
 from app.services.keycloak_client import KeycloakClient
 from app.services.sync_service import SyncService
 from app.models.collection import (
@@ -249,6 +249,14 @@ async def list_collections_endpoint(
     return {"collections": collections}
 
 
+async def _partition_existe(name: str) -> bool:
+    try:
+        models = await OpenRAGClient(timeout=10.0).list_models()
+    except Exception:
+        return False
+    return any(m.get("id") == f"openrag-{name}" for m in models.get("data", []))
+
+
 @router.post("")
 async def create_collection_endpoint(
     req: CreateCollectionRequest,
@@ -257,6 +265,16 @@ async def create_collection_endpoint(
     """Create a new collection (operators only: superadmin or a collection-admin)."""
     if not access.can_create_collection(user.groups):
         raise HTTPException(status_code=403, detail="Création réservée aux opérateurs")
+    # L'identifiant est ce que taperont les applications (`openrag-<identifiant>`) : il se
+    # valide ICI, pas seulement dans le formulaire. Une exception : RATTACHER une partition
+    # qui existe déjà chez OpenRAG — son nom est un fait, on ne peut que l'adopter.
+    demande = req.name
+    req.name = req.name.strip().lower()
+    motif = nommage.motif_de_refus(req.name)
+    if motif and not await _partition_existe(demande):
+        raise HTTPException(status_code=422, detail={"reason": motif, "message": nommage.MOTIFS[motif]})
+    if motif:
+        req.name = demande  # adoption : le nom de la partition, tel quel
     existing = await db_get_collection(req.name)
     if existing:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
@@ -290,6 +308,13 @@ async def create_collection_endpoint(
     return {"status": "created", "collection": collection}
 
 
+@router.get("/regles-nommage")
+async def regles_nommage():
+    """Les règles d'un identifiant de collection (avant /{name}) — le formulaire les applique
+    en direct, le serveur reste l'autorité."""
+    return nommage.regles()
+
+
 @router.get("/check-name")
 async def check_name_endpoint(name: str, user: CurrentUser = Depends(current_user)):
     """Disponibilité **autoritaire** d'un nom de collection (avant /{name}).
@@ -299,16 +324,17 @@ async def check_name_endpoint(name: str, user: CurrentUser = Depends(current_use
     contenu) pour que la vérif du wizard colle à la contrainte d'unicité backend.
     """
     norm = name.strip().lower()
-    if not norm:
-        return {"available": False, "reason": "empty"}
+    motif = nommage.motif_de_refus(norm)
+    if motif:
+        return {"available": False, "reason": motif, "message": nommage.MOTIFS[motif]}
     if await db_get_collection(norm):
-        return {"available": False, "reason": "db"}
+        return {"available": False, "reason": "db", "message": nommage.MOTIFS["db"]}
     try:
         models = await OpenRAGClient(timeout=10.0).list_models()
         for m in models.get("data", []):
             mid = m.get("id", "")
             if mid.startswith("openrag-") and mid[len("openrag-"):] == norm:
-                return {"available": False, "reason": "partition"}
+                return {"available": False, "reason": "partition", "message": nommage.MOTIFS["partition"]}
     except Exception:
         pass  # OpenRAG indisponible : on ne bloque pas sur ce critère
     return {"available": True}
