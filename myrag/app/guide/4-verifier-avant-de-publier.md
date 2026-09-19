@@ -22,6 +22,11 @@ complète : trois champs renseignés et une relecture. Un administrateur peut fo
 ## Vérifier, concrètement
 
 - Poser les **vingt questions de test** dans le bac à sable ; noter ce qui est faux.
+- Pour chaque réponse, **lire ses sources** : survoler une puce montre le début du passage ;
+  cliquer dessus ouvre le passage entier, avec un résumé du document dont il vient.
+  « Document complet » ouvre l'original. Une réponse juste appuyée sur le mauvais passage
+  est une réponse à noter. Le passage se télécharge en Word ou en PDF, pour le joindre à
+  une relecture.
 - Ouvrir trois documents au hasard et comparer à la source.
 - Lire la couverture constatée : si les dates ou les juridictions ne sont pas celles
   attendues, c'est l'import qu'il faut corriger, pas la fiche.
