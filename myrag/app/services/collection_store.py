@@ -15,6 +15,7 @@ from app.models.db import (
     GrilleControle,
     Proposition,
     Signalement,
+    UsageQuestion,
     EvalDataset,
     EvalRun,
     Feedback,
@@ -185,7 +186,7 @@ async def purge_collection(name: str) -> dict:
             SourceFile, EvalRun, EvalDataset, Feedback,
             IngestJob, PublicationHistory, Publication,
             # Le collectif — une table oubliée ici laisse des orphelins.
-            Proposition, Signalement, GrilleControle, Evenement,
+            Proposition, Signalement, GrilleControle, Evenement, UsageQuestion,
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)

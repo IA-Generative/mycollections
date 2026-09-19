@@ -3,9 +3,11 @@
 import json
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth import CurrentUser, current_user
+from app.services import accueil
 from app.services.openrag_client import OpenRAGClient
 from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 
@@ -333,11 +335,14 @@ def relier_au_proxy(texte: str) -> str:
 
 
 @router.post("/{collection}/chat")
-async def playground_chat(collection: str, req: PlaygroundChatRequest):
+async def playground_chat(collection: str, req: PlaygroundChatRequest,
+                          user: CurrentUser = Depends(current_user)):
     """Quick RAG chat test against a collection.
 
     If OpenRAG RAG returns no sources, falls back to manual context injection.
     """
+    # La mesure d'usage : une ligne par question (sans son texte). Ne bloque jamais.
+    await accueil.noter_question(collection, user.sub)
     client = OpenRAGClient(timeout=120.0)
 
     if not await client.health_check():

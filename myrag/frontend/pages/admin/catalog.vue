@@ -210,7 +210,8 @@ const { lister: listerCategories } = useCategories()
 
 const collections = ref<Collection[]>([])
 const categories = ref<Categorie[]>([])
-const categorieChoisie = ref('')
+// Les portes d'entrée de l'accueil arrivent ici avec ?categorie=<clé>.
+const categorieChoisie = ref(String(useRoute().query.categorie || ''))
 const search = ref('')
 const showArchived = ref(false)
 

@@ -581,6 +581,21 @@ class Evenement(Base):
         }
 
 
+class UsageQuestion(Base):
+    """Une question posée à une collection : QUAND, à LAQUELLE, par QUI (condensé) — jamais
+    le texte de la question. Sert à dire à celui qui partage ce que son travail a rendu
+    possible (accueil). Seul le bac à sable y écrit aujourd'hui : l'assistant et l'API
+    directe d'OpenRAG n'y passent pas."""
+
+    __tablename__ = "usage_question"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    collection_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    auteur_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    canal: Mapped[str] = mapped_column(String(20), nullable=False, default="bac-a-sable")
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
 class Amorce(Base):
     """L'état d'import d'une amorce du catalogue (app/amorces/catalogue.json)."""
 

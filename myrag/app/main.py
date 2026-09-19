@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import init_db
 from app.services import capacites
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
+from app.routers import accueil as accueil_routeur
 from app.routers import amorces, bus, categories, collectif, demandes, fiches, guide
 
 @asynccontextmanager
@@ -84,6 +85,7 @@ app.include_router(collectif.router, dependencies=AUTH_REQUIRED)
 app.include_router(amorces.router, dependencies=AUTH_REQUIRED)
 app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 app.include_router(categories.router, dependencies=AUTH_REQUIRED)
+app.include_router(accueil_routeur.router, dependencies=AUTH_REQUIRED)
 app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.
 app.include_router(bus.router)
