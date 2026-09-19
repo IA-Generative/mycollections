@@ -117,53 +117,117 @@ async def openrag_health():
     return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}
 
 
+def _decouper_morceau(texte: str) -> tuple[str, str, str]:
+    """Sépare un morceau relu dans OpenRAG de son habillage technique —
+    `[CONTEXT] résumé  * filename: x.md  [CHUNK_START] texte [CHUNK_END]` —
+    et rend (contexte, fichier, corps). Même découpe que `decouperMorceau`
+    côté frontend (utils/extrait.ts) : un lecteur n'a pas à voir ces balises.
+    """
+    import re
+    texte = texte or ""
+    debut = texte.find("[CHUNK_START]")
+    if debut < 0:
+        return "", "", re.sub(r"\[CHUNK_END\]\s*$", "", texte).strip()
+    apres = texte[debut + len("[CHUNK_START]"):]
+    fin = apres.rfind("[CHUNK_END]")
+    corps = (apres if fin < 0 else apres[:fin]).strip()
+    entete = re.sub(r"^\s*\[CONTEXT\]", "", texte[:debut])
+    fichier = ""
+    m = re.search(r"^[ \t]*\*[ \t]*filename[ \t]*:[ \t]*(.*)$", entete, flags=re.I | re.M)
+    if m:
+        fichier = m.group(1).strip()
+        entete = entete[:m.start()] + entete[m.end():]
+    return entete.strip(), fichier, corps
+
+
+def _paragraphes_html(texte: str) -> str:
+    """Texte brut → paragraphes HTML : tout est échappé, puis les adresses web
+    deviennent des liens. Pas de moteur Markdown ici : la page reste autonome."""
+    import html as _h
+    import re
+    blocs = [b.strip() for b in re.split(r"\n\s*\n", texte or "") if b.strip()]
+    rendus = []
+    for bloc in blocs:
+        sur = _h.escape(bloc)
+        sur = re.sub(
+            r"(https?://[^\s<>\"']+[^\s<>\"'.,;:!?)])",
+            r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
+            sur,
+        )
+        rendus.append(f"<p>{sur}</p>")
+    return "\n".join(rendus)
+
+
 def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status: int) -> str:
-    """Render a chunk payload as a minimal DSFR-flavored HTML page.
+    """Rend un morceau en page HTML autonome et lisible.
 
-    The user opens the proxy URL in a new tab. Raw JSON with literal \\n
-    escapes is unreadable; we extract page_content + metadata and wrap in
-    a monospace pre with whitespace preserved.
+    Cette page s'ouvre dans un onglet neuf (« Ouvrir dans un onglet », Ctrl-clic
+    sur une puce, lien cité depuis le chat) : pas de lien « Retour », il n'y a
+    pas d'historique à remonter. Le texte est débarrassé de ses balises
+    techniques et mis en paragraphes ; le résumé du document passe en encart.
 
-    Falls back to showing the upstream status + raw body on non-2xx or
-    non-JSON responses so you still have a clue what went wrong.
+    En cas d'échec d'OpenRAG (statut ≥ 400 ou réponse non JSON), on montre le
+    statut et le début de la réponse brute, pour garder un indice.
     """
     import html as _h
     title = f"Extrait · {chunk_id[:12]}…"
     if status >= 400 or payload is None:
         body = (
-            f"<h1 class='fr-h4'>Extrait indisponible</h1>"
-            f"<p class='fr-text--sm'>OpenRAG a renvoye HTTP {status}.</p>"
-            f"<pre class='myrag-extract__raw'>{_h.escape(raw.decode('utf-8', 'replace')[:2000])}</pre>"
+            f"<h1>Extrait indisponible</h1>"
+            f"<p class='meta'>OpenRAG a renvoyé HTTP {status}.</p>"
+            f"<pre class='brut'>{_h.escape(raw.decode('utf-8', 'replace')[:2000])}</pre>"
         )
     else:
         content = payload.get("page_content") or payload.get("content") or payload.get("text") or ""
+        contexte, fichier, corps = _decouper_morceau(str(content))
+        source = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        lire = lambda k: payload.get(k) or source.get(k)  # noqa: E731
+        fichier = str(lire("original_filename") or lire("filename") or fichier or "")
         meta_parts = []
-        for k in ("original_filename", "filename", "page", "file_id", "chunk_id"):
-            v = payload.get(k)
-            if v:
-                meta_parts.append(f"<strong>{_h.escape(str(k))}:</strong> {_h.escape(str(v))}")
-        meta = " &middot; ".join(meta_parts) if meta_parts else ""
+        if fichier:
+            meta_parts.append(f"<strong>Fichier</strong> : {_h.escape(fichier)}")
+        if lire("page") not in (None, ""):
+            meta_parts.append(f"<strong>Page</strong> : {_h.escape(str(lire('page')))}")
+        if lire("partition"):
+            meta_parts.append(f"<strong>Collection</strong> : {_h.escape(str(lire('partition')))}")
+        if fichier:
+            title = f"{fichier} · extrait"
         body = (
-            f"<h1 class='fr-h4'>Extrait de source</h1>"
-            + (f"<p class='fr-text--sm' style='color:#666;'>{meta}</p>" if meta else "")
-            + f"<pre class='myrag-extract__body'>{_h.escape(content)}</pre>"
+            "<p class='sur-titre'>Extrait de source</p>"
+            f"<h1>{_h.escape(fichier or 'Extrait')}</h1>"
+            + (f"<p class='meta'>{' &middot; '.join(meta_parts)}</p>" if meta_parts else "")
+            + f"<div class='texte'>{_paragraphes_html(corps) or '<p><em>(extrait vide)</em></p>'}</div>"
+            + (
+                "<aside class='contexte'><p class='contexte-titre'>À propos du document "
+                "<span>— résumé automatique</span></p>"
+                f"{_paragraphes_html(contexte)}</aside>" if contexte else ""
+            )
         )
-    # Inline CSS keeps this self-contained; no DSFR asset required (which
-    # would need another roundtrip through the frontend host).
+    # CSS en ligne : la page est autonome, sans ressource DSFR à aller chercher
+    # sur l'hôte du frontend.
     return f"""<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>{_h.escape(title)}</title>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_h.escape(title)}</title>
 <style>
-  body {{ font-family: -apple-system, Segoe UI, system-ui, sans-serif; max-width: 900px;
-           margin: 2rem auto; padding: 0 1.2rem; color: #161616; line-height: 1.5; }}
-  .fr-h4 {{ font-size: 1.25rem; margin: 0 0 0.6rem; }}
-  pre {{ background: #f6f6f6; padding: 1rem 1.2rem; border-left: 3px solid #000091;
-         border-radius: 4px; white-space: pre-wrap; word-break: break-word;
-         font-size: 0.92rem; line-height: 1.55; }}
-  .myrag-extract__raw {{ border-left-color: #ce0500; }}
-  a.back {{ display: inline-block; margin-bottom: 1rem; color: #000091; text-decoration: none; }}
-  a.back:hover {{ text-decoration: underline; }}
+  body {{ font-family: Marianne, -apple-system, "Segoe UI", system-ui, Arial, sans-serif;
+           max-width: 760px; margin: 2.5rem auto; padding: 0 1.2rem; color: #161616; line-height: 1.6; }}
+  .sur-titre {{ margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em;
+                text-transform: uppercase; color: #000091; }}
+  h1 {{ font-size: 1.4rem; line-height: 1.3; margin: 0.2rem 0 0.5rem; word-break: break-word; }}
+  .meta {{ margin: 0 0 1.5rem; padding-bottom: 0.8rem; border-bottom: 1px solid #ddd;
+           font-size: 0.85rem; color: #666; }}
+  .texte p {{ margin: 0 0 1rem; white-space: pre-line; word-break: break-word; }}
+  a {{ color: #000091; }}
+  .contexte {{ margin-top: 2rem; padding: 0.8rem 1.1rem; background: #f6f6f6;
+               border-left: 3px solid #cecece; font-size: 0.9rem; color: #3a3a3a; }}
+  .contexte p {{ margin: 0 0 0.4rem; }}
+  .contexte p:last-child {{ margin-bottom: 0; }}
+  .contexte-titre {{ font-size: 0.8rem; font-weight: 700; }}
+  .contexte-titre span {{ font-weight: 400; color: #666; }}
+  .brut {{ background: #f6f6f6; padding: 1rem 1.2rem; border-left: 3px solid #ce0500;
+           white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; }}
 </style></head>
-<body><a class="back" href="javascript:history.back()">&larr; Retour</a>{body}</body></html>"""
+<body>{body}</body></html>"""
 
 
 @app.get("/api/openrag/extract/{chunk_id}")
@@ -270,7 +334,7 @@ async def owui_probe():
 
 
 @app.get("/api/openrag/static/{filepath:path}")
-async def openrag_static_proxy(filepath: str):
+async def openrag_static_proxy(filepath: str, raw: bool = False):
     """Proxy for OpenRAG's /static/<hashname> URLs — what source.file_url
     points to for whole-document access. Auth-protected on OpenRAG's side
     (redirects to /auth/login for anonymous callers), relayed here with
@@ -293,7 +357,7 @@ async def openrag_static_proxy(filepath: str):
     # connexion à un service que l'utilisateur ne connaît pas.
     if upstream.status_code in (301, 302, 303, 307, 308) or \
             upstream.headers.get("content-type", "").startswith("text/html"):
-        return await openrag_extract_proxy(filepath)
+        return await openrag_extract_proxy(filepath, raw=raw)
     # Preserve content-disposition so browsers can hint a filename on save.
     resp_headers = {}
     if "content-disposition" in upstream.headers:
