@@ -122,3 +122,54 @@ def test_classer_conseille_de_resynchroniser(client, en_tant_que, creer_collecti
     r = client.put("/api/categories/affectations", json={"affectations": {nom: "droit-etrangers"}}).json()
     assert r["resync_conseillee"] is True
     assert client.put("/api/categories/affectations", json={"affectations": {nom: "droit-etrangers"}}).json()["resync_conseillee"] is False
+
+
+# ─── Une resynchronisation change ce qu'on LIT, jamais qui a le droit de lire ────────────
+# Constaté en production le 2026-09-19 : six corpus accordés à UN compte dans l'assistant
+# avaient une fiche « tout le monde » dans Mes collections. Reposer la portée enregistrée
+# les aurait ouverts à tous.
+
+RESTREINTE = {
+    "params": {"system": "prompt"}, "access_control": None,
+    "access_grants": [{"id": "g1", "resource_type": "model", "resource_id": "openrag-x", "created_at": 1,
+                       "principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}],
+    "meta": {"tags": [{"name": "Corpus partagés"}]},
+}
+OUVERTE_A_TOUS = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
+
+
+def _voulue_ouverte():
+    return {"params": {}, "access_control": None, "access_grants": list(OUVERTE_A_TOUS),
+            "meta": {"tags": [{"name": "Droit des étrangers"}, {"name": "Mes collections"}]}}
+
+
+def test_garder_les_droits_reconduit_la_portee_existante_sans_ses_champs_internes():
+    f = fusionner_fiche(RESTREINTE, _voulue_ouverte(), garder_les_droits=True)
+    assert f["access_grants"] == [{"principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}]
+    assert [t["name"] for t in f["meta"]["tags"]] == ["Corpus partagés", "Droit des étrangers", "Mes collections"]
+
+
+def test_une_publication_pose_bien_la_portee_choisie():
+    assert fusionner_fiche(RESTREINTE, _voulue_ouverte())["access_grants"] == OUVERTE_A_TOUS
+
+
+def test_une_fiche_sans_aucun_droit_le_reste():
+    fermee = {**RESTREINTE, "access_grants": []}
+    assert fusionner_fiche(fermee, _voulue_ouverte(), garder_les_droits=True)["access_grants"] == []
+
+
+def test_la_resynchronisation_demande_toujours_de_garder_les_droits(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    _publier(client, nom)
+    en_tant_que(SUPERADMIN)
+    with patch("app.services.owui_client.OwuiClient") as cls:
+        cls.return_value.upsert_model = AsyncMock(return_value={})
+        client.post("/api/publications/resynchroniser")
+    appels = cls.return_value.upsert_model.await_args_list
+    assert appels and all(a.kwargs["garder_les_droits"] is True for a in appels)
+
+
+def test_publier_ne_garde_pas_les_droits_il_les_pose(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    _, upsert = _publier(client, nom)
+    assert upsert.await_args.kwargs["garder_les_droits"] is False

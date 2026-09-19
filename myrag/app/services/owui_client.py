@@ -71,7 +71,7 @@ TAG_MES_COLLECTIONS = "Mes collections"
 
 def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = "",
                     system_prompt: str = "", suggestions_fournies: bool = False,
-                    tags_geres: set[str] | None = None) -> dict:
+                    tags_geres: set[str] | None = None, garder_les_droits: bool = False) -> dict:
     """Ce qu'on envoie au socle : la fiche VOULUE, sans rien effacer de ce qu'on ne gère pas.
 
     Republier une collection réécrivait la fiche entière : le prompt système réglé dans
@@ -86,6 +86,9 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
       les nôtres — `tags_geres` : « Mes collections » et les libellés de catégorie —
       sont remplacées par celles d'aujourd'hui ; les suggestions ne sont remplacées
       que si l'appelant en fournit.
+    - `garder_les_droits` : la portée de la fiche existante (`access_grants`,
+      `access_control`) est reconduite telle quelle. C'est le mode de la RESYNCHRONISATION :
+      elle change ce qu'on lit, jamais qui a le droit de lire.
     Fonction pure : ni réseau ni horloge.
     """
     fiche = {**voulue, "meta": dict(voulue.get("meta") or {}), "params": dict(voulue.get("params") or {})}
@@ -93,6 +96,14 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
         return fiche
     meta_avant = existante.get("meta") or {}
     params_avant = existante.get("params") or {}
+
+    if garder_les_droits:
+        # Le socle rend ses droits enrichis (id, dates…) ; on ne lui renvoie que ce qu'il attend.
+        fiche["access_grants"] = [
+            {k: g[k] for k in ("principal_type", "principal_id", "permission") if k in g}
+            for g in existante.get("access_grants") or [] if isinstance(g, dict)
+        ]
+        fiche["access_control"] = existante.get("access_control")
 
     fiche["params"] = {**params_avant, **({"system": system_prompt} if system_prompt else {})}
 
@@ -111,6 +122,10 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
     meta["tags"] = autres + list(meta.get("tags") or [])
     fiche["meta"] = meta
     return fiche
+
+
+class FicheAbsente(Exception):
+    """On demandait de reconduire les droits d'une fiche qui n'existe pas."""
 
 
 class OwuiClient:
@@ -180,6 +195,7 @@ class OwuiClient:
         tags: list[str] | None = None,
         tags_geres: set[str] | None = None,
         description_par_defaut: str = "",
+        garder_les_droits: bool = False,
     ) -> dict:
         """Create or update an OWUI Model.
 
@@ -190,6 +206,10 @@ class OwuiClient:
         Ne réécrit pas ce qu'il ne gère pas : voir `fusionner_fiche`.
         """
         existante = await self._fiche_existante(model_id)
+        if garder_les_droits and not existante:
+            # Rien à reconduire : créer la fiche ici poserait une portée que personne ne
+            # vient de choisir. C'est une PUBLICATION qui crée une fiche.
+            raise FicheAbsente(f"{model_id} n'a pas de fiche dans l'assistant : republier la collection")
         body = {
             "id": model_id,
             "name": name,
@@ -224,7 +244,8 @@ class OwuiClient:
             "is_active": True,
         }
         body = fusionner_fiche(existante, body, description=description, system_prompt=system_prompt,
-                               suggestions_fournies=suggestion_prompts is not None, tags_geres=tags_geres)
+                               suggestions_fournies=suggestion_prompts is not None, tags_geres=tags_geres,
+                               garder_les_droits=garder_les_droits)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             # Update first — succeeds only if the model already exists.

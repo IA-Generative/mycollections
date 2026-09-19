@@ -61,10 +61,14 @@ async def _voulue(name: str) -> dict:
         }
 
 
-async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None) -> dict:
+async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None,
+                             garder_les_droits: bool = False) -> dict:
     """Pose (ou repose) la fiche de la collection dans l'assistant. `a_sec` : dit ce qui
-    partirait, sans rien écrire. Lève PasPubliee si la collection n'a pas à y être."""
-    v = await _voulue(name)
+    partirait, sans rien écrire. Lève PasPubliee si la collection n'a pas à y être.
+
+    `garder_les_droits` : la portée de la fiche EXISTANTE est reconduite. Une publication
+    pose la portée que son auteur vient de choisir ; une resynchronisation, non."""
+    v = {**await _voulue(name), "garder_les_droits": garder_les_droits}
     rendu = {"collection": name, "model_id": v["model_id"], "nom": v["name"], "tags": v["tags"]}
     if a_sec:
         return {**rendu, "a_sec": True}
@@ -86,12 +90,16 @@ async def publiees() -> list[str]:
 
 async def resynchroniser_toutes(*, a_sec: bool = False) -> dict:
     """Après un changement de titre, de catégorie ou de libellé : reposer toutes les fiches.
-    Une fiche qui échoue n'arrête pas les autres ; le bilan les nomme."""
+    Une fiche qui échoue n'arrête pas les autres ; le bilan les nomme.
+
+    JAMAIS les droits : des fiches ont été posées ou restreintes hors de Mes collections
+    (corpus partagés accordés à un seul compte, alors que leur fiche ici dit « tout le
+    monde ») — reposer la portée enregistrée les aurait ouvertes à tous, d'un clic."""
     client = None if a_sec else owui_client.OwuiClient()
     faites, echecs = [], []
     for name in await publiees():
         try:
-            faites.append(await synchroniser_fiche(name, a_sec=a_sec, client=client))
+            faites.append(await synchroniser_fiche(name, a_sec=a_sec, client=client, garder_les_droits=True))
         except Exception as e:  # noqa: BLE001 — le bilan dit tout, rien ne se perd
             echecs.append({"collection": name, "erreur": f"{type(e).__name__}: {e}"[:300]})
     return {"a_sec": a_sec, "fiches": faites, "echecs": echecs}
