@@ -62,6 +62,53 @@ def grants_de_partage(visibility: str, groupes: list[str] | None) -> list[dict]:
     return []
 
 
+#: Ce que Mes collections pose dans `meta` d'une fiche. Tout le reste (outils, filtres,
+#: actions, connaissances… posés dans l'assistant ou par un script d'exploitation) ne lui
+#: appartient pas et survit à une republication.
+_META_GERE = ("description", "profile_image_url", "suggestion_prompts", "tags", "capabilities")
+TAG_MES_COLLECTIONS = "Mes collections"
+
+
+def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = "",
+                    system_prompt: str = "", suggestions_fournies: bool = False) -> dict:
+    """Ce qu'on envoie au socle : la fiche VOULUE, sans rien effacer de ce qu'on ne gère pas.
+
+    Republier une collection réécrivait la fiche entière : le prompt système réglé dans
+    l'assistant (`params.system`), ses autres paramètres, ses outils et ses filtres
+    disparaissaient sans un mot — la collection répondait encore, mais plus comme prévu.
+
+    - `params` : ceux de la fiche existante ; `system` n'est remplacé que si un prompt
+      est FOURNI (un prompt vide ne veut pas dire « effacer »).
+    - `meta` : les clés que Mes collections ne gère pas sont gardées ; une description
+      vide ne remplace pas une description rédigée ; les étiquettes posées ailleurs
+      restent, « Mes collections » s'y ajoute ; les suggestions ne sont remplacées que
+      si l'appelant en fournit.
+    Fonction pure : ni réseau ni horloge.
+    """
+    fiche = {**voulue, "meta": dict(voulue.get("meta") or {}), "params": dict(voulue.get("params") or {})}
+    if not existante:
+        return fiche
+    meta_avant = existante.get("meta") or {}
+    params_avant = existante.get("params") or {}
+
+    fiche["params"] = {**params_avant, **({"system": system_prompt} if system_prompt else {})}
+
+    meta = {k: v for k, v in meta_avant.items() if k not in _META_GERE}
+    meta.update(fiche["meta"])
+    if not description and meta_avant.get("description"):
+        meta["description"] = meta_avant["description"]
+    if not suggestions_fournies and meta_avant.get("suggestion_prompts"):
+        meta["suggestion_prompts"] = meta_avant["suggestion_prompts"]
+    if meta_avant.get("profile_image_url"):
+        meta["profile_image_url"] = meta_avant["profile_image_url"]
+    noms = [t.get("name") for t in meta.get("tags") or [] if isinstance(t, dict)]
+    autres = [t for t in meta_avant.get("tags") or []
+              if isinstance(t, dict) and t.get("name") and t.get("name") not in noms]
+    meta["tags"] = autres + list(meta.get("tags") or [])
+    fiche["meta"] = meta
+    return fiche
+
+
 class OwuiClient:
     def __init__(self, api_key: str | None = None, base_url: str | None = None,
                  timeout: float = 15.0):
@@ -98,6 +145,24 @@ class OwuiClient:
         data = resp.json()
         return data if data else None
 
+    async def _fiche_existante(self, model_id: str) -> dict | None:
+        """La fiche déjà posée, ou None s'il n'y en a pas.
+
+        Un socle répond 401, 403 ou 404 selon sa version pour une fiche ABSENTE (c'est
+        déjà ce qui oblige `upsert_model` à tenter la création après tout échec de mise
+        à jour) : ces réponses valent « pas de fiche ». Une clé vraiment invalide sera
+        dite par la création. Toute AUTRE panne (délai, 5xx) remonte : mieux vaut une
+        publication à rejouer qu'une fiche réécrite à l'aveugle, prompt effacé.
+        """
+        try:
+            return await self.get_model(model_id)
+        except PermissionError:
+            return None
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (403, 404):
+                return None
+            raise
+
     async def upsert_model(
         self,
         model_id: str,
@@ -114,7 +179,10 @@ class OwuiClient:
         Mirrors owuiapps-agents' approach: try update first, fall back to
         create if the update fails (e.g. model doesn't exist yet).
         Idempotent on repeated calls with the same model_id.
+
+        Ne réécrit pas ce qu'il ne gère pas : voir `fusionner_fiche`.
         """
+        existante = await self._fiche_existante(model_id)
         body = {
             "id": model_id,
             "name": name,
@@ -124,7 +192,7 @@ class OwuiClient:
                 "suggestion_prompts": [
                     {"content": p} for p in (suggestion_prompts or [])
                 ],
-                "tags": [{"name": "Mes collections"}],
+                "tags": [{"name": TAG_MES_COLLECTIONS}],
                 "capabilities": {"vision": False, "usage": False, "citations": True},
             },
             "params": (
@@ -146,6 +214,8 @@ class OwuiClient:
             "access_grants": access_grants or [],
             "is_active": True,
         }
+        body = fusionner_fiche(existante, body, description=description, system_prompt=system_prompt,
+                               suggestions_fournies=suggestion_prompts is not None)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             # Update first — succeeds only if the model already exists.
