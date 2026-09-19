@@ -49,7 +49,16 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
   - 👎 retours négatifs (`Feedback.rating < 0`),
   - 👍 promues (`QRCache` avec `source="feedback"`).
 
-  Click sur une carte → la question part dans le chat. Vote 👍 → `QRCache` (réponse curée). Vote 👎 → nouveau `Feedback(rating=-1, status="pending")`. Bouton **« Lancer toute la banque »** → exécute toutes les questions en série et affiche un tableau synthétique en pied de colonne. Sources rendues comme puces cliquables sous chaque réponse, avec **popover au survol** (preview ~500 chars du chunk) et lien « Document complet » pour ouvrir l'original. Debug (prompt/chunks/modèle/temps) en accordéon replié sous chaque message. Le backend relaie `/extract/{id}`, `/file/{id}` et `/static/{path}` d'OpenRAG via `/api/openrag/*` avec le token admin côté serveur — les liens ouverts en nouvel onglet contournent ainsi le 401 de l'API OpenRAG.
+  Click sur une carte → la question part dans le chat. Vote 👍 → `QRCache` (réponse curée). Vote 👎 → nouveau `Feedback(rating=-1, status="pending")`. Bouton **« Lancer toute la banque »** → exécute toutes les questions en série et affiche un tableau synthétique en pied de colonne. Debug (prompt/chunks/modèle/temps) en accordéon replié sous chaque message, les morceaux y sont rendus en Markdown.
+
+  ![Bulle au survol d'une puce de source](docs/images/source-bulle.png)
+
+  **Les sources d'une réponse** — écrans et règles à ne pas défaire dans [docs/sources.md](docs/sources.md) — s'affichent en puces sous le message ([SourceChip.vue](myrag/frontend/components/playground/SourceChip.vue)) :
+  - **au survol** (ou au focus clavier), une bulle montre le début du morceau et deux boutons, « Lire l'extrait » et « Document complet ». La bulle est posée sur la fenêtre (`Teleport`, position fixe) : la zone de messages défile et la rognerait. Elle reste ouverte le temps que la souris la rejoigne, et se ferme au défilement ou sur Échap ;
+  - **au clic**, une fenêtre de lecture s'ouvre sans quitter la page ([SourceViewer.vue](myrag/frontend/components/playground/SourceViewer.vue)) : texte rendu en Markdown assaini, résumé du document en encart, **export Word et PDF** (sans aller-retour serveur), « Ouvrir dans un onglet ». Ctrl/Cmd-clic garde le comportement d'un lien. Si la relecture du morceau échoue, la fenêtre montre le texte déjà reçu avec la réponse ;
+  - **les balises techniques d'OpenRAG** (`[CONTEXT]`, `* filename:`, `[CHUNK_START]`, `[CHUNK_END]`) ne sont jamais montrées : `decouperMorceau` ([utils/extrait.ts](myrag/frontend/utils/extrait.ts)) sépare le résumé, le nom de fichier et le texte ; `_decouper_morceau` fait la même découpe côté backend.
+
+  Le backend relaie `/extract/{id}`, `/file/{id}` et `/static/{path}` d'OpenRAG via `/api/openrag/*` avec le token admin côté serveur — un lien ouvert dans un onglet contourne ainsi le 401 de l'API OpenRAG. `/api/openrag/extract/{id}` rend une page HTML autonome et lisible (paragraphes, adresses cliquables, **pas de lien « Retour »** : un onglet neuf n'a pas d'historique) ; `?raw=1` rend le JSON d'OpenRAG tel quel, balises comprises — c'est ce que lit la fenêtre de lecture. `/static/{path}` propage `?raw=1` quand il se replie sur le morceau.
 - **Graph de références croisées** (NetworkX + Cytoscape.js) pour les collections le supportant.
 - **Sync Keycloak ↔ OpenRAG** : propagation des groupes `rag-query/<collection>` vers les partitions.
 
