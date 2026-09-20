@@ -2,7 +2,11 @@
 
 Front augmenté DSFR pour OpenRAG. Module qui s'intercale entre l'utilisateur et OpenRAG pour offrir un découpage intelligent de documents, un graph de références croisées, une administration des collections en DSFR, et une intégration riche dans Open WebUI.
 
-**Lien pour expérimenter** : [https://mycollections.fake-domain.name](https://mycollections.fake-domain.name) (alias : `mycorpus.fake-domain.name`).
+![Page d'accueil de Mes collections : ce que vos collections ont rendu possible, les trois gestes — découvrir, explorer, créer —, la demande d'un jeu de données et les portes par catégorie](docs/images/accueil.png)
+
+*L'accueil, avec des données d'exemple. Il invite à découvrir, puis à partager : un exemple de question prêt à poser, le catalogue, l'assistant de création, et la marche à suivre quand une donnée manque.*
+
+> Les adresses en `fake-domain.name` de ce document sont des **exemples** : remplacez-les par celles de votre déploiement.
 
 ## Raison d'être
 
@@ -31,12 +35,14 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
 2. [Architecture](#architecture)
 3. [Sources d'indexation supportées](#sources-dindexation-supportées)
 4. [Démarrage local](#démarrage-local)
-5. [Déploiement Scaleway](#déploiement-scaleway)
+5. [Déploiement sur Kubernetes](#déploiement-sur-kubernetes)
 6. [Documentation](#documentation)
 
 ## Ce que fait l'application
 
-- **Catalog DSFR** des collections de documents (parcours `/admin/catalog`).
+- **Un accueil qui invite à découvrir, puis à partager** ([pages/index.vue](myrag/frontend/pages/index.vue)) : une question d'exemple tirée du jeu d'évaluation d'une collection publiée à tous, prête à poser dans le bac à sable ; les chiffres de ce qui existe ; et, pour qui partage déjà, ce que ses collections ont rendu possible.
+- **Catalogue DSFR** des collections, rangées par **catégorie** (parcours `/admin/catalog`) ; chaque collection porte un titre lisible, distinct de son identifiant technique.
+- **Le collectif** : quand une donnée manque, on la **demande** ; une demande qui rassemble assez de collègues et un garant devient un chantier, amorcé depuis ce qui existe (open data, Légifrance, fichiers du service), vérifié, puis publié. Modèle, états et routes → [docs/collectif.md](docs/collectif.md) ; le guide en six étapes est servi par l'application (`/guide`, sources dans [myrag/app/guide/](myrag/app/guide/)).
 - **Wizard 5 étapes** de création d'une collection : source, métadonnées, ingestion, évaluation, publication.
 - **Connecteurs de source** : fichiers locaux (PDF/MD/DOCX…), URL distante, Légifrance (API PISTE), **Drive (Suite Numérique)** — indexation à la demande d'un dossier Drive partagé.
 - **Chunking intelligent** (4 stratégies : auto, article, chunk, directory) avec stockage du fichier source sur PVC pour permettre la réindexation.
@@ -70,19 +76,19 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
      ▼
 [MyRAG FastAPI — port 8200]
      │
-     ├── OpenRAG         (RAG backend, sur VM Scaleway en prod, Docker compose en local)
+     ├── OpenRAG         (backend RAG ; Docker compose en local)
      ├── Keycloak        (OIDC realm openwebui)
      ├── Drive           (Suite Numérique, via /external_api/v1.0/)
      ├── Open WebUI      (publication des collections comme modèles)
-     └── PostgreSQL      (DB myrag, partagée avec keycloak/myvault en prod)
+     └── PostgreSQL      (base `myrag` ; SQLite en développement)
 ```
 
 Stack :
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy async (SQLite dev / PostgreSQL prod), httpx, NetworkX.
 - **Frontend** : Nuxt 4, `@gouvfr/dsfr`, `oidc-client-ts` (PKCE).
 - **Auth** : Keycloak OIDC PKCE (realm `openwebui`, client `myrag-front` public + client `mycollections-drive` confidential pour service-to-service Drive).
-- **Tests** : pytest + pytest-asyncio.
-- **Images** : Docker multi-stage, déployées en K8s (Scaleway Kapsule) via manifests dans `myrag/k8s/`.
+- **Tests** : pytest + pytest-asyncio (`myrag/tests/`), vitest (`myrag/frontend/tests/`).
+- **Images** : Docker multi-stage, déployées sur Kubernetes via les manifestes de `myrag/k8s/`.
 
 Schéma détaillé + ports + variables d'environnement → [CLAUDE.md](CLAUDE.md).
 
@@ -121,13 +127,13 @@ Partager un dossier Drive au bot ≠ rendre son contenu public. Il y a **deux co
 
 **Par défaut, sans précautions, une collection `scope=all` indexée depuis Drive est interrogeable par tout utilisateur MyRAG.** Choisir explicitement `scope=group` à l'étape 2 du wizard pour cloisonner.
 
-Points à durcir (cf. `continue-keen-hamming.md` priorité 3) : `/admin/catalog` et `/c/{id}/playground` ne sont pas encore filtrés par rôle — tout user authentifié peut lister et interroger.
+Point à durcir : `/admin/catalog` et `/c/{id}/playground` ne sont pas encore filtrés par rôle — tout utilisateur authentifié peut lister et interroger.
 
 ### Filtrage du picker Drive par utilisateur (impersonation)
 
 **Problème résolu** : en v1 naïve, le picker appelait Drive avec un service account (`mycollections-drive`) → tous les dossiers partagés au bot étaient listés à **tous** les admins MyRAG. Un admin A pouvait indexer le dossier partagé par l'admin B sans son consentement.
 
-**Solution implémentée (2026-04-19, option 1a)** :
+**Solution implémentée** :
 - Les routes `/api/sources/drive/folders`, `/drive/add`, `/drive/sync/*`, `/drive/status/*` **reçoivent et relaient le token OIDC de l'utilisateur connecté** (`Authorization: Bearer <user_access_token>`). Drive voit l'appel comme fait par cet utilisateur → retourne uniquement les dossiers que cet utilisateur peut voir.
 - **Download synchrone avant async** : dans `/drive/add`, MyRAG télécharge tous les fichiers du dossier **pendant l'appel HTTP initial** (où le token user est encore valide), puis lance le chunking + upload OpenRAG en arrière-plan depuis les bytes déjà en mémoire. Plus aucun appel Drive après que la route a répondu.
 - **Access token lifespan bumped à 15 min** pour le client Keycloak `myrag-front` (attribut `access.token.lifespan=900`), ce qui laisse largement le temps de télécharger un dossier raisonnable avant expiry.
@@ -149,7 +155,7 @@ Trois timeouts en cascade :
 | Couche | Valeur actuelle | Ce qui expire | Conséquence |
 |--------|----------------|---------------|-------------|
 | Access token (client `myrag-front`) | **15 min** | Bearer utilisé dans `Authorization` | À chaque appel API, le Bearer peut être rejeté en 401 → besoin d'un renew |
-| SSO session idle (realm `openwebui`) | **4 h** (bump 2026-04-19) | La session Keycloak si l'user est inactif | Au-delà, le refresh token stocké par le browser ne peut plus obtenir un nouveau access token |
+| SSO session idle (realm `openwebui`) | **4 h** | La session Keycloak si l'user est inactif | Au-delà, le refresh token stocké par le browser ne peut plus obtenir un nouveau access token |
 | SSO session max | **10 h** | La session Keycloak absolue | Forced re-login au-delà, quoi qu'il arrive |
 
 Côté frontend, le flow est :
@@ -178,7 +184,7 @@ docker run -d --name myrag-test \
   --add-host=host.docker.internal:host-gateway \
   -v myrag-data:/app/data \
   -e OPENRAG_URL=http://openrag-openrag-cpu-1:8080 \
-  -e OPENRAG_ADMIN_TOKEN=or-admin-openrag-2026 \
+  -e OPENRAG_ADMIN_TOKEN=<jeton-admin-openrag> \
   -e KEYCLOAK_URL=http://host.docker.internal:8082 \
   -e KEYCLOAK_REALM=openwebui \
   --network openrag_default myrag:beta
@@ -188,34 +194,44 @@ cd myrag/frontend
 npm install
 AUTH_ENABLED=false npx nuxt dev --port 8201
 
+# Tests
+(cd .. && python3 -m pytest tests/unit -q)   # backend
+npx vitest run                               # frontend
+
 # 4. Vérifier
 curl http://localhost:8200/health            # backend
 curl http://localhost:8201/                  # frontend
 ```
 
-## Déploiement Scaleway
+## Déploiement sur Kubernetes
 
-Cible : Kapsule **`k8s-par-brave-bassi`**, namespace **`miraiku`**. OpenRAG tourne sur une VM Scaleway séparée (`api.openrag.fake-domain.name`). DB PostgreSQL partagée dans `miraiku` (DB dédiée `myrag`, user `app`).
+Les manifestes sont dans `myrag/k8s/`. Trois paramètres dépendent de votre environnement et
+n'ont pas de valeur par défaut ici : le **registre** d'images (`<REGISTRE>`), le **namespace**
+(`<NAMESPACE>`) et les **adresses** publiques. OpenRAG peut tourner ailleurs que dans le
+cluster ; la base PostgreSQL `myrag` doit exister avant le premier démarrage.
+
+> **Les adresses du SSO sont cuites dans l'image du frontend** : Nuxt en mode statique lit
+> `KEYCLOAK_URL`, `KEYCLOAK_REALM` et `KEYCLOAK_CLIENT_ID` à la construction, pas au démarrage.
+> Les changer impose de reconstruire l'image — modifier un ConfigMap n'y fait rien.
 
 ```bash
-# Build + push images (TOUJOURS linux/amd64 — Mac ARM64 par défaut = exec format error)
+# Construire et pousser (TOUJOURS linux/amd64 : un Mac ARM64 produit sinon « exec format error »)
 TAG=$(git rev-parse --short HEAD)
-scw registry login
-docker buildx build --platform linux/amd64 --push \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest myrag/
-docker buildx build --platform linux/amd64 --push \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest myrag/frontend/
+docker buildx build --platform linux/amd64 --push -t <REGISTRE>/myrag-backend:$TAG  myrag/
+docker buildx build --platform linux/amd64 --push -t <REGISTRE>/myrag-frontend:$TAG \
+  --build-arg KEYCLOAK_URL=https://<votre-sso> myrag/frontend/
 
-# Apply (secret.yaml à remplir localement depuis secret.yaml.template)
+# Appliquer (secret.yaml se remplit localement depuis secret.yaml.template, et ne se commite pas)
 cp myrag/k8s/secret.yaml.template myrag/k8s/secret.yaml  # puis éditer
 kubectl apply -f myrag/k8s/secret.yaml -f myrag/k8s/configmap.yaml -f myrag/k8s/pvc.yaml \
               -f myrag/k8s/service-backend.yaml -f myrag/k8s/service-frontend.yaml \
               -f myrag/k8s/deployment-backend.yaml -f myrag/k8s/deployment-frontend.yaml \
               -f myrag/k8s/ingress.yaml
-kubectl -n miraiku rollout status deploy/myrag-backend
+kubectl -n <NAMESPACE> rollout status deploy/myrag-backend
 ```
+
+Préférez un tag d'image **immuable** à `latest` : c'est ce qui permet de dire quelle version
+tourne, et de revenir en arrière.
 
 ### Branchement OWUI ↔ OpenRAG (one-shot, à faire une fois par cluster)
 
@@ -224,44 +240,49 @@ Le bouton **« Publier »** côté MyRAG crée un wrapper de modèle dans OWUI q
 **1. Déclarer OpenRAG comme provider OpenAI dans OWUI** (les `openrag-*` deviennent auto-découvrables) :
 
 ```bash
-# Ajoute OpenRAG comme 3e provider en plus de Pipelines et Scaleway Direct.
-# Le rollout est automatique sur set env. Lit les clés existantes depuis owui-socle-secrets.
-kubectl -n miraiku set env deploy/openwebui \
-  OPENAI_API_BASE_URLS="http://pipelines:9099/v1;https://api.scaleway.ai/<SCW_PROJECT_ID>/v1;https://api.openrag.fake-domain.name/v1" \
-  OPENAI_API_KEYS="$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.PIPELINES_API_KEY}' | base64 -d);$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.SCW_SECRET_KEY_LLM}' | base64 -d);<OPENRAG_ADMIN_TOKEN>" \
-  OPENAI_API_CONFIGS='[{"prefix":"scaleway-general.","name":"Pipelines"},{"prefix":"","name":"Scaleway Direct"},{"prefix":"openrag-","name":"OpenRAG MyRAG"}]'
+# Ajoute OpenRAG comme fournisseur compatible OpenAI, à côté de ceux déjà déclarés.
+# Le rollout est automatique sur set env. Les trois listes se lisent dans le même ordre.
+kubectl -n <NAMESPACE> set env deploy/openwebui \
+  OPENAI_API_BASE_URLS="<vos fournisseurs existants>;https://api.openrag.fake-domain.name/v1" \
+  OPENAI_API_KEYS="<leurs clés, dans le même ordre>;<OPENRAG_ADMIN_TOKEN>" \
+  OPENAI_API_CONFIGS='[<une entrée par fournisseur existant>,{"prefix":"openrag-","name":"OpenRAG"}]'
 ```
 
 **2. Donner à MyRAG la clé API admin OWUI** (pour appeler `/api/v1/models/create`) :
 
 ```bash
 # Génère une clé dans OWUI : Paramètres > Compte > Clés API (compte avec rôle admin).
-kubectl -n miraiku patch secret myrag-secrets --type=merge \
+kubectl -n <NAMESPACE> patch secret myrag-secrets --type=merge \
   -p "{\"stringData\":{\"OWUI_ADMIN_API_KEY\":\"sk-...\"}}"
-kubectl -n miraiku rollout restart deploy/myrag-backend
+kubectl -n <NAMESPACE> rollout restart deploy/myrag-backend
 ```
 
 **Vérification** :
 
 ```bash
-# Doit lister 15+ modèles openrag-* avec connection_type=external (pas preset)
+# Doit lister les modèles openrag-* avec connection_type=external (pas preset)
 curl -sS https://mychat.fake-domain.name/api/models \
-  -H "Authorization: Bearer $(kubectl -n miraiku get secret myrag-secrets -o jsonpath='{.data.OWUI_ADMIN_API_KEY}' | base64 -d)" \
+  -H "Authorization: Bearer $(kubectl -n <NAMESPACE> get secret myrag-secrets -o jsonpath='{.data.OWUI_ADMIN_API_KEY}' | base64 -d)" \
   | python3 -c "import sys,json; print('\n'.join(sorted([m['id'] for m in json.load(sys.stdin)['data'] if 'openrag' in m['id']])))"
 
 # Diagnostic complet de la chaîne OWUI (clé valide ? admin ? base models discoverables ?)
 curl -sS https://mycollections.fake-domain.name/api/owui/probe | python3 -m json.tool
 ```
 
-Pour persister les changements OWUI au prochain redéploiement de l'environnement, mettre à jour le ConfigMap `owui-socle-config` dans `../owuicore-main/k8s/base/configmap.yaml` (variables `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS`).
+Pour que ces réglages survivent au prochain redéploiement d'Open WebUI, reportez-les dans sa configuration versionnée (variables `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS`).
 
-Procédure complète (création DB, provisioning bot user Drive, troubleshooting amd64 / naive UTC datetimes / nginx redirects / redirect_uri Keycloak) → [myrag/DEPLOYMENT.md](myrag/DEPLOYMENT.md).
+Procédure détaillée (création de la base, compte de service Drive, dépannage) → [myrag/DEPLOYMENT.md](myrag/DEPLOYMENT.md).
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md) — architecture interne, variables d'environnement, problèmes connus, procédure de démarrage du stack complet local.
-- [myrag/DEPLOYMENT.md](myrag/DEPLOYMENT.md) — procédure de déploiement Scaleway pas-à-pas + troubleshooting.
+- [docs/sources.md](docs/sources.md) — lire les sources d'une réponse : écrans, et règles à ne pas défaire.
+- [docs/collectif.md](docs/collectif.md) — le collectif : modèle, états, routes, fil d'avancement ; décision dans [ADR-0001](docs/adr/ADR-0001-collections-collaboratives-modele-et-etats.md).
+- [myrag/app/guide/](myrag/app/guide/) — le guide « Soyez acteurs vous-mêmes », en six étapes, servi par l'application.
+- [docs/drive-find-architecture.md](docs/drive-find-architecture.md) — comment Drive et son moteur de recherche s'articulent.
+- [CLAUDE.md](CLAUDE.md) — repères pour travailler dans le dépôt : dépendances, architecture interne, fichiers clés, variables d'environnement, problèmes connus.
+- [myrag/DEPLOYMENT.md](myrag/DEPLOYMENT.md) — déploiement pas à pas et dépannage.
 - [openwebui/README.md](openwebui/README.md) — plugin Open WebUI pour consommer les collections publiées.
+- [TODO.md](TODO.md) — ce qui reste à faire, et les défauts connus.
 
 ## Licence
 

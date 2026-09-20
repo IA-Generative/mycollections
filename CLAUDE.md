@@ -17,7 +17,7 @@ Mes collections ne fonctionne PAS en standalone. Il depend de plusieurs services
                               |
          ┌────────────────────┼────────────────────┐
          |                    |                    |
-    [OpenRAG]           [Keycloak]          [Scaleway APIs]
+    [OpenRAG]           [Keycloak]          [API de modeles]
      :8180               :8082              (LLM + embeddings)
          |                    |
     ┌────┼────┐          [owuicore-main]
@@ -28,75 +28,77 @@ Mes collections ne fonctionne PAS en standalone. Il depend de plusieurs services
 
 ### Services requis et ou les trouver
 
-| Service | Port | Repository | Indispensable | Verification |
+| Service | Port | Depot | Indispensable | Verification |
 |---------|------|------------|:-------------:|-------------|
-| **OpenRAG** | 8180 | `/Users/etiquet/Documents/GitHub/openrag` | oui | `curl http://localhost:8180/health_check` |
-| **Keycloak** | 8082 | `/Users/etiquet/Documents/GitHub/owuicore-main` (compose) | oui | `curl http://localhost:8082/realms/openwebui` |
-| **Open WebUI** | 3000 | `/Users/etiquet/Documents/GitHub/owuicore-main` | non (publication) | `curl http://localhost:3000` |
+| **OpenRAG** | 8180 | `../openrag` | oui | `curl http://localhost:8180/health_check` |
+| **Keycloak** | 8082 | `../owuicore-main` (compose) | oui | `curl http://localhost:8082/realms/openwebui` |
+| **Open WebUI** | 3000 | `../owuicore-main` | non (publication) | `curl http://localhost:3000` |
 | **Milvus** | — | Demarre par le compose OpenRAG | oui (via OpenRAG) | Inclus dans `docker compose up` OpenRAG |
 | **PostgreSQL (rdb)** | — | Demarre par le compose OpenRAG | oui (via OpenRAG) | Inclus dans `docker compose up` OpenRAG |
-| **Scaleway APIs** | — | Cloud (pas de repo local) | oui (LLM + embeddings) | Clefs dans `.env` OpenRAG |
+| **API de modeles** (LLM + embeddings) | — | Service externe, compatible OpenAI | oui | Clefs dans le `.env` d'OpenRAG |
 
-### Repositories lies (ecosysteme Mirai)
+### Depots lies (ecosysteme Mirai)
 
-| Repository | Chemin local | Role |
-|-----------|-------------|------|
-| `openrag` | `/Users/etiquet/Documents/GitHub/openrag` | Backend RAG (indexation, search, chat) |
-| `owuicore-main` | `/Users/etiquet/Documents/GitHub/owuicore-main` | Open WebUI + Keycloak + Pipelines + Tika |
-| `keycloak-comu` | `/Users/etiquet/Documents/GitHub/keycloak-comu` | Self-service groupes Keycloak (gestion membres) |
-| `keycloak-utils` | `/Users/etiquet/Documents/GitHub/keycloak-utils` | Utilitaires admin Keycloak |
-| `owuitools-legifrance` | `/Users/etiquet/Documents/GitHub/owuitools-legifrance` | MCP Legifrance (API PISTE) |
-| `owuipipe-grafragexp` | `/Users/etiquet/Documents/GitHub/owuipipe-grafragexp` | Viewer graph Cytoscape.js (source du viewer) |
-| `AssistantMiraiLibreOffice` | `/Users/etiquet/Documents/GitHub/AssistantMiraiLibreOffice` | Extension LibreOffice (integration future) |
-| `mirai-assistant-navigateur` | `/Users/etiquet/Documents/GitHub/mirai-assistant-navigateur` | Extension navigateur (integration future) |
-| `mirai-infra` | `/Users/etiquet/Documents/GitHub/mirai-infra` | Infrastructure K8s Scaleway |
-| `mirai-values` | `/Users/etiquet/Documents/GitHub/mirai-values` | Helm values pour le deploiement |
+Les chemins sont donnes **relativement a ce depot** : les depots se clonent cote a cote.
+
+| Depot | Chemin | Role |
+|-------|--------|------|
+| `openrag` | `../openrag` | Backend RAG (indexation, search, chat) |
+| `owuicore-main` | `../owuicore-main` | Open WebUI + Keycloak + Pipelines + Tika |
+| `keycloak-comu` | `../keycloak-comu` | Self-service groupes Keycloak (gestion membres) |
+| `keycloak-utils` | `../keycloak-utils` | Utilitaires admin Keycloak |
+| `owuitools-legifrance` | `../owuitools-legifrance` | MCP Legifrance (API PISTE) |
+| `owuipipe-grafragexp` | `../owuipipe-grafragexp` | Viewer graph Cytoscape.js (source du viewer) |
+| `AssistantMiraiLibreOffice` | `../AssistantMiraiLibreOffice` | Extension LibreOffice (integration future) |
+| `mirai-assistant-navigateur` | `../mirai-assistant-navigateur` | Extension navigateur (integration future) |
+| `mirai-infra` | `../mirai-infra` | Infrastructure Kubernetes |
+| `mirai-values` | `../mirai-values` | Helm values pour le deploiement |
 
 ### Demarrage du stack complet (Docker local)
 
 ```bash
 # 1. Demarrer owuicore-main (Keycloak + Open WebUI + Pipelines + Tika)
-cd /Users/etiquet/Documents/GitHub/owuicore-main
+cd ../owuicore-main
 docker compose up -d
 
 # 2. Demarrer OpenRAG (+ Milvus + PostgreSQL + MinIO)
-cd /Users/etiquet/Documents/GitHub/openrag
+cd ../openrag
 docker compose --profile cpu up -d
 
 # 3. Demarrer MyRAG (backend)
-cd /Users/etiquet/Documents/GitHub/mycollections
+cd ../mycollections
 docker build -t myrag:beta myrag/ && docker run -d --name myrag-test \
   -p 8200:8200 --dns 8.8.8.8 --dns 8.8.4.4 \
   --add-host=host.docker.internal:host-gateway \
   -v myrag-data:/app/data \
   -e OPENRAG_URL=http://openrag-openrag-cpu-1:8080 \
-  -e OPENRAG_ADMIN_TOKEN=or-admin-openrag-2026 \
+  -e OPENRAG_ADMIN_TOKEN=<jeton-admin-openrag> \
   -e KEYCLOAK_URL=http://host.docker.internal:8082 \
   -e KEYCLOAK_REALM=openwebui \
-  -e KEYCLOAK_ADMIN_PASSWORD=xxx \
+  -e KEYCLOAK_ADMIN_PASSWORD=<mot-de-passe-admin-keycloak> \
   -e MYRAG_PSEUDO_SEL=dev-sel \
   --network openrag_default myrag:beta
 
 # 4. Demarrer le frontend (dev mode)
-cd /Users/etiquet/Documents/GitHub/mycollections/myrag/frontend
+cd myrag/frontend
 npm install && npx nuxt dev --port 8201
 ```
 
-### Deploiement Scaleway (K8s)
+### Deploiement (Kubernetes)
+
+Les manifestes sont dans `myrag/k8s/` ; la procedure est dans le README (section
+« Deploiement sur Kubernetes ») et dans `myrag/DEPLOYMENT.md`. Registre d'images, namespace et
+adresses dependent de l'environnement : ils ne sont pas ecrits dans ce depot.
 
 ```bash
-# Les manifests K8s sont dans myrag/k8s/
-# Le stack complet sur Scaleway :
-#   - OpenRAG : namespace openrag (deployment + milvus + rdb)
-#   - Keycloak : namespace owui (pod keycloak)
-#   - Open WebUI : namespace owui (pod openwebui)
-#   - MyRAG : namespace myrag (deployment + service + ingress)
-#
-# Variables d'environnement Scaleway :
-#   DATABASE_URL=postgresql+asyncpg://user:pass@rdb.openrag.svc:5432/myrag
-#   OPENRAG_URL=http://openrag.openrag.svc:8080
-#   KEYCLOAK_URL=http://keycloak.owui.svc:8080
+# Variables d'environnement du backend, en cluster (exemples de forme, pas de valeurs reelles) :
+#   DATABASE_URL=postgresql+asyncpg://<user>:<mot-de-passe>@<hote-postgres>:5432/myrag
+#   OPENRAG_URL=http://<service-openrag>:8080
+#   KEYCLOAK_URL=https://<votre-sso>
 ```
+
+**Les adresses du SSO sont cuites dans l'image du frontend** (Nuxt statique : lues a la
+construction, pas au demarrage). Les changer impose de reconstruire l'image.
 
 ### Verification rapide de sante
 
@@ -134,8 +136,8 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy async (SQLite dev / PostgreSQL prod), httpx, NetworkX
 - **Frontend** : Nuxt 4, @gouvfr/dsfr, oidc-client-ts
 - **Auth** : Keycloak OIDC PKCE (realm openwebui, client myrag-front)
-- **Tests** : pytest, TDD
-- **Docker** : Docker Compose + K8s Scaleway manifests
+- **Tests** : pytest (backend), vitest (frontend), TDD
+- **Docker** : Docker Compose + manifestes Kubernetes (`myrag/k8s/`)
 
 ## Key Files
 
@@ -160,6 +162,8 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |
 | `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
 | `myrag/frontend/utils/extrait.ts` | `decouperMorceau` (retire les balises OpenRAG), exports ; pendant backend : `_decouper_morceau` dans `app/main.py` |
+| `myrag/frontend/pages/index.vue`, `myrag/frontend/utils/accueil.ts` | Accueil : decouvrir, explorer, creer ; ce que l'accueil raconte est en fonctions pures testees |
+| `myrag/app/routers/accueil.py`, `categories.py`, `guide.py` | Exemple de question et bilan de l'accueil ; categories du catalogue ; guide en six etapes (`myrag/app/guide/*.md`) |
 | `myrag/frontend/pages/admin/create/` | Wizard 5 etapes |
 | `myrag/frontend/composables/useApi.ts` | Client API centralise |
 
@@ -174,8 +178,12 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/myrag  # prod
 ## Testing
 
 ```bash
-cd myrag && python3 -m pytest tests/unit/ -v
+cd myrag && python3 -m pytest tests/unit/ -v      # backend
+cd myrag/frontend && npx vitest run              # frontend
 ```
+
+Le comportement d'un survol, d'un focus ou d'un defilement ne se prouve pas par un test
+unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 
 ## Environment Variables
 
@@ -198,6 +206,15 @@ cd myrag && python3 -m pytest tests/unit/ -v
 | `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
 | `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
+
+## Regles de travail
+
+- **`main` est protegee** : tout passe par une branche et une pull request. La construction des
+  images lit `main` — un correctif qui n'y est pas fusionne n'est pas livre, meme s'il marche en local.
+- **Le depot est public** : ni nom de personne, ni chemin de poste, ni identifiant d'infrastructure
+  (registre, cluster, namespace), ni jeton — meme d'exemple — dans le code ou la documentation.
+  Les adresses d'exemple sont en `fake-domain.name` ; les ecrans de documentation utilisent des
+  donnees d'exemple, jamais celles d'un environnement reel.
 
 ## Problemes connus
 
