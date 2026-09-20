@@ -352,7 +352,10 @@ class GraphBuilder:
                 "message": "No graph available for this collection",
             }
 
-        # Filter by query if provided
+        # Le filtre est une recherche LITTÉRALE (sous-chaîne) dans l'identifiant, le libellé et l'aperçu.
+        # S'il ne trouve rien, le graphe entier est rendu — et on le DIT (`query_matched`) : sans cela,
+        # une question en langage courant semblait « marcher » alors qu'elle ne filtrait rien.
+        filtre_trouve = True
         if query:
             # Find nodes matching query
             matching = [
@@ -361,6 +364,7 @@ class GraphBuilder:
                 or query.lower() in d.get("content_preview", "").lower()
                 or query.lower() in d.get("label", "").lower()
             ]
+            filtre_trouve = bool(matching)
             if matching:
                 subgraph = self.get_subgraph(collection, matching, depth=1)
                 if subgraph:
@@ -431,6 +435,7 @@ class GraphBuilder:
             "graph_kind": "article",
             "corpus_id": collection,
             "query": query,
+            "query_matched": filtre_trouve,
             "max_nodes": max_nodes,
             "min_weight": min_weight,
             "total_nodes": len(nodes),

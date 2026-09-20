@@ -14,6 +14,37 @@ router = APIRouter(prefix="/graph", tags=["Graph"])
 _builder = GraphBuilder()
 
 
+async def config_du_visualiseur(corpus_id: str) -> dict:
+    """Ce que le visualiseur doit savoir pour ouvrir l'assistant sur la collection.
+
+    Le modèle n'est donné que si la collection est publiée À TOUS dans l'assistant : cette page est
+    servie sans session (une iframe ne porte pas de jeton), elle ne dit donc rien qui ne soit déjà
+    visible de tout compte de l'assistant.
+    """
+    from app.config import settings
+    from app.database import async_session
+    from app.models.db import Collection, Publication
+
+    public = (settings.owui_public_url or "").strip().rstrip("/")
+    modele = ""
+    if public and corpus_id:
+        async with async_session() as session:
+            col = await session.get(Collection, corpus_id)
+            pub = await session.get(Publication, corpus_id)
+            if (col and pub and not col.archived_at and pub.state == "published"
+                    and pub.alias_enabled and pub.visibility == "all"):
+                modele = f"openrag-{col.name}"
+    return {"openwebui_url": public, "assistant_model": modele}
+
+
+def injecter_config(html: str, config: dict) -> str:
+    """Pose `window.GRAPH_VIEWER_CONFIG` en tête de page. Tout `<` est écrit `\\u003c` : aucune
+    valeur ne peut refermer la balise script, ni en ouvrir une."""
+    import json
+    charge = json.dumps(config, ensure_ascii=False).replace("<", "\\u003c")
+    return html.replace("<body>", f"<body>\n  <script>window.GRAPH_VIEWER_CONFIG = {charge};</script>", 1)
+
+
 @router.get("", response_class=HTMLResponse)
 async def graph_viewer(
     corpus_id: str = Query("", description="Collection to display"),
@@ -25,7 +56,7 @@ async def graph_viewer(
     if not os.path.exists(viewer_path):
         raise HTTPException(status_code=404, detail="Graph viewer not found")
     with open(viewer_path) as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(content=injecter_config(f.read(), await config_du_visualiseur(corpus_id)))
 
 
 @router.get("/data")

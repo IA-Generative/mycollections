@@ -859,6 +859,31 @@
       font-size: 0.92rem;
     }
 
+    /* ─── Le graphe d'abord ────────────────────────────────────────────────────────
+       Les deux panneaux latéraux réservaient 290 à 360 px chacun : dans une page de
+       1 200 px, il restait 480 px au graphe. Ils se replient ; le graphe prend la place. */
+    .shell.replie-gauche { grid-template-columns: 1fr minmax(280px, 360px); }
+    .shell.replie-droite { grid-template-columns: minmax(290px, 360px) 1fr; }
+    .shell.replie-gauche.replie-droite { grid-template-columns: 1fr; }
+    .shell.replie-gauche > .controls,
+    .shell.replie-droite > .details { display: none; }
+    /* La zone de dessin a la hauteur de la FENÊTRE, pas celle du panneau de réglages : étirée à
+       ~1 500 px, elle était en portrait, et la grille compacte — qui se cale sur la forme de la zone —
+       sortait étroite et haute même dans une zone large. Elle reste en vue quand les réglages défilent. */
+    .viewer { align-self: start; position: sticky; top: calc(24px * var(--ui-scale));
+      height: calc(100vh - 48px * var(--ui-scale)); min-height: 420px; }
+    #cy { height: 100%; min-height: 0; }
+    .overlay-card.lue { display: none; }
+    .volets { position: absolute; z-index: 30; bottom: 12px; left: 12px; right: 12px; display: flex;
+      justify-content: space-between; pointer-events: none; }
+    .volets button { pointer-events: auto; width: auto; flex: 0 0 auto; min-height: 0; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
+      color: #000091; background: #fff; border: 1px solid #000091; border-radius: 4px; padding: .3rem .7rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 18, .16); }
+    .volets button:hover { background: #f5f5fe; }
+    .volets button:focus-visible { outline: 2px solid #0a76f6; outline-offset: 2px; }
+    /* une seule colonne : rien à replier, et la zone de dessin reprend sa place dans le flux */
+    @media (max-width: 1180px) { .volets { display: none; } .viewer { position: relative; top: auto; height: auto; } #cy { min-height: 62vh; } }
+
     @media (max-width: 1180px) {
       .shell {
         grid-template-columns: 1fr;
@@ -914,7 +939,7 @@
 </head>
 <body>
   <div class="shell">
-    <aside class="panel controls">
+    <aside class="panel controls" id="panneauReglages">
       <div class="section">
         <div class="hero-intro">
           <div class="hero-visual" aria-hidden="true">
@@ -926,10 +951,10 @@
 
       <div class="section grid">
         <div class="field">
-          <label for="query">Votre question</label>
-          <textarea id="query" name="query" rows="4" placeholder="Compare le traité de Brétigny et le traité de Troyes"></textarea>
+          <label for="query">Filtrer le graphe — ou préparer une question</label>
+          <textarea id="query" name="query" rows="4" placeholder="Un mot, un numéro d'article…"></textarea>
           <div class="question-helper-row">
-            <span class="helper">Modifiez la question directement ici. Le bouton de relance ouvre Open WebUI avec cette question préremplie.</span>
+            <span class="helper" id="aideFiltre"><strong>Un mot ou un numéro</strong> réduit le graphe aux éléments qui le contiennent, et à leurs voisins — puis « Actualiser ». <strong>Une phrase entière ne filtre rien</strong> : le graphe ne comprend pas les questions. <span id="aideAssistant">Pour interroger la collection, écrivez votre question et ouvrez-la dans l'assistant avec le bouton ci-contre.</span></span>
             <div class="question-action-bar">
               <button
                 id="openWebuiButton"
@@ -1046,9 +1071,13 @@
         <div id="timelineTicksVertical" class="timeline-guide__ticks"></div>
       </div>
       <div id="cy"></div>
+      <div class="volets">
+        <button type="button" id="voletGauche" aria-controls="panneauReglages" aria-expanded="true">◀ Masquer les réglages</button>
+        <button type="button" id="voletDroite" aria-controls="panneauDetail" aria-expanded="true">Masquer le détail ▶</button>
+      </div>
     </main>
 
-    <aside class="panel details">
+    <aside class="panel details" id="panneauDetail">
       <div class="section">
         <h2>Détail</h2>
         <h3 id="detailsTitle">Aucun élément sélectionné</h3>
@@ -1464,20 +1493,29 @@
       }
     }
 
+    // Pas de repli sur localhost : sans adresse publique de l'assistant, le bouton ne s'offre pas.
     function getOpenWebuiUrl() {
-      const configured = String(viewerConfig.openwebui_url || "").trim();
-      return configured || DEFAULT_OPENWEBUI_URL;
+      return String(viewerConfig.openwebui_url || "").trim();
     }
 
     function buildOpenWebuiQuestionUrl(question) {
       try {
         const target = new URL(getOpenWebuiUrl());
+        // `models` : l'assistant s'ouvre sur la collection, pas sur son modèle par défaut.
+        if (viewerConfig.assistant_model) target.searchParams.set("models", viewerConfig.assistant_model);
         target.searchParams.set("q", question);
         return target.toString();
       } catch (error) {
         console.warn("Open WebUI URL could not be parsed", error);
         return `${DEFAULT_OPENWEBUI_URL}/?q=${encodeURIComponent(question)}`;
       }
+    }
+
+    /** L'exemple du champ vient du CORPUS : le libellé de l'élément le plus relié du graphe affiché. */
+    function proposerUnExemple(nodes) {
+      const lePlusRelie = [...(nodes || [])].sort((a, b) => (Number(b.degree) || 0) - (Number(a.degree) || 0))[0];
+      const libelle = String((lePlusRelie && (lePlusRelie.label || lePlusRelie.id)) || "").trim();
+      queryInput.placeholder = libelle ? `Par exemple : ${libelle.slice(0, 60)}` : "Un mot, un numéro d'article…";
     }
 
     async function relaunchInOpenWebUi() {
@@ -2739,6 +2777,16 @@
 
         const layoutSelection = applyGraphToCytoscape(data);
         setEmptyDetails();
+        proposerUnExemple(data.nodes);
+        if (data.query && data.query_matched === false) {
+          setOverlayState(
+            "Aucun élément ne contient ce texte",
+            `« ${data.query} » n'apparaît dans aucun élément : le graphe entier est affiché. Essayez un mot ou un numéro d'article — ou posez la question à l'assistant.`,
+            true
+          );
+          updateUrl();
+          return;
+        }
         const defaultMessage = layoutSelection.note
           ? `${data.message || "Ajustez les paramètres pour modifier l'affichage."} ${layoutSelection.note}`
           : (data.message || "Ajustez les paramètres pour modifier l'affichage.");
@@ -2932,6 +2980,93 @@
     });
 
     initializeViewer();
+  </script>
+  <script>
+    /* Les volets : replier les panneaux pour laisser la place au graphe.
+       - le choix est retenu d'une visite à l'autre ;
+       - le panneau « Détail » se rouvre seul quand un élément est sélectionné — on observe son
+         titre plutôt que Cytoscape, recréé à chaque « Actualiser » (un écouteur posé dessus serait perdu). */
+    (function () {
+      const shell = document.querySelector(".shell");
+      const CLE = "myrag.graphe.volets";
+      const boutons = {
+        gauche: { el: document.getElementById("voletGauche"), classe: "replie-gauche", ouvert: "◀ Masquer les réglages", ferme: "Réglages ▶" },
+        droite: { el: document.getElementById("voletDroite"), classe: "replie-droite", ouvert: "Masquer le détail ▶", ferme: "◀ Détail" },
+      };
+      function lire() { try { return JSON.parse(localStorage.getItem(CLE) || "null"); } catch (e) { return null; } }
+      function retenir() {
+        try { localStorage.setItem(CLE, JSON.stringify({ gauche: shell.classList.contains("replie-gauche"), droite: shell.classList.contains("replie-droite") })); } catch (e) {}
+      }
+      // `redisposer` : la zone a changé de FORME, la disposition se recalcule pour en profiter — sauf si un
+      // élément est sélectionné (recalculer ferait perdre la sélection) : on se contente alors de recadrer.
+      function recadrer(redisposer) {
+        window.requestAnimationFrame(() => {
+          if (typeof cy === "undefined" || !cy) return;
+          cy.resize();
+          const rienDeChoisi = /aucun élément sélectionné/i.test((document.getElementById("detailsTitle") || {}).textContent || "");
+          if (redisposer && rienDeChoisi && typeof applyGraphToCytoscape === "function" && typeof currentGraphData !== "undefined" && currentGraphData) {
+            applyGraphToCytoscape(currentGraphData);
+          } else if (typeof focusGraphInViewport === "function") {
+            focusGraphInViewport(false);
+          }
+        });
+      }
+      function poser(cote, replie, memoriser) {
+        const b = boutons[cote];
+        shell.classList.toggle(b.classe, replie);
+        b.el.textContent = replie ? b.ferme : b.ouvert;
+        b.el.setAttribute("aria-expanded", String(!replie));
+        if (memoriser) retenir();
+        recadrer(memoriser);
+      }
+      for (const cote of Object.keys(boutons)) {
+        boutons[cote].el.addEventListener("click", () => poser(cote, !shell.classList.contains(boutons[cote].classe), true));
+      }
+      // Première visite : le détail est replié (il est vide tant que rien n'est sélectionné).
+      const retenu = lire() || { gauche: false, droite: true };
+      poser("gauche", !!retenu.gauche, false);
+      poser("droite", !!retenu.droite, false);
+
+      // La carte d'état (« Visualisation prête ») s'efface une fois lue : elle réservait près d'un quart
+      // de la hauteur au-dessus du graphe. Tout autre état (chargement, erreur) la fait revenir aussitôt.
+      const carte = document.getElementById("overlayCard");
+      const etat = document.getElementById("overlayTitle");
+      let minuterieCarte = null;
+      function suivreLaCarte() {
+        if (minuterieCarte) { clearTimeout(minuterieCarte); minuterieCarte = null; }
+        carte.classList.remove("lue");
+        if (/visualisation prête/i.test(etat.textContent || "")) {
+          minuterieCarte = setTimeout(() => { carte.classList.add("lue"); recadrer(false); }, 5000);
+        }
+      }
+      if (carte && etat && window.MutationObserver) {
+        new MutationObserver(suivreLaCarte).observe(carte, { childList: true, characterData: true, subtree: true });
+        suivreLaCarte();
+      }
+
+      // Ouvrir l'assistant : seulement si on connaît son adresse publique. Sinon le bouton ouvrait
+      // `http://localhost:3000` — en production, une page qui n'existe pas.
+      const versAssistant = document.getElementById("openWebuiButton");
+      const aideAssistant = document.getElementById("aideAssistant");
+      const cfg = window.GRAPH_VIEWER_CONFIG || {};
+      if (!String(cfg.openwebui_url || "").trim()) {
+        if (versAssistant) versAssistant.style.display = "none";
+        if (aideAssistant) aideAssistant.style.display = "none";
+      } else if (versAssistant) {
+        const dit = cfg.assistant_model
+          ? "Poser cette question à l'assistant MirAI, sur cette collection"
+          : "Poser cette question à l'assistant MirAI (la collection n'y est pas publiée à tous : il répondra sans elle)";
+        for (const attribut of ["title", "data-tooltip", "aria-label"]) versAssistant.setAttribute(attribut, dit);
+      }
+
+      const titre = document.getElementById("detailsTitle");
+      if (titre && window.MutationObserver) {
+        new MutationObserver(() => {
+          const vide = /aucun élément sélectionné/i.test(titre.textContent || "");
+          if (!vide && shell.classList.contains("replie-droite")) poser("droite", false, false);
+        }).observe(titre, { childList: true, characterData: true, subtree: true });
+      }
+    })();
   </script>
 </body>
 </html>
