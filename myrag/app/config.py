@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Open WebUI (used by /publish to create model aliases)
     owui_url: str = Field(default="http://openwebui.miraiku.svc.cluster.local")
     owui_admin_api_key: str = Field(default="")
+    # Adresse PUBLIQUE de l'assistant (celle qu'ouvre un navigateur) — `owui_url` est l'adresse interne,
+    # pour les appels de service. Vide : les écrans ne proposent pas d'ouvrir l'assistant.
+    owui_public_url: str = Field(default="")
 
     # Graph
     graphrag_viewer_url: str = Field(default="")
