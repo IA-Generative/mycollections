@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from app.auth import CurrentUser, current_user
 from app.database import async_session
 from app.models.db import Collection, Publication, PublicationHistory, utcnow
-from app.services import collectif_store, etats
-from app.services.collection_store import get_or_create_collection
+from app.services import access, collectif_store, etats
+from app.services.collection_store import get_collection, get_or_create_collection
 from app.services.nommage import titre_de
 
 MESSAGE_VERIFICATION = (
@@ -18,7 +18,38 @@ MESSAGE_VERIFICATION = (
     "circuit de contrôle."
 )
 
+MESSAGE_ARCHIVEE = (
+    "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord "
+    "(page Publication, ou catalogue d'administration)."
+)
+
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
+
+
+async def _fiche_pour(name: str, user: CurrentUser, *, ecrire: bool) -> dict | None:
+    """La fiche de la collection si l'appelant peut la lire (`ecrire=False`) ou la gérer
+    (`ecrire=True`) ; sinon 404 — ou 403 quand il la lit sans pouvoir la gérer.
+
+    Publier, dépublier, archiver, désarchiver sont des gestes d'ÉCRITURE : créateur,
+    administrateur de la collection (`<racine>/<nom>-admin`) ou superadmin. Sans cette
+    garde, tout compte connecté archivait la collection d'un autre.
+
+    Une partition sans fiche (orpheline) rend `None` : seul qui pourrait la gérer passe.
+    """
+    fiche = await get_collection(name)
+    cree_par = (fiche or {}).get("created_by")
+    gere = access.can_write(name=name, created_by=cree_par, user_groups=user.groups, user_sub=user.sub)
+    if fiche is None:
+        if not gere:
+            raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+        return None
+    lit = gere or access.can_read(name=name, scope=fiche.get("scope"), scope_groups=fiche.get("scope_groups"),
+                                  created_by=cree_par, user_groups=user.groups, user_sub=user.sub)
+    if not lit:
+        raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
+    if ecrire and not gere:
+        raise HTTPException(status_code=403, detail="Geste réservé à qui gère cette collection")
+    return fiche
 
 
 class PublishRequest(BaseModel):
@@ -36,16 +67,24 @@ class PublishRequest(BaseModel):
 
 
 @router.get("/{name}/publication")
-async def get_publication_status(name: str):
+async def get_publication_status(name: str, user: CurrentUser = Depends(current_user)):
+    fiche = await _fiche_pour(name, user, ecrire=False)
+    archivee = bool((fiche or {}).get("archived_at"))
     async with async_session() as session:
         pub = await session.get(Publication, name)
         if not pub:
-            return {"collection": name, "state": "draft"}
-        return pub.to_dict()
+            return {"collection": name, "state": "draft", "archivee": archivee}
+        return {**pub.to_dict(), "archivee": archivee}
 
 
 @router.post("/{name}/publish")
 async def publish_collection(name: str, req: PublishRequest, user: CurrentUser = Depends(current_user)):
+    fiche = await _fiche_pour(name, user, ecrire=True)
+    # Une collection archivée ne part pas dans l'assistant. Le dire ICI, en clair : sinon l'état
+    # local passait à « publiée » et la synchronisation échouait sur un message qui ne disait
+    # que le nom de la collection (« Publication OWUI echouee : <nom> »).
+    if (fiche or {}).get("archived_at") and req.state != "draft":
+        raise HTTPException(status_code=409, detail=MESSAGE_ARCHIVEE)
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 
@@ -124,7 +163,8 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
         except PermissionError as e:
             owui_error = str(e)
         except Exception as e:
-            owui_error = f"Publication OWUI echouee : {e}"
+            # `PasPubliee` ne porte que le nom de la collection : à lui seul il ne dit rien.
+            owui_error = f"La collection n'a pas pu être posée dans l'assistant ({type(e).__name__} : {e}). L'état local est enregistré ; réessayez « Mettre à jour »."
 
     await collectif_store.consigner(
         "collection", name, "publication.publiee" if pub.state == "published" else "publication.brouillon",
@@ -163,6 +203,7 @@ async def _retirer_du_socle(name: str) -> str | None:
 
 @router.post("/{name}/unpublish")
 async def unpublish_collection(name: str, user: CurrentUser = Depends(current_user)):
+    await _fiche_pour(name, user, ecrire=True)
     async with async_session() as session:
         pub = await session.get(Publication, name)
         if not pub:
@@ -188,6 +229,7 @@ async def archive_collection(name: str, user: CurrentUser = Depends(current_user
     """
     from app.services.collection_store import archive_collection as store_archive
 
+    await _fiche_pour(name, user, ecrire=True)
     result = await store_archive(name)
     if not result:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
@@ -218,6 +260,7 @@ async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(c
     """
     from app.services.collection_store import unarchive_collection as store_unarchive
 
+    await _fiche_pour(name, user, ecrire=True)
     result = await store_unarchive(name)
     if not result:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
@@ -236,7 +279,8 @@ async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(c
 
 
 @router.get("/{name}/publication/history")
-async def publication_history(name: str):
+async def publication_history(name: str, user: CurrentUser = Depends(current_user)):
+    await _fiche_pour(name, user, ecrire=False)
     from sqlalchemy import select
     async with async_session() as session:
         result = await session.execute(
