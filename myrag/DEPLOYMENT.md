@@ -1,54 +1,59 @@
-# Déploiement Scaleway — Mes collections
+# Déploiement sur Kubernetes — Mes collections
 
-Procédure pour déployer le backend + frontend de Mes collections sur le cluster Scaleway Kapsule `k8s-par-brave-bassi` dans le namespace `miraiku`, en pointant sur la VM OpenRAG publique `api.openrag.fake-domain.name`.
+Procédure pour déployer le backend et le frontend de Mes collections sur un cluster Kubernetes,
+en pointant sur un OpenRAG joignable en HTTPS (ici, à titre d'exemple, `api.openrag.fake-domain.name`).
+
+> Ce document ne nomme ni cluster, ni registre, ni namespace, ni adresse réelle : le dépôt est
+> public. `<REGISTRE>`, `<NAMESPACE>` et les adresses en `fake-domain.name` sont à remplacer par
+> les valeurs de votre environnement. Les commandes `scw` valent pour un registre Scaleway ;
+> adaptez-les à votre fournisseur.
 
 ## Topologie cible
 
 ```
 ┌──────────────────────────────────┐    ┌──────────────────────────────────┐
-│  Cluster Kapsule                 │    │  VM Scaleway (51.159.119.187)    │
-│  k8s-par-brave-bassi             │    │  api.openrag.fake-domain.name    │
-│  namespace miraiku               │    │                                  │
-│                                  │    │  Traefik + HTTPS public          │
-│  mycorpus.fake-domain.name       │    │  OpenRAG + Milvus + PG + MinIO   │
-│    ├── /api → myrag-backend:8200 │═══▶│  Bearer token: sk-openrag-...    │
-│    ├── /health → myrag-backend   │    │                                  │
+│  Cluster Kubernetes              │    │  OpenRAG (VM ou autre cluster)   │
+│  namespace <NAMESPACE>           │    │  api.openrag.fake-domain.name    │
+│                                  │    │                                  │
+│  mycorpus.fake-domain.name       │    │  HTTPS public                    │
+│    ├── /api → myrag-backend:8200 │═══▶│  OpenRAG + Milvus + PG + MinIO   │
+│    ├── /health → myrag-backend   │    │  Bearer : <jeton-admin-openrag>  │
 │    ├── /graph → myrag-backend    │    └──────────────────────────────────┘
 │    ├── /articles → myrag-backend │
 │    └── /     → myrag-frontend:3000│    ┌──────────────────────────────────┐
-│                                  │═══▶│  Shared postgres (miraiku)       │
-│                                  │    │  DB: myrag, user: app            │
+│                                  │═══▶│  PostgreSQL                      │
+│                                  │    │  base : myrag                    │
 │                                  │    └──────────────────────────────────┘
 └──────────────────────────────────┘
 ```
 
 ## Pré-requis
 
-- `kubectl` configuré sur le context `admin@k8s-par-brave-bassi`
-- `scw` CLI authentifié (pour la registry)
-- Accès admin à la registry `rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/`
-- DB `myrag` créée sur `postgres.miraiku.svc.cluster.local` (provisionnée à chaque init via [`postgres/init/01-create-databases.sql`](../../owuicore-main/postgres/init/01-create-databases.sql) du repo `owuicore-main`)
+- `kubectl` configuré sur le context `<votre-contexte-kubectl>`
+- accès en écriture au registre d'images (`scw` CLI authentifié s'il s'agit d'un registre Scaleway)
+- le registre `<REGISTRE>/` déclaré comme secret de tirage dans le namespace
+- une base `myrag` créée sur votre PostgreSQL (section 2)
 
 ## 1. Build + push des images
 
 ```bash
-cd /Users/etiquet/Documents/GitHub/mycollections
+cd mycollections   # la racine de ce dépôt
 TAG=$(git rev-parse --short HEAD)
 
-# Login Scaleway Container Registry
+# Connexion au registre (exemple Scaleway ; sinon `docker login <REGISTRE>`)
 scw registry login
 
 # Backend — IMPORTANT: --platform linux/amd64 si tu builds depuis un Mac ARM64,
 # sinon exec format error au pod start sur Kapsule (AMD64).
 docker buildx build --platform linux/amd64 --push \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest \
+  -t <REGISTRE>/myrag-backend:$TAG \
+  -t <REGISTRE>/myrag-backend:latest \
   myrag/
 
 # Frontend (build statique Nuxt + nginx), meme contrainte de plateforme.
 docker buildx build --platform linux/amd64 --push \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG \
-  -t rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:latest \
+  -t <REGISTRE>/myrag-frontend:$TAG \
+  -t <REGISTRE>/myrag-frontend:latest \
   myrag/frontend/
 ```
 
@@ -67,8 +72,8 @@ import sys,json,base64
 t=json.load(sys.stdin)['access_token']; p=t.split('.')[1]+'=' * (4 - len(t.split('.')[1])%4)
 print(json.loads(base64.urlsafe_b64decode(p))['sub'])")
 
-P=$(kubectl -n miraiku get pod -l app.kubernetes.io/component=backend,app.kubernetes.io/name=drive --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
-kubectl -n miraiku exec $P -- python -c "
+P=$(kubectl -n <NAMESPACE> get pod -l app.kubernetes.io/component=backend,app.kubernetes.io/name=drive --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+kubectl -n <NAMESPACE> exec $P -- python -c "
 import django; django.setup()
 from core.models import User
 SUB = '$SUB'
@@ -94,12 +99,12 @@ except User.DoesNotExist:
 La DB `myrag` est déjà dans l'init SQL d'owuicore-main (cf. `postgres/init/01-create-databases.sql`). Pour une instance PG déjà en place, créer manuellement :
 
 ```bash
-POD=$(kubectl -n miraiku get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}')
-kubectl -n miraiku exec $POD -- sh -c \
+POD=$(kubectl -n <NAMESPACE> get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}')
+kubectl -n <NAMESPACE> exec $POD -- sh -c \
   'psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE myrag OWNER app"'
 
 # Vérification
-kubectl -n miraiku exec $POD -- sh -c \
+kubectl -n <NAMESPACE> exec $POD -- sh -c \
   'psql -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate=false ORDER BY datname"'
 ```
 
@@ -116,7 +121,7 @@ Variables à renseigner (déjà pré-remplies avec les valeurs du brief) :
 - `KEYCLOAK_CLIENT_SECRET` : secret du client Keycloak `openrag` (confidential)
 - `LEGIFRANCE_CLIENT_ID` / `LEGIFRANCE_CLIENT_SECRET` : optionnels
 
-> **Note** : les credentials PostgreSQL ne sont PAS dans ce secret. `DATABASE_URL` est composée à l'exécution du pod depuis le secret partagé `owui-socle-secrets` (keys `POSTGRES_USER` / `POSTGRES_PASSWORD`) via la substitution `$(VAR)` de Kubernetes, cf. `deployment-backend.yaml`.
+> **Note** : les credentials PostgreSQL ne sont PAS dans ce secret. `DATABASE_URL` est composée à l'exécution du pod depuis un secret du namespace qui porte `POSTGRES_USER` / `POSTGRES_PASSWORD` via la substitution `$(VAR)` de Kubernetes, cf. `deployment-backend.yaml`.
 
 ## 4. Apply des manifests
 
@@ -132,9 +137,9 @@ kubectl apply -f myrag/k8s/deployment-backend.yaml
 kubectl apply -f myrag/k8s/deployment-frontend.yaml
 kubectl apply -f myrag/k8s/ingress.yaml
 
-kubectl -n miraiku rollout status deploy/myrag-backend --timeout=120s
-kubectl -n miraiku rollout status deploy/myrag-frontend --timeout=60s
-kubectl -n miraiku get pod,svc,ingress -l 'app in (myrag-backend,myrag-frontend)'
+kubectl -n <NAMESPACE> rollout status deploy/myrag-backend --timeout=120s
+kubectl -n <NAMESPACE> rollout status deploy/myrag-frontend --timeout=60s
+kubectl -n <NAMESPACE> get pod,svc,ingress -l 'app in (myrag-backend,myrag-frontend)'
 ```
 
 ## 4.5. Branchement OWUI ↔ OpenRAG (one-shot par cluster)
@@ -143,24 +148,23 @@ Sans cette étape, le bouton **Publier** crée bien un wrapper de modèle dans O
 
 ### 4.5.1. Ajouter OpenRAG comme provider OpenAI dans OWUI
 
-OWUI auto-découvre tous les modèles (`/v1/models`) de chaque URL listée dans `OPENAI_API_BASE_URLS`. On ajoute l'URL publique de la VM OpenRAG comme troisième entrée (à côté de `pipelines:9099` et `api.scaleway.ai`).
+OWUI auto-découvre tous les modèles (`/v1/models`) de chaque URL listée dans `OPENAI_API_BASE_URLS`. On ajoute l'URL publique d'OpenRAG à la suite des fournisseurs déjà déclarés.
 
 ```bash
-# Vérifier d'abord que /v1/models répond bien (15+ modèles openrag-* attendus)
+# Vérifier d'abord que /v1/models répond bien (un modèle openrag-* par collection)
 curl -sS "https://api.openrag.fake-domain.name/v1/models" \
   -H "Authorization: Bearer ${OPENRAG_ADMIN_TOKEN}" \
   | python3 -c "import sys,json; print(len(json.load(sys.stdin)['data']), 'modèles')"
 
-# Ajouter OpenRAG. set env merge proprement avec les valeurs existantes
-# (Pipelines + Scaleway Direct) — il suffit de redonner les 3 listes ;-séparées
-# en entier. On lit les clés Pipelines et Scaleway depuis owui-socle-secrets pour
-# ne pas les écrire en clair dans la commande.
-kubectl -n miraiku set env deploy/openwebui \
-  OPENAI_API_BASE_URLS="http://pipelines:9099/v1;https://api.scaleway.ai/<SCW_PROJECT_ID>/v1;https://api.openrag.fake-domain.name/v1" \
-  OPENAI_API_KEYS="$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.PIPELINES_API_KEY}' | base64 -d);$(kubectl -n miraiku get secret owui-socle-secrets -o jsonpath='{.data.SCW_SECRET_KEY_LLM}' | base64 -d);<OPENRAG_ADMIN_TOKEN>" \
-  OPENAI_API_CONFIGS='[{"prefix":"scaleway-general.","name":"Pipelines"},{"prefix":"","name":"Scaleway Direct"},{"prefix":"openrag-","name":"OpenRAG MyRAG"}]'
+# Ajouter OpenRAG. Les trois listes, séparées par « ; », se redonnent EN ENTIER et se lisent
+# dans le même ordre. Lisez les clés existantes depuis vos secrets plutôt que de les écrire
+# en clair dans la commande.
+kubectl -n <NAMESPACE> set env deploy/openwebui \
+  OPENAI_API_BASE_URLS="<vos fournisseurs existants>;https://api.openrag.fake-domain.name/v1" \
+  OPENAI_API_KEYS="<leurs clés, dans le même ordre>;<OPENRAG_ADMIN_TOKEN>" \
+  OPENAI_API_CONFIGS='[<une entrée par fournisseur existant>,{"prefix":"openrag-","name":"OpenRAG"}]'
 
-kubectl -n miraiku rollout status deploy/openwebui --timeout=120s
+kubectl -n <NAMESPACE> rollout status deploy/openwebui --timeout=120s
 ```
 
 ### 4.5.2. Donner à MyRAG la clé API admin OWUI
@@ -171,12 +175,12 @@ Le router `/api/collections/{name}/publish` du backend MyRAG appelle `POST /api/
 # 1. Dans OWUI : Paramètres > Compte > Clés API > "+ Créer une clé"
 #    (le compte qui crée la clé doit être admin OWUI — la clé hérite du rôle).
 # 2. Stocker dans le secret myrag-secrets :
-kubectl -n miraiku patch secret myrag-secrets --type=merge \
+kubectl -n <NAMESPACE> patch secret myrag-secrets --type=merge \
   -p "{\"stringData\":{\"OWUI_ADMIN_API_KEY\":\"sk-<la-clé-générée>\"}}"
 
 # 3. Le pod backend doit être redémarré pour relire le secret
-kubectl -n miraiku rollout restart deploy/myrag-backend
-kubectl -n miraiku rollout status deploy/myrag-backend
+kubectl -n <NAMESPACE> rollout restart deploy/myrag-backend
+kubectl -n <NAMESPACE> rollout status deploy/myrag-backend
 ```
 
 ### 4.5.3. Vérification end-to-end
@@ -202,18 +206,18 @@ curl -sS -X POST https://mycollections.fake-domain.name/api/collections/<col>/pu
 
 ### 4.5.4. Persistance dans le repo source
 
-Les `kubectl set env` et `patch secret` ci-dessus sont **éphémères** : un futur `kubectl apply -f` du repo `owuicore-main` les écraserait. Pour persister :
+Les `kubectl set env` et `patch secret` ci-dessus sont **éphémères** : un futur `kubectl apply` de la configuration d'Open WebUI les écraserait. Pour persister :
 
-- Mettre à jour le ConfigMap source `owui-socle-config` dans [`owuicore-main/k8s/base/configmap.yaml`](../../owuicore-main/k8s/base/configmap.yaml) avec les 3 nouvelles valeurs `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS`.
+- Reporter les trois valeurs `OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, `OPENAI_API_CONFIGS` dans la configuration versionnée d'Open WebUI.
 - Le secret `myrag-secrets` est géré par `myrag/k8s/secret.yaml` (gitignored) — penser à y ajouter `OWUI_ADMIN_API_KEY` si on régénère le secret depuis le template.
 
 ## 5. DNS
 
-Le CNAME `mycorpus.fake-domain.name → mychat.fake-domain.name.` est déjà configuré (vérifiable via `scw dns record list dns-zone=fake-domain.name`). cert-manager génère le certificat TLS automatiquement via `letsencrypt-prod` dès que l'Ingress est en place (compter 1-2 minutes).
+Le CNAME `mycorpus.fake-domain.name → mychat.fake-domain.name.` doit exister chez votre hébergeur DNS. cert-manager génère le certificat TLS automatiquement via `letsencrypt-prod` dès que l'Ingress est en place (compter 1-2 minutes).
 
 ```bash
 # Vérifier l'émission du certificat
-kubectl -n miraiku get certificate mycorpus-tls -o wide
+kubectl -n <NAMESPACE> get certificate mycorpus-tls -o wide
 ```
 
 ## 6. Smoke test
@@ -226,8 +230,8 @@ curl -s https://mycorpus.fake-domain.name/health
 curl -s https://mycorpus.fake-domain.name/ | head -20
 
 # Santé depuis un pod dans le cluster (sans passer par l'ingress)
-kubectl -n miraiku run smoke --rm -it --image=curlimages/curl --restart=Never -- \
-  curl -s http://myrag-backend.miraiku.svc.cluster.local:8200/health
+kubectl -n <NAMESPACE> run smoke --rm -it --image=curlimages/curl --restart=Never -- \
+  curl -s http://myrag-backend.<NAMESPACE>.svc.cluster.local:8200/health
 ```
 
 Puis rejouer les parcours usagers depuis un navigateur sur `https://mycorpus.fake-domain.name`.
@@ -237,14 +241,14 @@ Puis rejouer les parcours usagers depuis un navigateur sur `https://mycorpus.fak
 ```bash
 # Revenir au tag précédent
 TAG_ROLLBACK=<sha-d'avant>
-kubectl -n miraiku set image deploy/myrag-backend \
-  backend=rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:$TAG_ROLLBACK
-kubectl -n miraiku set image deploy/myrag-frontend \
-  frontend=rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-frontend:$TAG_ROLLBACK
+kubectl -n <NAMESPACE> set image deploy/myrag-backend \
+  backend=<REGISTRE>/myrag-backend:$TAG_ROLLBACK
+kubectl -n <NAMESPACE> set image deploy/myrag-frontend \
+  frontend=<REGISTRE>/myrag-frontend:$TAG_ROLLBACK
 
 # Ou rollback du rollout
-kubectl -n miraiku rollout undo deploy/myrag-backend
-kubectl -n miraiku rollout undo deploy/myrag-frontend
+kubectl -n <NAMESPACE> rollout undo deploy/myrag-backend
+kubectl -n <NAMESPACE> rollout undo deploy/myrag-frontend
 ```
 
 ## 8. Troubleshooting
@@ -252,7 +256,7 @@ kubectl -n miraiku rollout undo deploy/myrag-frontend
 ### Backend en CrashLoopBackOff
 
 ```bash
-kubectl -n miraiku logs -l app=myrag-backend --tail=100
+kubectl -n <NAMESPACE> logs -l app=myrag-backend --tail=100
 ```
 
 Causes fréquentes :
