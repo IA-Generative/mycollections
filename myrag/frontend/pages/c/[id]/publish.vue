@@ -25,6 +25,11 @@
     </div>
 
     <div v-if="pub">
+      <div v-if="pub.archivee" class="fr-alert fr-alert--warning fr-mb-4w">
+        <h2 class="fr-alert__title">Cette collection est archivée</h2>
+        <p>Elle n'apparaît plus dans le catalogue et ne peut pas être publiée. Ses documents sont conservés : la désarchiver la remet exactement où elle était.</p>
+        <button class="fr-btn fr-btn--sm fr-mt-2w" :disabled="occupe" @click="desarchiver">Désarchiver</button>
+      </div>
       <!-- State badge -->
       <div class="fr-mb-4w">
         <span class="fr-badge fr-badge--lg" :class="stateBadge(pub.state)">
@@ -138,30 +143,41 @@
 
           <!-- Actions -->
           <div class="fr-btns-group fr-btns-group--inline">
-            <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing"
+            <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
                     title="Fait apparaître la collection dans l'assistant, pour les personnes choisies ci-dessus.">
               {{ publishing ? 'Publication…' : 'Publier' }}
             </button>
-            <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing"
+            <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
                     title="Applique vos changements (nom, description, qui la voit) à la collection déjà publiée.">
               {{ publishing ? 'Mise à jour…' : 'Mettre à jour' }}
             </button>
-            <button v-if="pub.state === 'published'" class="fr-btn fr-btn--secondary" @click="unpublish"
+            <button v-if="pub.state === 'published'" class="fr-btn fr-btn--secondary" :disabled="occupe" @click="unpublish"
                     title="Retire la collection de l'assistant. Les documents restent, et vous pourrez republier.">
               Désactiver
             </button>
-            <button v-if="pub.state !== 'archived'" class="fr-btn fr-btn--tertiary" @click="archive"
-                    title="Retire la collection de l'assistant ET du catalogue. Les documents sont conservés : un administrateur peut la désarchiver.">
-              Archiver
-            </button>
           </div>
 
+          <div v-if="erreur" class="fr-alert fr-alert--error fr-mt-2w"><p>{{ erreur }}</p></div>
           <div v-if="result" class="fr-alert fr-mt-2w"
                :class="owuiError ? 'fr-alert--warning' : 'fr-alert--success'">
             <p>{{ result }}</p>
             <p v-if="owuiError" class="fr-text--sm" style="margin-top:0.4rem;">
               <strong>OWUI :</strong> {{ owuiError }}
             </p>
+          </div>
+        </div>
+
+        <!-- Archiver : loin de « Publier », et jamais sur un seul clic -->
+        <div v-if="!pub.archivee" class="fr-col-12 fr-mt-4w">
+          <div class="publier-retrait">
+            <div>
+              <h3 class="fr-h6 fr-mb-1v">Retirer la collection</h3>
+              <p class="fr-text--sm fr-mb-0">
+                Archiver la retire du catalogue et empêche de la publier. Rien n'est supprimé : ses documents sont conservés,
+                et vous pourrez la désarchiver d'ici.
+              </p>
+            </div>
+            <button class="fr-btn fr-btn--tertiary fr-btn--sm" :disabled="occupe" @click="confirmerArchivage = true">Archiver…</button>
           </div>
         </div>
 
@@ -180,11 +196,39 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <dialog v-if="confirmerArchivage" open class="fr-modal fr-modal--opened" aria-labelledby="archiver-titre"
+              style="display:block;background:rgba(22,22,22,.64);z-index:1000;" @click.self="confirmerArchivage = false" @keydown.esc="confirmerArchivage = false">
+        <div class="fr-container fr-container--fluid fr-container-md">
+          <div class="fr-grid-row fr-grid-row--center">
+            <div class="fr-col-12 fr-col-md-8 fr-col-lg-6">
+              <div class="fr-modal__body">
+                <div class="fr-modal__header">
+                  <button class="fr-btn--close fr-btn" title="Fermer" @click="confirmerArchivage = false">Fermer</button>
+                </div>
+                <div class="fr-modal__content">
+                  <h1 id="archiver-titre" class="fr-modal__title">Archiver « {{ titre }} » ?</h1>
+                  <p>La collection disparaîtra du catalogue et ne pourra plus être publiée tant qu'elle sera archivée.</p>
+                  <p class="fr-text--sm">Ses documents, ses réglages et son historique sont conservés. Vous pourrez la désarchiver depuis cette page.</p>
+                </div>
+                <div class="fr-modal__footer">
+                  <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-lg">
+                    <li><button ref="btnAnnuler" class="fr-btn fr-btn--secondary" @click="confirmerArchivage = false">Annuler</button></li>
+                    <li><button class="fr-btn" :disabled="occupe" @click="archive">Archiver la collection</button></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </dialog>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { libelleEtat } from '~/utils/collectif'
+import { libelleEtat, messageErreur } from '~/utils/collectif'
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
@@ -195,6 +239,12 @@ const etat = ref<any>(null)
 const publishing = ref(false)
 const result = ref('')
 const owuiError = ref('')
+const erreur = ref('')
+const occupe = ref(false)
+const confirmerArchivage = ref(false)
+const btnAnnuler = ref<HTMLButtonElement | null>(null)
+// Le bouton sûr reçoit le focus : « Entrée » par réflexe n'archive pas.
+watch(confirmerArchivage, (o) => { if (o) nextTick(() => btnAnnuler.value?.focus()) })
 
 const allMethods = ['search_collection', 'view_article', 'explore_graph', 'browse_collection']
 
@@ -219,7 +269,7 @@ function stateBadge(s: string) {
 }
 
 function stateLabel(s: string) {
-  return { draft: 'Brouillon', published: 'Publie', disabled: 'Desactive', archived: 'Archive' }[s] || s
+  return { draft: 'Brouillon', published: 'Publiée', disabled: 'Désactivée', archived: 'Archivée' }[s] || s
 }
 
 async function publish() {
@@ -227,14 +277,16 @@ async function publish() {
   result.value = ''
   try {
     owuiError.value = ''
-    const data = await post(`/api/collections/${id}/publish`, form.value)
+    erreur.value = ''
+    // L'API lit `visibility_groups` (une LISTE). La page envoyait `visibility_group` (une chaîne),
+    // que l'API ignorait : publier « à un groupe » publiait pour personne.
+    const groupe = form.value.visibility_group.trim()
+    const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' && groupe ? [groupe] : [] }
+    const data = await post(`/api/collections/${id}/publish`, corps)
     pub.value = await get(`/api/collections/${id}/publication`)
-    const m = data?.modes || data || {}
-    const active = [m.alias_enabled && 'alias', m.tool_enabled && 'tool', m.embed_enabled && '#collection']
-      .filter(Boolean).join(' + ')
-    const base = active ? `Publie en mode ${active}` : 'Publie'
+    const base = 'Collection publiée'
     if (data?.owui?.synced) {
-      result.value = `${base} — modele '${data.owui.model_id}' synchronise avec OWUI.`
+      result.value = `${base} : elle apparaît dans l'assistant sous le modèle « ${data.owui.model_id} ».`
     } else if (data?.owui?.error) {
       result.value = base
       owuiError.value = data.owui.error
@@ -242,19 +294,29 @@ async function publish() {
       result.value = base
     }
   } catch (e: any) {
-    result.value = `Erreur: ${e.message}`
+    erreur.value = messageErreur(e)
   }
   publishing.value = false
 }
 
-async function unpublish() {
-  await post(`/api/collections/${id}/unpublish`)
-  pub.value = await get(`/api/collections/${id}/publication`)
+/** Un geste d'écriture : jamais deux à la fois, et un refus (403, 409…) se dit au lieu de se perdre. */
+async function geste(chemin: string) {
+  occupe.value = true
+  erreur.value = ''
+  result.value = ''
+  try {
+    await post(`/api/collections/${id}/${chemin}`)
+    pub.value = await get(`/api/collections/${id}/publication`)
+  } catch (e) {
+    erreur.value = messageErreur(e)
+  }
+  occupe.value = false
 }
-
+const unpublish = () => geste('unpublish')
+const desarchiver = () => geste('unarchive')
 async function archive() {
-  await post(`/api/collections/${id}/archive`)
-  pub.value = await get(`/api/collections/${id}/publication`)
+  confirmerArchivage.value = false
+  await geste('archive')
 }
 
 onMounted(async () => {
@@ -273,8 +335,14 @@ onMounted(async () => {
       form.value.embed_enabled = pub.value.embed_enabled
       form.value.visibility = pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
       if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
-      form.value.visibility_group = pub.value.visibility_group || `myrag/${id}`
+      form.value.visibility_group = (pub.value.visibility_groups || [])[0] || pub.value.visibility_group || `myrag/${id}`
     }
   } catch (e) {}
 })
 </script>
+
+<style scoped>
+.publier-retrait { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem;
+  border: 1px solid var(--border-default-grey); border-left: 4px solid var(--border-plain-warning); padding: 1rem 1.25rem; }
+.publier-retrait > div { flex: 1 1 320px; max-width: 70ch; }
+</style>
