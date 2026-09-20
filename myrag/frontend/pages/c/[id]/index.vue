@@ -67,35 +67,17 @@
             <p class="fr-text--sm fr-mb-0"><NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Le guide : interroger depuis vos SI</NuxtLink></p>
           </div>
 
-          <!-- Badges -->
-          <div class="fr-mt-2w fr-mb-4w">
-            <span class="fr-badge fr-badge--info">{{ collection.strategy }}</span>
-            <span class="fr-badge" :class="sensitivityBadge(collection.sensitivity)">
-              {{ collection.sensitivity }}
-            </span>
-            <span v-if="collection.graph_enabled" class="fr-badge fr-badge--new">Graph actif</span>
-            <span v-if="collection.ai_summary_enabled" class="fr-badge fr-badge--new">Resume IA</span>
-            <span class="fr-badge">{{ collection.prompt_template }}</span>
+          <!-- Badges : trois réglages techniques, chacun expliqué au survol et au focus -->
+          <div class="fr-mt-2w fr-mb-4w fiche-badges">
+            <span v-for="b in badges" :key="b.cle" class="fr-badge" :class="b.classe" :title="b.aide" tabindex="0">{{ b.libelle }}</span>
           </div>
 
-          <!-- Quick actions -->
           <!-- Dans un groupe DSFR, la position de l'icône se déclare sur le GROUPE : sans
                `fr-btns-group--icon-left`, il réduit chaque bouton à son icône, libellé masqué. -->
           <div class="fr-btns-group fr-btns-group--inline fr-btns-group--icon-left fr-mb-4w">
-            <NuxtLink :to="`/c/${id}/playground`" class="fr-btn fr-icon-chat-3-line fr-btn--icon-left">
-              Tester le RAG
-            </NuxtLink>
-            <NuxtLink :to="`/c/${id}/graph`" class="fr-btn fr-btn--secondary fr-icon-git-branch-line fr-btn--icon-left">
-              Voir le graph
-            </NuxtLink>
-            <NuxtLink :to="`/c/${id}/upload`" class="fr-btn fr-btn--secondary fr-icon-upload-line fr-btn--icon-left">
-              Uploader
-            </NuxtLink>
-            <NuxtLink :to="`/c/${id}/config`" class="fr-btn fr-btn--tertiary fr-icon-settings-5-line fr-btn--icon-left">
-              Configurer
-            </NuxtLink>
-            <NuxtLink :to="`/c/${id}/publish`" class="fr-btn fr-btn--tertiary fr-icon-send-plane-line fr-btn--icon-left">
-              Publier
+            <NuxtLink v-for="a in actions" :key="a.vers" :to="a.vers" class="fr-btn fr-btn--icon-left"
+                      :class="[a.icone, a.rang]" :title="a.aide">
+              {{ a.libelle }}
             </NuxtLink>
           </div>
         </div>
@@ -151,6 +133,12 @@
           <p class="fr-text--sm fr-mt-3w">
             <NuxtLink to="/guide/verifier-avant-de-publier" class="fr-link fr-text--sm">Vérifier avant de publier — le guide</NuxtLink>
           </p>
+        </div>
+
+        <!-- Documents : le corpus lui-même. Monté à la première ouverture — la liste d'un code
+             entier ne se lit pas tant que personne ne la demande. -->
+        <div v-show="tab === 'documents'" v-bind="panneau('documents')">
+          <CorpusDocuments v-if="documentsVus" :collection="id" />
         </div>
 
         <!-- Signaler un défaut -->
@@ -301,6 +289,7 @@ const onglets = computed(() => {
   const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
   return [
     { cle: 'consulter', libelle: 'Consulter' },
+    { cle: 'documents', libelle: 'Documents' },
     { cle: 'signaler', libelle: `Signaler un défaut${ouverts(signalements.value, s => s.etat !== 'clos')}` },
     { cle: 'proposer', libelle: `Proposer une modification${ouverts(propositions.value, p => p.etat === 'proposee')}` },
     { cle: 'historique', libelle: 'Historique' },
@@ -310,6 +299,52 @@ const onglets = computed(() => {
     { cle: 'qr', libelle: 'Cache Q&R' },
   ]
 })
+
+/** Les cinq gestes de la fiche. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
+const actions = computed(() => [
+  { vers: `/c/${id}/playground`, libelle: 'Tester le RAG', icone: 'fr-icon-chat-3-line', rang: '',
+    aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
+  { vers: `/c/${id}/graph`, libelle: 'Voir le graph', icone: 'fr-icon-share-line', rang: 'fr-btn--secondary',
+    aide: "La carte des renvois entre documents : quel article cite quel autre. Disponible quand le graphe est activé pour la collection." },
+  { vers: `/c/${id}/upload`, libelle: 'Uploader', icone: 'fr-icon-upload-line', rang: 'fr-btn--secondary',
+    aide: "Ajouter des documents à la collection : fichiers de votre poste, adresse web, dossier Drive." },
+  { vers: `/c/${id}/config`, libelle: 'Configurer', icone: 'fr-icon-settings-5-line', rang: 'fr-btn--tertiary',
+    aide: "Les réglages : titre et description, qui peut lire la collection, sensibilité des données, contact, cache de réponses." },
+  { vers: `/c/${id}/publish`, libelle: 'Publier', icone: 'fr-icon-send-plane-line', rang: 'fr-btn--tertiary',
+    aide: "Rendre la collection disponible dans l'assistant MirAI, et choisir qui la voit." },
+])
+
+const STRATEGIES: Record<string, string> = {
+  auto: "Découpage automatique : l'outil choisit comment couper chaque document en passages, selon sa forme.",
+  article: "Découpage par article : un passage par article — fait pour les codes et les textes juridiques.",
+  chunk: "Découpage par longueur : des passages de taille régulière, sans tenir compte de la structure.",
+  directory: "Découpage par dossier : la structure des dossiers d'origine est conservée.",
+}
+const SENSIBILITES: Record<string, string> = {
+  public: "Données publiques : rien de sensible, la collection peut être ouverte largement.",
+  internal: "Données internes au ministère : à ne pas diffuser à l'extérieur.",
+  personal: "Contient des données personnelles : diffusion à limiter, et à justifier.",
+  restricted: "Diffusion restreinte : réservée aux personnes habilitées.",
+  confidential: "Confidentiel : accès au plus petit nombre.",
+}
+/** Les réglages affichés en badges, avec ce qu'ils veulent dire pour qui ne les a pas choisis. */
+const badges = computed(() => {
+  const col = collection.value || {}
+  const liste = [
+    { cle: 'strategie', libelle: col.strategy, classe: 'fr-badge--info',
+      aide: STRATEGIES[col.strategy] || `Mode de découpage des documents en passages : « ${col.strategy} ».` },
+    { cle: 'sensibilite', libelle: col.sensitivity, classe: sensitivityBadge(col.sensitivity),
+      aide: SENSIBILITES[col.sensitivity] || `Sensibilité des données : « ${col.sensitivity} ».` },
+  ]
+  if (col.graph_enabled) liste.push({ cle: 'graphe', libelle: 'Graph actif', classe: 'fr-badge--new', aide: "Les renvois entre documents sont cartographiés : voir « Voir le graph »." })
+  if (col.ai_summary_enabled) liste.push({ cle: 'resume', libelle: 'Résumé IA', classe: 'fr-badge--new', aide: "Chaque document reçoit un résumé automatique, qui aide la recherche à le retrouver." })
+  liste.push({ cle: 'prompt', libelle: col.prompt_template, classe: '',
+    aide: `Modèle de consigne donné à l'assistant : « ${col.prompt_template} ». Il fixe le ton et la façon de citer — voir l'onglet « Prompt système ».` })
+  return liste.filter(b => b.libelle)
+})
+
+const documentsVus = ref(false)
+watch(tab, (t) => { if (t === 'documents') documentsVus.value = true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
@@ -404,5 +439,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.fiche-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+.fiche-badges .fr-badge { cursor: help; }
 .fiche-qualite { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; background: var(--background-default-grey); }
 </style>

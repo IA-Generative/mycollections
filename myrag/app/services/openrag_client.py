@@ -158,6 +158,27 @@ class OpenRAGClient:
             raise
         return data.get("files", []) if isinstance(data, dict) else []
 
+    async def file_detail(self, partition: str, file_id: str) -> dict | None:
+        """Le détail d'un fichier indexé (`GET /partition/<p>/file/<id>`) : ses métadonnées
+        et les liens vers ses morceaux. `None` si OpenRAG ne le connaît pas."""
+        try:
+            data = await self._get(f"/partition/{partition}/file/{file_id}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (404, 400):
+                return None
+            raise
+        return data if isinstance(data, dict) else None
+
+    async def extract(self, chunk_id: str) -> dict | None:
+        """Un morceau relu (`GET /extract/<id>`), balises techniques comprises. `None` s'il manque."""
+        try:
+            data = await self._get(f"/extract/{chunk_id}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (404, 400):
+                return None
+            raise
+        return data if isinstance(data, dict) else None
+
     async def get_file_content(self, partition: str, file_id: str) -> str:
         """Best-effort plain-text retrieval of an indexed file's content.
         Used by generate-eval to build a sample. Returns an empty string if

@@ -11,7 +11,7 @@ from app.database import init_db
 from app.services import capacites
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
 from app.routers import accueil as accueil_routeur
-from app.routers import amorces, bus, categories, collectif, demandes, fiches, guide
+from app.routers import amorces, bus, categories, collectif, corpus, demandes, fiches, guide
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -82,6 +82,7 @@ app.include_router(eval_datasets.router, dependencies=AUTH_REQUIRED)
 # Le collectif (ADR-0001) : demandes, circuit d'une collection, amorces.
 app.include_router(demandes.router, dependencies=AUTH_REQUIRED)
 app.include_router(collectif.router, dependencies=AUTH_REQUIRED)
+app.include_router(corpus.router, dependencies=AUTH_REQUIRED)
 app.include_router(amorces.router, dependencies=AUTH_REQUIRED)
 app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 app.include_router(categories.router, dependencies=AUTH_REQUIRED)
@@ -117,27 +118,7 @@ async def openrag_health():
     return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}
 
 
-def _decouper_morceau(texte: str) -> tuple[str, str, str]:
-    """Sépare un morceau relu dans OpenRAG de son habillage technique —
-    `[CONTEXT] résumé  * filename: x.md  [CHUNK_START] texte [CHUNK_END]` —
-    et rend (contexte, fichier, corps). Même découpe que `decouperMorceau`
-    côté frontend (utils/extrait.ts) : un lecteur n'a pas à voir ces balises.
-    """
-    import re
-    texte = texte or ""
-    debut = texte.find("[CHUNK_START]")
-    if debut < 0:
-        return "", "", re.sub(r"\[CHUNK_END\]\s*$", "", texte).strip()
-    apres = texte[debut + len("[CHUNK_START]"):]
-    fin = apres.rfind("[CHUNK_END]")
-    corps = (apres if fin < 0 else apres[:fin]).strip()
-    entete = re.sub(r"^\s*\[CONTEXT\]", "", texte[:debut])
-    fichier = ""
-    m = re.search(r"^[ \t]*\*[ \t]*filename[ \t]*:[ \t]*(.*)$", entete, flags=re.I | re.M)
-    if m:
-        fichier = m.group(1).strip()
-        entete = entete[:m.start()] + entete[m.end():]
-    return entete.strip(), fichier, corps
+from app.services.morceau import decouper_morceau as _decouper_morceau  # noqa: E402
 
 
 def _paragraphes_html(texte: str) -> str:

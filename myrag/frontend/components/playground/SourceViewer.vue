@@ -23,7 +23,7 @@
                   </template>
                 </p>
 
-                <p v-if="chargement" class="fr-text--sm">Chargement de l'extrait…</p>
+                <p v-if="chargement || enChargement" class="fr-text--sm" aria-live="polite">Chargement…</p>
                 <div v-else-if="fichierUrl" class="myrag-viewer__fichier">
                   <iframe v-if="estPdf" :src="fichierUrl" title="Document" class="myrag-viewer__pdf"></iframe>
                   <p v-else class="fr-text--sm">
@@ -36,9 +36,9 @@
                     <p>{{ avertissement }}</p>
                   </div>
                   <div ref="zoneTexte" class="myrag-md myrag-viewer__texte" v-html="corpsHtml"></div>
-                  <aside v-if="morceau.contexte" class="myrag-viewer__contexte">
+                  <aside v-if="contexteAffiche" class="myrag-viewer__contexte">
                     <p class="myrag-viewer__contexte-titre">À propos du document <span>— résumé automatique</span></p>
-                    <p class="myrag-viewer__contexte-texte">{{ morceau.contexte }}</p>
+                    <p class="myrag-viewer__contexte-texte">{{ contexteAffiche }}</p>
                   </aside>
                 </template>
               </div>
@@ -61,10 +61,10 @@
                       Télécharger le document
                     </a>
                   </li>
-                  <li>
-                    <a class="fr-btn fr-btn--tertiary" :href="url"
+                  <li v-if="lienOnglet">
+                    <a class="fr-btn fr-btn--tertiary" :href="lienOnglet"
                        target="_blank" rel="noopener">
-                      Ouvrir dans un onglet
+                      {{ url ? 'Ouvrir dans un onglet' : 'Voir la source d’origine' }}
                     </a>
                   </li>
                 </ul>
@@ -94,8 +94,17 @@ const props = defineProps<{
   titre: string
   sousTitre?: string
   page?: number | string
-  /** Texte du morceau déjà présent dans la réponse du chat — repli si la relecture échoue. */
+  /** Texte du morceau déjà présent dans la réponse du chat — repli si la relecture échoue.
+   *  Sans `url`, c'est LE texte à montrer : l'appelant l'a déjà relu (un document entier). */
   contenuInitial?: string
+  /** Résumé du document, quand l'appelant le connaît déjà (sinon lu dans les balises du morceau). */
+  contexte?: string
+  /** L'appelant est encore en train de relire le texte. */
+  enChargement?: boolean
+  /** Message à afficher au-dessus du texte (lecture partielle, document tronqué…). */
+  avis?: string
+  /** Adresse d'origine du document (Légifrance…) : remplace « Ouvrir dans un onglet » quand il n'y a pas d'`url`. */
+  lienSource?: string
 }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -111,6 +120,8 @@ const btnFermer = ref<HTMLButtonElement | null>(null)
 const zoneTexte = ref<HTMLElement | null>(null)
 
 const morceau = computed(() => decouperMorceau(contenu.value))
+const contexteAffiche = computed(() => props.contexte || morceau.value.contexte)
+const lienOnglet = computed(() => props.url || props.lienSource || '')
 const corpsHtml = computed(() => renderMarkdownSafe(morceau.value.corps) || '<p><em>(extrait vide)</em></p>')
 const nomFichierBrut = computed(() => props.titre || 'document')
 
@@ -140,7 +151,7 @@ async function charger() {
   libererFichier()
   contenu.value = props.contenuInitial || ''
   meta.value = {}
-  avertissement.value = ''
+  avertissement.value = props.avis || ''
   if (!props.url) return
   chargement.value = true
   try {
@@ -216,6 +227,10 @@ function exporterPdf() {
 function fermer() {
   emit('close')
 }
+
+watch(() => [props.contenuInitial, props.avis], () => {
+  if (props.open && !props.url) { contenu.value = props.contenuInitial || ''; avertissement.value = props.avis || '' }
+})
 
 watch(() => props.open, (o) => {
   if (o) {
