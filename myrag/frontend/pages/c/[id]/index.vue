@@ -37,7 +37,7 @@
     </div>
 
     <div v-else>
-      <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-grid-row fr-grid-row--gutters fr-mb-3w">
         <!-- Left: collection info -->
         <div class="fr-col-8">
           <h1 class="fr-h2 fr-mb-1w">{{ titre }}</h1>
@@ -79,11 +79,13 @@
           </div>
 
           <!-- Quick actions -->
-          <div class="fr-btns-group fr-btns-group--inline fr-mb-4w">
+          <!-- Dans un groupe DSFR, la position de l'icône se déclare sur le GROUPE : sans
+               `fr-btns-group--icon-left`, il réduit chaque bouton à son icône, libellé masqué. -->
+          <div class="fr-btns-group fr-btns-group--inline fr-btns-group--icon-left fr-mb-4w">
             <NuxtLink :to="`/c/${id}/playground`" class="fr-btn fr-icon-chat-3-line fr-btn--icon-left">
               Tester le RAG
             </NuxtLink>
-            <NuxtLink :to="`/c/${id}/graph`" class="fr-btn fr-btn--secondary fr-icon-mind-map-line fr-btn--icon-left">
+            <NuxtLink :to="`/c/${id}/graph`" class="fr-btn fr-btn--secondary fr-icon-git-branch-line fr-btn--icon-left">
               Voir le graph
             </NuxtLink>
             <NuxtLink :to="`/c/${id}/upload`" class="fr-btn fr-btn--secondary fr-icon-upload-line fr-btn--icon-left">
@@ -102,76 +104,47 @@
         <div class="fr-col-4">
           <CollectifEtapesCollection v-if="etat" :etat="etat" :superadmin="isAdmin" class="fr-mb-2w" @changer="changerEtat" @forcer="forcerEtat" />
           <div v-if="erreurEtat" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>{{ erreurEtat }}</p></div>
-          <div class="fr-card">
-            <div class="fr-card__body">
-              <div class="fr-card__content">
-                <h3 class="fr-card__title">Qualite</h3>
-                <div class="myrag-quality-bar fr-mt-2w">
-                  <div class="myrag-quality-bar__fill"
-                       :class="qualityClass(feedbackStats.satisfaction_rate)"
-                       :style="{ width: `${feedbackStats.satisfaction_rate * 100}%` }">
-                  </div>
-                </div>
-                <p class="fr-text--sm fr-mt-1w">
-                  {{ Math.round(feedbackStats.satisfaction_rate * 100) }}% satisfaction
-                  ({{ feedbackStats.positive }} 👍 / {{ feedbackStats.negative }} 👎)
-                </p>
-                <p v-if="feedbackStats.pending_review > 0" class="fr-text--sm">
-                  ⚠ {{ feedbackStats.pending_review }} feedback en attente
-                </p>
+          <!-- Un simple encadré, comme le parcours d'états au-dessus — pas une `.fr-card` : elle vaut
+               `height: 100%` (posée sous le parcours d'états, elle débordait sur les onglets) et
+               réordonne son contenu (le titre passait sous la jauge). -->
+          <section class="fiche-qualite" aria-labelledby="fiche-qualite-titre">
+            <h3 id="fiche-qualite-titre" class="fr-h6 fr-mb-1w">Qualité</h3>
+            <div class="myrag-quality-bar">
+              <div class="myrag-quality-bar__fill"
+                   :class="qualityClass(feedbackStats.satisfaction_rate)"
+                   :style="{ width: `${feedbackStats.satisfaction_rate * 100}%` }">
               </div>
             </div>
-          </div>
+            <p class="fr-text--sm fr-mt-1w fr-mb-0">
+              <template v-if="feedbackStats.total">
+                {{ Math.round(feedbackStats.satisfaction_rate * 100) }} % de satisfaction
+                ({{ feedbackStats.positive }} 👍 / {{ feedbackStats.negative }} 👎)
+              </template>
+              <template v-else>Aucun avis pour l'instant.</template>
+            </p>
+            <p v-if="feedbackStats.pending_review > 0" class="fr-text--sm fr-mt-1w fr-mb-0">
+              ⚠ {{ feedbackStats.pending_review }} avis en attente de relecture
+            </p>
+          </section>
         </div>
       </div>
 
       <!-- Tabs -->
       <div class="fr-tabs">
-        <ul class="fr-tabs__list" role="tablist">
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'consulter'" @click="tab = 'consulter'">
-              Consulter
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'signaler'" @click="tab = 'signaler'">
-              Signaler un défaut{{ signalements && signalements.length ? ` (${signalements.filter(s => s.etat !== 'clos').length})` : '' }}
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'proposer'" @click="tab = 'proposer'">
-              Proposer une modification{{ propositions && propositions.length ? ` (${propositions.filter(p => p.etat === 'proposee').length})` : '' }}
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'historique'" @click="tab = 'historique'">
-              Historique
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'discussion'" @click="tab = 'discussion'">
-              Discussion
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'prompt'" @click="tab = 'prompt'">
-              System Prompt
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'feedback'" @click="tab = 'feedback'">
-              Feedback ({{ feedbackStats.total }})
-            </button>
-          </li>
-          <li role="presentation">
-            <button class="fr-tabs__tab" :aria-selected="tab === 'qr'" @click="tab = 'qr'">
-              Cache Q&R
+        <!-- Le DSFR cache tout panneau qui n'a pas `fr-tabs__panel--selected` (visibility: hidden) :
+             c'est son JavaScript qui pose cette classe, et nous ne le chargeons pas. Vue la pose. -->
+        <ul class="fr-tabs__list" role="tablist" aria-label="Rubriques de la collection" @keydown="clavierOnglets">
+          <li v-for="o in onglets" :key="o.cle" role="presentation">
+            <button :id="`onglet-${o.cle}`" type="button" class="fr-tabs__tab" role="tab"
+                    :aria-selected="tab === o.cle" :aria-controls="`panneau-${o.cle}`"
+                    :tabindex="tab === o.cle ? 0 : -1" @click="tab = o.cle">
+              {{ o.libelle }}
             </button>
           </li>
         </ul>
 
         <!-- Consulter : la grille de contrôle, toujours affichée, même vide -->
-        <div v-show="tab === 'consulter'" class="fr-tabs__panel">
+        <div v-show="tab === 'consulter'" v-bind="panneau('consulter')">
           <CollectifGrilleControle v-if="grille" :grille="grille" :garant="estGarant" @enregistrer="enregistrerGrille" @relire="relire" />
           <p v-else class="fr-text--sm" style="color:var(--text-mention-grey)">Grille de contrôle indisponible.</p>
           <div v-if="erreurGrille" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"><p>{{ erreurGrille }}</p></div>
@@ -181,24 +154,24 @@
         </div>
 
         <!-- Signaler un défaut -->
-        <div v-show="tab === 'signaler'" class="fr-tabs__panel">
+        <div v-show="tab === 'signaler'" v-bind="panneau('signaler')">
           <CollectifSignalements :signalements="signalements" :garant="estGarant" :actif="capacites.signalements" :fichiers="fichiers"
                                  :signaler="corps => c.signaler(id, corps)" @depose="rechargerCollectif" @traiter="traiterSignalement" />
         </div>
 
         <!-- Proposer une modification -->
-        <div v-show="tab === 'proposer'" class="fr-tabs__panel">
+        <div v-show="tab === 'proposer'" v-bind="panneau('proposer')">
           <CollectifPropositions :propositions="propositions" :garant="estGarant" :proposer="corps => c.proposer(id, corps)"
                                  @deposee="rechargerCollectif" @publier="publierProposition" @refuser="refuserProposition" />
         </div>
 
         <!-- Historique : le fil -->
-        <div v-show="tab === 'historique'" class="fr-tabs__panel">
+        <div v-show="tab === 'historique'" v-bind="panneau('historique')">
           <CollectifAvancement :evenements="evenements" :suivant="suivant" abonnable :abonne="abonne" @abonner="abonner" @suite="suite" />
         </div>
 
         <!-- Discussion -->
-        <div v-show="tab === 'discussion'" class="fr-tabs__panel">
+        <div v-show="tab === 'discussion'" v-bind="panneau('discussion')">
           <div class="fr-callout">
             <h3 class="fr-callout__title">La discussion se tient dans les forums Mirai</h3>
             <p class="fr-callout__text">
@@ -210,7 +183,7 @@
         </div>
 
         <!-- Prompt tab -->
-        <div v-show="tab === 'prompt'" class="fr-tabs__panel">
+        <div v-show="tab === 'prompt'" v-bind="panneau('prompt')">
           <h3>System prompt actuel</h3>
           <p class="fr-text--sm fr-mb-1w">Template: {{ collection.prompt_template }}</p>
           <pre class="fr-p-2w" style="background:#f6f6f6;border-radius:4px;white-space:pre-wrap;font-size:0.85rem;max-height:400px;overflow-y:auto;">{{ collection.system_prompt }}</pre>
@@ -220,7 +193,7 @@
         </div>
 
         <!-- Feedback tab -->
-        <div v-show="tab === 'feedback'" class="fr-tabs__panel">
+        <div v-show="tab === 'feedback'" v-bind="panneau('feedback')">
           <div v-if="feedbackItems.length === 0" class="fr-callout">
             <p>Aucun feedback pour cette collection.</p>
           </div>
@@ -245,7 +218,7 @@
         </div>
 
         <!-- Q&R tab -->
-        <div v-show="tab === 'qr'" class="fr-tabs__panel">
+        <div v-show="tab === 'qr'" v-bind="panneau('qr')">
           <p class="fr-text--sm">Cache Q&R — reponses curees pour les questions frequentes.</p>
           <NuxtLink :to="`/c/${id}/config`" class="fr-btn fr-btn--sm fr-mt-2w">
             Gerer le cache Q&R
@@ -323,6 +296,43 @@ const feedbackItems = ref<any[]>([])
 const loading = ref(true)
 const tab = ref('consulter')
 
+/** Les rubriques de la fiche, dans l'ordre de la rangée d'onglets. */
+const onglets = computed(() => {
+  const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
+  return [
+    { cle: 'consulter', libelle: 'Consulter' },
+    { cle: 'signaler', libelle: `Signaler un défaut${ouverts(signalements.value, s => s.etat !== 'clos')}` },
+    { cle: 'proposer', libelle: `Proposer une modification${ouverts(propositions.value, p => p.etat === 'proposee')}` },
+    { cle: 'historique', libelle: 'Historique' },
+    { cle: 'discussion', libelle: 'Discussion' },
+    { cle: 'prompt', libelle: 'Prompt système' },
+    { cle: 'feedback', libelle: `Avis (${feedbackStats.value.total})` },
+    { cle: 'qr', libelle: 'Cache Q&R' },
+  ]
+})
+
+/** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
+function panneau(cle: string) {
+  return {
+    id: `panneau-${cle}`,
+    class: ['fr-tabs__panel', { 'fr-tabs__panel--selected': tab.value === cle }],
+    role: 'tabpanel',
+    'aria-labelledby': `onglet-${cle}`,
+    tabindex: 0,
+  }
+}
+
+/** Flèches, Début et Fin parcourent la rangée, comme le veut le motif « onglets ». */
+function clavierOnglets(ev: KeyboardEvent) {
+  const cles = onglets.value.map(o => o.cle)
+  const i = cles.indexOf(tab.value)
+  const vers = { ArrowRight: (i + 1) % cles.length, ArrowLeft: (i - 1 + cles.length) % cles.length, Home: 0, End: cles.length - 1 }[ev.key]
+  if (vers === undefined) return
+  ev.preventDefault()
+  tab.value = cles[vers]
+  nextTick(() => document.getElementById(`onglet-${cles[vers]}`)?.focus())
+}
+
 function sensitivityBadge(s: string) {
   return { public: 'fr-badge--success', internal: 'fr-badge--info', restricted: 'fr-badge--warning', confidential: 'fr-badge--error' }[s] || ''
 }
@@ -392,3 +402,7 @@ onMounted(async () => {
   loading.value = false
 })
 </script>
+
+<style scoped>
+.fiche-qualite { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; background: var(--background-default-grey); }
+</style>
