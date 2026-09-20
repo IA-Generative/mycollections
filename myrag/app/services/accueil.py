@@ -53,7 +53,7 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
             .order_by(Collection.name)
         )).scalars().all()
         if not cols:
-            return {"collections": [], "fenetre_jours": FENETRE_JOURS, "actives": 0, "questions": 0, "personnes": None}
+            return {"collections": [], "fenetre_jours": FENETRE_JOURS, "actives": 0, "questions": 0, "mes_essais": 0, "personnes": None}
         noms = [c.name for c in cols]
         categories = {k.cle: k.libelle for k in (await session.execute(select(Categorie))).scalars().all()}
         publiees = set((await session.execute(
@@ -66,6 +66,12 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
         )).all())
         personnes = (await session.execute(
             select(func.count(func.distinct(UsageQuestion.auteur_hash))).where(*des_autres, UsageQuestion.auteur_hash.is_not(None))
+        )).scalar() or 0
+        # Mes propres essais ne comptent pas — mais on les DIT : un « 0 » nu, pour qui vient de poser
+        # six questions, se lit comme une panne du compteur.
+        les_miennes = (await session.execute(
+            select(func.count()).where(UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis,
+                                       UsageQuestion.auteur_hash == mon_hash)
         )).scalar() or 0
         signalements = dict((await session.execute(
             select(Signalement.collection_name, func.count())
@@ -83,6 +89,7 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
         "collections": lignes, "fenetre_jours": FENETRE_JOURS,
         "actives": sum(1 for l in lignes if l["publiee"]),
         "questions": sum(l["questions"] for l in lignes),
+        "mes_essais": les_miennes,
         "personnes": personnes if personnes >= SEUIL_PERSONNES else None,
         "signalements_ouverts": sum(l["signalements_ouverts"] for l in lignes),
     }
