@@ -74,6 +74,15 @@ describe('messageMerci', () => {
     expect(m.titre).toContain('faites-les connaître')
     expect(m.action.vers).toBe('/c/faq')
   })
+  it('ne dit pas « personne » à qui vient d’y poser ses propres questions', () => {
+    const m = messageMerci({ collections: [col('CESEDA', 0)], actives: 1, questions: 0, mes_essais: 6, personnes: null, fenetre_jours: 30 })!
+    expect(m.texte).toContain('Vos 6 essais ne comptent pas')
+    expect(m.texte).toContain('aucun collègue')
+    expect(m.texte).toContain('bac à sable')
+    expect(m.texte).not.toContain('Personne')
+    const un = messageMerci({ collections: [col('CESEDA', 0)], actives: 1, questions: 0, mes_essais: 1, personnes: null, fenetre_jours: 30 })!
+    expect(un.texte).toContain('Votre essai ne compte pas')
+  })
   it('rien de publié : invite à finir', () => {
     const m = messageMerci({ collections: [col('FAQ', 0, false)], actives: 0, questions: 0, personnes: null, fenetre_jours: 30 })!
     expect(m.titre).toContain('presque là')

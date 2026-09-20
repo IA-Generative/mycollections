@@ -53,6 +53,20 @@ def test_mes_essais_ne_comptent_pas_ceux_des_collegues_oui(client, en_tant_que, 
     assert r["fenetre_jours"] == 30
 
 
+def test_mes_essais_sont_dits_a_part_pour_qu_un_zero_ne_passe_pas_pour_une_panne(client, en_tant_que, creer_collection, nom):
+    moi = personne("createur-essais")
+    creer_collection(nom, moi)
+    for _ in range(6):
+        _demander(client, en_tant_que, moi, nom)
+    en_tant_que(moi)
+    bilan = client.get("/api/accueil/mes-collections").json()
+    assert (bilan["questions"], bilan["mes_essais"]) == (0, 6)   # le « 0 » est juste — et il s'explique
+    _demander(client, en_tant_que, personne("collegue-essais"), nom)
+    en_tant_que(moi)
+    bilan = client.get("/api/accueil/mes-collections").json()
+    assert (bilan["questions"], bilan["mes_essais"]) == (1, 6)
+
+
 def test_sous_le_seuil_on_ne_dit_pas_combien_de_personnes(client, en_tant_que, creer_collection, nom):
     moi = personne("seul-" + nom[-6:])
     creer_collection(nom, moi)

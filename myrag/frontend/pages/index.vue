@@ -11,7 +11,9 @@
     <section v-if="merci" class="accueil-merci fr-mb-5w" aria-label="Ce que vos collections ont rendu possible">
       <div class="accueil-merci__chiffres">
         <div><b>{{ nombre(bilan!.actives) }}</b><span>collection{{ bilan!.actives > 1 ? 's' : '' }} active{{ bilan!.actives > 1 ? 's' : '' }}</span></div>
-        <div><b>{{ nombre(bilan!.questions) }}</b><span>question{{ bilan!.questions > 1 ? 's' : '' }} en {{ bilan!.fenetre_jours }} jours</span></div>
+        <div :title="`Questions posées par vos collègues depuis le bac à sable, sur ${bilan!.fenetre_jours} jours. Vos propres essais ne comptent pas ; les questions posées dans l'assistant MirAI ne sont pas encore mesurées.`">
+          <b>{{ nombre(bilan!.questions) }}</b><span>question{{ bilan!.questions > 1 ? 's' : '' }} de collègues en {{ bilan!.fenetre_jours }} jours</span>
+        </div>
         <div v-if="bilan!.personnes"><b>{{ nombre(bilan!.personnes) }}</b><span>collègues aidés</span></div>
       </div>
       <div class="accueil-merci__mots">

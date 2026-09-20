@@ -48,6 +48,8 @@ export interface BilanPartage {
   questions: number
   personnes: number | null
   signalements_ouverts?: number
+  /** Mes propres questions sur la fenêtre : elles ne comptent pas, mais on les dit. */
+  mes_essais?: number
   fenetre_jours: number
 }
 
@@ -72,9 +74,14 @@ export function messageMerci(b: BilanPartage | null): Merci | null {
     }
   }
   if (b.actives > 0) {
+    // « Personne » serait faux pour qui vient d'y poser six questions : on dit que ses essais ne comptent pas.
+    const mes = b.mes_essais || 0
+    const essais = mes > 1 ? `Vos ${nombre(mes)} essais ne comptent pas : aucun collègue ne les a encore interrogées`
+      : mes === 1 ? 'Votre essai ne compte pas : aucun collègue ne les a encore interrogées'
+      : 'Aucun collègue ne les a encore interrogées'
     return {
       titre: 'Vos collections sont prêtes — faites-les connaître.',
-      texte: `Personne ne les a encore interrogées ces ${b.fenetre_jours} derniers jours. Un lien dans un message d'équipe suffit souvent : « ${premiere.titre} » répond en langage courant.`,
+      texte: `${essais} ces ${b.fenetre_jours} derniers jours, depuis le bac à sable. Un lien dans un message d'équipe suffit souvent : « ${premiere.titre} » répond en langage courant.`,
       action: { libelle: 'Copier le lien à partager', vers: `/c/${premiere.name}` },
     }
   }
