@@ -18,7 +18,26 @@
     <div v-if="!chargees" class="fr-callout"><p>Chargement…</p></div>
     <div v-else-if="!capacites.demandes" class="fr-alert fr-alert--info"><p>Les demandes de jeux de données ne sont pas activées sur cette plateforme.</p></div>
     <template v-else>
-      <CollectifFormulaireDemande :mail="mail" :chercher="chercher" :deposer="deposerDemande" @deposee="apresDepot" @moi-aussi="moiAussi" />
+      <!-- Le formulaire se déplie à la demande : ouvert d'office, il occupait tout l'écran et cachait
+           la liste — alors que le premier geste utile est souvent de SOUTENIR une demande existante.
+           `v-show`, pas `v-if` : replier ne perd pas ce qui a été saisi. -->
+      <section class="demande-depot fr-mb-4w" :class="{ ouvert: formulaireOuvert }">
+        <div class="demande-depot__tete">
+          <div>
+            <h2 class="fr-h6 fr-mb-0">Un jeu de données vous manque ?</h2>
+            <p v-if="!formulaireOuvert" class="fr-text--sm fr-mb-0" style="color:var(--text-mention-grey)">
+              Regardez d'abord la liste ci-dessous : s'il est déjà demandé, un « Moi aussi » compte davantage qu'une nouvelle demande.
+            </p>
+          </div>
+          <button type="button" class="fr-btn fr-btn--sm fr-btn--icon-left" :class="formulaireOuvert ? 'fr-btn--tertiary fr-icon-arrow-up-s-line' : 'fr-icon-add-line'"
+                  aria-controls="formulaire-demande" :aria-expanded="formulaireOuvert" @click="basculer">
+            {{ formulaireOuvert ? 'Replier le formulaire' : 'Demander un jeu de données' }}
+          </button>
+        </div>
+        <div v-show="formulaireOuvert" id="formulaire-demande" class="fr-mt-2w">
+          <CollectifFormulaireDemande :mail="mail" :chercher="chercher" :deposer="deposerDemande" @deposee="apresDepot" @moi-aussi="moiAussi" />
+        </div>
+      </section>
 
       <div v-if="message" class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"><p>{{ message }}</p></div>
       <div v-if="erreur" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>{{ erreur }}</p></div>
@@ -66,13 +85,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { LIBELLES_DEMANDE, ceQuiManque, messageErreur, progression } from '~/utils/collectif'
 const { capacites, chargees, charger } = useCapacites()
 const { listerDemandes, deposerDemande, soutenir, retirerSoutien } = useCollectif()
 const { user } = useAuth()
 const demandes = ref<any[] | null>([])
 const filtre = ref('toutes')
+const route = useRoute()
+// L'accueil (« Demander un jeu de données ») arrive ici avec ?deposer=1 : le formulaire s'ouvre d'office.
+const formulaireOuvert = ref(route.query.deposer === '1')
+function basculer() {
+  formulaireOuvert.value = !formulaireOuvert.value
+  if (formulaireOuvert.value) nextTick(() => document.getElementById('d-titre')?.focus())
+}
 const message = ref('')
 const erreur = ref('')
 const mail = computed(() => (user.value as any)?.profile?.email || '')
@@ -89,6 +115,23 @@ async function aider(d: any, role: string, minutes: number) {
 }
 async function retirer(d: any) { try { remplacer((await retirerSoutien(d.id)).demande) } catch (e) { erreur.value = messageErreur(e) } }
 async function moiAussi(id: string) { const d = (demandes.value || []).find(x => x.id === id) || { id }; await aider(d, 'soutien', 0) }
-function apresDepot(d: any) { message.value = `Demande « ${d.titre} » déposée. Vous êtes abonné·e à son avancement.`; if (demandes.value) demandes.value = [d, ...demandes.value] }
-onMounted(async () => { await charger(); if (capacites.value.demandes) await recharger() })
+function apresDepot(d: any) {
+  message.value = `Demande « ${d.titre} » déposée. Vous êtes abonné·e à son avancement.`
+  if (demandes.value) demandes.value = [d, ...demandes.value]
+  formulaireOuvert.value = false   // déposée : on rend la place à la liste, où elle apparaît en tête
+}
+onMounted(async () => {
+  await charger()
+  if (capacites.value.demandes) await recharger()
+  if (formulaireOuvert.value) nextTick(() => document.getElementById('d-titre')?.focus())
+})
 </script>
+
+<style scoped>
+.demande-depot { border: 1px solid var(--border-default-grey); border-left: 4px solid var(--border-active-blue-france); padding: 1rem 1.25rem; }
+.demande-depot__tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; }
+.demande-depot__tete > div { flex: 1 1 320px; }
+/* Replié dans un encadré, le formulaire n'a plus besoin de son propre cadre de mise en avant. */
+.demande-depot :deep(form.fr-callout) { margin-bottom: 0; }
+.demande-depot :deep(form.fr-callout > .fr-callout__title) { display: none; }
+</style>
