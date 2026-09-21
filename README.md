@@ -169,9 +169,13 @@ Pour les vrais flows long-running (>15 min, réindexation massive), la V2 utilis
 
 ## Démarrage local
 
-Prérequis : Docker Desktop, Node 22, Python 3.12, le repo `openrag` et `owuicore-main` clonés à côté.
+Prérequis : Docker, [mise](https://mise.jdx.dev/) (pour uv + node). Pour le **stack complet** (option C : RAG + auth), il faut aussi les repos `openrag` et `owuicore-main` clonés à côté.
+
+
 
 ```bash
+# 0. Installer les outils (une fois)
+mise install     # uv + node 22
 # 1. Démarrer les dépendances
 cd ../owuicore-main      && docker compose up -d   # Keycloak + OWUI + Pipelines + Tika
 cd ../openrag            && docker compose --profile cpu up -d
@@ -195,9 +199,8 @@ npm install
 AUTH_ENABLED=false npx nuxt dev --port 8201
 
 # Tests
-(cd .. && python3 -m pytest tests/unit -q)   # backend
-npx vitest run                               # frontend
-
+cd myrag && uv run pytest tests/unit -q
+cd frontend && npx vitest run
 # 4. Vérifier
 curl http://localhost:8200/health            # backend
 curl http://localhost:8201/                  # frontend

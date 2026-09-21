@@ -28,7 +28,23 @@ services:
       owuicore:
         aliases:
           - myrag
-
+  myrag-frontend:
+    build:
+      context: ./frontend
+      args:
+        MYRAG_API_URL: ${MYRAG_API_URL:-http://localhost:8200}
+        AUTH_ENABLED: "false"
+        APP_TITLE: ${APP_TITLE:-Mes collections (beta)}
+    ports:
+      - "${FRONT_PORT:-8201}:3000"
+    depends_on:
+      - myrag
+    restart: unless-stopped
+    networks:
+      default:
+      owuicore:
+        aliases:
+          - myrag
 volumes:
   myrag-data:
 

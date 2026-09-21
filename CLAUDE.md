@@ -135,9 +135,10 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 
 - **Backend** : Python 3.12, FastAPI, SQLAlchemy async (SQLite dev / PostgreSQL prod), httpx, NetworkX
 - **Frontend** : Nuxt 4, @gouvfr/dsfr, oidc-client-ts
+- **Outillage** : mise (uv + node 22) ; dependances Python via `uv` (`myrag/pyproject.toml` + `uv.lock`, pas de `requirements.txt`)
 - **Auth** : Keycloak OIDC PKCE (realm openwebui, client myrag-front)
 - **Tests** : pytest (backend), vitest (frontend), TDD
-- **Docker** : Docker Compose + manifestes Kubernetes (`myrag/k8s/`)
+- **Docker** : `myrag/docker-compose.yaml` (backend + frontend, standalone) + manifestes Kubernetes (`myrag/k8s/`)
 
 ## Key Files
 
@@ -178,8 +179,8 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/myrag  # prod
 ## Testing
 
 ```bash
-cd myrag && python3 -m pytest tests/unit/ -v      # backend
-cd myrag/frontend && npx vitest run              # frontend
+cd myrag && uv run pytest tests/unit/ -v      # backend (via le venv uv)
+cd myrag/frontend && npx vitest run          # frontend
 ```
 
 Le comportement d'un survol, d'un focus ou d'un defilement ne se prouve pas par un test
@@ -192,19 +193,34 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `DATABASE_URL` | `sqlite+aiosqlite:////app/data/myrag.db` | Base de donnees |
 | `OPENRAG_URL` | `http://openrag:8080` | URL du service OpenRAG |
 | `OPENRAG_ADMIN_TOKEN` | `` | Token admin OpenRAG |
+| `OPENRAG_PUBLIC_URL` | `` | Adresse publique d'OpenRAG (bloc « Où interroger ») ; vide => reprend `openrag_url` si https |
 | `KEYCLOAK_URL` | `http://keycloak:8080` | URL Keycloak |
 | `KEYCLOAK_REALM` | `openwebui` | Realm Keycloak |
+| `KEYCLOAK_ADMIN_USER` | `admin` | Utilisateur admin Keycloak |
 | `KEYCLOAK_ADMIN_PASSWORD` | `` | Mot de passe admin Keycloak (fallback si pas de client_secret) |
 | `KEYCLOAK_CLIENT_ID` | `myrag-admin` | Client Keycloak pour l'API admin |
 | `KEYCLOAK_CLIENT_SECRET` | `` | Secret du client (si service account) |
 | `LEGIFRANCE_CLIENT_ID` | `` | Client ID API PISTE Legifrance |
 | `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
-| `AUTH_ENABLED` | `true` | Activer l'auth Keycloak sur le frontend |
+| `AUTH_ENABLED` | `false` | Activer la garde JWT Keycloak sur le backend (routes XHR) ; false en dev |
+| `MYRAG_GROUPE_EXIGE` | `` | Restreindre l'acces a un groupe du realm (vide = pas de restriction en dev) |
+| `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes MyRAG |
+| `GRAPHRAG_VIEWER_URL` | `` | URL du viewer graph (Cytoscape) ; vide => `/graph` repli sur le local |
+| `MYRAG_PREFIXES_BANNIS` | `demo-,amorce-,rag-,test-` | Prefixes refuses a la creation d'une collection |
+| `MYRAG_PUBLIC_URL` | `http://localhost:8200` | URL publique (liens iframe) |
+| `CORS_ALLOW_ORIGINS` | `` | Origines autorisees (CSV). Vide => `*` sans credentials |
+| `DATA_DIR` | `/app/data` | Repertoire de donnees (fichiers sources, sqlite) |
 | `MYRAG_PSEUDO_SEL` | `` | Sel HMAC des identités du collectif (le même que `obs-pseudo-salt` du bus) ; vide ⇒ routes du collectif en 503. En dev : `dev-sel` |
 | `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |
 | `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
 | `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
+| `CONFIRMATION_JOURS` | `5` | Une demande sans reponse passe « réalisée » au bout de ce nombre de jours |
+| `BUS_URL` / `BUS_SECRET` | `` | Relais du fil vers la cloche du menu commun ; vides ⇒ `/api/bus` en 503 |
+| `OWUI_URL` / `OWUI_ADMIN_API_KEY` | `http://openwebui...` / `` | Open WebUI (creation des alias de modeles a la publication) |
+| `OWUI_PUBLIC_URL` | `` | Adresse publique de l'assistant (ouverte par le navigateur) |
+| `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
+| `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
 
 ## Regles de travail
@@ -218,7 +234,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 
 ## Problemes connus
 
-- **DNS dans les containers Docker** : ajouter `--dns 8.8.8.8 --dns 8.8.4.4` au `docker run`
+- **DNS dans les containers Docker** : le `docker-compose.yaml` de `myrag/` fixe `dns: 8.8.8.8, 8.8.4.4` ; en `docker run` manuel, ajouter `--dns 8.8.8.8 --dns 8.8.4.4`
 - **OIDC issuer mismatch** : utiliser `host.docker.internal:8082` (pas `localhost`) pour Keycloak depuis un container
 - **PDF sur Mac ARM64** : bug pypdfium2, utiliser TXT/MD a la place
 - **Le token admin OpenRAG est ecrase au restart** : definir `AUTH_TOKEN` dans le `.env` d'OpenRAG
