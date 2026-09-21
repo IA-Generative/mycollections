@@ -96,10 +96,11 @@
           </thead>
           <tbody v-for="groupe in groupes" :key="groupe.cle || '__aucune__'">
             <tr>
-              <th colspan="6" scope="colgroup" style="background:var(--background-alt-grey);text-align:left;">
+              <th colspan="6" scope="colgroup" class="catalogue-categorie">
+                <span class="fr-icon-folder-2-line fr-icon--sm" aria-hidden="true"></span>
                 {{ groupe.libelle }}
-                <span class="fr-text--xs" style="font-weight:400;color:var(--text-mention-grey);">
-                  — {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
+                <span class="catalogue-categorie__compte">
+                  {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
                 </span>
               </th>
             </tr>
@@ -337,6 +338,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Le bandeau de catégorie : les lignes du tableau DSFR sont zébrées de gris, un intertitre gris s'y perdait.
+   Bleu France léger + filet à gauche, et de l'air au-dessus pour séparer les groupes. */
+.fr-table tbody th.catalogue-categorie { background: var(--background-action-low-blue-france) !important;
+  color: var(--text-title-blue-france); box-shadow: inset 4px 0 0 var(--border-action-high-blue-france);
+  text-align: left; font-size: 1rem; font-weight: 700; padding-top: .75rem; padding-bottom: .75rem; }
+tbody + tbody th.catalogue-categorie { border-top: 1.5rem solid var(--background-default-grey); }
+.catalogue-categorie__compte { margin-left: .5rem; padding: 0 .5rem; border-radius: 1rem; font-size: .75rem; font-weight: 500;
+  background: var(--background-default-grey); color: var(--text-mention-grey); vertical-align: middle; }
 .catalogue-chargement { border: 1px solid var(--border-default-grey); padding: 1.25rem 1.5rem; }
 .catalogue-chargement__tete { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.1rem; }
 .catalogue-chargement__roue { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%;
