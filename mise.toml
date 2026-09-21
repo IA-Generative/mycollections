@@ -1,3 +1,4 @@
 [tools]
 uv = "latest"
+node = "22"
 prek = { version = "latest", postinstall = "prek install" }
