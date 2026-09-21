@@ -15,7 +15,8 @@ puis redémarrer désactive la garde sans rebuild ni rollback.
 Deux dispositifs s'ajoutent à la validation du jeton :
 
 - **Restriction à un groupe** (``MYRAG_GROUPE_EXIGE``). Un jeton valide du realm ne
-  suffit pas : il doit porter le groupe demandé dans son claim ``groups``. Sans quoi
+  suffit pas : il doit porter le groupe demandé dans son claim ``groups`` (chemin
+  complet de préférence, cf. ``_exiger_le_groupe``). Sans quoi
   tout compte du realm ministériel entrerait dans une bêta réservée à ses testeurs.
   Vide (défaut) = aucune restriction, comportement d'avant.
 - **Identité de l'appelant** (``sub``). Ce claim est la clé du modèle d'accès : c'est
@@ -35,6 +36,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
+from app.services.access import chemins
 
 logger = logging.getLogger("myrag.auth")
 
@@ -61,28 +63,42 @@ def _get_jwks_client() -> "jwt.PyJWKClient":
 
 
 def _exiger_le_groupe(claims: dict) -> None:
-    """Refuse un jeton qui ne porte pas le groupe demandé par ``MYRAG_GROUPE_EXIGE``.
+    """Refuse un jeton qui ne porte pas un des groupes demandés par ``MYRAG_GROUPE_EXIGE``.
 
-    Le claim ``groups`` porte le NOM FEUILLE des groupes (mapper Keycloak
-    ``full.path=false``), jamais leur chemin : on compare à un nom, pas à un
-    « /chemin/groupe ». Panacher les deux formes donnerait un refus systématique
-    que rien dans le message ne permettrait d'expliquer.
+    La variable accepte une liste séparée par des virgules, chaque entrée sous l'une
+    de deux formes :
+
+    - un **chemin** (``/g/mirai-beta-testeurs``) : il doit figurer tel quel dans un
+      claim en chemins complets (mapper ``full.path=true``). Forme sûre, à viser.
+    - un **nom court** (``mirai-beta-testeurs``) : comparé à une valeur du claim telle
+      quelle. Forme HÉRITÉE du mapper ``full.path=false``, à ne garder que le temps
+      d'une bascule : un nom court n'est pas unique dans le realm, et n'importe qui
+      peut créer un groupe homonyme dans keycloak-comu.
+
+    Pendant la bascule du mapper, ``mirai-beta-testeurs,/g/mirai-beta-testeurs``
+    laisse passer les deux formes ; ensuite, le chemin seul.
     """
-    exige = settings.myrag_groupe_exige.strip()
-    if not exige:
+    exiges = [e.strip() for e in settings.myrag_groupe_exige.split(",") if e.strip()]
+    if not exiges:
         return
     brut = claims.get("groups", [])
-    groupes = brut if isinstance(brut, list) else [brut]
-    if exige not in [str(g) for g in groupes]:
-        # Tracer le refus sans nommer la personne : le motif suffit au diagnostic.
-        logger.warning(
-            "Accès refusé : le jeton ne porte pas le groupe requis (%d groupe(s) présent(s))",
-            len(groupes),
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="Accès réservé aux membres du groupe autorisé",
-        )
+    groupes = [str(g) for g in (brut if isinstance(brut, list) else [brut])]
+    chemins_du_jeton = set(chemins(groupes))
+    for exige in exiges:
+        if exige.startswith("/"):
+            if exige.rstrip("/") in chemins_du_jeton:
+                return
+        elif exige in groupes:
+            return
+    # Tracer le refus sans nommer la personne : le motif suffit au diagnostic.
+    logger.warning(
+        "Accès refusé : le jeton ne porte pas le groupe requis (%d groupe(s) présent(s))",
+        len(groupes),
+    )
+    raise HTTPException(
+        status_code=403,
+        detail="Accès réservé aux membres du groupe autorisé",
+    )
 
 
 def verify_jwt(

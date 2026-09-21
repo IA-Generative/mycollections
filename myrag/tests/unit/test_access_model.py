@@ -11,9 +11,19 @@ CREATOR_SUB = "u-creator"
 
 
 class TestGroupsMatch:
-    def test_match_avec_ou_sans_slash_initial(self):
+    def test_match_fiche_avec_ou_sans_slash_initial(self):
+        # Côté fiche, la valeur enregistrée est normalisée.
         assert access.groups_match(["/dir/pole-juridique"], ["dir/pole-juridique"])
-        assert access.groups_match(["dir/pole-juridique"], ["/dir/pole-juridique"])
+        assert access.groups_match(["/dir/pole-juridique"], ["/dir/pole-juridique"])
+
+    def test_claim_en_noms_courts_ne_correspond_a_rien(self):
+        # Côté jeton, seul un chemin complet compte : un nom court est forgeable.
+        assert not access.groups_match(["dir/pole-juridique"], ["/dir/pole-juridique"])
+        assert not access.groups_match(["mirai-beta-testeurs"], ["mirai-beta-testeurs"])
+        assert not access.groups_match(["pole-juridique", "/dir/pole-juridique"], ["/dir/pole-juridique"])
+
+    def test_homonyme_dans_un_autre_parent_refuse(self):
+        assert not access.groups_match(["/g/BACI/Admins"], ["/g/Mirai Analyse/Admins"])
 
     def test_pas_de_match(self):
         assert not access.groups_match(["/dir/rh"], ["/dir/juridique"])
@@ -84,3 +94,22 @@ class TestCanRead:
     def test_group_tiers_refuse(self):
         assert not self._r(scope="group", scope_groups=["/dir/juridique"],
                            user_groups=["/dir/rh"])
+
+
+class TestFormeDeLaBeta:
+    """Modèle complet, claim en noms courts (bêta, mapper ``full.path=false``)."""
+
+    def test_superadmin_en_nom_court_ne_donne_ni_ecriture_ni_lecture(self):
+        groups = ["mirai-beta-testeurs", "superadmin", "/myrag/superadmin"]
+        assert not access.can_write(name="victor", created_by="", user_groups=groups, user_sub="x")
+        assert not access.can_read(name="victor", scope="private", scope_groups=[],
+                                   created_by="", user_groups=groups, user_sub="x")
+
+    def test_createur_garde_ses_droits(self):
+        # Le créateur est reconnu par son `sub`, pas par ses groupes.
+        groups = ["mirai-beta-testeurs"]
+        assert access.can_write(name="victor", created_by=CREATOR_SUB, user_groups=groups, user_sub=CREATOR_SUB)
+
+    def test_superadmin_en_chemins_complets(self):
+        groups = ["/g/mirai-beta-testeurs", "/myrag/superadmin"]
+        assert access.can_write(name="victor", created_by="", user_groups=groups, user_sub="x")
