@@ -142,6 +142,40 @@ def graph_from_import(data: dict) -> nx.DiGraph:
     return graph
 
 
+_ROMAINS = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+AUTRES = "other"
+
+
+def _groupe(attrs: dict) -> str:
+    """La partie du corpus où vit un nœud : son Livre, ou « other »."""
+    livre = (attrs or {}).get("livre", "")
+    return f"Livre-{livre}" if livre else AUTRES
+
+
+def _rang(identifiant: str) -> tuple:
+    """Tri des parties : Livre I, II, III, IV, V… IX (en chiffres romains, pas en lettres — « IX »
+    passait avant « V ») ; ce qui n'est pas un chiffre romain suit, par ordre alphabétique ; « other » ferme."""
+    if identifiant == AUTRES:
+        return (2, 0, "")
+    suffixe = identifiant.split("-", 1)[-1].upper()
+    if suffixe and all(c in _ROMAINS for c in suffixe):
+        valeurs = [_ROMAINS[c] for c in suffixe]
+        total = sum(-v if i + 1 < len(valeurs) and v < valeurs[i + 1] else v for i, v in enumerate(valeurs))
+        return (0, total, "")
+    return (1, 0, identifiant.lower())
+
+
+def parties_du_corpus(groupes) -> list[dict]:
+    """Ce que le sélecteur « Partie du corpus » du visualiseur attend : des `{id, label}`, la première
+    entrée valant « tout ». Le serveur rendait des chaînes nues ; le visualiseur lisait `.id` et
+    `.label` sur chacune, et affichait un menu d'options VIDES."""
+    ids = sorted({g for g in groupes if g}, key=_rang)
+    if len(ids) < 2:
+        return [{"id": "", "label": "Tout le corpus"}]   # une seule partie : rien à choisir
+    libelle = lambda g: "Hors livres" if g == AUTRES else g.replace("-", " ", 1)  # noqa: E731
+    return [{"id": "", "label": "Tout le corpus"}] + [{"id": g, "label": libelle(g)} for g in ids]
+
+
 class GraphBuilder:
     """Manages graphs per collection with persistence."""
 
@@ -337,8 +371,12 @@ class GraphBuilder:
         query: str = "",
         max_nodes: int = 80,
         min_weight: float = 0.0,
+        source_prefix: str = "",
     ) -> dict:
-        """Convert graph to GraphDataResponse format (compatible with grafragexp viewer)."""
+        """Convert graph to GraphDataResponse format (compatible with grafragexp viewer).
+
+        `source_prefix` restreint le graphe à une PARTIE du corpus (un Livre, pour un code). Le
+        visualiseur l'envoyait depuis toujours ; le serveur l'ignorait."""
         graph = self.get(collection)
         if not graph:
             return {
@@ -349,8 +387,19 @@ class GraphBuilder:
                 "edges": [],
                 "total_nodes": 0,
                 "total_edges": 0,
-                "message": "No graph available for this collection",
+                "message": "Cette collection n'a pas encore de graphe de références.",
+                # Le visualiseur parcourt TOUJOURS cette liste : absente, il plantait sur « Erreur de
+                # chargement » au lieu de dire que le graphe n'existe pas.
+                "source_prefix": "",
+                "available_sources": parties_du_corpus([]),
             }
+
+        # Les parties se lisent sur le graphe ENTIER, avant tout filtre : la liste offerte ne doit pas
+        # dépendre de ce qui est affiché (80 éléments au plus).
+        parties = parties_du_corpus(_groupe(d) for _, d in graph.nodes(data=True))
+        partie = source_prefix if any(p["id"] == source_prefix for p in parties) else ""
+        if partie:
+            graph = graph.subgraph([n for n, d in graph.nodes(data=True) if _groupe(d) == partie]).copy()
 
         # Le filtre est une recherche LITTÉRALE (sous-chaîne) dans l'identifiant, le libellé et l'aperçu.
         # S'il ne trouve rien, le graphe entier est rendu — et on le DIT (`query_matched`) : sans cela,
@@ -406,7 +455,7 @@ class GraphBuilder:
                 "degree": degree,
                 "frequency": 1,
                 "size": size,
-                "source_group": f"Livre-{livre}" if livre else "other",
+                "source_group": _groupe(attrs),
                 "document_paths": [attrs.get("filename", "")],
                 "fragments": [{
                     "id": f"{node_id}:preview",
@@ -443,7 +492,6 @@ class GraphBuilder:
             "nodes": nodes,
             "edges": edges,
             "message": "",
-            "available_sources": sorted(set(
-                n.get("source_group", "") for n in nodes
-            )),
+            "source_prefix": partie,
+            "available_sources": parties,
         }

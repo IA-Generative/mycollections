@@ -65,6 +65,7 @@ async def graph_data(
     query: str = Query("", description="Search text to filter nodes"),
     max_nodes: int = Query(80, ge=5, le=500),
     min_weight: float = Query(0.0, ge=0.0),
+    source_prefix: str = Query("", max_length=200, description="Partie du corpus (un Livre) à laquelle restreindre le graphe"),
 ):
     """Graph data in GraphDataResponse format (compatible with grafragexp Cytoscape.js viewer)."""
     if not corpus_id:
@@ -75,6 +76,7 @@ async def graph_data(
         query=query,
         max_nodes=max_nodes,
         min_weight=min_weight,
+        source_prefix=source_prefix,
     )
 
 
