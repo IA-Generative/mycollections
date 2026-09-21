@@ -18,20 +18,21 @@
                 <NuxtLink to="/" class="fr-header__service-title">
                   Mes collections
                 </NuxtLink>
-                <p class="fr-header__service-tagline">Recherche augmentee dans vos collections documentaires</p>
+                <p class="fr-header__service-tagline">Interrogez les documents de votre ministère</p>
               </div>
             </div>
             <div class="fr-header__tools">
               <div class="fr-header__tools-links">
                 <ul class="fr-btns-group">
-                  <!-- Service status indicators -->
-                  <li>
+                  <!-- Témoins d'état des deux services : un repère d'exploitation, pas une
+                       information pour l'usager — réservés aux administrateurs. -->
+                  <li v-if="isAdmin">
                     <span class="myrag-status" :title="myragStatus.title">
                       <span class="myrag-status__dot" :class="myragStatus.class"></span>
                       MyRAG
                     </span>
                   </li>
-                  <li>
+                  <li v-if="isAdmin">
                     <span class="myrag-status" :title="openragStatus.title">
                       <span class="myrag-status__dot" :class="openragStatus.class"></span>
                       OpenRAG
@@ -113,7 +114,7 @@
 
     <!-- Connection error banner -->
     <div v-if="openragStatus.status === 'down'" class="fr-alert fr-alert--error fr-alert--sm" role="alert">
-      <p>OpenRAG n'est pas accessible ({{ config.public.myragApiUrl }}). Verifiez que le service est demarre.</p>
+      <p :title="isAdmin ? `OpenRAG injoignable (${config.public.myragApiUrl})` : undefined">La recherche est momentanément indisponible. Réessayez dans quelques minutes.</p>
     </div>
 
     <!-- Auth error banner -->
@@ -123,8 +124,8 @@
 
     <!-- Auth loading gate -->
     <div v-if="authLoading && config.public.authEnabled" class="fr-container fr-mt-8w" style="text-align:center;">
-      <p>Connexion a Keycloak en cours...</p>
-      <p class="fr-text--sm fr-mt-2w">Si cette page persiste, verifiez que Keycloak est accessible sur {{ config.public.keycloakUrl }}</p>
+      <p>Connexion en cours…</p>
+      <p class="fr-text--sm fr-mt-2w" :title="config.public.keycloakUrl">Si cette page persiste, le service de connexion ne répond pas : réessayez dans quelques minutes.</p>
     </div>
 
     <!-- Main content (only when auth is ready) -->
@@ -171,8 +172,8 @@ async function chargerMiennes() {
 }
 watch(() => route.fullPath, () => { menuOuvert.value = false; chargerMiennes() })
 
-const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
-const openragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Verification...' })
+const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Vérification…' })
+const openragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Vérification…' })
 
 async function checkServices() {
   // Check MyRAG

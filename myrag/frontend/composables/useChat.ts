@@ -59,7 +59,7 @@ export function useChat(collection: string) {
       const data = await post(`/api/playground/${collection}/chat`, { question: q })
       const assistant: ChatMessage = {
         role: 'assistant',
-        content: data.response || 'Pas de reponse generee.',
+        content: data.response || 'Pas de réponse générée.',
         sources: data.sources || [],
         sourceNames: data.source_names || [],
         model: data.model,

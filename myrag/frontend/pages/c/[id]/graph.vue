@@ -1,16 +1,10 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb fr-mb-1w" aria-label="vous êtes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Graphe</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Liens entre documents" class="fr-mb-1w" />
     <div class="graphe-tete">
-      <h1 class="fr-h5 fr-mb-0">Graphe de références — {{ titre }}</h1>
+      <h1 class="fr-h5 fr-mb-0">Liens entre documents — {{ titre }}</h1>
       <button v-if="pleinEcranPossible" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-fullscreen-line fr-btn--icon-left"
-              title="Le graphe occupe tout l'écran. Échap pour revenir." @click="pleinEcran">
+              title="La carte des liens occupe tout l'écran. Échap pour revenir." @click="pleinEcran">
         Plein écran
       </button>
     </div>
@@ -19,7 +13,7 @@
          la hauteur qui reste sous l'en-tête. La largeur se MESURE (clientWidth) plutôt que `100vw`,
          qui compte la barre de défilement et ferait défiler la page de côté sous Windows. -->
     <div ref="cadre" class="graphe-cadre" :style="styleCadre">
-      <iframe :src="`${baseUrl}/graph?corpus_id=${id}`" title="Graphe de références de la collection" allowfullscreen></iframe>
+      <iframe :src="`${baseUrl}/graph?corpus_id=${id}`" title="Liens entre les documents de la collection" allowfullscreen></iframe>
       <!-- En plein écran, l'en-tête de la page a disparu : la sortie doit se voir DANS le graphe.
            Le bouton reste ; le rappel « Échap » s'efface après quelques secondes. -->
       <div v-if="enPleinEcran" class="graphe-sortie">
@@ -67,9 +61,34 @@ function pleinEcran() {
 function quitterPleinEcran() {
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
 }
+/**
+ * La barre commune de la bêta (`/_beta/menu.js`, `#mm-barre`) est posée sur `document.body` : en
+ * plein écran, seul le cadre s'affiche, et « Mon avis » disparaissait avec elle. Le temps du
+ * plein écran, le cadre l'ACCUEILLE — un seul point d'accès à l'avis, le vrai : son panneau vit
+ * dans la barre et ses écouteurs voyagent avec le nœud — puis on la rend exactement où elle était.
+ * Sans barre (menu non chargé), rien ne se passe.
+ */
+let placeDeLaBarre: { parent: Node, suivant: Node | null } | null = null
+function accueillirBarre() {
+  const barre = document.getElementById('mm-barre')
+  if (!barre || !barre.parentNode || !cadre.value || barre.parentNode === cadre.value) return
+  placeDeLaBarre = { parent: barre.parentNode, suivant: barre.nextSibling }
+  cadre.value.appendChild(barre)
+}
+function rendreBarre() {
+  const barre = document.getElementById('mm-barre')
+  const place = placeDeLaBarre
+  placeDeLaBarre = null
+  if (!barre || !place) return
+  if (place.suivant && place.suivant.parentNode === place.parent) place.parent.insertBefore(barre, place.suivant)
+  else place.parent.appendChild(barre)
+}
+
 /** Le navigateur est seul juge : Échap, ou son propre bouton, sortent aussi du plein écran. */
 function suivrePleinEcran() {
   enPleinEcran.value = document.fullscreenElement === cadre.value
+  if (enPleinEcran.value) accueillirBarre()
+  else rendreBarre()
   if (minuterieRappel) { clearTimeout(minuterieRappel); minuterieRappel = null }
   rappelVisible.value = enPleinEcran.value
   if (enPleinEcran.value) {
@@ -90,6 +109,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', mesurer)
   document.removeEventListener('fullscreenchange', suivrePleinEcran)
   if (minuterieRappel) clearTimeout(minuterieRappel)
+  rendreBarre()
 })
 watch(titre, () => nextTick(mesurer))
 </script>

@@ -1,27 +1,20 @@
 <template>
   <div>
-    <!-- Breadcrumb -->
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">{{ titre }}</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" :rubrique="collection ? rubrique : undefined" />
 
-    <div v-if="loading" class="fr-callout"><p>Chargement...</p></div>
+    <div v-if="loading" class="fr-callout"><p>Chargement…</p></div>
 
     <!-- Collection not found in MyRAG DB (may exist as bare OpenRAG partition) -->
     <div v-else-if="!collection" class="fr-alert fr-alert--warning">
-      <h3 class="fr-alert__title">Collection « {{ id }} » sans configuration MyRAG</h3>
+      <h3 class="fr-alert__title">La collection « {{ id }} » n'a pas encore de fiche</h3>
       <p>
-        Cette collection existe peut-être côté OpenRAG mais n'a pas encore de
-        configuration MyRAG (description, stratégie, responsable…).
+        Cette collection existe peut-être dans le moteur de recherche, mais n'a pas encore
+        de fiche dans Mes collections (description, découpage, responsable…).
         <span v-if="loadError" class="fr-text--sm" style="color:#666;">({{ loadError }})</span>
       </p>
       <p>
-        Tu peux la rattacher à une config MyRAG minimale puis compléter les
-        métadonnées depuis les onglets habituels — aucune donnée OpenRAG n'est
-        touchée.
+        Vous pouvez la rattacher à une fiche minimale puis compléter sa description
+        depuis les onglets habituels — aucun document n'est touché.
       </p>
       <div v-if="adoptError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
         <p>{{ adoptError }}</p>
@@ -172,29 +165,29 @@
 
         <!-- Prompt tab -->
         <div v-show="tab === 'prompt'" v-bind="panneau('prompt')">
-          <h3>System prompt actuel</h3>
-          <p class="fr-text--sm fr-mb-1w">Template: {{ collection.prompt_template }}</p>
+          <h3>Consignes données à l'assistant</h3>
+          <p class="fr-text--sm fr-mb-1w">Modèle de consignes : {{ libelleConsignes(collection.prompt_template) }}</p>
           <pre class="fr-p-2w" style="background:#f6f6f6;border-radius:4px;white-space:pre-wrap;font-size:0.85rem;max-height:400px;overflow-y:auto;">{{ collection.system_prompt }}</pre>
-          <NuxtLink :to="`/c/${id}/prompt`" class="fr-btn fr-btn--sm fr-mt-2w">
-            Editer le prompt
+          <NuxtLink :to="`/c/${id}/prompt`" class="fr-btn fr-btn--sm fr-btn--icon-left fr-icon-edit-line fr-mt-2w">
+            Modifier les consignes
           </NuxtLink>
         </div>
 
         <!-- Feedback tab -->
         <div v-show="tab === 'feedback'" v-bind="panneau('feedback')">
           <div v-if="feedbackItems.length === 0" class="fr-callout">
-            <p>Aucun feedback pour cette collection.</p>
+            <p>Aucun avis pour cette collection.</p>
           </div>
           <div v-else class="fr-table">
             <table>
               <thead>
-                <tr><th>Question</th><th>Note</th><th>Status</th><th>Actions</th></tr>
+                <tr><th>Question</th><th>Note</th><th>État</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 <tr v-for="fb in feedbackItems" :key="fb.id">
                   <td>{{ fb.question.substring(0, 80) }}...</td>
                   <td>{{ fb.rating > 0 ? '👍' : '👎' }}</td>
-                  <td><span class="fr-badge fr-badge--sm">{{ fb.status }}</span></td>
+                  <td><span class="fr-badge fr-badge--sm">{{ libelleStatutAvis(fb.status) }}</span></td>
                   <td>
                     <button v-if="fb.status === 'pending'" class="fr-btn fr-btn--sm fr-btn--tertiary"
                             @click="reviewFeedback(fb.id, 'reviewed')">Valider</button>
@@ -207,9 +200,9 @@
 
         <!-- Q&R tab -->
         <div v-show="tab === 'qr'" v-bind="panneau('qr')">
-          <p class="fr-text--sm">Cache Q&R — reponses curees pour les questions frequentes.</p>
+          <p class="fr-text--sm">Réponses validées — des réponses relues et retenues pour les questions fréquentes.</p>
           <NuxtLink :to="`/c/${id}/config`" class="fr-btn fr-btn--sm fr-mt-2w">
-            Gerer le cache Q&R
+            Gérer les réponses validées
           </NuxtLink>
         </div>
       </div>
@@ -219,7 +212,10 @@
 
 <script setup lang="ts">
 import { messageErreur } from '~/utils/collectif'
+import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleStatutAvis } from '~/utils/libelles'
+import { ongletDeLAdresse, libelleSansCompteur } from '~/utils/filAriane'
 const route = useRoute()
+const router = useRouter()
 const id = route.params.id as string
 const { get, patch } = useApi()
 const c = useCollectif()
@@ -294,24 +290,42 @@ const onglets = computed(() => {
     { cle: 'proposer', libelle: `Proposer une modification${ouverts(propositions.value, p => p.etat === 'proposee')}` },
     { cle: 'historique', libelle: 'Historique' },
     { cle: 'discussion', libelle: 'Discussion' },
-    { cle: 'prompt', libelle: 'Prompt système' },
+    { cle: 'prompt', libelle: "Consignes données à l'assistant" },
     { cle: 'feedback', libelle: `Avis (${feedbackStats.value.total})` },
-    { cle: 'qr', libelle: 'Cache Q&R' },
+    { cle: 'qr', libelle: 'Réponses validées' },
   ]
 })
 
+// L'onglet ouvert vit dans l'adresse (`?onglet=documents`) : un lien partagé, un retour
+// arrière ou un rechargement rouvrent la même rubrique. « Consulter », l'onglet par défaut,
+// n'y figure pas — les liens existants vers `/c/{id}` ne changent pas.
+const ONGLET_PAR_DEFAUT = 'consulter'
+const ongletDemande = () => ongletDeLAdresse(route.query.onglet, onglets.value.map(o => o.cle), ONGLET_PAR_DEFAUT)
+tab.value = ongletDemande()
+watch(tab, (t) => {
+  if (t === ongletDemande()) return
+  const query = { ...route.query }
+  if (t === ONGLET_PAR_DEFAUT) delete query.onglet
+  else query.onglet = t
+  router.replace({ query })
+})
+watch(() => route.query.onglet, () => { tab.value = ongletDemande() })
+
+/** Le dernier maillon du fil d'Ariane : l'onglet ouvert, sans son compteur. */
+const rubrique = computed(() => libelleSansCompteur(onglets.value.find(o => o.cle === tab.value)?.libelle || ''))
+
 /** Les cinq gestes de la fiche. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
 const actions = computed(() => [
-  { vers: `/c/${id}/playground`, libelle: 'Tester le RAG', icone: 'fr-icon-chat-3-line', rang: '',
+  { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
     aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
-  { vers: `/c/${id}/graph`, libelle: 'Voir le graph', icone: 'fr-icon-share-line', rang: 'fr-btn--secondary',
-    aide: "La carte des renvois entre documents : quel article cite quel autre. Disponible quand le graphe est activé pour la collection." },
-  { vers: `/c/${id}/upload`, libelle: 'Uploader', icone: 'fr-icon-upload-line', rang: 'fr-btn--secondary',
+  { vers: `/c/${id}/graph`, libelle: 'Voir les liens entre documents', icone: 'fr-icon-links-line', rang: 'fr-btn--secondary',
+    aide: "La carte des renvois entre documents : quel article cite quel autre. Disponible quand les liens entre documents sont activés pour la collection." },
+  { vers: `/c/${id}/upload`, libelle: 'Ajouter des documents', icone: 'fr-icon-file-add-line', rang: 'fr-btn--secondary',
     aide: "Ajouter des documents à la collection : fichiers de votre poste, adresse web, dossier Drive." },
-  { vers: `/c/${id}/config`, libelle: 'Configurer', icone: 'fr-icon-settings-5-line', rang: 'fr-btn--tertiary',
-    aide: "Les réglages : titre et description, qui peut lire la collection, sensibilité des données, contact, cache de réponses." },
-  { vers: `/c/${id}/publish`, libelle: 'Publier', icone: 'fr-icon-send-plane-line', rang: 'fr-btn--tertiary',
-    aide: "Rendre la collection disponible dans l'assistant MirAI, et choisir qui la voit." },
+  { vers: `/c/${id}/config`, libelle: 'Réglages', icone: 'fr-icon-settings-5-line', rang: 'fr-btn--tertiary',
+    aide: "Les réglages : titre et description, type de collection, qui peut lire la collection, sensibilité des données, contact." },
+  { vers: `/c/${id}/publish`, libelle: 'Partager dans Mon assistant', icone: 'fr-icon-share-forward-line', rang: 'fr-btn--tertiary',
+    aide: "Rendre la collection disponible dans Mon assistant, là où vos collègues posent leurs questions — et choisir qui la voit. Rien n'est définitif : on peut la retirer ensuite." },
 ])
 
 const STRATEGIES: Record<string, string> = {
@@ -331,20 +345,20 @@ const SENSIBILITES: Record<string, string> = {
 const badges = computed(() => {
   const col = collection.value || {}
   const liste = [
-    { cle: 'strategie', libelle: col.strategy, classe: 'fr-badge--info',
+    { cle: 'strategie', libelle: libelleStrategie(col.strategy), classe: 'fr-badge--info',
       aide: STRATEGIES[col.strategy] || `Mode de découpage des documents en passages : « ${col.strategy} ».` },
-    { cle: 'sensibilite', libelle: col.sensitivity, classe: sensitivityBadge(col.sensitivity),
+    { cle: 'sensibilite', libelle: libelleSensibilite(col.sensitivity), classe: sensitivityBadge(col.sensitivity),
       aide: SENSIBILITES[col.sensitivity] || `Sensibilité des données : « ${col.sensitivity} ».` },
   ]
-  if (col.graph_enabled) liste.push({ cle: 'graphe', libelle: 'Graph actif', classe: 'fr-badge--new', aide: "Les renvois entre documents sont cartographiés : voir « Voir le graph »." })
+  if (col.graph_enabled) liste.push({ cle: 'graphe', libelle: 'Liens entre documents', classe: 'fr-badge--new', aide: "Les renvois entre documents sont cartographiés : voir « Voir les liens entre documents »." })
   if (col.ai_summary_enabled) liste.push({ cle: 'resume', libelle: 'Résumé IA', classe: 'fr-badge--new', aide: "Chaque document reçoit un résumé automatique, qui aide la recherche à le retrouver." })
-  liste.push({ cle: 'prompt', libelle: col.prompt_template, classe: '',
-    aide: `Modèle de consigne donné à l'assistant : « ${col.prompt_template} ». Il fixe le ton et la façon de citer — voir l'onglet « Prompt système ».` })
+  liste.push({ cle: 'prompt', libelle: libelleConsignes(col.prompt_template), classe: '',
+    aide: `Modèle de consignes donné à l'assistant : « ${libelleConsignes(col.prompt_template)} ». Il fixe le ton et la façon de citer — voir l'onglet « Consignes données à l'assistant ».` })
   return liste.filter(b => b.libelle)
 })
 
 const documentsVus = ref(false)
-watch(tab, (t) => { if (t === 'documents') documentsVus.value = true })
+watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
@@ -404,7 +418,7 @@ async function adoptCollection() {
     // Reload the whole page so onMounted re-runs with the new DB record.
     window.location.reload()
   } catch (e: any) {
-    adoptError.value = e?.message || 'Echec de la creation.'
+    adoptError.value = e?.message || 'Échec de la création.'
     adopting.value = false
   }
 }
