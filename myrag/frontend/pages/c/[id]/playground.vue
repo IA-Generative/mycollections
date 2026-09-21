@@ -4,7 +4,7 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Tester</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Poser une question</a></li>
       </ol>
     </nav>
 
@@ -17,10 +17,10 @@
             Clique sur une question a droite, ou tape la tienne ci-dessous.
           </p>
           <p v-else-if="bank.isGenerating.value" class="fr-text--sm">
-            Preparation des premieres questions de test…
+            Préparation des premières questions de test…
           </p>
           <p v-else class="fr-text--sm">
-            Pose une question pour tester comment le RAG repond sur cette collection.
+            Pose une question pour voir comment la collection répond.
           </p>
         </div>
 
@@ -30,7 +30,7 @@
                        :message="m"
                        @vote="(v) => onVote(m, v)" />
           <div v-if="isLoading" class="fr-text--sm" style="color:#666;padding:0.4rem 0;">
-            ⏳ L'assistant reflechit…
+            ⏳ L'assistant réfléchit…
           </div>
         </div>
 
@@ -58,7 +58,7 @@
         <div class="myrag-playground__bank-header">
           <h2 class="fr-h5" style="margin:0;">Banque de questions</h2>
           <p class="fr-text--xs" style="color:#666;margin:0.2rem 0 0 0;">
-            Questions venant des retours utilisateurs, d'un import, ou generees.
+            Questions venant des retours utilisateurs, d'un import, ou générées automatiquement.
           </p>
         </div>
 
@@ -69,7 +69,7 @@
           Chargement…
         </p>
         <p v-else-if="bank.isGenerating.value && !bank.items.value.length" class="fr-text--sm" style="color:#666;">
-          Generation de questions de test…
+          Génération de questions de test…
         </p>
         <p v-else-if="!bank.filtered.value.length" class="fr-text--sm" style="color:#666;">
           Aucune question dans ce filtre.
@@ -87,11 +87,11 @@
 
         <!-- Batch results table -->
         <div v-if="batchResults.length" class="myrag-playground__batch">
-          <h3 class="fr-h6" style="margin:1rem 0 0.5rem;">Resultats batch ({{ batchResults.length }})</h3>
+          <h3 class="fr-h6" style="margin:1rem 0 0.5rem;">Résultats de toute la banque ({{ batchResults.length }})</h3>
           <div class="fr-table fr-table--no-caption" style="margin-bottom:0;">
             <table>
               <thead>
-                <tr><th>Question</th><th>Reponse</th><th>Sources</th></tr>
+                <tr><th>Question</th><th>Réponse</th><th>Sources</th></tr>
               </thead>
               <tbody>
                 <tr v-for="(r, i) in batchResults" :key="i">
@@ -108,13 +108,15 @@
         <div class="myrag-playground__bank-footer">
           <button class="fr-btn fr-btn--sm fr-btn--secondary"
                   :disabled="!bank.items.value.length || isBatchRunning"
+                  title="Pose à la collection, l'une après l'autre, toutes les questions de la banque, et résume les réponses dans un tableau."
                   @click="runAll">
             {{ isBatchRunning ? `⏳ ${batchProgress}/${bank.items.value.length}` : '▶▶ Lancer toute la banque' }}
           </button>
           <button class="fr-btn fr-btn--sm fr-btn--tertiary"
                   :disabled="bank.isGenerating.value"
+                  title="Fait rédiger automatiquement quatre nouvelles questions de test à partir des documents de la collection."
                   @click="bank.generate">
-            {{ bank.isGenerating.value ? '⏳ Generation…' : '🤖 Generer 4 de plus' }}
+            {{ bank.isGenerating.value ? '⏳ Génération…' : '🤖 Générer 4 de plus' }}
           </button>
         </div>
       </aside>
@@ -229,7 +231,7 @@ async function runAll() {
       } catch (e: any) {
         batchResults.value.push({
           question: q.question,
-          response: `Erreur: ${e?.message || e}`,
+          response: `Erreur : ${e?.message || e}`,
           source_count: 0,
         })
       }

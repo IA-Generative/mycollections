@@ -4,13 +4,13 @@
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Graphe</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Liens entre documents</a></li>
       </ol>
     </nav>
     <div class="graphe-tete">
-      <h1 class="fr-h5 fr-mb-0">Graphe de références — {{ titre }}</h1>
+      <h1 class="fr-h5 fr-mb-0">Liens entre documents — {{ titre }}</h1>
       <button v-if="pleinEcranPossible" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-fullscreen-line fr-btn--icon-left"
-              title="Le graphe occupe tout l'écran. Échap pour revenir." @click="pleinEcran">
+              title="La carte des liens occupe tout l'écran. Échap pour revenir." @click="pleinEcran">
         Plein écran
       </button>
     </div>
@@ -19,7 +19,7 @@
          la hauteur qui reste sous l'en-tête. La largeur se MESURE (clientWidth) plutôt que `100vw`,
          qui compte la barre de défilement et ferait défiler la page de côté sous Windows. -->
     <div ref="cadre" class="graphe-cadre" :style="styleCadre">
-      <iframe :src="`${baseUrl}/graph?corpus_id=${id}`" title="Graphe de références de la collection" allowfullscreen></iframe>
+      <iframe :src="`${baseUrl}/graph?corpus_id=${id}`" title="Liens entre les documents de la collection" allowfullscreen></iframe>
       <!-- En plein écran, l'en-tête de la page a disparu : la sortie doit se voir DANS le graphe.
            Le bouton reste ; le rappel « Échap » s'efface après quelques secondes. -->
       <div v-if="enPleinEcran" class="graphe-sortie">

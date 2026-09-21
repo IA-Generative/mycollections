@@ -16,7 +16,7 @@
     </div>
 
     <div v-if="erreur" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"><p>{{ erreur }}</p></div>
-    <p v-else-if="!resultat" class="fr-text--sm fr-mt-2w" aria-live="polite">Lecture du corpus…</p>
+    <p v-else-if="!resultat" class="fr-text--sm fr-mt-2w" aria-live="polite">Lecture des documents…</p>
 
     <template v-else>
       <p class="fr-text--sm fr-mt-2w fr-mb-1w corpus-docs__plage" aria-live="polite">
@@ -25,7 +25,7 @@
       </p>
 
       <p v-if="!resultat.total && !q.trim()" class="fr-text--sm">
-        Cette collection n'a encore aucun document indexé.
+        Cette collection n'a encore aucun document.
       </p>
 
       <ul v-else class="corpus-docs__liste" :aria-busy="charge">
