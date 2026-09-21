@@ -45,7 +45,7 @@
       <div class="fr-grid-row fr-grid-row--middle fr-mb-2w" style="gap:1rem">
         <h2 class="fr-h4" style="margin:0">{{ demandesFiltrees.length }} demande{{ demandesFiltrees.length > 1 ? 's' : '' }}</h2>
         <div class="collectif-roles" role="group" aria-label="Filtrer par état">
-          <button v-for="e in ['toutes', 'ouverte', 'chantier', 'realisee', 'close']" :key="e" class="collectif-roles__role" :class="{ pris: filtre === e }" @click="filtre = e">{{ e === 'toutes' ? 'toutes' : LIBELLES_DEMANDE[e].libelle }}</button>
+          <button v-for="e in ['toutes', 'ouverte', 'chantier', 'a_confirmer', 'realisee', 'close']" :key="e" class="collectif-roles__role" :class="{ pris: filtre === e }" @click="filtre = e">{{ e === 'toutes' ? 'toutes' : LIBELLES_DEMANDE[e].libelle }}</button>
         </div>
       </div>
 
@@ -68,10 +68,14 @@
                 <span class="fr-badge fr-badge--sm" :class="LIBELLES_DEMANDE[d.etat]?.badge">{{ LIBELLES_DEMANDE[d.etat]?.libelle || d.etat }}</span>
                 <span v-if="d.sommeil" class="fr-badge fr-badge--sm fr-ml-1w">en sommeil</span>
                 <div v-if="ceQuiManque(d)" class="fr-text--xs" style="color:var(--text-mention-grey)">{{ ceQuiManque(d) }}</div>
+                <div v-if="d.etat === 'a_confirmer'" class="fr-text--xs" style="color:var(--text-mention-grey)">
+                  <NuxtLink v-if="d.je_suis_demandeur" :to="`/demandes/${d.id}`" class="fr-link fr-text--xs">à vous de confirmer</NuxtLink>
+                  <template v-else>le demandeur confirme</template> — {{ echeance(d.confirmation_avant) }}
+                </div>
               </td>
-              <td><CollectifJePeuxAider :mon-role="d.mon_role" :garant="d.garant" :ferme="['realisee', 'close'].includes(d.etat)" @choisir="(r, m) => aider(d, r, m)" /></td>
+              <td><CollectifJePeuxAider :mon-role="d.mon_role" :garant="d.garant" :je-suis-demandeur="d.je_suis_demandeur" :ferme="['realisee', 'close', 'a_confirmer'].includes(d.etat)" @choisir="(r, m) => aider(d, r, m)" /></td>
               <td>
-                <button v-if="!['realisee', 'close'].includes(d.etat)" class="fr-btn fr-btn--sm" :class="d.soutenue_par_moi ? 'fr-btn--tertiary' : ''" @click="d.soutenue_par_moi ? retirer(d) : aider(d, 'soutien', 0)">
+                <button v-if="!['realisee', 'close', 'a_confirmer'].includes(d.etat)" class="fr-btn fr-btn--sm" :class="d.soutenue_par_moi ? 'fr-btn--tertiary' : ''" @click="d.soutenue_par_moi ? retirer(d) : aider(d, 'soutien', 0)">
                   {{ d.soutenue_par_moi ? 'Retirer' : 'Moi aussi' }}
                 </button>
                 <NuxtLink v-else-if="d.collection_name" :to="`/c/${d.collection_name}`" class="fr-btn fr-btn--sm fr-btn--secondary">Ouvrir la collection</NuxtLink>
@@ -86,7 +90,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { LIBELLES_DEMANDE, ceQuiManque, messageErreur, progression } from '~/utils/collectif'
+import { LIBELLES_DEMANDE, ceQuiManque, echeance, messageErreur, progression } from '~/utils/collectif'
 const { capacites, chargees, charger } = useCapacites()
 const { listerDemandes, deposerDemande, soutenir, retirerSoutien } = useCollectif()
 const { user } = useAuth()

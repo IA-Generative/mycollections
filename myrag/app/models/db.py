@@ -322,12 +322,16 @@ class SourceFile(Base):
 # ═══════════════════════════════════════════════════════════════════════════════════
 # Le collectif : demandes, soutiens, propositions, signalements, grille, journal.
 # Aucun `sub` en clair dans ces tables : toute identité est un condensé HMAC salé
-# (app.services.pseudo), le même que celui du bus de la bêta. Le courriel de recontact
-# est la seule exception, ENCADRÉE : il n'existe que consenti (contrainte, pas politesse).
+# (app.services.pseudo), le même que celui du bus de la bêta. Le courriel de l'auteur est
+# la seule exception, ENCADRÉE : il ne sert qu'à SA demande, ne se lit que par son garant et
+# l'administration, et s'efface quand la demande se termine (réalisée ou close).
 # ═══════════════════════════════════════════════════════════════════════════════════
 
 FREQUENCES_DEMANDE = ("quotidienne", "hebdomadaire", "mensuelle", "ponctuelle")
-ETATS_DEMANDE = ("ouverte", "chantier", "realisee", "close")
+# « a_confirmer » : la collection est publiée à tous, l'auteur dit si elle répond à son besoin
+# (décision PO du 2026-09-21). Sans réponse sous CONFIRMATION_JOURS, elle est réalisée « sans réponse ».
+ETATS_DEMANDE = ("ouverte", "chantier", "a_confirmer", "realisee", "close")
+SATISFACTIONS = ("oui", "non", "sans_reponse")
 ROLES_SOUTIEN = ("soutien", "fournisseur", "relecteur", "garant")
 OBJETS_ABONNEMENT = ("demande", "collection")
 CIBLES_PROPOSITION = ("ligne", "fichier")
@@ -355,9 +359,16 @@ class Demande(Base):
     # Comment la personne se procure la donnée AUJOURD'HUI. Obligatoire : sans cette
     # information, constituer un nouveau jeu est pratiquement impossible.
     acces_actuel: Mapped[str] = mapped_column(Text, nullable=False)
-    # Réponse EXPLICITE à « acceptez-vous d'être recontacté·e ? » — pas de défaut.
+    # L'auteur est joignable pour SA demande : sans lui, personne ne peut dire si la collection
+    # livrée y répond (décision PO du 2026-09-21 — ce n'était jusque-là qu'une option). Le
+    # formulaire web exige le courriel ; le bus (autres applications) peut s'en passer : l'auteur
+    # reste joignable par la cloche, où il est abonné à sa demande dès le dépôt.
     recontact: Mapped[bool] = mapped_column(Boolean, nullable=False)
     contact: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    # La boucle de satisfaction : quand l'auteur a été sollicité, ce qu'il a répondu, et pourquoi non.
+    confirmation_demandee_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    satisfaction: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    motif_insatisfaction: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     etat: Mapped[str] = mapped_column(String(20), nullable=False, default="ouverte")
     # Le seuil en vigueur à la création, FIGÉ : changer capacites.json ne rejuge pas
     # les demandes passées.
@@ -378,6 +389,7 @@ class Demande(Base):
             name="demande_cloture_motivee",
         ),
         CheckConstraint("contact IS NULL OR recontact", name="demande_contact_consenti"),
+        CheckConstraint("satisfaction IS NULL OR " + _domaine("satisfaction", SATISFACTIONS), name="demande_satisfaction_valide"),
         Index("demande_etat_maj", "etat", "maj_le"),
     )
 
@@ -397,6 +409,9 @@ class Demande(Base):
             "collection_name": self.collection_name,
             "doublon_de": self.doublon_de,
             "motif_cloture": self.motif_cloture,
+            "satisfaction": self.satisfaction,
+            "motif_insatisfaction": self.motif_insatisfaction,
+            "confirmation_demandee_le": self.confirmation_demandee_le.isoformat() if self.confirmation_demandee_le else None,
             "cree_le": self.cree_le.isoformat() if self.cree_le else "",
             "maj_le": self.maj_le.isoformat() if self.maj_le else "",
         }

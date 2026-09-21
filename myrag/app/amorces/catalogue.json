@@ -1078,7 +1078,7 @@
       "questions": [
         {
           "question": "Que doit contenir une demande de jeu de données ?",
-          "expected_answer": "Le jeu, l'usage, la fréquence, comment on fait aujourd'hui, la réponse au recontact — jamais un score.",
+          "expected_answer": "Le jeu, l'usage, la fréquence, comment on fait aujourd'hui, votre courriel (vous êtes le demandeur) — jamais un score.",
           "tags": [
             "guide"
           ]

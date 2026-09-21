@@ -40,19 +40,22 @@
         <span class="fr-hint-text">{{ MESSAGE_ACCES_ACTUEL }}</span></label>
       <textarea id="d-acces" v-model="f.acces_actuel" class="fr-input" rows="3" required></textarea>
     </div>
-    <fieldset class="fr-fieldset">
-      <legend class="fr-fieldset__legend fr-text--regular">Acceptez-vous d'être recontacté·e pour soutenir cette initiative ? <span class="collectif-obligatoire">*</span>
-        <span class="fr-hint-text">Votre courriel n'est enregistré qu'avec votre accord, et ne sert qu'à cette demande.</span></legend>
-      <div class="fr-fieldset__element fr-fieldset__element--inline">
-        <div class="fr-radio-group fr-radio-group--sm"><input id="d-rc-oui" v-model="f.recontact" type="radio" :value="true" name="recontact" required><label class="fr-label" for="d-rc-oui">Oui{{ mail ? `, à ${mail}` : '' }}</label></div>
+    <!-- Plus une question (décision PO du 2026-09-21) : l'auteur est joignable pour SA demande —
+         sans lui, personne ne peut dire si la collection livrée y répond. On le dit, simplement. -->
+    <div class="collectif-demandeur fr-mb-2w">
+      <p class="fr-text--sm fr-mb-1w">
+        <strong>Vous serez le demandeur</strong> — environ une demi-heure par semaine pendant le chantier :
+        répondre aux questions de ceux qui construisent la collection, essayer les premières réponses, puis
+        <strong>confirmer qu'elle répond à votre besoin</strong>.
+      </p>
+      <p v-if="mail" class="fr-text--sm fr-mb-0">Nous vous recontacterons à <strong>{{ mail }}</strong>.</p>
+      <div v-else class="fr-input-group fr-mb-0">
+        <label class="fr-label" for="d-contact">Votre courriel professionnel <span class="collectif-obligatoire">*</span></label>
+        <input id="d-contact" v-model="f.contact" class="fr-input" type="email" required autocomplete="email">
       </div>
-      <div class="fr-fieldset__element fr-fieldset__element--inline">
-        <div class="fr-radio-group fr-radio-group--sm"><input id="d-rc-non" v-model="f.recontact" type="radio" :value="false" name="recontact"><label class="fr-label" for="d-rc-non">Non</label></div>
-      </div>
-    </fieldset>
-    <div v-if="f.recontact === true && !mail" class="fr-input-group">
-      <label class="fr-label" for="d-contact">Votre courriel</label>
-      <input id="d-contact" v-model="f.contact" class="fr-input" type="email" required>
+      <p class="fr-text--xs fr-mb-0 fr-mt-1w" style="color:var(--text-mention-grey)">
+        Il n'est lu que par le garant de la demande et l'administration, et il est effacé quand la demande se termine.
+      </p>
     </div>
     <div v-if="erreur" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>{{ erreur }}</p></div>
     <button class="fr-btn" type="submit" :disabled="envoi">{{ envoi ? 'Dépôt…' : 'Déposer la demande' }}</button>
@@ -64,7 +67,7 @@ import { ref } from 'vue'
 import { FREQUENCES, MESSAGE_ACCES_ACTUEL, messageErreur } from '~/utils/collectif'
 const props = defineProps<{ mail?: string; chercher: (q: string) => Promise<any[]>; deposer: (corps: any) => Promise<any> }>()
 const emit = defineEmits<{ (e: 'deposee', demande: any): void; (e: 'moi-aussi', id: string): void }>()
-const f = ref<any>({ titre: '', usage: '', frequence: 'hebdomadaire', service: '', acces_actuel: '', recontact: null, contact: '' })
+const f = ref<any>({ titre: '', usage: '', frequence: 'hebdomadaire', service: '', acces_actuel: '', contact: '' })
 const doublons = ref<any[]>([])
 const erreur = ref('')
 const envoi = ref(false)
@@ -77,13 +80,14 @@ function chercherDoublons() {
 }
 async function envoyer() {
   erreur.value = ''
-  if (f.value.recontact === null) { erreur.value = 'La réponse à la question du recontact est attendue.'; return }
+  const contact = (props.mail || f.value.contact || '').trim()
+  if (!contact) { erreur.value = 'Votre courriel est attendu : c\'est par lui que le garant vous recontactera.'; return }
   envoi.value = true
   try {
-    const corps = { ...f.value, contact: f.value.recontact ? (props.mail || f.value.contact || null) : null }
+    const corps = { ...f.value, contact }
     const r = await props.deposer(corps)
     emit('deposee', r.demande)
-    f.value = { titre: '', usage: '', frequence: 'hebdomadaire', service: f.value.service, acces_actuel: '', recontact: null, contact: '' }
+    f.value = { titre: '', usage: '', frequence: 'hebdomadaire', service: f.value.service, acces_actuel: '', contact: '' }
     doublons.value = []
   } catch (e) { erreur.value = messageErreur(e) }
   envoi.value = false

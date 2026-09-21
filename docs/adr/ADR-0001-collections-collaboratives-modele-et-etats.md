@@ -57,6 +57,7 @@ Règles actées :
    journal (`force: true`, motif).
 4. **Une demande exige comment on se procure la donnée aujourd'hui** et une réponse
    explicite au recontact ; le courriel n'existe que consenti (contrainte de table).
+   *Amendé le 2026-09-21, voir « Amendement » ci-dessous.*
 5. **Chaque geste écrit un événement** dans la même transaction, signé d'une personne
    ou d'un robot ; « en sommeil » se calcule à la lecture (30 jours), jamais stocké.
 6. **Un drapeau à `false` dans `capacites.json` rend 404** côté API — le bouton absent
@@ -87,3 +88,25 @@ Règles actées :
 - [ ] Lot 2 : `collectif_store.appliquer_proposition` (Grist, versions de fichier)
 - [x] Lot 4 : route machine `POST /_beta/messages` côté bus (apps-menu-api 0.8.0), relais des événements aux abonnés
 - [x] Lot 6 : canal de lecture du suivi — GRANT SELECT par colonnes nommées (suivi 0.26.0, `scripts/pg-roles-suivi-myrag.sh` du dépôt GitOps)
+
+## Amendement du 2026-09-21 — l'auteur est toujours joignable, et confirme
+
+**Constat.** Le recontact était une question : un auteur qui répondait « non » ne pouvait
+plus être sollicité — personne ne pouvait donc dire si la collection livrée répondait à sa
+demande. Et le courriel consenti n'était lu par aucun code ni aucun écran.
+
+**Décision (PO).**
+1. L'auteur est toujours joignable **pour sa propre demande** : le formulaire web exige son
+   courriel (prérempli depuis le SSO). La base juridique n'est plus le consentement mais le
+   traitement de sa demande — **à faire valider par le DPO**. Le courriel n'est servi qu'au
+   garant et à l'administration, et il est **effacé** quand la demande se termine. Le bus
+   (dépôt depuis une autre application) reste sans courriel obligatoire : l'auteur y est
+   joignable par la cloche, où il est abonné dès le dépôt.
+2. L'auteur tient d'office le rôle **demandeur** (~½ h par semaine pendant le chantier) ; il
+   n'est pas compté dans le seuil, qui reste celui des AUTRES soutiens.
+3. **Boucle de satisfaction** : publiée à tous, la demande passe `a_confirmer` ; oui →
+   `realisee` ; non → retour en `chantier` avec motif, garant prévenu ; sans réponse sous
+   **5 jours** → `realisee` avec `satisfaction = sans_reponse`.
+
+**Conséquences.** Nouvel état `a_confirmer` (contrainte `demande_etat_valide` reposée au
+démarrage sur PostgreSQL) ; trois colonnes sur `demande`. La satisfaction devient mesurable.
