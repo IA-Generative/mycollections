@@ -1,12 +1,6 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Consignes données à l'assistant</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Consignes données à l'assistant" />
 
     <h1 class="fr-h3">Consignes données à l'assistant — {{ titre }}</h1>
 

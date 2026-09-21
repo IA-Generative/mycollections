@@ -1,12 +1,6 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Poser une question</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Poser une question" />
 
     <div class="myrag-playground">
       <!-- LEFT: chat column -->

@@ -1,12 +1,6 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Réglages</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Réglages" />
 
     <h1 class="fr-h3">Réglages — {{ titre }}</h1>
 
@@ -377,11 +371,11 @@ async function save() {
       await patch(`/api/collections/${id}`, form.value)
     }
     retenir({ name: id, titre: form.value.titre })
-    savedMsg.value = 'Configuration sauvegardee. Retour a la liste dans un instant…'
+    savedMsg.value = 'Réglages enregistrés. Retour à la fiche de la collection dans un instant…'
     savedClass.value = 'fr-alert--success'
-    // Leave the success banner visible briefly, then send the user back
-    // to the home page listing all collections.
-    setTimeout(() => { navigateTo('/') }, 1500)
+    // Le bandeau reste visible un instant, puis on revient à la fiche de la collection :
+    // c'est d'elle que l'on est parti, pas de l'accueil.
+    setTimeout(() => { navigateTo(`/c/${id}`) }, 1500)
   } catch (e: any) {
     savedMsg.value = `Erreur : ${e.message}`
     savedClass.value = 'fr-alert--error'

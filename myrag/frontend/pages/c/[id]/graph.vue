@@ -1,12 +1,6 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb fr-mb-1w" aria-label="vous êtes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Liens entre documents</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Liens entre documents" class="fr-mb-1w" />
     <div class="graphe-tete">
       <h1 class="fr-h5 fr-mb-0">Liens entre documents — {{ titre }}</h1>
       <button v-if="pleinEcranPossible" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-fullscreen-line fr-btn--icon-left"

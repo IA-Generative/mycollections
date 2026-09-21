@@ -1,12 +1,6 @@
 <template>
   <div>
-    <!-- Breadcrumb -->
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">{{ titre }}</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" :rubrique="collection ? rubrique : undefined" />
 
     <div v-if="loading" class="fr-callout"><p>Chargement…</p></div>
 
@@ -219,7 +213,9 @@
 <script setup lang="ts">
 import { messageErreur } from '~/utils/collectif'
 import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleStatutAvis } from '~/utils/libelles'
+import { ongletDeLAdresse, libelleSansCompteur } from '~/utils/filAriane'
 const route = useRoute()
+const router = useRouter()
 const id = route.params.id as string
 const { get, patch } = useApi()
 const c = useCollectif()
@@ -300,6 +296,24 @@ const onglets = computed(() => {
   ]
 })
 
+// L'onglet ouvert vit dans l'adresse (`?onglet=documents`) : un lien partagé, un retour
+// arrière ou un rechargement rouvrent la même rubrique. « Consulter », l'onglet par défaut,
+// n'y figure pas — les liens existants vers `/c/{id}` ne changent pas.
+const ONGLET_PAR_DEFAUT = 'consulter'
+const ongletDemande = () => ongletDeLAdresse(route.query.onglet, onglets.value.map(o => o.cle), ONGLET_PAR_DEFAUT)
+tab.value = ongletDemande()
+watch(tab, (t) => {
+  if (t === ongletDemande()) return
+  const query = { ...route.query }
+  if (t === ONGLET_PAR_DEFAUT) delete query.onglet
+  else query.onglet = t
+  router.replace({ query })
+})
+watch(() => route.query.onglet, () => { tab.value = ongletDemande() })
+
+/** Le dernier maillon du fil d'Ariane : l'onglet ouvert, sans son compteur. */
+const rubrique = computed(() => libelleSansCompteur(onglets.value.find(o => o.cle === tab.value)?.libelle || ''))
+
 /** Les cinq gestes de la fiche. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
 const actions = computed(() => [
   { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
@@ -344,7 +358,7 @@ const badges = computed(() => {
 })
 
 const documentsVus = ref(false)
-watch(tab, (t) => { if (t === 'documents') documentsVus.value = true })
+watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
