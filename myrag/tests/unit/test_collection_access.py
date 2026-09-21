@@ -38,9 +38,11 @@ class TestVisibility:
         groups = ["/autre/chose", "/myrag", "/myrag/a/b"]
         assert access.visible_collection_names(groups) == set()
 
-    def test_paths_without_leading_slash(self):
-        # Keycloak peut émettre les groupes sans slash initial
-        assert access.visible_collection_names(["myrag/collec-user1"]) == {"collec-user1"}
+    def test_paths_without_leading_slash_refused(self):
+        # Keycloak en full.path=true émet toujours un « / » initial. Sans lui, c'est un
+        # NOM de groupe — et un nom peut contenir « / » : aucun droit.
+        assert access.visible_collection_names(["myrag/collec-user1"]) == set()
+        assert access.is_superadmin(["myrag/superadmin"]) is False
 
 
 class TestPredicates:
@@ -65,3 +67,57 @@ class TestPredicates:
         assert access.can_create_collection([G_USER1_ADMIN]) is True
         assert access.can_create_collection([G_USER1]) is True  # membre simple : OK
         assert access.can_create_collection([]) is True
+
+
+class TestFormeDeLaBeta:
+    """Mapper Keycloak en ``full.path=false`` (bêta) : le claim porte des noms courts.
+
+    Le realm de la bêta laisse ses utilisateurs créer leurs groupes (keycloak-comu,
+    sous ``/g``) : tout nom court y est forgeable. On n'en tire donc aucun droit.
+    """
+
+    COURTS = ["mirai-beta-testeurs", "Admins"]
+
+    def test_nom_court_superadmin_refuse(self):
+        assert access.is_superadmin(self.COURTS + ["superadmin"]) is False
+
+    def test_homonyme_imitant_un_chemin_refuse(self):
+        # Groupe keycloak-comu NOMMÉ « /myrag/superadmin » : en noms courts, le claim
+        # porte cette valeur, mais aussi le groupe exigé des testeurs, sans « / ».
+        forge = self.COURTS + ["/myrag/superadmin", "/myrag/collec-user1-admin"]
+        assert access.is_superadmin(forge) is False
+        assert access.writable_collection_names(forge) == set()
+        assert access.visible_collection_names(forge) == set()
+
+    def test_groupe_de_collection_en_nom_court_ignore(self):
+        groups = self.COURTS + ["collec-user1", "collec-user1-admin"]
+        assert access.visible_collection_names(groups) == set()
+        assert access.can_write_collection("collec-user1", groups) is False
+
+
+class TestCheminsCompletsDeLaBeta:
+    """Même realm, mapper basculé en ``full.path=true``."""
+
+    TESTEUR = "/g/mirai-beta-testeurs"
+
+    def test_superadmin_reconnu(self):
+        assert access.is_superadmin([self.TESTEUR, G_SUPER]) is True
+        assert access.can_write_collection("nimporte", [self.TESTEUR, G_SUPER]) is True
+
+    def test_homonyme_hors_perimetre_refuse(self):
+        # Ce que keycloak-comu permet de créer : tout vit sous /g.
+        forge = [self.TESTEUR, "/g/superadmin", "/g/myrag/superadmin", "/g/x/collec-user1-admin"]
+        assert access.is_superadmin(forge) is False
+        assert access.writable_collection_names(forge) == set()
+        assert access.visible_collection_names(forge) == set()
+
+    def test_groupes_de_collection_reconnus(self):
+        groups = [self.TESTEUR, G_USER1, "/myrag/collec-b-admin"]
+        assert access.visible_collection_names(groups) == {"collec-user1", "collec-b"}
+        assert access.writable_collection_names(groups) == {"collec-b"}
+        assert access.can_write_collection("collec-user1", groups) is False
+
+    def test_chemins_rend_le_claim_ou_rien(self):
+        assert access.chemins([self.TESTEUR, G_SUPER]) == [self.TESTEUR, G_SUPER]
+        assert access.chemins([self.TESTEUR, "superadmin"]) == []
+        assert access.chemins(None) == []

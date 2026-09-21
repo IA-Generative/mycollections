@@ -30,9 +30,12 @@ class Settings(BaseSettings):
     keycloak_admin_password: str = Field(default="")
 
     # Restriction d'accès à un groupe du realm. Vide = pas de restriction (dev,
-    # tests, intégration). Renseigné en bêta avec le NOM FEUILLE du groupe des
-    # testeurs — le mapper Keycloak émet les groupes en `full.path=false`, donc le
-    # claim porte `mirai-beta-testeurs`, jamais `/g/mirai-beta-testeurs`.
+    # tests, intégration). Liste séparée par des virgules ; une entrée qui commence
+    # par « / » est un CHEMIN (`/g/mirai-beta-testeurs`, mapper `full.path=true`,
+    # la forme sûre), sinon un NOM COURT comparé tel quel (forme héritée du mapper
+    # `full.path=false` : un homonyme créé dans keycloak-comu passerait). Les droits
+    # de Mes collections (superadmin, groupes de collection) n'existent, eux, qu'en
+    # chemins complets — cf. app/services/access.py.
     myrag_groupe_exige: str = Field(default="")
 
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
