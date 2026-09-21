@@ -8,7 +8,7 @@ Code : `app/models/db.py` (tables), `app/services/etats.py` (règles, module pur
 
 | table | ce qu'elle porte | clé |
 |---|---|---|
-| `demande` | titre, usage, fréquence, service, **acces_actuel**, **recontact** (+ `contact` consenti), état, **seuil figé**, condensé de l'auteur, lien amorce/collection, clôture motivée | `id` (uuid) |
+| `demande` | titre, usage, fréquence, service, **acces_actuel**, **contact** de l'auteur (obligatoire au dépôt web, effacé à la fin ; `recontact` n'est plus une question), `satisfaction` / `motif_insatisfaction` / `confirmation_demandee_le`, état, **seuil figé**, condensé de l'auteur, lien amorce/collection, clôture motivée | `id` (uuid) |
 | `soutien` | rôle ∈ soutien · fournisseur · relecteur · garant, temps déclaré (min) | `(demande_id, sub_hash)` |
 | `abonnement` | qui reçoit le fil d'une demande ou d'une collection | `(objet_type, objet_id, sub_hash)` |
 | `proposition` | cible (ligne Grist / fichier), avant, après, justification, source, état, motif de refus | `id` |
@@ -18,13 +18,20 @@ Code : `app/models/db.py` (tables), `app/services/etats.py` (règles, module pur
 | `amorce` | l'état d'import d'une entrée du catalogue `app/amorces/catalogue.json` | `id` (slug) |
 
 Sur `collections` : `etat_collab`, `garant_hash`, `garant_pressenti`, `demande_id`.
-Aucun `sub` en clair dans ces tables ; le `contact` n'existe que si `recontact` (CHECK).
+Aucun `sub` en clair dans ces tables. Le `contact` est la seule exception : il ne sert qu'à la
+demande de son auteur, n'est servi qu'à son **garant** et à l'**administration** (`contact_auteur`
+sur `GET /api/demandes/{id}`), et il est effacé quand la demande se termine. La contrainte
+`contact IS NULL OR recontact` demeure : un client qui déclare encore refuser n'envoie rien.
 
 ## Les états
 
 - **Demande** : `ouverte` → `chantier` (N soutiens distincts ET un garant, calculé par le
-  serveur, seuil figé à la création) → `realisee` (sa collection est publiée à tous) ;
-  `close` avec doublon ou motif. « en sommeil » = chantier sans événement depuis
+  serveur, seuil figé à la création) → `a_confirmer` (sa collection est publiée à tous ; l'auteur
+  est sollicité par la cloche) → `realisee` (il confirme, ou ne répond pas sous
+  `CONFIRMATION_JOURS` = 5 : satisfaction `sans_reponse`, calculé à la lecture) ; « pas encore »
+  ramène à `chantier` avec son motif, et prévient le garant ; `close` avec doublon ou motif.
+  L'auteur tient d'office le rôle **demandeur** (~½ h par semaine) : il n'est pas compté parmi
+  les soutiens. « en sommeil » = chantier sans événement depuis
   `SOMMEIL_JOURS` (30), calculé à la lecture.
 - **Collection** : `amorcee` → `en_controle` → `publiee_groupe` → `publiee_tous`, une
   étape à la fois ; retour `publiee_tous` → `publiee_groupe` permis ; `publiee_tous`
@@ -41,7 +48,8 @@ Toutes sous jeton ; l'identité est condensée (`MYRAG_PSEUDO_SEL`, sinon 503).
 
 ```
 GET    /api/demandes?etat=&q=            liste enrichie ; q ⇒ demandes proches (dédoublonnage)
-POST   /api/demandes                     201 ; titre, usage, frequence, service, acces_actuel, recontact, contact?, amorce_id?
+POST   /api/demandes                     201 ; titre, usage, frequence, service, acces_actuel, contact, amorce_id?
+POST   /api/demandes/{id}/satisfaction   {satisfait, motif?} — l'auteur (ou l'administration) ; 409 hors « a_confirmer »
 GET    /api/demandes/{id}                fiche : nb_soutiens, garant, roles, sommeil, soutenue_par_moi, mon_role, abonne
 PATCH  /api/demandes/{id}                auteur ou superadmin ; jamais `etat`
 POST   /api/demandes/{id}/soutenir       {role, temps_declare_min?} — recalcul d'état serveur ; 409 si second garant

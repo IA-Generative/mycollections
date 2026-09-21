@@ -14,6 +14,7 @@ export const LIBELLES_ETAT: Record<string, string> = {
 export const LIBELLES_DEMANDE: Record<string, { libelle: string; badge: string }> = {
   ouverte: { libelle: 'ouverte', badge: 'fr-badge--new' },
   chantier: { libelle: 'chantier', badge: 'fr-badge--info' },
+  a_confirmer: { libelle: 'à confirmer', badge: 'fr-badge--warning' },
   realisee: { libelle: 'réalisée', badge: 'fr-badge--success' },
   close: { libelle: 'close', badge: '' },
 }
@@ -32,6 +33,24 @@ export const ROLES = [
   { valeur: 'relecteur', libelle: 'relecteur', cout: '~1 h par relecture', minutes: 60 },
   { valeur: 'garant', libelle: 'garant', cout: '~2 h par mois', minutes: 120 },
 ]
+
+/** L'auteur de la demande : un rôle tenu d'office, pas choisi — il n'est pas compté parmi les soutiens. */
+export const ROLE_DEMANDEUR = { valeur: 'demandeur', libelle: 'demandeur', cout: '~½ h par semaine pendant le chantier' }
+
+/** Ce que l'auteur a répondu à « la collection répond-elle à votre besoin ? ». */
+export const LIBELLES_SATISFACTION: Record<string, string> = {
+  oui: 'confirmée par le demandeur',
+  non: 'ne répond pas encore au besoin',
+  sans_reponse: 'réalisée sans confirmation du demandeur',
+}
+
+/** « dans 3 jours », « aujourd'hui » — l'échéance d'une demande à confirmer. */
+export function echeance(iso: string | null | undefined, maintenant: Date = new Date()): string {
+  if (!iso) return ''
+  const jours = Math.ceil((new Date(iso).getTime() - maintenant.getTime()) / 86_400_000)
+  if (jours <= 0) return "aujourd'hui"
+  return jours === 1 ? 'demain' : `dans ${jours} jours`
+}
 
 export const MESSAGE_ACCES_ACTUEL =
   "Sans cette information, il nous est pratiquement impossible de constituer un nouveau jeu de données : c'est elle qui en révèle la source, le format et les conditions d'accès."
@@ -68,7 +87,9 @@ export function libelleEvenement(type: string, detail: Record<string, any> = {})
     'soutien.retire': 'Soutien retiré',
     'garant.retire': 'Garant retiré par l’administration',
     'seuil.atteint': `Seuil atteint : ${detail.soutiens ?? '?'} soutiens et un garant`,
-    'demande.etat': `Passage en ${LIBELLES_DEMANDE[detail.vers]?.libelle || detail.vers || '?'}`,
+    'demande.etat': detail.satisfaction
+      ? `${detail.satisfaction === 'oui' ? 'Le demandeur confirme : la collection répond' : detail.satisfaction === 'non' ? 'Le demandeur : ne répond pas encore' : `Sans réponse du demandeur en ${detail.jours ?? 5} jours`} — ${LIBELLES_DEMANDE[detail.vers]?.libelle || detail.vers}`
+      : `Passage en ${LIBELLES_DEMANDE[detail.vers]?.libelle || detail.vers || '?'}`,
     'collection.creee': 'Collection créée',
     'collection.etat': `${detail.force ? 'Forçage : ' : ''}passage « ${libelleEtat(detail.de)} » → « ${libelleEtat(detail.vers)} »`,
     'grille.maj': 'Grille de contrôle mise à jour',

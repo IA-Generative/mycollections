@@ -49,15 +49,40 @@
       </div>
     </div>
 
+    <!-- Chargement : sans lui, le tableau vide des premières secondes se lisait « aucune collection ». -->
+    <div v-if="chargement && !collections.length" class="catalogue-chargement fr-mb-4w" role="status" aria-live="polite" aria-busy="true">
+      <div class="catalogue-chargement__tete">
+        <span class="catalogue-chargement__roue" aria-hidden="true"></span>
+        <span><strong>Chargement du catalogue…</strong> Les collections et leurs documents sont recensés ; cela peut prendre quelques secondes.</span>
+      </div>
+      <div class="catalogue-chargement__lignes" aria-hidden="true">
+        <div v-for="n in 6" :key="n" class="catalogue-chargement__ligne" :style="{ animationDelay: `${n * 90}ms` }">
+          <span style="width:22%"></span><span style="width:38%"></span><span style="width:12%"></span><span style="width:14%"></span>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="erreurChargement && !collections.length" class="fr-alert fr-alert--error fr-mb-4w">
+      <h3 class="fr-alert__title">Le catalogue n'a pas pu être chargé</h3>
+      <p>{{ erreurChargement }}</p>
+      <button class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w" @click="loadCollections">Réessayer</button>
+    </div>
+
+    <div v-else-if="!collections.length" class="fr-callout fr-mb-4w">
+      <h3 class="fr-callout__title">Aucune collection pour l'instant</h3>
+      <p class="fr-callout__text">Le catalogue est vide : la première collection peut être la vôtre.</p>
+      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Créer une collection</NuxtLink>
+    </div>
+
     <!-- Results -->
-    <div v-if="filtered.length === 0 && search" class="fr-callout fr-mb-4w">
+    <div v-else-if="filtered.length === 0 && search" class="fr-callout fr-mb-4w">
       <h3 class="fr-callout__title">Aucune collection trouvee pour "{{ search }}"</h3>
       <p class="fr-callout__text">Vous pouvez creer une nouvelle collection.</p>
       <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Creer une collection</NuxtLink>
     </div>
 
-    <div v-else>
-      <div class="fr-table">
+    <div v-else :aria-busy="chargement">
+      <div class="fr-table" :class="{ 'catalogue-rechargement': chargement }">
         <table>
           <thead>
             <tr>
@@ -248,11 +273,21 @@ function appLabel(app: string) {
   return { assistant: 'Assistant' }[app] || app
 }
 
+const chargement = ref(true)
+const erreurChargement = ref('')
+
 async function loadCollections() {
+  chargement.value = true
+  erreurChargement.value = ''
   try {
     const data = await get('/api/collections', showArchived.value ? { include_archived: 'true' } : undefined)
     collections.value = data.collections || []
-  } catch (e) { console.error(e) }
+  } catch (e: any) {
+    console.error(e)
+    erreurChargement.value = e?.message || 'Le service ne répond pas. Réessayez dans un instant.'
+  } finally {
+    chargement.value = false
+  }
 }
 
 async function onArchive(col: any) {
@@ -300,3 +335,21 @@ onMounted(async () => {
   try { categories.value = await listerCategories() } catch (e) { console.error(e) }
 })
 </script>
+
+<style scoped>
+.catalogue-chargement { border: 1px solid var(--border-default-grey); padding: 1.25rem 1.5rem; }
+.catalogue-chargement__tete { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.1rem; }
+.catalogue-chargement__roue { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  border: 3px solid var(--border-default-grey); border-top-color: var(--border-active-blue-france); animation: catalogue-tour .8s linear infinite; }
+.catalogue-chargement__lignes { display: flex; flex-direction: column; gap: .7rem; }
+.catalogue-chargement__ligne { display: flex; gap: 1.2rem; animation: catalogue-pulse 1.4s ease-in-out infinite; }
+.catalogue-chargement__ligne span { height: .85rem; border-radius: 3px; background: var(--background-contrast-grey); }
+/* Un rechargement (bascule « archivées ») garde le tableau, estompé : rien ne saute. */
+.catalogue-rechargement { opacity: .5; transition: opacity .2s; pointer-events: none; }
+@keyframes catalogue-tour { to { transform: rotate(360deg); } }
+@keyframes catalogue-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .catalogue-chargement__roue { animation-duration: 2.4s; }
+  .catalogue-chargement__ligne { animation: none; }
+}
+</style>

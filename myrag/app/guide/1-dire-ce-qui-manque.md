@@ -15,8 +15,11 @@ quelqu'un, de le dire à tous.
 - **Comment vous faites aujourd'hui** : où vous prenez la donnée, dans quel format, auprès
   de qui. Sans cette information, il nous est pratiquement impossible de constituer un
   nouveau jeu : c'est elle qui en révèle la source et les conditions d'accès.
-- **Accepter d'être recontacté·e** ou non. Sans jugement : c'est une question, pas une
-  condition — mais la réponse est attendue.
+- **Votre courriel.** Vous êtes le **demandeur** : environ une demi-heure par semaine
+  pendant le chantier, pour répondre aux questions de ceux qui construisent la collection
+  et essayer ses premières réponses. Sans vous, personne ne peut dire si elle répond au
+  besoin. Le courriel n'est lu que par le garant de la demande et l'administration, et il
+  est effacé quand la demande se termine.
 
 Il n'y a pas de note, pas de score, pas de priorité à donner. Le rang d'une demande,
 c'est le nombre de personnes distinctes qui disent « moi aussi ».
@@ -30,7 +33,7 @@ chantier, cinq demandes d'une personne chacune n'en démarrent aucun.
 ## Le geste dans l'outil
 
 Dans **Mes collections**, onglet **Demandes de la communauté**, bloc « Un jeu de données
-vous manque ? » : nom, usage, fréquence, comment vous faites aujourd'hui, recontact,
+vous manque ? » : nom, usage, fréquence, comment vous faites aujourd'hui, votre courriel,
 puis **Déposer la demande**. Le même bloc existe dans le panneau **Mon avis** de la barre
 commune, depuis n'importe quelle application de la bêta.
 
@@ -41,3 +44,11 @@ avant réponse au courrier ; fréquence : hebdomadaire ; aujourd'hui : extractio
 trimestrielle sur data.gouv.fr puis recherche à la main dans le tableur. La demande a
 trouvé son garant au bureau des élections ; l'amorce importée ne garde que les colonnes
 non nominatives.
+
+## Quand la collection est prête
+
+Quand la collection née de votre demande est **publiée à tous**, la demande passe
+**à confirmer** et la cloche vous prévient : *répond-elle à votre besoin ?* Répondez sur la
+page de la demande. **Oui** : elle est réalisée. **Pas encore** : dites ce qui manque — la
+demande redevient un chantier, et son garant reprend la main. Sans réponse sous **cinq
+jours**, elle est considérée comme réalisée, pour que rien ne reste suspendu.

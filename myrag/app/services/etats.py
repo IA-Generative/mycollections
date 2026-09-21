@@ -100,6 +100,16 @@ def en_sommeil(
     return (maintenant - dernier_evenement_le) > timedelta(days=jours)
 
 
+def confirmation_echue(
+    etat: str, demandee_le: datetime | None, maintenant: datetime | None = None, jours: int = 5
+) -> bool:
+    """Une demande « à confirmer » dont l'auteur n'a pas répondu depuis `jours` jours."""
+    if etat != "a_confirmer" or demandee_le is None:
+        return False
+    maintenant = maintenant or utcnow()
+    return (maintenant - demandee_le) > timedelta(days=jours)
+
+
 def mention_verification(etat: str | None) -> str | None:
     """La mention que portent les réponses d'une collection non publiée à tous."""
     return None if etat == "publiee_tous" else MENTION_VERIFICATION

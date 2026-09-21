@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)
+    # Une demande « à confirmer » sans réponse de son auteur passe « réalisée » au bout de ce
+    # nombre de jours (décision PO du 2026-09-21 : 5) — personne ne bloque le circuit.
+    confirmation_jours: int = Field(default=5)
     # Le bus de la bêta (mirai-apps-menu) : l'adresse interne pour relayer le fil vers
     # la cloche, et le secret partagé qui authentifie les deux sens (X-Bus-Secret).
     # Vides : pas de relais, et /api/bus répond 503 (le patron du sel).

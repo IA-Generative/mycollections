@@ -56,6 +56,35 @@ async def init_db():
                                   table="publications")
         await _retro_remplir_titres(conn)
         await _semer_categories(conn)
+        # Boucle de satisfaction des demandes (2026-09-21).
+        await _migrate_add_column(conn, "confirmation_demandee_le", "DATETIME", "TIMESTAMP", table="demande")
+        await _migrate_add_column(conn, "satisfaction", "VARCHAR(20)", "VARCHAR(20)", table="demande")
+        await _migrate_add_column(conn, "motif_insatisfaction", "TEXT", "TEXT", table="demande")
+        await _elargir_etats_demande(conn)
+
+
+async def _elargir_etats_demande(conn):
+    """La contrainte `demande_etat_valide` d'une base existante ne connaît pas « a_confirmer » :
+    `create_all` ne touche pas une table qui existe. On la repose à partir du modèle — toujours
+    la même, donc idempotent. PostgreSQL seulement : SQLite ne modifie pas une contrainte, et ses
+    bases (développement, tests) sont recréées."""
+    from sqlalchemy import text
+
+    from app.models.db import ETATS_DEMANDE, SATISFACTIONS
+
+    def _sync(sync_conn):
+        if sync_conn.dialect.name == "sqlite":
+            return
+        domaine = ", ".join(f"'{e}'" for e in ETATS_DEMANDE)
+        sync_conn.execute(text("ALTER TABLE demande DROP CONSTRAINT IF EXISTS demande_etat_valide"))
+        sync_conn.execute(text(f"ALTER TABLE demande ADD CONSTRAINT demande_etat_valide CHECK (etat IN ({domaine}))"))
+        # Et la satisfaction, colonne ajoutée plus haut : même domaine que le modèle.
+        satisfactions = ", ".join(f"'{v}'" for v in SATISFACTIONS)
+        sync_conn.execute(text("ALTER TABLE demande DROP CONSTRAINT IF EXISTS demande_satisfaction_valide"))
+        sync_conn.execute(text("ALTER TABLE demande ADD CONSTRAINT demande_satisfaction_valide "
+                               f"CHECK (satisfaction IS NULL OR satisfaction IN ({satisfactions}))"))
+
+    await conn.run_sync(_sync)
 
 
 async def _retro_remplir_titres(conn):

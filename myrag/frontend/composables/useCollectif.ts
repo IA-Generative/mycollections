@@ -17,6 +17,7 @@ export function useCollectif() {
     abonnerDemande: (id: string, oui: boolean) => (oui ? post(`/api/demandes/${id}/abonner`) : del(`/api/demandes/${id}/abonner`)),
     journalDemande: (id: string, params?: Record<string, string>) => get(`/api/demandes/${id}/journal`, params),
     cloreDemande: (id: string, corps: any) => post(`/api/demandes/${id}/clore`, corps),
+    repondreSatisfaction: (id: string, corps: { satisfait: boolean; motif?: string | null }) => post(`/api/demandes/${id}/satisfaction`, corps),
     // collection
     etat: (n: string) => get(`/api/collections/${n}/etat`),
     changerEtat: (n: string, cible: string, forcer = false, motif = '') =>

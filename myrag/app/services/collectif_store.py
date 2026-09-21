@@ -8,7 +8,7 @@ aucune route n'accepte un état en entrée. Toute identité est un condensé.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
 
@@ -71,11 +71,12 @@ async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> l
         )).scalars().all())
     derniers = await journal.derniers_par_objet(session, "demande")
     maintenant = utcnow()
+    delai = timedelta(days=settings.confirmation_jours)
     resultat = []
     for d in demandes:
         mes = [s for s in par_demande.get(d.id, []) if sub_hash and s.sub_hash == sub_hash]
         liste = par_demande.get(d.id, [])
-        roles: dict[str, int] = {}
+        roles: dict[str, int] = {"demandeur": 1}   # l'auteur, toujours — il n'est pas compté dans les soutiens
         for s in liste:
             roles[s.role] = roles.get(s.role, 0) + 1
         fiche = d.to_dict()
@@ -89,6 +90,11 @@ async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> l
             "abonne": d.id in abonnes,
             "sommeil": etats.en_sommeil(d.etat, derniers.get(d.id), maintenant, settings.sommeil_jours),
             "seuil_atteint": len({s.sub_hash for s in liste}) >= d.seuil,
+            # L'auteur tient le rôle « demandeur » d'office : il n'est pas un soutien (le seuil compte
+            # les AUTRES), et il est celui qui dit, à la fin, si la collection répond au besoin.
+            "je_suis_demandeur": bool(sub_hash) and d.cree_par_hash == sub_hash,
+            "confirmation_avant": (d.confirmation_demandee_le + delai).isoformat()
+                                  if d.etat == "a_confirmer" and d.confirmation_demandee_le else None,
         })
         resultat.append(fiche)
     return resultat
@@ -117,8 +123,27 @@ async def creer_demande(donnees: dict, sub_hash: str, seuil: int) -> dict:
         return (await _enrichir(session, [d], sub_hash))[0]
 
 
+async def _echeances(session) -> None:
+    """Les demandes « à confirmer » restées sans réponse au-delà du délai passent « réalisées ».
+    Appelé à chaque lecture, comme le calcul du sommeil : pas de tâche planifiée à surveiller,
+    et l'état servi est toujours juste. Écrit et journalise ; ne fait rien s'il n'y a rien d'échu."""
+    maintenant = utcnow()
+    en_attente = (await session.execute(select(Demande).where(Demande.etat == "a_confirmer"))).scalars().all()
+    echues = [d for d in en_attente
+              if etats.confirmation_echue(d.etat, d.confirmation_demandee_le, maintenant, settings.confirmation_jours)]
+    for d in echues:
+        journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur",
+                       detail={"de": "a_confirmer", "vers": "realisee", "satisfaction": "sans_reponse",
+                               "jours": settings.confirmation_jours})
+        d.etat, d.satisfaction, d.maj_le = "realisee", "sans_reponse", maintenant
+        d.contact = None   # la demande est terminée : le courriel n'a plus de raison d'être gardé
+    if echues:
+        await session.commit()
+
+
 async def lister_demandes(sub_hash: str | None, etat: str | None = None) -> list[dict]:
     async with async_session() as session:
+        await _echeances(session)
         stmt = select(Demande).order_by(Demande.maj_le.desc())
         if etat:
             stmt = stmt.where(Demande.etat == etat)
@@ -128,6 +153,7 @@ async def lister_demandes(sub_hash: str | None, etat: str | None = None) -> list
 
 async def lire_demande(ident: str, sub_hash: str | None) -> dict:
     async with async_session() as session:
+        await _echeances(session)
         d = await session.get(Demande, ident)
         if not d:
             raise Introuvable(ident)
@@ -140,6 +166,46 @@ async def auteur_de(ident: str) -> str:
         if not d:
             raise Introuvable(ident)
         return d.cree_par_hash
+
+
+async def contact_de(ident: str) -> str | None:
+    """Le courriel de l'auteur — le routeur ne le sert qu'au garant de la demande et à l'administration."""
+    async with async_session() as session:
+        d = await session.get(Demande, ident)
+        if not d:
+            raise Introuvable(ident)
+        return d.contact
+
+
+async def confirmer_satisfaction(ident: str, sub_hash: str, satisfait: bool, motif: str | None) -> dict:
+    """L'auteur dit si la collection livrée répond à son besoin. Oui : réalisée. Non : la demande
+    redevient un chantier, avec son motif, et son garant est prévenu. Le droit (auteur ou
+    administration) est vérifié par le routeur."""
+    async with async_session() as session:
+        await _echeances(session)
+        d = await session.get(Demande, ident)
+        if not d:
+            raise Introuvable(ident)
+        if d.etat != "a_confirmer":
+            raise Conflit("cette demande n'attend pas de confirmation")
+        vers = "realisee" if satisfait else "chantier"
+        journal.ecrire(session, "demande", ident, "demande.etat", auteur_hash=sub_hash,
+                       detail={"de": d.etat, "vers": vers, "satisfaction": "oui" if satisfait else "non",
+                               **({} if satisfait else {"motif": motif})})
+        d.etat, d.maj_le = vers, utcnow()
+        d.satisfaction = "oui" if satisfait else "non"
+        d.motif_insatisfaction = None if satisfait else motif
+        if satisfait:
+            d.contact = None
+        else:
+            d.confirmation_demandee_le = None
+        garants = [] if satisfait else list((await session.execute(select(Soutien.sub_hash).where(
+            Soutien.demande_id == ident, Soutien.role == "garant"))).scalars().all())
+        await session.commit()
+        if garants:
+            relais.planifier(garants, f"« {d.titre} » : son auteur indique que la collection ne répond pas "
+                                      f"encore à son besoin — « {(motif or '')[:200]} ». La demande redevient un chantier.")
+        return (await _enrichir(session, [d], sub_hash))[0]
 
 
 async def modifier_demande(ident: str, champs: dict, sub_hash: str) -> dict:
@@ -257,6 +323,7 @@ async def clore_demande(ident: str, sub_hash: str, doublon_de: str | None, motif
         journal.ecrire(session, "demande", ident, "demande.etat", auteur_hash=sub_hash,
                        detail={"de": d.etat, "vers": "close", "doublon_de": doublon_de, "motif": motif})
         d.etat, d.doublon_de, d.motif_cloture, d.maj_le = "close", doublon_de, motif, utcnow()
+        d.contact = None   # la demande est terminée : le courriel n'a plus de raison d'être gardé
         await session.commit()
         return (await _enrichir(session, [d], sub_hash))[0]
 
@@ -346,13 +413,23 @@ async def changer_etat(name: str, cible: str, sub_hash: str, *, forcer: bool, mo
         abonnes = await _abonnes_dans(session, "collection", name)
         if c.demande_id:
             abonnes += await _abonnes_dans(session, "demande", c.demande_id)
+        a_solliciter: list[str] = []
+        titre_demande = ""
         if vers == "publiee_tous" and c.demande_id:
             d = await session.get(Demande, c.demande_id)
             if d and d.etat in ("ouverte", "chantier"):
+                # Plus de passage direct à « réalisée » : l'auteur dit d'abord si la collection répond.
                 journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur",
-                               detail={"de": d.etat, "vers": "realisee", "collection": name})
-                d.etat, d.collection_name, d.maj_le = "realisee", name, utcnow()
+                               detail={"de": d.etat, "vers": "a_confirmer", "collection": name})
+                d.etat, d.collection_name, d.maj_le = "a_confirmer", name, utcnow()
+                d.confirmation_demandee_le = utcnow()
+                a_solliciter, titre_demande = [d.cree_par_hash], d.titre
         await session.commit()
+    if a_solliciter:
+        relais.planifier(a_solliciter,
+                         f"Votre demande « {titre_demande} » a sa collection, publiée à tous. Répond-elle à votre "
+                         f"besoin ? Dites-le sur la page de la demande — sans réponse sous {settings.confirmation_jours} "
+                         f"jours, elle sera considérée comme réalisée.")
     libelles = {"amorcee": "amorcée", "en_controle": "en contrôle", "publiee_groupe": "publiée au groupe", "publiee_tous": "publiée à tous"}
     relais.planifier(abonnes, f"La collection « {name} » est désormais {libelles.get(vers, vers)}"
                               + (" (forçage par l'administration)." if forcer else "."))
@@ -576,7 +653,8 @@ async def suivi_pour(sub_hash: str) -> dict:
         miennes = set((await session.execute(select(Soutien.demande_id).where(Soutien.sub_hash == sub_hash))).scalars().all())
         miennes |= set((await session.execute(select(Abonnement.objet_id).where(
             Abonnement.objet_type == "demande", Abonnement.sub_hash == sub_hash))).scalars().all())
-        ouvertes = list((await session.execute(select(Demande).where(Demande.etat.in_(("ouverte", "chantier")))
+        await _echeances(session)
+        ouvertes = list((await session.execute(select(Demande).where(Demande.etat.in_(("ouverte", "chantier", "a_confirmer")))
                                                .order_by(Demande.maj_le.desc()))).scalars().all())
         enrichies = await _enrichir(session, ouvertes, sub_hash)
         suivies = [d for d in enrichies if d["id"] in miennes]
@@ -584,7 +662,8 @@ async def suivi_pour(sub_hash: str) -> dict:
                    and d["nb_soutiens"] >= max(1, d["seuil"] - 1)][:5]
         collections = list((await session.execute(select(Abonnement.objet_id).where(
             Abonnement.objet_type == "collection", Abonnement.sub_hash == sub_hash))).scalars().all())
-        cles = ("id", "titre", "etat", "nb_soutiens", "seuil", "garant", "sommeil", "soutenue_par_moi", "mon_role", "collection_name")
+        cles = ("id", "titre", "etat", "nb_soutiens", "seuil", "garant", "sommeil", "soutenue_par_moi", "mon_role", "collection_name",
+                "je_suis_demandeur", "confirmation_avant")
         return {"demandes": [{k: d[k] for k in cles} for d in suivies],
                 "presque_au_seuil": [{k: d[k] for k in cles} for d in presque],
                 "collections": collections}

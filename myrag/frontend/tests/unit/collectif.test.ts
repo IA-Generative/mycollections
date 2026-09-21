@@ -61,3 +61,30 @@ describe('le message d’erreur de l’API', () => {
     expect(messageErreur(new Error('panne'))).toBe('panne')
   })
 })
+
+describe('la boucle de satisfaction (2026-09-21)', () => {
+  it('« à confirmer » a son libellé', async () => {
+    const { LIBELLES_DEMANDE } = await import('../../utils/collectif')
+    expect(LIBELLES_DEMANDE.a_confirmer.libelle).toBe('à confirmer')
+  })
+  it('dit l’échéance en jours', async () => {
+    const { echeance } = await import('../../utils/collectif')
+    const maintenant = new Date('2026-09-21T10:00:00Z')
+    expect(echeance('2026-09-26T09:00:00Z', maintenant)).toBe('dans 5 jours')
+    expect(echeance('2026-09-22T09:00:00Z', maintenant)).toBe('demain')
+    expect(echeance('2026-09-21T08:00:00Z', maintenant)).toBe("aujourd'hui")
+    expect(echeance(null, maintenant)).toBe('')
+  })
+  it('le fil dit ce que le demandeur a répondu', async () => {
+    const { libelleEvenement } = await import('../../utils/collectif')
+    expect(libelleEvenement('demande.etat', { vers: 'realisee', satisfaction: 'oui' })).toContain('confirme')
+    expect(libelleEvenement('demande.etat', { vers: 'chantier', satisfaction: 'non' })).toContain('ne répond pas encore')
+    expect(libelleEvenement('demande.etat', { vers: 'realisee', satisfaction: 'sans_reponse', jours: 5 })).toContain('Sans réponse du demandeur en 5 jours')
+    expect(libelleEvenement('demande.etat', { vers: 'a_confirmer' })).toBe('Passage en à confirmer')
+  })
+  it('le rôle demandeur dit son coût', async () => {
+    const { ROLE_DEMANDEUR, ROLES } = await import('../../utils/collectif')
+    expect(ROLE_DEMANDEUR.cout).toContain('½ h par semaine')
+    expect(ROLES.map(r => r.valeur)).not.toContain('demandeur')   // tenu d'office, jamais choisi
+  })
+})

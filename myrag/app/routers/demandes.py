@@ -20,7 +20,11 @@ MESSAGE_ACCES_ACTUEL = (
     "est pratiquement impossible de constituer un nouveau jeu de données : c'est elle qui en "
     "révèle la source, le format et les conditions d'accès."
 )
-MESSAGE_RECONTACT = "Acceptez-vous d'être recontacté·e pour soutenir cette initiative ? La réponse est attendue."
+MESSAGE_CONTACT = (
+    "Votre courriel est attendu : vous serez recontacté·e pour préciser votre besoin et, à la fin, "
+    "confirmer que la collection y répond. Il n'est lu que par le garant de la demande et "
+    "l'administration, et il est effacé quand la demande se termine."
+)
 
 
 def _non_vide(v: str, message: str) -> str:
@@ -37,7 +41,9 @@ class DemandeEntree(BaseModel):
     frequence: str
     service: str = ""
     acces_actuel: str
-    recontact: bool
+    # Plus une question (décision PO du 2026-09-21) : l'auteur est joignable pour SA demande.
+    # Le champ reste accepté pour les clients qui l'envoient encore (le bus des autres applications).
+    recontact: bool = True
     contact: str | None = None
     amorce_id: str | None = None
 
@@ -71,6 +77,31 @@ class DemandeEntree(BaseModel):
             raise ValueError("Le courriel de recontact n'a pas la forme attendue")
         if not self.contact:
             self.contact = None
+        return self
+
+
+class DemandeWeb(DemandeEntree):
+    """Le dépôt depuis Mes collections : le courriel de l'auteur est obligatoire. Le bus (dépôt depuis
+    une autre application) garde `DemandeEntree` : l'auteur y reste joignable par la cloche."""
+
+    @model_validator(mode="after")
+    def _contact_exige(self):
+        if not self.contact:
+            raise ValueError(MESSAGE_CONTACT)
+        self.recontact = True
+        return self
+
+
+class SatisfactionEntree(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    satisfait: bool
+    motif: str | None = None
+
+    @model_validator(mode="after")
+    def _motif_si_non(self):
+        self.motif = (self.motif or "").strip()[:1000] or None
+        if not self.satisfait and not self.motif:
+            raise ValueError("Dites ce qui manque encore : c'est ce que le garant reprendra")
         return self
 
 
@@ -135,7 +166,7 @@ async def lister(moi: Identite = Depends(identite), etat: str | None = Query(Non
 
 
 @router.post("", status_code=201)
-async def deposer(entree: DemandeEntree, moi: Identite = Depends(identite)):
+async def deposer(entree: DemandeWeb, moi: Identite = Depends(identite)):
     seuil = int((await capacites.lire_async())["seuil_chantier"])
     demande = await store.creer_demande(entree.model_dump(), moi.hash, seuil)
     return {"demande": demande}
@@ -144,9 +175,30 @@ async def deposer(entree: DemandeEntree, moi: Identite = Depends(identite)):
 @router.get("/{ident}")
 async def lire(ident: str, moi: Identite = Depends(identite)):
     try:
-        return {"demande": await store.lire_demande(ident, moi.hash)}
+        demande = await store.lire_demande(ident, moi.hash)
+        # Le courriel de l'auteur : à son garant et à l'administration seulement — ce sont eux qui
+        # le recontactent. Jamais dans la liste, jamais aux autres.
+        if moi.superadmin or demande.get("mon_role") == "garant":
+            demande["contact_auteur"] = await store.contact_de(ident)
+        return {"demande": demande}
     except store.Introuvable as e:
         raise _404(e)
+
+
+@router.post("/{ident}/satisfaction")
+async def satisfaction(ident: str, entree: SatisfactionEntree, moi: Identite = Depends(identite)):
+    """L'auteur dit si la collection livrée répond à son besoin. L'administration peut répondre
+    à sa place (sur sa parole, dite ailleurs) ; personne d'autre."""
+    try:
+        auteur = await store.auteur_de(ident)
+    except store.Introuvable as e:
+        raise _404(e)
+    if auteur != moi.hash and not moi.superadmin:
+        raise HTTPException(status_code=403, detail="C'est à la personne qui a déposé la demande de le dire")
+    try:
+        return {"demande": await store.confirmer_satisfaction(ident, moi.hash, entree.satisfait, entree.motif)}
+    except store.Conflit as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.patch("/{ident}")
