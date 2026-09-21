@@ -61,9 +61,34 @@ function pleinEcran() {
 function quitterPleinEcran() {
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
 }
+/**
+ * La barre commune de la bêta (`/_beta/menu.js`, `#mm-barre`) est posée sur `document.body` : en
+ * plein écran, seul le cadre s'affiche, et « Mon avis » disparaissait avec elle. Le temps du
+ * plein écran, le cadre l'ACCUEILLE — un seul point d'accès à l'avis, le vrai : son panneau vit
+ * dans la barre et ses écouteurs voyagent avec le nœud — puis on la rend exactement où elle était.
+ * Sans barre (menu non chargé), rien ne se passe.
+ */
+let placeDeLaBarre: { parent: Node, suivant: Node | null } | null = null
+function accueillirBarre() {
+  const barre = document.getElementById('mm-barre')
+  if (!barre || !barre.parentNode || !cadre.value || barre.parentNode === cadre.value) return
+  placeDeLaBarre = { parent: barre.parentNode, suivant: barre.nextSibling }
+  cadre.value.appendChild(barre)
+}
+function rendreBarre() {
+  const barre = document.getElementById('mm-barre')
+  const place = placeDeLaBarre
+  placeDeLaBarre = null
+  if (!barre || !place) return
+  if (place.suivant && place.suivant.parentNode === place.parent) place.parent.insertBefore(barre, place.suivant)
+  else place.parent.appendChild(barre)
+}
+
 /** Le navigateur est seul juge : Échap, ou son propre bouton, sortent aussi du plein écran. */
 function suivrePleinEcran() {
   enPleinEcran.value = document.fullscreenElement === cadre.value
+  if (enPleinEcran.value) accueillirBarre()
+  else rendreBarre()
   if (minuterieRappel) { clearTimeout(minuterieRappel); minuterieRappel = null }
   rappelVisible.value = enPleinEcran.value
   if (enPleinEcran.value) {
@@ -84,6 +109,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', mesurer)
   document.removeEventListener('fullscreenchange', suivrePleinEcran)
   if (minuterieRappel) clearTimeout(minuterieRappel)
+  rendreBarre()
 })
 watch(titre, () => nextTick(mesurer))
 </script>

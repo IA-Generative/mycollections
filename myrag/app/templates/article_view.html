@@ -93,5 +93,17 @@
         <a href="/graph?corpus_id={{ collection }}&query={{ article_id }}" class="btn btn-primary">📊 Voir les liens</a>
         <a href="/graph/{{ collection }}/related?article={{ article_id }}&depth=2" class="btn btn-secondary">🔗 Articles liés</a>
     </div>
+    <!-- La barre commune de la bêta (« Mon avis ») — seulement quand la page est ouverte SEULE.
+         Dans une iframe (la page « Liens entre documents » de Mes collections, l'assistant), la page
+         qui l'accueille a déjà la sienne : on ne la double pas. Absent, le menu ne casse rien. -->
+    <script>
+      (function () {
+        try { if (window.top !== window) return; } catch (e) { return; }
+        var s = document.createElement("script");
+        s.src = "/_beta/menu.js";
+        s.onerror = function () { void 0; };
+        document.body.appendChild(s);
+      })();
+    </script>
 </body>
 </html>
