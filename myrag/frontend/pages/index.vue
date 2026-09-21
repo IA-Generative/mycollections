@@ -115,7 +115,7 @@
       </div>
       <div class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-3w">
         <!-- Le formulaire de dépôt ouvre la page des demandes, au-dessus de celles de la communauté. -->
-        <NuxtLink v-if="capacites.demandes" to="/demandes" class="fr-btn fr-btn--sm">Demander un jeu de données</NuxtLink>
+        <NuxtLink v-if="capacites.demandes" :to="{ path: '/demandes', query: { deposer: '1' } }" class="fr-btn fr-btn--sm">Demander un jeu de données</NuxtLink>
         <NuxtLink to="/guide" class="fr-btn fr-btn--tertiary fr-btn--sm">Le guide « Soyez acteurs vous-mêmes »</NuxtLink>
       </div>
     </section>
