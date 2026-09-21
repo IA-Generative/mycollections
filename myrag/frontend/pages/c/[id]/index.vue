@@ -19,7 +19,7 @@
         <span v-if="loadError" class="fr-text--sm" style="color:#666;">({{ loadError }})</span>
       </p>
       <p>
-        Tu peux la rattacher à une fiche minimale puis compléter sa description
+        Vous pouvez la rattacher à une fiche minimale puis compléter sa description
         depuis les onglets habituels — aucun document n'est touché.
       </p>
       <div v-if="adoptError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">

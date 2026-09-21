@@ -14,13 +14,13 @@
         <!-- Empty state: invite to pick from bank or type -->
         <div v-if="!messages.length" class="myrag-playground__empty">
           <p v-if="bank.items.value.length" class="fr-text--sm">
-            Clique sur une question a droite, ou tape la tienne ci-dessous.
+            Choisissez une question à droite, ou saisissez la vôtre ci-dessous.
           </p>
           <p v-else-if="bank.isGenerating.value" class="fr-text--sm">
             Préparation des premières questions de test…
           </p>
           <p v-else class="fr-text--sm">
-            Pose une question pour voir comment la collection répond.
+            Posez une question pour voir comment la collection répond.
           </p>
         </div>
 
@@ -39,7 +39,7 @@
           <div class="fr-input-group">
             <label class="fr-label fr-sr-only" for="question">Votre question</label>
             <textarea id="question" class="fr-input" v-model="draft" rows="2"
-                      placeholder="Ta question ici…"
+                      placeholder="Votre question…"
                       @keydown.enter.exact.prevent="canSend && send()"></textarea>
           </div>
           <div class="fr-btns-group fr-btns-group--inline">
