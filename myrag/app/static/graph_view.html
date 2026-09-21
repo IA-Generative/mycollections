@@ -6,9 +6,8 @@
   <title>Visualiseur GraphRAG</title>
   <meta name="theme-color" content="#000091">
   <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/assets/site.webmanifest">
   <style>
     :root {
@@ -139,11 +138,12 @@
       border-radius: calc(18px * var(--ui-scale));
       overflow: hidden;
       border: 1px solid #cfd7ff;
-      background: linear-gradient(145deg, #f2f5ff, #dfe6ff 40%, #f8f9ff);
+      background: #000091;
       box-shadow: 0 calc(10px * var(--ui-scale)) calc(24px * var(--ui-scale)) rgba(0, 0, 145, 0.12);
     }
 
-    .hero-visual img {
+    .hero-visual img,
+    .hero-visual svg {
       display: block;
       width: 100%;
       height: 100%;
@@ -943,7 +943,26 @@
       <div class="section">
         <div class="hero-intro">
           <div class="hero-visual" aria-hidden="true">
-            <img src="/assets/mirai-graphrag-256.png" srcset="/assets/mirai-graphrag-256.png 1x, /assets/mirai-graphrag-512.png 2x, /assets/mirai-graphrag.png 4x" width="256" height="256" alt="" loading="eager" decoding="async">
+            <!-- Le logo de Mes collections, posé DANS la page : l'image d'origine (/assets/mirai-graphrag-*.png)
+                 appartenait au projet dont vient ce visualiseur, et n'a jamais existé ici. -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" focusable="false">
+              <rect width="256" height="256" rx="56" fill="#000091"/>
+              <rect x="92" y="48" width="104" height="128" rx="14" fill="#ffffff" opacity="0.38"/>
+              <rect x="64" y="64" width="122" height="146" rx="16" fill="#ffffff"/>
+              <g stroke="#000091" stroke-width="5" stroke-linecap="round" opacity="0.55">
+                <line x1="100" y1="110" x2="158" y2="100"/>
+                <line x1="100" y1="110" x2="118" y2="158"/>
+                <line x1="158" y1="100" x2="118" y2="158"/>
+                <line x1="118" y1="158" x2="156" y2="178"/>
+                <line x1="158" y1="100" x2="156" y2="178"/>
+              </g>
+              <g>
+                <circle cx="100" cy="110" r="11" fill="#000091"/>
+                <circle cx="118" cy="158" r="11" fill="#000091"/>
+                <circle cx="156" cy="178" r="11" fill="#000091"/>
+                <circle cx="158" cy="100" r="13" fill="#e1000f"/>
+              </g>
+            </svg>
           </div>
           <p class="lede"><strong>MirAI</strong> vous permet de visualiser votre corpus sous forme de graphes. Explorez les liens, changez de mode de lecture et repérez rapidement les éléments clés ou les repères temporels.</p>
         </div>
@@ -972,7 +991,7 @@
         </div>
 
         <div class="field">
-          <label for="source">Jeu de documents</label>
+          <label for="source" title="Ne montrer que les éléments d'une partie du corpus — un Livre, pour un code. Puis « Actualiser ».">Partie du corpus</label>
           <select id="source" name="source"></select>
         </div>
 

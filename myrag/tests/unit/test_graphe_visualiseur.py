@@ -72,3 +72,69 @@ def test_le_filtre_dit_quand_il_ne_trouve_rien(monkeypatch):
     sans = b.to_graph_data_response(collection="c", query="", max_nodes=80, min_weight=0.0)
     assert (trouve["query_matched"], rien["query_matched"], sans["query_matched"]) == (True, False, True)
     assert rien["total_nodes"] == 2   # le graphe entier est rendu — et désormais on le sait
+
+
+# ─── « Partie du corpus » : le sélecteur qui ne servait à rien ──────────────────────────────
+
+def _code():
+    g = nx.DiGraph()
+    for article, livre in (("L. 110-1", "I"), ("L. 421-1", "IV"), ("L. 421-2", "IV"), ("L. 511-1", "V"), ("L. 900-1", "IX"), ("Annexe 1", "")):
+        g.add_node(article, label=f"Article {article}", livre=livre, content_preview="")
+    g.add_edge("L. 421-1", "L. 421-2")
+    g.add_edge("L. 421-1", "L. 511-1")
+    return g
+
+
+def _reponse(monkeypatch, graphe, **params):
+    b = GraphBuilder()
+    monkeypatch.setattr(b, "get", lambda collection: graphe)
+    return b.to_graph_data_response(collection="c", **{"query": "", "max_nodes": 80, "min_weight": 0.0, **params})
+
+
+def test_le_selecteur_recoit_des_options_lisibles_en_ordre_romain(monkeypatch):
+    sources = _reponse(monkeypatch, _code())["available_sources"]
+    assert sources[0] == {"id": "", "label": "Tout le corpus"}
+    assert [s["label"] for s in sources[1:]] == ["Livre I", "Livre IV", "Livre V", "Livre IX", "Hors livres"]   # IX APRÈS V
+    assert all(set(s) == {"id", "label"} and isinstance(s["label"], str) and s["label"] for s in sources)
+
+
+def test_choisir_un_livre_restreint_vraiment_le_graphe(monkeypatch):
+    tout = _reponse(monkeypatch, _code())
+    livre4 = _reponse(monkeypatch, _code(), source_prefix="Livre-IV")
+    assert tout["total_nodes"] == 6 and tout["source_prefix"] == ""
+    assert {n["id"] for n in livre4["nodes"]} == {"L. 421-1", "L. 421-2"} and livre4["source_prefix"] == "Livre-IV"
+    assert livre4["total_edges"] == 1   # le lien vers le Livre V sort avec lui
+    assert len(livre4["available_sources"]) == len(tout["available_sources"])   # la liste ne dépend pas du filtre
+    hors = _reponse(monkeypatch, _code(), source_prefix="other")
+    assert {n["id"] for n in hors["nodes"]} == {"Annexe 1"}
+
+
+def test_une_partie_inconnue_est_ignoree_et_dite(monkeypatch):
+    r = _reponse(monkeypatch, _code(), source_prefix="Livre-XLII")
+    assert r["total_nodes"] == 6 and r["source_prefix"] == ""
+
+
+def test_partie_et_filtre_se_combinent(monkeypatch):
+    r = _reponse(monkeypatch, _code(), source_prefix="Livre-IV", query="421-2")
+    assert r["query_matched"] is True and {n["id"] for n in r["nodes"]} <= {"L. 421-1", "L. 421-2"}
+    ailleurs = _reponse(monkeypatch, _code(), source_prefix="Livre-IV", query="511-1")   # existe, mais dans le Livre V
+    assert ailleurs["query_matched"] is False
+
+
+def test_un_corpus_sans_parties_n_offre_pas_de_faux_choix(monkeypatch):
+    g = nx.DiGraph(); g.add_node("a", label="A"); g.add_node("b", label="B")
+    assert _reponse(monkeypatch, g)["available_sources"] == [{"id": "", "label": "Tout le corpus"}]
+
+
+def test_sans_graphe_le_visualiseur_recoit_quand_meme_sa_liste(monkeypatch):
+    b = GraphBuilder()
+    monkeypatch.setattr(b, "get", lambda collection: None)
+    r = b.to_graph_data_response(collection="c", query="", max_nodes=80, min_weight=0.0)
+    assert r["graph_ready"] is False and r["available_sources"] == [{"id": "", "label": "Tout le corpus"}]
+
+
+def test_la_route_transmet_la_partie(client, monkeypatch):
+    from app.routers import graph as routes
+    monkeypatch.setattr(routes._builder, "get", lambda collection: _code())
+    r = client.get("/graph/data", params={"corpus_id": "c", "source_prefix": "Livre-V"}).json()
+    assert [n["id"] for n in r["nodes"]] == ["L. 511-1"] and r["source_prefix"] == "Livre-V"
