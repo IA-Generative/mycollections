@@ -55,7 +55,9 @@ class Settings(BaseSettings):
     drive_public_host: str = Field(default="")
 
     # Open WebUI (used by /publish to create model aliases)
-    owui_url: str = Field(default="http://openwebui.miraiku.svc.cluster.local")
+    # Défaut d'EXEMPLE : chaque déploiement pose son adresse par OWUI_URL. Nommer ici
+    # un namespace réel ferait de ce dépôt public une carte de l'infrastructure.
+    owui_url: str = Field(default="http://openwebui.mon-namespace.svc.cluster.local")
     owui_admin_api_key: str = Field(default="")
     # Adresse PUBLIQUE de l'assistant (celle qu'ouvre un navigateur) — `owui_url` est l'adresse interne,
     # pour les appels de service. Vide : les écrans ne proposent pas d'ouvrir l'assistant.

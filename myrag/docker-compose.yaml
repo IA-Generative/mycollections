@@ -6,7 +6,9 @@ services:
     environment:
       - APP_TITLE=MyRAG (beta)
       - OPENRAG_URL=${OPENRAG_URL:-http://openrag:8080}
-      - OPENRAG_ADMIN_TOKEN=${OPENRAG_ADMIN_TOKEN:-or-admin-openrag-2026}
+      # Sans défaut, VOULU : une valeur de repli a la forme d'un secret, et elle masque
+      # une configuration oubliée jusqu'au premier appel refusé. Posez OPENRAG_ADMIN_TOKEN.
+      - OPENRAG_ADMIN_TOKEN=${OPENRAG_ADMIN_TOKEN:?posez OPENRAG_ADMIN_TOKEN dans votre .env}
       - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8080}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM:-openwebui}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-myrag-admin}
