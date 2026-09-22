@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: myrag-sources
-  namespace: miraiku
+  namespace: myrag
 spec:
   accessModes:
     - ReadWriteOnce
