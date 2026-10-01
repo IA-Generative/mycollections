@@ -39,9 +39,12 @@
         </div>
 
         <!-- Submit -->
-        <button class="fr-btn fr-mt-4w" @click="upload" :disabled="!file || uploading">
+        <button class="fr-btn fr-mt-4w" @click="upload" :disabled="!file || uploading || rechercheIndisponible">
           {{ uploading ? 'Envoi en cours…' : 'Ajouter le document' }}
         </button>
+        <p v-if="rechercheIndisponible" class="fr-message fr-message--info fr-mt-1w">
+          L'ajout de documents reviendra avec la recherche. Le bandeau en haut de la page vous préviendra.
+        </p>
 
         <!-- Result -->
         <div v-if="result" class="fr-alert fr-alert--success fr-mt-4w">
@@ -62,6 +65,8 @@ const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
 const { uploadFile, baseUrl } = useApi()
+// Le document irait au moteur de recherche : pendant une panne, l'envoi échouerait.
+const { rechercheIndisponible } = useEtatService()
 
 const file = ref<File | null>(null)
 const strategy = ref('auto')

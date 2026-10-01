@@ -110,12 +110,13 @@ async def get_config():
 @app.get("/api/openrag/health")
 async def openrag_health():
     """Proxy for OpenRAG's health_check. Browsers can't reach OpenRAG
-    directly (CORS) so the layout status badge calls this instead.
+    directly (CORS) so the service status (useEtatService) calls this instead.
     """
     from app.services.openrag_client import OpenRAGClient
     client = OpenRAGClient(timeout=5.0)
     ok = await client.health_check()
-    return {"status": "up" if ok else "down", "openrag_url": settings.openrag_url}
+    # Sans l'adresse du moteur : la route est publique, l'adresse interne n'a rien à y faire.
+    return {"status": "up" if ok else "down"}
 
 
 from app.services.morceau import decouper_morceau as _decouper_morceau  # noqa: E402
