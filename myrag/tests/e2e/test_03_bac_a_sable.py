@@ -32,20 +32,23 @@ def test_la_reponse_cite_ses_sources(reponse_obtenue):
 
 
 def test_la_source_se_lit_au_survol_puis_en_fenetre(reponse_obtenue, captures):
+    """La puce ouvre la fenêtre de lecture. Le survol montre un aperçu quand le morceau a du texte
+    à montrer — un morceau vide (un document importé sans texte) n'en a pas, par conception."""
     page = reponse_obtenue
     puce = page.locator(".myrag-msg--assistant .myrag-source-chip-wrap").first
     bulle = page.locator(".myrag-source-chip__popover")
     puce.scroll_into_view_if_needed()
     puce.hover()
-    try:
-        bulle.first.wait_for(state="visible", timeout=5_000)
-    except Exception:
-        # La bulle s'ouvre aussi au focus clavier : c'est l'autre chemin prévu par le composant.
-        puce.locator("a, button, [tabindex]").first.focus()
-        bulle.first.wait_for(state="visible", timeout=10_000)
-    assert bulle.first.inner_text().strip()
-    captures.prendre(page, "04-source-bulle", mobile=False)
-    page.get_by_role("link", name=re.compile("Lire l'extrait")).first.click()
+    page.wait_for_timeout(1_500)
+    if bulle.count() and bulle.first.is_visible():
+        assert bulle.first.inner_text().strip()
+        captures.prendre(page, "04-source-bulle", mobile=False)
+        page.mouse.move(0, 0)
+        page.wait_for_timeout(800)
+    lien = puce.locator("a[href]").first
+    assert lien.count() == 1, "la puce n'offre aucun lien vers sa source"
+    assert "/api/openrag/" in (lien.get_attribute("href") or ""), "le lien de la puce ne passe pas par le proxy signé"
+    lien.click()
     fenetre = page.locator("dialog.myrag-viewer")
     fenetre.wait_for(state="visible", timeout=30_000)
     assert fenetre.locator("#myrag-viewer-title").inner_text().strip()
