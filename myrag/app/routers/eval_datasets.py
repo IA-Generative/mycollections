@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
+from app.routers._droits import gerer_la_collection, lire_la_collection
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -25,7 +27,7 @@ class DatasetRequest(BaseModel):
     questions: list[dict]
 
 
-@router.get("/{collection}/datasets")
+@router.get("/{collection}/datasets", dependencies=[Depends(lire_la_collection)])
 async def list_datasets(collection: str):
     async with async_session() as session:
         result = await session.execute(
@@ -36,7 +38,7 @@ async def list_datasets(collection: str):
         return {"datasets": [d.to_dict() for d in result.scalars().all()]}
 
 
-@router.post("/{collection}/datasets")
+@router.post("/{collection}/datasets", dependencies=[Depends(gerer_la_collection)])
 async def create_dataset(collection: str, req: DatasetRequest):
     async with async_session() as session:
         ds = EvalDataset(
@@ -51,7 +53,7 @@ async def create_dataset(collection: str, req: DatasetRequest):
         return ds.to_dict()
 
 
-@router.delete("/{collection}/datasets/{dataset_id}")
+@router.delete("/{collection}/datasets/{dataset_id}", dependencies=[Depends(gerer_la_collection)])
 async def delete_dataset(collection: str, dataset_id: int):
     async with async_session() as session:
         ds = await session.get(EvalDataset, dataset_id)

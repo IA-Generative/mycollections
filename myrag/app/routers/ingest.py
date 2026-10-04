@@ -299,13 +299,22 @@ async def list_source_files(collection: str):
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, user: CurrentUser = Depends(current_user)):
+    from app.routers._droits import peut_lire_nom
     job = await get_job(job_id)
-    if not job:
+    if not job or not await peut_lire_nom(job.get("collection", ""), user):
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.get("/jobs")
-async def list_all_jobs(collection: str | None = Query(None)):
-    return {"jobs": await list_jobs(collection=collection)}
+async def list_all_jobs(collection: str | None = Query(None), user: CurrentUser = Depends(current_user)):
+    """Les travaux des seules collections que l'appelant peut lire (avant : tous)."""
+    from app.routers._droits import peut_lire_nom
+    travaux = await list_jobs(collection=collection)
+    lisibles: dict[str, bool] = {}
+    for t in travaux:
+        c = t.get("collection", "")
+        if c not in lisibles:
+            lisibles[c] = await peut_lire_nom(c, user)
+    return {"jobs": [t for t in travaux if lisibles[t.get("collection", "")]]}

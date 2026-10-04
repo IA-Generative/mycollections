@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter
+from fastapi import Depends
+from app.routers._droits import lire_la_collection
 from sqlalchemy import select
 
 from app.database import async_session
@@ -30,7 +32,7 @@ from app.services.qr_cache import QRCache
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
 
 
-@router.get("/{collection}/bank")
+@router.get("/{collection}/bank", dependencies=[Depends(lire_la_collection)])
 async def get_bank(collection: str):
     """Return the aggregated question bank for a collection.
 

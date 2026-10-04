@@ -20,7 +20,7 @@
 
         <!-- Message list -->
         <div v-if="messages.length" class="myrag-playground__messages" ref="messagesEl">
-          <PlaygroundChatMessage v-for="m in messages" :key="m.turnId || m.content"
+          <PlaygroundChatMessage v-for="m in messages" :key="m.turnId || m.content" :gestionnaire="peutGerer"
                        :message="m"
                        @vote="(v) => onVote(m, v)" />
           <div v-if="isLoading" class="fr-text--sm" style="color:#666;padding:0.4rem 0;">
@@ -128,10 +128,12 @@ import { useBank, type BankItem } from '~/composables/useBank'
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
-const { post } = useApi()
+const { get, post } = useApi()
 
 const { messages, isLoading, sendMessage, reset: resetChat } = useChat(id)
 const bank = useBank(id)
+/** Gérer la collection (dit par l'API) : 👍 l'ajoute alors aux réponses validées ; sinon, un avis. */
+const peutGerer = ref(false)
 
 const draft = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
@@ -184,7 +186,14 @@ function reset() {
 
 async function onVote(msg: any, vote: 'up' | 'down') {
   const item = msg.turnId ? turnToBankItem.get(msg.turnId) : null
-  if (item) {
+  if (!peutGerer.value) {
+    // Un lecteur ne modifie pas la collection : son 👍 comme son 👎 devient un avis pour le gestionnaire.
+    const idx = messages.value.indexOf(msg)
+    const question = item?.question || (idx > 0 ? messages.value[idx - 1]?.content : '') || ''
+    if (question) {
+      await post(`/api/feedback/ingest`, { collection: id, question, response: msg.content, rating: vote === 'up' ? 1 : -1 })
+    }
+  } else if (item) {
     if (vote === 'up') await bank.voteUp(item, msg.content)
     else               await bank.voteDown(item, msg.content, '')
   } else {
@@ -246,8 +255,11 @@ function trunc(s: string, n: number): string {
   return s.length > n ? s.substring(0, n) + '…' : s
 }
 
-onMounted(() => {
-  bank.autoSeedIfEmpty()
+onMounted(async () => {
+  // Les droits d'abord : seul qui gère la collection garnit sa banque et ses réponses validées.
+  try { peutGerer.value = !!(await get(`/api/collections/${id}`))?.mes_droits?.ecrire } catch { peutGerer.value = false }
+  if (peutGerer.value) bank.autoSeedIfEmpty()
+  else bank.load().catch(() => {})
   // « Poser cette question » depuis l'accueil : la question arrive saisie, il reste à l'envoyer.
   const q = String(route.query.q || '').trim()
   if (q && !draft.value) draft.value = q.slice(0, 500)
