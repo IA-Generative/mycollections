@@ -21,7 +21,13 @@ async def lifespan(app: FastAPI):
     # Import models so tables are registered
     import app.models.db  # noqa: F401
     await init_db()
+    # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
+    import asyncio
+    from app.routers.ingest import reprendre_les_travaux_interrompus
+    reprise = asyncio.create_task(reprendre_les_travaux_interrompus())
     yield
+    if not reprise.done():
+        reprise.cancel()
 
 
 app = FastAPI(
