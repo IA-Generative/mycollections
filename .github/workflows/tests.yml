@@ -23,13 +23,13 @@ jobs:
         working-directory: myrag
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Les dépendances sont tenues par uv (pyproject.toml + uv.lock), comme dans l'image.
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: myrag/requirements.txt
-      - run: pip install -r requirements.txt
-      - run: python -m pytest tests -q
+          enable-cache: true
+          cache-dependency-glob: myrag/uv.lock
+      - run: uv sync --frozen
+      - run: uv run python -m pytest tests -q
 
   frontend:
     runs-on: ubuntu-latest
