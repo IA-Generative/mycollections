@@ -9,6 +9,8 @@ import re
 
 import pytest
 
+from tests.e2e.conftest import _liste
+
 TITRE = "E2E, à ignorer : jeu d'essai de la suite de tests"
 
 
@@ -54,8 +56,7 @@ def test_deposer_une_demande(session_testeur, demande_essai, captures):
     page.wait_for_timeout(2_000)
     assert "déposée" in session_testeur.texte(), "pas de confirmation de dépôt"
     captures.prendre(page, "08-demande-deposee", mobile=False)
-    liste = session_testeur.get("/api/demandes").json()
-    demandes = liste.get("demandes", liste) if isinstance(liste, dict) else liste
+    demandes = _liste(session_testeur.get("/api/demandes").json(), "demandes")
     mienne = next((d for d in demandes if d.get("titre") == TITRE), None)
     assert mienne, "la demande déposée n'est pas dans la liste"
     demande_essai["id"] = mienne.get("id") or mienne.get("ident")

@@ -185,6 +185,13 @@ def verdict_hors_groupe(navigateur, cible) -> tuple[str, str]:
 
 # --- données d'essai : une collection, nettoyée avant et après ------------------------------
 
+def _liste(corps, cle: str) -> list:
+    """L'API rend tantôt une liste nue, tantôt `{"<cle>": [...]}` : on lit les deux."""
+    if isinstance(corps, dict):
+        return list(corps.get(cle) or [])
+    return list(corps or [])
+
+
 def _menage(session: Session, nom: str) -> None:
     """Efface la collection, quoi qu'il soit arrivé avant (dépublier, archiver, purger)."""
     for appel in (lambda: session.post(f"/api/collections/{nom}/unpublish", {}),
@@ -203,7 +210,7 @@ def collection_essai(session_testeur) -> str:
     nom = "e2e-" + _dt.date.today().strftime("%Y%m%d")
     try:
         reponse = session_testeur.get("/api/collections?include_archived=true")
-        for c in reponse.json() if reponse.status == 200 else []:
+        for c in _liste(reponse.json(), "collections") if reponse.status == 200 else []:
             if str(c.get("name", "")).startswith("e2e-"):
                 _menage(session_testeur, c["name"])
     except Exception:
