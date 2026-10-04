@@ -5,9 +5,10 @@ groupes MyRAG (pas de colonne en base) :
 
   - ``<root>/<collection>``        → membre (lecture) ;
   - ``<root>/<collection>-admin``  → administrateur de la collection (écriture) ;
-  - ``<root>/superadmin``          → opérateur global (lit et écrit tout).
+où ``<root>`` = ``settings.myrag_group_root`` (défaut ``/myrag``).
 
-où ``<root>`` = ``settings.myrag_group_root`` (défaut ``/myrag``). Les groupes
+L'opérateur global (superadmin : lit et écrit tout) est membre d'un des groupes listés dans
+``MYRAG_SUPERADMIN_GROUPES`` (chemins complets, ex. ``/g/mirai-beta-testeurs-admin``). Les groupes
 arrivent dans le claim ``groups`` de l'access token. Tout compte sans groupe
 MyRAG ne voit aucune collection.
 
@@ -83,8 +84,23 @@ def _leaf(path: str) -> str | None:
     return leaf
 
 
+#: Le groupe que porte l'utilisateur synthétique quand l'authentification est désactivée
+#: (développement, tests d'intégration) : superadmin seulement dans ce mode.
+GROUPE_DEV = "/__dev__/superadmin"
+
+
+def groupes_superadmin() -> set[str]:
+    """Les chemins configurés dans ``MYRAG_SUPERADMIN_GROUPES`` (un nom court est ignoré : il
+    n'est pas unique dans le realm, et n'importe qui en crée un homonyme dans keycloak-comu)."""
+    valeurs = {_normalise(v.strip()) for v in settings.myrag_superadmin_groupes.split(",") if v.strip().startswith("/")}
+    if not settings.auth_enabled:
+        valeurs.add(GROUPE_DEV)
+    return valeurs
+
+
 def is_superadmin(groups: list[str] | None) -> bool:
-    return any(_leaf(g) == SUPERADMIN for g in chemins(groups))
+    cibles = groupes_superadmin()
+    return bool(cibles) and any(_normalise(g) in cibles for g in chemins(groups))
 
 
 def _collections(groups: list[str] | None, *, admin_only: bool) -> set[str]:

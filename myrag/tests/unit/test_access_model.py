@@ -6,7 +6,7 @@ Couvre app.services.access.can_read / can_write / groups_match.
 from app.services import access
 
 
-SUPERADMIN = ["/myrag/superadmin"]
+SUPERADMIN = ["/g/administration-de-test"]
 CREATOR_SUB = "u-creator"
 
 
@@ -100,7 +100,7 @@ class TestFormeDeLaBeta:
     """Modèle complet, claim en noms courts (bêta, mapper ``full.path=false``)."""
 
     def test_superadmin_en_nom_court_ne_donne_ni_ecriture_ni_lecture(self):
-        groups = ["mirai-beta-testeurs", "superadmin", "/myrag/superadmin"]
+        groups = ["mirai-beta-testeurs", "superadmin", "/g/administration-de-test"]
         assert not access.can_write(name="victor", created_by="", user_groups=groups, user_sub="x")
         assert not access.can_read(name="victor", scope="private", scope_groups=[],
                                    created_by="", user_groups=groups, user_sub="x")
@@ -111,5 +111,5 @@ class TestFormeDeLaBeta:
         assert access.can_write(name="victor", created_by=CREATOR_SUB, user_groups=groups, user_sub=CREATOR_SUB)
 
     def test_superadmin_en_chemins_complets(self):
-        groups = ["/g/mirai-beta-testeurs", "/myrag/superadmin"]
+        groups = ["/g/mirai-beta-testeurs", "/g/administration-de-test"]
         assert access.can_write(name="victor", created_by="", user_groups=groups, user_sub="x")

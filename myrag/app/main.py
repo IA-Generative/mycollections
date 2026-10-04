@@ -96,6 +96,14 @@ app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
 app.include_router(bus.router)
 
 
+@app.get("/api/moi", dependencies=AUTH_REQUIRED)
+async def moi(user: CurrentUser = Depends(current_user)):
+    """Ce que l'interface doit savoir de l'appelant : est-il administrateur ? (L'interface ne
+    déduit plus ce droit des groupes du jeton : la liste est dans MYRAG_SUPERADMIN_GROUPES,
+    côté serveur, seul juge.)"""
+    return {"superadmin": access.is_superadmin(user.groups)}
+
+
 @app.get("/api/config")
 async def get_config():
     return {

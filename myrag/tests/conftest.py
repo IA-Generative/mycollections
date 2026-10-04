@@ -24,6 +24,7 @@ os.environ["MYRAG_PSEUDO_SEL"] = "sel-de-test"
 os.environ["CAPACITES_URL"] = ""
 os.environ["AUTH_ENABLED"] = "false"
 os.environ["MYRAG_GROUPE_EXIGE"] = ""
+os.environ["MYRAG_SUPERADMIN_GROUPES"] = "/g/administration-de-test"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -39,7 +40,7 @@ TABLES_PAR_COLLECTION = (
     "proposition", "signalement", "grille_controle", "evenement", "usage_question",
 )
 
-SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/myrag/superadmin"])
+SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])
 GROUPE_TESTEURS = "/g/mirai-beta-testeurs"
 
 

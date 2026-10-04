@@ -161,7 +161,7 @@ def jeton_de_la_beta(client, monkeypatch):
 
 @pytest.mark.parametrize("groupes,attendu", [
     # Mapper basculé en chemins complets, groupe `/myrag/superadmin` attribué : ça passe.
-    (["/g/mirai-beta-testeurs", "/myrag/superadmin"], 200),
+    (["/g/mirai-beta-testeurs", "/g/administration-de-test"], 200),
     # Même mapper, sans le groupe : refus.
     (["/g/mirai-beta-testeurs"], 403),
     # Homonymes que keycloak-comu laisse créer à n'importe qui (tout vit sous /g) : refus.
@@ -169,7 +169,7 @@ def jeton_de_la_beta(client, monkeypatch):
     # Mapper encore en noms courts (état du 2026-09-21) : aucun nom ne vaut superadmin,
     # pas même un groupe NOMMÉ « /myrag/superadmin ».
     (["mirai-beta-testeurs", "superadmin"], 403),
-    (["mirai-beta-testeurs", "/myrag/superadmin"], 403),
+    (["mirai-beta-testeurs", "/g/administration-de-test"], 403),
 ])
 def test_classer_avec_un_jeton_de_la_beta(client, jeton_de_la_beta, groupes, attendu):
     r = client.put("/api/categories/affectations", json={"affectations": {}}, headers=jeton_de_la_beta(groupes))
@@ -178,6 +178,6 @@ def test_classer_avec_un_jeton_de_la_beta(client, jeton_de_la_beta, groupes, att
 
 def test_hors_du_groupe_des_testeurs_le_jeton_est_refuse_avant_tout(client, jeton_de_la_beta):
     r = client.put("/api/categories/affectations", json={"affectations": {}},
-                   headers=jeton_de_la_beta(["/g/autre", "/myrag/superadmin"]))
+                   headers=jeton_de_la_beta(["/g/autre", "/g/administration-de-test"]))
     assert r.status_code == 403
     assert "groupe autorisé" in r.json()["detail"]

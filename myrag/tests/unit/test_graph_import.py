@@ -12,7 +12,7 @@ from app.services.graph_builder import GraphBuilder, GraphImportError, graph_fro
 
 GESTIONNAIRE = CurrentUser(sub="g1", username="gest", groups=["/myrag/grimp-ceseda-admin"])
 LECTEUR = CurrentUser(sub="l1", username="lecteur", groups=["/myrag/grimp-autre-admin"])
-SUPERADMIN = CurrentUser(sub="op", username="op", groups=["/myrag/superadmin"])
+SUPERADMIN = CurrentUser(sub="op", username="op", groups=["/g/administration-de-test"])
 
 GRAPHE = {
     "nodes": [

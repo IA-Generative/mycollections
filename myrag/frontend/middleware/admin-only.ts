@@ -1,20 +1,17 @@
 /**
- * Protège les routes /admin : seuls les super-admins (/myrag/superadmin) passent.
- *
- * Défense en profondeur — la sécurité réelle est appliquée par l'API. Application
- * SPA (ssr:false) : on n'évalue que côté client. Tant que l'utilisateur n'est pas
- * encore chargé (init OIDC asynchrone), on ne bloque pas (le menu reste masqué et
- * l'API refuse les données) ; on ne redirige que si un non-admin est confirmé.
+ * Protège les routes /admin : seuls les administrateurs (MYRAG_SUPERADMIN_GROUPES, dit par
+ * `/api/moi`) passent. Défense en profondeur : la sécurité réelle est appliquée par l'API.
+ * Tant que le compte n'est pas chargé (init OIDC asynchrone, faite par le gabarit), on laisse
+ * passer : le gabarit refait le contrôle une fois le compte chargé.
  */
-export default defineNuxtRouteMiddleware(() => {
+export default defineNuxtRouteMiddleware(async () => {
   if (import.meta.server) return
   const config = useRuntimeConfig()
   if (!config.public.authEnabled) return
 
   const { user } = useAuth()
-  if (!user.value) return // auth pas encore prête : ne pas bloquer
+  if (!user.value) return
 
-  if (!isAdminGroup(user.value.profile?.groups)) {
-    return navigateTo('/')
-  }
+  const { charger } = useAdminAuth()
+  if (!(await charger())) return navigateTo('/')
 })

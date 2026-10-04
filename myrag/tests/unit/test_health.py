@@ -1,4 +1,4 @@
-"""Tests for MyRAG (beta) health and configuration endpoints."""
+"""Tests de santé et de configuration de Mes collections."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,8 +21,8 @@ class TestHealth:
 
     def test_health_contains_app_title(self, client):
         data = client.get("/health").json()
-        assert "MyRAG" in data["app"]
-        assert "beta" in data["app"].lower()
+        assert "Mes collections" in data["app"]
+        assert "bêta" in data["app"].lower()
 
     def test_health_contains_version(self, client):
         data = client.get("/health").json()

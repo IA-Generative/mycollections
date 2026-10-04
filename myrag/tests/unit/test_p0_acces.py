@@ -94,3 +94,10 @@ def test_la_fiche_dit_a_l_appelant_ce_qu_il_peut_faire(client, en_tant_que, cree
         cls.return_value.list_files = AsyncMock(return_value=[])
         liste = client.get("/api/collections").json()["collections"]
     assert next(c for c in liste if c["name"] == nom)["mes_droits"]["ecrire"] is False
+
+
+def test_moi_dit_si_l_appelant_administre(client, en_tant_que):
+    en_tant_que(personne("quelqu-un"))
+    assert client.get("/api/moi").json() == {"superadmin": False}
+    en_tant_que(SUPERADMIN)
+    assert client.get("/api/moi").json() == {"superadmin": True}
