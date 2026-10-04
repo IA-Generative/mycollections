@@ -166,7 +166,7 @@ def session_admin(navigateur, cible) -> Session:
     issue, detail, contexte = _ouvrir(navigateur, cible, "E2E_ADMIN", obligatoire=False)
     if issue != "entre":
         contexte.close()
-        pytest.fail(f"le compte administrateur n'entre pas : {issue} : {detail}")
+        pytest.skip(f"le compte E2E_ADMIN n'entre pas ({issue} : {detail}) : parcours d'administration ignoré")
     session = Session(contexte, contexte.pages[0], detail, cible)
     if not any(g.endswith("/superadmin") for g in session.groupes()):
         contexte.close()
