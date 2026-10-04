@@ -21,34 +21,8 @@
                 <p class="fr-header__service-tagline">Interrogez les documents de votre ministère</p>
               </div>
             </div>
-            <div class="fr-header__tools">
-              <div class="fr-header__tools-links">
-                <ul class="fr-btns-group">
-                  <!-- Témoins d'état des deux services : un repère d'exploitation, pas une
-                       information pour l'usager — réservés aux administrateurs. -->
-                  <li v-if="isAdmin">
-                    <span class="myrag-status" :title="myragStatus.title">
-                      <span class="myrag-status__dot" :class="myragStatus.class"></span>
-                      MyRAG
-                    </span>
-                  </li>
-                  <li v-if="isAdmin">
-                    <span class="myrag-status" :title="openragStatus.title">
-                      <span class="myrag-status__dot" :class="openragStatus.class"></span>
-                      OpenRAG
-                    </span>
-                  </li>
-                  <!-- Le nom et « Se déconnecter » sont portés par le menu commun de la
-                       bêta (bulle en haut à droite, sortie GET /deconnexion) : une seule
-                       commande de compte à l'écran. -->
-                  <li v-if="isAdmin">
-                    <NuxtLink to="/admin" class="fr-btn fr-icon-settings-5-line fr-btn--sm">
-                      Admin
-                    </NuxtLink>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <!-- Rien à droite de l'en-tête : la barre commune de la bêta y flotte, et porte
+                 le compte, « Se déconnecter » et « État du service » (menu personnel). -->
           </div>
         </div>
       </div>
@@ -112,10 +86,38 @@
       </div>
     </header>
 
-    <!-- Connection error banner -->
-    <div v-if="openragStatus.status === 'down'" class="fr-alert fr-alert--error fr-alert--sm" role="alert">
-      <p :title="isAdmin ? `OpenRAG injoignable (${config.public.myragApiUrl})` : undefined">La recherche est momentanément indisponible. Réessayez dans quelques minutes.</p>
+    <!-- État du service : rien quand tout va bien. En panne, un bandeau qui dit ce qui
+         ne marche pas, ce qui marche encore, et qu'il est inutile de le signaler. -->
+    <div v-if="serviceIndisponible && !bandeauMasque" class="fr-notice fr-notice--alert" role="status">
+      <div class="fr-container">
+        <div class="fr-notice__body">
+          <p>
+            <span class="fr-notice__title">Mes collections ne répond plus pour le moment.</span>
+            <span class="fr-notice__desc">Vos collections et vos documents ne sont pas perdus. L'équipe est prévenue : inutile de le signaler.</span>
+            <a href="#" class="fr-notice__link" @click.prevent="fenetreOuverte = true">Voir l'état du service</a>
+          </p>
+          <button type="button" class="fr-btn--close fr-btn" title="Masquer ce message" @click="bandeauMasque = true">Masquer le message</button>
+        </div>
+      </div>
     </div>
+    <div v-else-if="rechercheIndisponible && !bandeauMasque" class="fr-notice fr-notice--warning" role="status">
+      <div class="fr-container">
+        <div class="fr-notice__body">
+          <p>
+            <span class="fr-notice__title">La recherche dans les documents est momentanément indisponible.</span>
+            <span class="fr-notice__desc">Vos collections, leurs fiches et leurs réglages restent consultables. L'équipe est prévenue : inutile de le signaler.</span>
+            <a href="#" class="fr-notice__link" @click.prevent="fenetreOuverte = true">Voir l'état du service</a>
+          </p>
+          <button type="button" class="fr-btn--close fr-btn" title="Masquer ce message" @click="bandeauMasque = true">Masquer le message</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="retabli" class="fr-container fr-mt-2w">
+      <div class="fr-alert fr-alert--success fr-alert--sm" role="status">
+        <p>Le service fonctionne de nouveau.</p>
+      </div>
+    </div>
+    <EtatDuService />
 
     <!-- Auth error banner -->
     <div v-if="authError" class="fr-alert fr-alert--warning fr-alert--sm" role="alert">
@@ -172,45 +174,10 @@ async function chargerMiennes() {
 }
 watch(() => route.fullPath, () => { menuOuvert.value = false; chargerMiennes() })
 
-const myragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Vérification…' })
-const openragStatus = ref({ status: 'checking', class: 'myrag-status__dot--checking', title: 'Vérification…' })
-
-async function checkServices() {
-  // Check MyRAG
-  try {
-    const resp = await fetch(`${config.public.myragApiUrl}/health`, { signal: AbortSignal.timeout(3000) })
-    if (resp.ok) {
-      const data = await resp.json()
-      myragStatus.value = {
-        status: 'up',
-        class: 'myrag-status__dot--up',
-        title: `MyRAG ${data.version || ''} — OK`,
-      }
-    } else {
-      myragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `MyRAG — HTTP ${resp.status}` }
-    }
-  } catch {
-    myragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: 'MyRAG — Non accessible' }
-  }
-
-  // Check OpenRAG via the MyRAG proxy (browsers can't hit OpenRAG directly
-  // because of CORS — the VM only allows same-origin).
-  try {
-    const resp = await fetch(`${config.public.myragApiUrl}/api/openrag/health`, { signal: AbortSignal.timeout(5000) })
-    if (resp.ok) {
-      const data = await resp.json()
-      if (data.status === 'up') {
-        openragStatus.value = { status: 'up', class: 'myrag-status__dot--up', title: `OpenRAG — OK (${data.openrag_url})` }
-      } else {
-        openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `OpenRAG — ${data.openrag_url} injoignable` }
-      }
-    } else {
-      openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: `OpenRAG — HTTP ${resp.status}` }
-    }
-  } catch {
-    openragStatus.value = { status: 'down', class: 'myrag-status__dot--down', title: 'OpenRAG — Non accessible' }
-  }
-}
+const { serviceIndisponible, rechercheIndisponible, retabli, fenetreOuverte, demarrer: surveillerEtat } = useEtatService()
+// Masqué par l'usager : jusqu'au prochain changement d'état, pas au-delà.
+const bandeauMasque = ref(false)
+watch([serviceIndisponible, rechercheIndisponible], () => { bandeauMasque.value = false })
 
 onMounted(async () => {
   // Init auth (redirect to Keycloak if not logged in)
@@ -220,8 +187,7 @@ onMounted(async () => {
 
   chargerCapacites()
   chargerMiennes()
-  checkServices()
-  setInterval(checkServices, 30000)
+  surveillerEtat()
 })
 </script>
 
@@ -256,51 +222,5 @@ onMounted(async () => {
   width: auto;
   height: 3.5rem;
   border-radius: 6px;
-}
-
-.myrag-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: #666;
-  padding: 4px 8px;
-}
-
-.myrag-status__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.myrag-status__dot--up {
-  background: #18753c;
-  box-shadow: 0 0 4px #18753c;
-}
-
-.myrag-status__dot--down {
-  background: #ce0500;
-  box-shadow: 0 0 4px #ce0500;
-  animation: pulse-red 1.5s infinite;
-}
-
-.myrag-status__dot--checking {
-  background: #b34000;
-  animation: pulse-orange 1s infinite;
-}
-
-.myrag-status__dot--unknown {
-  background: #666;
-}
-
-@keyframes pulse-red {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-@keyframes pulse-orange {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
 }
 </style>

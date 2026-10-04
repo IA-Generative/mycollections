@@ -44,6 +44,9 @@
               Effacer
             </button>
           </div>
+          <p v-if="rechercheIndisponible" class="fr-message fr-message--info fr-mt-1w">
+            Les questions reviendront dès que la recherche sera rétablie. Le bandeau en haut de la page vous préviendra.
+          </p>
         </div>
       </section>
 
@@ -101,7 +104,7 @@
         <!-- Footer actions -->
         <div class="myrag-playground__bank-footer">
           <button class="fr-btn fr-btn--sm fr-btn--secondary"
-                  :disabled="!bank.items.value.length || isBatchRunning"
+                  :disabled="!bank.items.value.length || isBatchRunning || rechercheIndisponible"
                   title="Pose à la collection, l'une après l'autre, toutes les questions de la banque, et résume les réponses dans un tableau."
                   @click="runAll">
             {{ isBatchRunning ? `⏳ ${batchProgress}/${bank.items.value.length}` : '▶▶ Lancer toute la banque' }}
@@ -141,7 +144,9 @@ const testedIds = ref(new Set<string>())
  *  can call the right backend endpoint. Map is message.turnId → BankItem. */
 const turnToBankItem = new Map<string, BankItem>()
 
-const canSend = computed(() => !isLoading.value && draft.value.trim().length > 0)
+// Une question posée pendant une panne échouerait : on le dit avant le clic.
+const { rechercheIndisponible } = useEtatService()
+const canSend = computed(() => !isLoading.value && !rechercheIndisponible.value && draft.value.trim().length > 0)
 
 function scrollToBottom() {
   nextTick(() => {
