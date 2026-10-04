@@ -280,8 +280,13 @@ const feedbackItems = ref<any[]>([])
 const loading = ref(true)
 const tab = ref('consulter')
 
+/** Ce que l'appelant peut faire de la collection (dit par l'API) : on n'offre que ces gestes. */
+const peutGerer = computed(() => !!collection.value?.mes_droits?.ecrire)
+const RESERVES_A_QUI_GERE = new Set(['prompt', 'feedback', 'qr', `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
+
 /** Les rubriques de la fiche, dans l'ordre de la rangée d'onglets. */
-const onglets = computed(() => {
+const onglets = computed(() => ongletsTous.value.filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle)))
+const ongletsTous = computed(() => {
   const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
   return [
     { cle: 'consulter', libelle: 'Consulter' },
@@ -314,8 +319,9 @@ watch(() => route.query.onglet, () => { tab.value = ongletDemande() })
 /** Le dernier maillon du fil d'Ariane : l'onglet ouvert, sans son compteur. */
 const rubrique = computed(() => libelleSansCompteur(onglets.value.find(o => o.cle === tab.value)?.libelle || ''))
 
-/** Les cinq gestes de la fiche. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
-const actions = computed(() => [
+/** Les gestes de la fiche, filtrés selon les droits. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
+const actions = computed(() => actionsToutes.value.filter(a => peutGerer.value || !RESERVES_A_QUI_GERE.has(a.vers)))
+const actionsToutes = computed(() => [
   { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
     aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
   { vers: `/c/${id}/graph`, libelle: 'Voir les liens entre documents', icone: 'fr-icon-links-line', rang: 'fr-btn--secondary',

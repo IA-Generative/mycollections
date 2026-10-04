@@ -79,3 +79,18 @@ def test_le_diagnostic_de_l_assistant_est_reserve_a_l_administration(client, en_
 def test_la_description_de_l_api_n_est_pas_publique(client):
     for chemin in ("/docs", "/redoc", "/openapi.json"):
         assert client.get(chemin).status_code == 404, chemin
+
+
+def test_la_fiche_dit_a_l_appelant_ce_qu_il_peut_faire(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    d = client.get(f"/api/collections/{nom}").json()["mes_droits"]
+    assert d == {"lire": True, "ecrire": True, "garant": True, "superadmin": False}, "le créateur en est le garant"
+    en_tant_que(personne("lecteur"))
+    d = client.get(f"/api/collections/{nom}").json()["mes_droits"]
+    assert d["ecrire"] is False and d["garant"] is False
+    with patch("app.routers.collections.OpenRAGClient") as cls:
+        cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        cls.return_value.list_files = AsyncMock(return_value=[])
+        liste = client.get("/api/collections").json()["collections"]
+    assert next(c for c in liste if c["name"] == nom)["mes_droits"]["ecrire"] is False
