@@ -66,6 +66,15 @@ class PublishRequest(BaseModel):
     state: str = ""  # allow "draft" for save-as-draft
 
 
+async def _historique(session, name: str, limite: int = 20) -> list[dict]:
+    """Les derniers gestes, les plus anciens d'abord : quoi et quand — jamais le courriel de qui."""
+    from sqlalchemy import select
+    lignes = (await session.execute(
+        select(PublicationHistory).where(PublicationHistory.collection_name == name)
+        .order_by(PublicationHistory.acted_at.desc()).limit(limite))).scalars().all()
+    return [{"action": h.action, "at": h.acted_at.isoformat() if h.acted_at else None} for h in reversed(lignes)]
+
+
 @router.get("/{name}/publication")
 async def get_publication_status(name: str, user: CurrentUser = Depends(current_user)):
     fiche = await _fiche_pour(name, user, ecrire=False)
@@ -77,7 +86,7 @@ async def get_publication_status(name: str, user: CurrentUser = Depends(current_
             # « proposer dans l'assistant » arrivait décochée et le partage ne publiait rien).
             return {"collection": name, "state": "draft", "archivee": archivee, "alias_enabled": True,
                     "tool_enabled": False, "embed_enabled": False, "visibility_groups": []}
-        return {**pub.to_dict(), "archivee": archivee}
+        return {**pub.to_dict(), "archivee": archivee, "history": await _historique(session, name)}
 
 
 @router.post("/{name}/publish")
@@ -216,7 +225,7 @@ async def unpublish_collection(name: str, user: CurrentUser = Depends(current_us
         pub.state = "disabled"
 
         session.add(PublicationHistory(
-            collection_name=name, action="disabled", acted_by="admin",
+            collection_name=name, action="disabled", acted_by=user.username or user.sub or "?",
         ))
         await session.commit()
 
@@ -242,15 +251,19 @@ async def archive_collection(name: str, user: CurrentUser = Depends(current_user
     async with async_session() as session:
         pub = await session.get(Publication, name)
         pub_state = None
+        etait_servie = bool(pub and pub.state == "published" and pub.alias_enabled)
         if pub:
             pub.state = "archived"
             pub_state = pub.state
         session.add(PublicationHistory(
-            collection_name=name, action="archived", acted_by="admin",
+            collection_name=name, action="archived", acted_by=user.username or user.sub or "?",
         ))
         await session.commit()
 
-    await collectif_store.consigner("collection", name, "collection.archivee", user.sub, collection_name=name)
+    # Archivée = retirée : la fiche ne doit plus être offerte dans l'assistant (avant : elle y restait).
+    erreur_socle = await _retirer_du_socle(name) if etait_servie else None
+    await collectif_store.consigner("collection", name, "collection.archivee", user.sub, collection_name=name,
+                                    detail={"owui_retire": etait_servie and erreur_socle is None})
     return {
         "collection": name,
         "archived_at": result["archived_at"],
@@ -275,7 +288,7 @@ async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(c
         if pub and pub.state == "archived":
             pub.state = "disabled"
         session.add(PublicationHistory(
-            collection_name=name, action="unarchived", acted_by="admin",
+            collection_name=name, action="unarchived", acted_by=user.username or user.sub or "?",
         ))
         await session.commit()
 
