@@ -1,108 +1,59 @@
-"""Tests for collection config and system prompt management."""
+"""Fiche d'une collection et consignes (prompt système), lues et écrites en base.
 
-import json
-import pytest
+Réécrit le 2026-10-04 : la version précédente déposait un `metadata.json` sur disque,
+un stockage abandonné depuis le passage à la base ; elle ne pouvait plus réussir.
+"""
+
 from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
+
+from tests.conftest import SUPERADMIN, personne
 
 
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    # Patch settings.data_dir everywhere it's imported
-    import app.config
-    monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
-    from app.main import app
-    return TestClient(app)
+def test_creer_puis_relire_une_collection(client, en_tant_que, creer_collection, nom):
+    cree = creer_collection(nom, description="Essai", strategy="auto", sensitivity="public")
+    assert cree["name"] == nom
+    assert cree["system_prompt"], "la création doit poser des consignes par défaut"
+    en_tant_que(personne("createur"))
+    r = client.get(f"/api/collections/{nom}")
+    assert r.status_code == 200 and r.json()["name"] == nom
 
 
-@pytest.fixture
-def sample_collection(tmp_path):
-    """Create a sample collection config on disk."""
-    col_dir = tmp_path / "test-col"
-    col_dir.mkdir()
-    config = {
-        "name": "test-col",
-        "description": "Test collection",
-        "strategy": "article",
-        "sensitivity": "public",
-        "system_prompt": "Tu es un assistant test.",
-        "graph_enabled": False,
-        "scope": "group",
-        "created_at": "2026-04-18T12:00:00",
-    }
-    (col_dir / "metadata.json").write_text(json.dumps(config))
-    return config
+def test_la_liste_contient_la_collection_creee(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("lecteur"))
+    with patch("app.routers.collections.OpenRAGClient") as cls:
+        cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        cls.return_value.list_files = AsyncMock(return_value=[])
+        r = client.get("/api/collections")
+    assert r.status_code == 200
+    assert nom in [c["name"] for c in r.json()["collections"]]
 
 
-class TestCollectionsCRUD:
-    @patch("app.routers.collections.OpenRAGClient")
-    def test_create_collection(self, mock_client_cls, client):
-        mock_client = mock_client_cls.return_value
-        mock_client.create_partition = AsyncMock(return_value={"status": "created"})
-
-        response = client.post("/api/collections", json={
-            "name": "my-col",
-            "description": "Test",
-            "strategy": "article",
-            "sensitivity": "public",
-        })
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "created"
-        assert data["collection"]["name"] == "my-col"
-        assert "system_prompt" in data["collection"]
-
-    def test_list_collections_empty(self, client):
-        response = client.get("/api/collections")
-        assert response.status_code == 200
-        assert response.json()["collections"] == []
-
-    @patch("app.routers.collections.OpenRAGClient")
-    def test_list_collections_with_data(self, mock_client_cls, client, sample_collection):
-        mock_client_cls.return_value.create_partition = AsyncMock()
-        response = client.get("/api/collections")
-        assert response.status_code == 200
-        cols = response.json()["collections"]
-        assert len(cols) == 1
-        assert cols[0]["name"] == "test-col"
-
-    def test_get_collection(self, client, sample_collection):
-        response = client.get("/api/collections/test-col")
-        assert response.status_code == 200
-        assert response.json()["name"] == "test-col"
-
-    def test_get_collection_not_found(self, client):
-        response = client.get("/api/collections/nonexistent")
-        assert response.status_code == 404
+def test_une_collection_inconnue_rend_404(client, en_tant_que):
+    en_tant_que(SUPERADMIN)
+    assert client.get("/api/collections/inconnue-de-tous").status_code == 404
 
 
-class TestSystemPrompt:
-    def test_get_system_prompt(self, client, sample_collection):
-        response = client.get("/api/collections/test-col/system-prompt")
-        assert response.status_code == 200
-        assert response.json()["system_prompt"] == "Tu es un assistant test."
-        assert response.json()["source"] == "collection"
+def test_consignes_lues_puis_modifiees_par_le_gestionnaire(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    createur = en_tant_que(personne("createur"))
+    lu = client.get(f"/api/collections/{nom}/system-prompt")
+    assert lu.status_code == 200 and lu.json()["source"] == "collection"
+    r = client.patch(f"/api/collections/{nom}/system-prompt", json={"system_prompt": "Nouveau prompt juridique."})
+    assert r.status_code == 200, r.text
+    en_tant_que(createur)
+    assert client.get(f"/api/collections/{nom}/system-prompt").json()["system_prompt"] == "Nouveau prompt juridique."
 
-    def test_get_system_prompt_default(self, client):
-        response = client.get("/api/collections/unknown/system-prompt")
-        assert response.status_code == 200
-        assert response.json()["source"] == "default"
-        assert "assistant" in response.json()["system_prompt"].lower()
-        assert response.json()["template"] == "generic"
 
-    def test_update_system_prompt(self, client, sample_collection):
-        response = client.patch("/api/collections/test-col/system-prompt", json={
-            "system_prompt": "Nouveau prompt juridique."
-        })
-        assert response.status_code == 200
-        assert response.json()["system_prompt"] == "Nouveau prompt juridique."
+def test_consignes_par_defaut_pour_une_collection_sans_fiche(client, en_tant_que):
+    en_tant_que(SUPERADMIN)
+    r = client.get("/api/collections/sans-fiche-aucune/system-prompt")
+    assert r.status_code == 200
+    assert r.json()["source"] == "default" and r.json()["template"] == "generic"
 
-        # Verify persistence
-        response2 = client.get("/api/collections/test-col/system-prompt")
-        assert response2.json()["system_prompt"] == "Nouveau prompt juridique."
 
-    def test_update_system_prompt_not_found(self, client):
-        response = client.patch("/api/collections/nonexistent/system-prompt", json={
-            "system_prompt": "test"
-        })
-        assert response.status_code == 404
+def test_un_simple_lecteur_ne_modifie_pas_les_consignes(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("simple-lecteur"))
+    r = client.patch(f"/api/collections/{nom}/system-prompt", json={"system_prompt": "x"})
+    assert r.status_code == 403
