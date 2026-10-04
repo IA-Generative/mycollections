@@ -22,9 +22,11 @@ async def test_un_travail_interrompu_reprend_au_demarrage(client, en_tant_que, c
     from app.services.job_store import get_job, update_job
     creer_collection(nom)
     en_tant_que(personne("createur"))
-    with patch("app.routers.ingest.OpenRAGClient") as cls:
+    # Le dépôt s'arrête avant l'envoi des morceaux : la tâche de fond ne tourne pas (comme un pod
+    # arrêté juste après le découpage), et ne peut donc pas finir le travail en concurrence du test.
+    with patch("app.routers.ingest.OpenRAGClient") as cls, \
+         patch("app.routers.ingest._upload_chunks_background", new=AsyncMock(return_value=None)):
         cls.return_value.create_partition = AsyncMock(return_value={})
-        cls.return_value.upload_chunk = AsyncMock(side_effect=RuntimeError("pod arrêté"))
         job_id = _deposer(client, nom).json()["job_id"]
     await update_job(job_id, status="uploading", uploaded_chunks=0, failed_chunks=0)  # comme après un arrêt
 
