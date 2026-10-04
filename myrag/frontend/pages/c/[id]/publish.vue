@@ -97,9 +97,9 @@
               </div>
               <div v-if="form.visibility === 'group'" class="fr-input-group fr-ml-4w fr-mt-1w">
                 <label class="fr-label" for="vis-groupe-nom">Groupe
-                  <span class="fr-hint-text">Son chemin dans l'annuaire, par exemple <code>myrag/{{ id }}</code>.</span>
+                  <span class="fr-hint-text">Son nom tel qu'il apparaît dans l'assistant (Réglages, Groupes). Un nom inconnu de l'assistant est refusé : la collection ne viserait personne.</span>
                 </label>
-                <input id="vis-groupe-nom" class="fr-input" v-model="form.visibility_group" :placeholder="`myrag/${id}`" />
+                <input id="vis-groupe-nom" class="fr-input" v-model="form.visibility_group"  />
               </div>
             </div>
             <p class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">

@@ -162,6 +162,8 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
             owui_error = str(e)
         except PermissionError as e:
             owui_error = str(e)
+        except ValueError as e:  # GroupeInconnu : le message dit quoi corriger
+            owui_error = f"La collection n'a pas pu être partagée dans l'assistant : {e}"
         except Exception as e:
             # `PasPubliee` ne porte que le nom de la collection : à lui seul il ne dit rien.
             owui_error = f"La collection n'a pas pu être posée dans l'assistant ({type(e).__name__} : {e}). L'état local est enregistré ; réessayez « Mettre à jour »."

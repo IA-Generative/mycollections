@@ -97,11 +97,13 @@ class TestSurLesRoutes:
         _avancer(client, en_tant_que, nom, "publiee_groupe")
         with patch("app.services.owui_client.OwuiClient") as cls:
             cls.return_value.upsert_model = AsyncMock(return_value={"id": f"openrag-{nom}"})
+            cls.return_value.ids_de_groupes = AsyncMock(return_value=(["id-du-groupe-x"], []))
             r = client.post(f"/api/collections/{nom}/publish", json={"visibility": "group", "visibility_groups": ["/g/x"], "alias_description": "Décisions"})
             assert r.status_code == 200, r.text
             appel = cls.return_value.upsert_model.call_args.kwargs
         assert appel["description"].startswith("⚠ " + MENTION_VERIFICATION)
         assert appel["access_grants"] and all(g["principal_type"] == "group" for g in appel["access_grants"]), "au groupe, jamais user/*"
+        assert [g["principal_id"] for g in appel["access_grants"]] == ["id-du-groupe-x"], "l'identifiant du groupe dans l'assistant, pas le chemin saisi"
 
     def test_le_bac_a_sable_porte_la_mention(self, client, en_tant_que, creer_collection, nom):
         creer_collection(nom, GARANT)
