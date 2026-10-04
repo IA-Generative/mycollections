@@ -1,6 +1,6 @@
 """MyRAG (beta) — Front augmente DSFR pour OpenRAG."""
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -24,8 +24,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_title,
     version=settings.app_version,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # La description de l'API n'est pas publique : elle n'est servie qu'en développement.
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
     lifespan=lifespan,
 )
 
@@ -56,16 +58,16 @@ async def root():
         content={
             "app": settings.app_title,
             "version": settings.app_version,
-            "docs": "/docs",
         }
     )
 
 
-from app.auth import AUTH_REQUIRED
+from app.auth import AUTH_REQUIRED, CurrentUser, current_user
+from app.services import access
 
 # Routes XHR (le front attache un Bearer via useApi) → garde JWT activable par
 # AUTH_ENABLED. Exemptés : graph/articles (HTML servi en iframe/lien direct,
-# sans Authorization possible), feedback (écritures externes possibles) et les
+# sans Authorization possible) et les
 # proxys admin-token (liens ouverts dans un nouvel onglet) — cf. risques résiduels.
 app.include_router(ingest.router, dependencies=AUTH_REQUIRED)
 app.include_router(collections.router, dependencies=AUTH_REQUIRED)
@@ -73,7 +75,7 @@ app.include_router(sync.router, dependencies=AUTH_REQUIRED)
 app.include_router(graph.router)
 app.include_router(articles.router)
 app.include_router(sources.router, dependencies=AUTH_REQUIRED)
-app.include_router(feedback.router)
+app.include_router(feedback.router, dependencies=AUTH_REQUIRED)
 app.include_router(publication.router, dependencies=AUTH_REQUIRED)
 app.include_router(playground.router, dependencies=AUTH_REQUIRED)
 app.include_router(playground_bank.router, dependencies=AUTH_REQUIRED)
@@ -271,8 +273,8 @@ async def openrag_file_proxy(file_id: str):
     )
 
 
-@app.get("/api/owui/probe")
-async def owui_probe():
+@app.get("/api/owui/probe", dependencies=AUTH_REQUIRED)
+async def owui_probe(user: CurrentUser = Depends(current_user)):
     """Diagnostic endpoint for the admin API key.
 
     Returns only the HTTP status of the OWUI calls that /publish would make,
@@ -281,6 +283,8 @@ async def owui_probe():
 
     Does not expose the key (not even a prefix) nor any upstream response body.
     """
+    if not access.is_superadmin(user.groups):
+        raise HTTPException(status_code=403, detail="Diagnostic réservé à l'administration")
     from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
     import httpx
     try:

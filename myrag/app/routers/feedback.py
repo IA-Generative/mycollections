@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+
+from app.auth import CurrentUser, current_user
+from app.routers.publication import _fiche_pour
 
 from app.services.feedback_store import (
     ingest_feedback as db_ingest,
@@ -38,7 +41,9 @@ class PromoteRequest(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest_feedback_endpoint(req: IngestRequest):
+async def ingest_feedback_endpoint(req: IngestRequest, user: CurrentUser = Depends(current_user)):
+    # Donner un avis sur une collection demande de pouvoir la lire.
+    await _fiche_pour(req.collection, user, ecrire=False)
     fb = await db_ingest(
         collection=req.collection,
         question=req.question,
@@ -56,28 +61,39 @@ async def list_feedback_endpoint(
     collection: str,
     status: str | None = Query(None),
     rating: int | None = Query(None),
+    user: CurrentUser = Depends(current_user),
 ):
+    # Les questions et réponses des utilisateurs : réservées à qui GÈRE la collection.
+    await _fiche_pour(collection, user, ecrire=True)
     items = await db_list(collection, status=status, rating=rating)
     return {"feedback": items}
 
 
 @router.get("/{collection}/stats")
-async def feedback_stats_endpoint(collection: str):
+async def feedback_stats_endpoint(collection: str, user: CurrentUser = Depends(current_user)):
+    await _fiche_pour(collection, user, ecrire=False)
     return await db_stats(collection)
 
 
 @router.patch("/{collection}/{feedback_id}/review")
-async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest):
-    result = await db_review(feedback_id, status=req.status, reviewed_by=req.reviewed_by)
+async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest,
+                                   user: CurrentUser = Depends(current_user)):
+    await _fiche_pour(collection, user, ecrire=True)
+    fb = await db_get(feedback_id)
+    if not fb or fb.get("collection") != collection:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    result = await db_review(feedback_id, status=req.status, reviewed_by=req.reviewed_by or user.username)
     if not result:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return {"status": "updated"}
 
 
 @router.post("/{collection}/{feedback_id}/promote")
-async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest):
+async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest,
+                                    user: CurrentUser = Depends(current_user)):
+    await _fiche_pour(collection, user, ecrire=True)
     fb = await db_get(feedback_id)
-    if not fb:
+    if not fb or fb.get("collection") != collection:
         raise HTTPException(status_code=404, detail="Feedback not found")
 
     await db_promote(feedback_id, promote_to=req.promote_to)
