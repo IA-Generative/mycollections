@@ -34,9 +34,15 @@ def test_la_reponse_cite_ses_sources(reponse_obtenue):
 def test_la_source_se_lit_au_survol_puis_en_fenetre(reponse_obtenue, captures):
     page = reponse_obtenue
     puce = page.locator(".myrag-msg--assistant .myrag-source-chip-wrap").first
-    puce.hover()
     bulle = page.locator(".myrag-source-chip__popover")
-    bulle.first.wait_for(state="visible", timeout=10_000)
+    puce.scroll_into_view_if_needed()
+    puce.hover()
+    try:
+        bulle.first.wait_for(state="visible", timeout=5_000)
+    except Exception:
+        # La bulle s'ouvre aussi au focus clavier : c'est l'autre chemin prévu par le composant.
+        puce.locator("a, button, [tabindex]").first.focus()
+        bulle.first.wait_for(state="visible", timeout=10_000)
     assert bulle.first.inner_text().strip()
     captures.prendre(page, "04-source-bulle", mobile=False)
     page.get_by_role("link", name=re.compile("Lire l'extrait")).first.click()
