@@ -89,6 +89,4 @@ def test_l_auteur_peut_clore_sa_demande_depuis_la_page(session_testeur, demande_
     """L'API l'autorise (auteur, garant ou administration) ; la page doit l'offrir."""
     page = session_testeur.aller(f"/demandes/{demande_essai['id']}")
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
-    if page.get_by_role("button", name=re.compile(r"^Clore")).count() == 0:
-        pytest.xfail("P1 : la page ne montre « Clore… » qu'au garant ou à l'administration (peutClore), alors que l'API l'accorde aussi à l'auteur ; une demande d'essai ou périmée ne peut pas être retirée par qui l'a déposée")
-    assert True
+    assert page.get_by_role("button", name=re.compile(r"^Clore")).count() == 1, "« Clore… » doit être offert à l'auteur"

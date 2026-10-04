@@ -27,7 +27,6 @@ def test_l_administration_s_ouvre_au_superadmin(session_admin, captures):
     captures.prendre(page, "10-administration-amorces", mobile=False)
 
 
-@pytest.mark.xfail(strict=True, reason="P2 : la carte « Templates » de /admin mène à /admin/templates, qui n'existe pas")
 def test_les_cartes_de_l_administration_menent_quelque_part(session_admin):
     page = session_admin.aller("/admin")
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
