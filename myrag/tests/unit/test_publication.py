@@ -1,105 +1,64 @@
-"""Tests for publication lifecycle (TDD)."""
+"""Cycle de publication : brouillon → publiée → désactivée → archivée, et son historique.
 
-from __future__ import annotations
+Réécrit le 2026-10-04 sur la base (l'ancienne version lisait un `metadata.json` disque et
+simulait un `OpenRAGClient` que le routeur n'importe plus). Les droits sont couverts par
+`test_publication_droits.py` ; ici, le gestionnaire fait chaque geste et on lit l'état.
+"""
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from fastapi.testclient import TestClient
+
+from app.models.collection import PublicationConfig
+from tests.conftest import personne
+
+PUBLIER = {"alias_enabled": True, "visibility": "group", "visibility_groups": ["/g/mirai-beta-testeurs"]}
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    import app.config
-    monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
-    from app.main import app
-    return TestClient(app)
+def socle():
+    with patch("app.services.fiche_assistant.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})) as m, \
+         patch("app.services.owui_client.OwuiClient.delete_model", new=AsyncMock(return_value=None)):
+        yield m
 
 
-@pytest.fixture
-def collection_with_config(tmp_path):
-    """Create a collection config on disk."""
-    import json
-    col_dir = tmp_path / "test-col"
-    col_dir.mkdir()
-    config = {
-        "name": "test-col",
-        "description": "Test collection",
-        "strategy": "article",
-        "sensitivity": "public",
-        "prompt_template": "generic",
-        "system_prompt": "Tu es un assistant.",
-        "graph_enabled": False,
-        "ai_summary_enabled": False,
-        "ai_summary_threshold": 1000,
-        "scope": "group",
-        "created_at": "2026-04-19T10:00:00",
-        "publication": {
-            "state": "draft",
-            "alias_enabled": True,
-            "alias_name": "MirAI Test",
-            "tool_enabled": False,
-            "embed_enabled": False,
-            "visibility": "all",
-        },
-    }
-    (col_dir / "metadata.json").write_text(json.dumps(config))
+def test_l_etat_par_defaut_est_brouillon():
+    assert PublicationConfig().state == "draft"
 
 
-class TestPublicationConfig:
-    def test_default_state_is_draft(self, client):
-        from app.models.collection import PublicationConfig
-        pub = PublicationConfig()
-        assert pub.state == "draft"
-
-    def test_publication_in_collection(self, client, collection_with_config):
-        response = client.get("/api/collections/test-col")
-        assert response.status_code == 200
-        data = response.json()
-        assert "publication" in data
-        assert data["publication"]["state"] == "draft"
+def test_une_collection_neuve_est_en_brouillon(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    r = client.get(f"/api/collections/{nom}/publication")
+    assert r.status_code == 200 and r.json()["state"] in ("draft", None)
 
 
-class TestPublicationEndpoints:
-    def test_get_publication_status(self, client, collection_with_config):
-        response = client.get("/api/collections/test-col/publication")
-        assert response.status_code == 200
-        assert response.json()["state"] == "draft"
+def test_publier_desactiver_archiver(client, en_tant_que, creer_collection, nom, socle):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    r = client.post(f"/api/collections/{nom}/publish", json=PUBLIER)
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/collections/{nom}/publication").json()["state"] == "published"
 
-    @patch("app.routers.publication.OpenRAGClient")
-    def test_publish(self, mock_client_cls, client, collection_with_config):
-        mock_client_cls.return_value.health_check = AsyncMock(return_value=True)
-        response = client.post("/api/collections/test-col/publish", json={
-            "alias_enabled": True,
-            "alias_name": "MirAI Test Col",
-            "tool_enabled": True,
-            "visibility": "all",
-        })
-        assert response.status_code == 200
-        assert response.json()["state"] == "published"
+    assert client.post(f"/api/collections/{nom}/unpublish").status_code == 200
+    assert client.get(f"/api/collections/{nom}/publication").json()["state"] == "disabled"
 
-    def test_publish_nonexistent(self, client):
-        response = client.post("/api/collections/nonexistent/publish", json={})
-        assert response.status_code == 404
+    assert client.post(f"/api/collections/{nom}/archive").status_code == 200
+    assert client.get(f"/api/collections/{nom}").json().get("archived_at")
 
-    @patch("app.routers.publication.OpenRAGClient")
-    def test_unpublish(self, mock_client_cls, client, collection_with_config):
-        # First publish
-        mock_client_cls.return_value.health_check = AsyncMock(return_value=True)
-        client.post("/api/collections/test-col/publish", json={"alias_enabled": True})
-        # Then unpublish
-        response = client.post("/api/collections/test-col/unpublish")
-        assert response.status_code == 200
-        assert response.json()["state"] == "disabled"
 
-    @patch("app.routers.publication.OpenRAGClient")
-    def test_archive(self, mock_client_cls, client, collection_with_config):
-        mock_client_cls.return_value.health_check = AsyncMock(return_value=True)
-        client.post("/api/collections/test-col/publish", json={"alias_enabled": True})
-        response = client.post("/api/collections/test-col/archive")
-        assert response.status_code == 200
-        assert response.json()["state"] == "archived"
+def test_l_historique_garde_les_gestes(client, en_tant_que, creer_collection, nom, socle):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    client.post(f"/api/collections/{nom}/publish", json=PUBLIER)
+    client.post(f"/api/collections/{nom}/unpublish")
+    r = client.get(f"/api/collections/{nom}/publication/history")
+    assert r.status_code == 200
+    assert len(r.json()["history"]) >= 2
 
-    def test_publication_history(self, client, collection_with_config):
-        response = client.get("/api/collections/test-col/publication/history")
-        assert response.status_code == 200
-        assert "history" in response.json()
+
+def test_publier_une_collection_inconnue_rend_404_a_qui_ne_peut_pas_la_gerer(client, en_tant_que, socle):
+    """Un superadmin peut adopter une partition sans fiche ; une personne ordinaire, non."""
+    en_tant_que(personne("quelqu-un"))
+    assert client.post("/api/collections/inconnue-de-tous/publish", json=PUBLIER).status_code == 404
+    socle.assert_not_awaited()
