@@ -92,7 +92,7 @@ async function upload() {
       sensitivity: sensitivity.value,
     })
   } catch (e: any) {
-    error.value = e.message
+    error.value = messageErreur(e)
   } finally {
     uploading.value = false
   }

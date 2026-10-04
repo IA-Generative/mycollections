@@ -88,3 +88,15 @@ describe('la boucle de satisfaction (2026-09-21)', () => {
     expect(ROLES.map(r => r.valeur)).not.toContain('demandeur')   // tenu d'office, jamais choisi
   })
 })
+
+describe('messageErreur, en français lisible', () => {
+  it("garde le détail écrit pour une personne", () => {
+    expect(messageErreur(new Error('API error 409: {"detail":"La collection est archivée."}'))).toBe('La collection est archivée.')
+  })
+  it('remplace un détail technique par le sens du code', () => {
+    expect(messageErreur(new Error('API error 404: {"detail":"Not Found"}'))).toMatch(/Introuvable/)
+    expect(messageErreur(new Error('API error 500: Internal Server Error'))).toMatch(/erreur/)
+    expect(messageErreur(new Error('API error 403: {"detail":"Forbidden"}'))).toMatch(/droit/)
+    expect(messageErreur(new TypeError('Failed to fetch'))).toMatch(/ne répond pas/)
+  })
+})

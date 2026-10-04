@@ -123,7 +123,7 @@ async function testPrompt() {
     const data = await resp.json()
     testResponse.value = data.response || data.detail || 'Pas de réponse'
   } catch (e: any) {
-    testResponse.value = `Erreur : ${e.message}`
+    testResponse.value = messageErreur(e)
   }
   testing.value = false
 }

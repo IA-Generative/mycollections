@@ -245,7 +245,7 @@ async function test() {
     const data = await post(`/api/playground/${collection}/chat`, { question: question.value })
     response.value = data.response || 'Pas de reponse'
     sourceNames.value = data.source_names || []
-  } catch (e: any) { response.value = `Erreur: ${e.message}` }
+  } catch (e: any) { response.value = messageErreur(e) }
   testing.value = false
 }
 
@@ -262,7 +262,7 @@ async function generateDataset() {
       generateError.value = data.error || 'Aucune question generee. Reessayez.'
     }
   } catch (e: any) {
-    generateError.value = `Erreur: ${e.message}`
+    generateError.value = messageErreur(e)
   }
   generating.value = false
 }
@@ -314,7 +314,7 @@ async function patchPromptGuardrail() {
     })
     promptPatched.value = true
   } catch (e: any) {
-    generateError.value = `Erreur lors de la mise a jour du prompt: ${e.message}`
+    generateError.value = `Les consignes n'ont pas pu être mises à jour : ${messageErreur(e)}`
   }
 }
 
@@ -368,7 +368,7 @@ async function runEval() {
     } catch (e: any) {
       evalResults.value.push({
         ...q,
-        response: `Erreur: ${e.message}`,
+        response: messageErreur(e),
         sources_found: [],
         keywords_found: [],
         pass: false,

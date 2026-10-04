@@ -129,15 +129,37 @@ export function dateCourte(iso: string | null | undefined): string {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-/** Le message d'erreur de l'API, débarrassé de son enveloppe JSON. */
+/** Ce que les codes HTTP veulent dire pour une personne, quand l'API ne dit rien de mieux. */
+const SENS_DES_CODES: Record<number, string> = {
+  401: 'Votre session a expiré : rechargez la page pour vous reconnecter.',
+  403: "Vous n'avez pas le droit de faire ce geste sur cette collection.",
+  404: "Introuvable : la collection a peut-être été archivée, ou vous n'y avez pas accès.",
+  413: 'Le fichier est trop volumineux.',
+  415: "Ce type de fichier n'est pas pris en charge.",
+  429: 'Le service est très sollicité : réessayez dans une minute.',
+  500: "Le service a rencontré une erreur. Réessayez ; si elle revient, dites-le dans « Mon avis ».",
+  502: 'Un service dont nous dépendons ne répond pas. Réessayez dans un instant.',
+  503: 'Le service est momentanément indisponible. Réessayez dans un instant.',
+  504: 'Le service a mis trop de temps à répondre. Réessayez dans un instant.',
+}
+
+/** Le message d'erreur de l'API, débarrassé de son enveloppe JSON, en français lisible :
+ *  le `detail` de l'API s'il est écrit pour une personne, sinon le sens du code HTTP. */
 export function messageErreur(e: unknown): string {
   const brut = e instanceof Error ? e.message : String(e)
-  const m = brut.match(/^API error \d+: (.*)$/s)
+  if (/Failed to fetch|NetworkError|Load failed/i.test(brut)) return 'Le service ne répond pas. Vérifiez votre connexion, puis réessayez.'
+  const m = brut.match(/^API error (\d+): (.*)$/s)
   if (!m) return brut
+  const code = Number(m[1])
+  let detail = ''
   try {
-    const j = JSON.parse(m[1])
-    if (typeof j.detail === 'string') return j.detail
-    if (Array.isArray(j.detail)) return j.detail.map((x: any) => x.msg?.replace(/^Value error, /, '') || '').join(' ')
+    const j = JSON.parse(m[2])
+    if (typeof j.detail === 'string') detail = j.detail
+    else if (Array.isArray(j.detail)) detail = j.detail.map((x: any) => x.msg?.replace(/^Value error, /, '') || '').join(' ')
   } catch {}
-  return m[1]
+  // Un détail technique (anglais, trace, « Not Found ») ne parle à personne : le sens du code à la place.
+  const technique = !detail || /^(Not Found|Internal Server Error|Unauthorized|Forbidden|Bad Request)$/i.test(detail)
+    || /Traceback|Exception|Error:|not found$/i.test(detail)
+  if (technique) return SENS_DES_CODES[code] || `Le service a répondu par une erreur (${code}). Réessayez dans un instant.`
+  return detail
 }

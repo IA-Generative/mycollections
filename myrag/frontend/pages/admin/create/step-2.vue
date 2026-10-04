@@ -459,7 +459,7 @@ async function createAndNext() {
       nameStatus.value = 'taken'
       error.value = `L'identifiant « ${form.value.name} » est déjà pris. Précisez le contenu (un périmètre, une année, un service).`
     } else {
-      error.value = e.message
+      error.value = messageErreur(e)
     }
   }
   creating.value = false

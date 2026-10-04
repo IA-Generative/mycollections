@@ -69,11 +69,11 @@ export function useChat(collection: string) {
       messages.value.push(assistant)
       return assistant
     } catch (e: any) {
-      const errMsg = e?.message || String(e)
+      const errMsg = messageErreur(e)
       lastError.value = errMsg
       const errTurn: ChatMessage = {
         role: 'assistant',
-        content: `**Erreur** : ${errMsg}`,
+        content: `La question n'a pas pu aboutir : ${errMsg}`,
         error: true,
       }
       messages.value.push(errTurn)
