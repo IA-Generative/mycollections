@@ -6,10 +6,11 @@ import logging
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, File, Form, Query, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.services.chunker import chunk_document, Strategy, Sensitivity
 from app.services.job_store import create_job, get_job, update_job, increment_job_progress, complete_job, list_jobs
@@ -62,12 +63,42 @@ async def _upload_chunks_background(job_id: str, collection: str, chunks: list[d
     logger.info(f"Job {job_id} finished: {job}")
 
 
+MESSAGE_FORMAT = ("Ce fichier n'est pas du texte : aujourd'hui, seuls les fichiers texte (.txt, .md, .csv) "
+                  "sont découpés et indexés. Un PDF ou un document Word serait indexé illisible : "
+                  "enregistrez-le d'abord au format texte ou Markdown.")
+
+
+def texte_ou_refus(content: bytes, filename: str) -> str:
+    """Le texte du fichier, ou 415. Le découpage lit du texte : un PDF, un document Office ou une
+    image passaient en UTF-8 « avec remplacement » et partaient indexés en caractères illisibles
+    (diagnostic d'octobre 2026)."""
+    tete = content[:4096]
+    binaire = (tete.startswith((b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0", b"\x89PNG", b"\xff\xd8\xff", b"GIF8"))
+               or b"\x00" in tete)
+    if not binaire:
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                return content.decode("cp1252")  # un .txt enregistré sous Windows
+            except UnicodeDecodeError:
+                binaire = True
+    raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
+
+
+async def _exiger_gestion(collection: str, user: CurrentUser) -> None:
+    """Déposer des documents, c'est écrire dans la collection : créateur, groupe <nom>-admin ou
+    superadmin. Avant : un jeton suffisait pour alimenter la collection d'un autre."""
+    from app.routers.publication import _fiche_pour
+    await _fiche_pour(collection, user, ecrire=True)
+
+
 async def _ingest_content(
     collection: str, filename: str, content: bytes,
     strategy: str, sensitivity: str, source_path: str = "",
 ) -> dict:
     """Common ingest logic for file upload and URL fetch."""
-    text = content.decode("utf-8", errors="replace")
+    text = texte_ou_refus(content, filename)
     if not text.strip():
         raise HTTPException(status_code=400, detail="Fichier vide")
 
@@ -135,8 +166,10 @@ async def ingest_file(
     sensitivity: Sensitivity = Form("public"),
     max_chars: int = Form(512),
     overlap: int = Form(50),
+    user: CurrentUser = Depends(current_user),
 ):
     """Upload a file, chunk it intelligently, and index in OpenRAG."""
+    await _exiger_gestion(collection, user)
     content = await file.read()
     return await _ingest_content(
         collection=collection,
@@ -154,8 +187,9 @@ class IngestFromUrlRequest(BaseModel):
 
 
 @router.post("/{collection}/from-url")
-async def ingest_from_url(collection: str, req: IngestFromUrlRequest):
+async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: CurrentUser = Depends(current_user)):
     """Download a remote file by URL, chunk it, and index in OpenRAG."""
+    await _exiger_gestion(collection, user)
     assert_public_http_url(req.url)
     try:
         async with httpx.AsyncClient(
@@ -184,11 +218,13 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest):
 
 
 @router.post("/{collection}/reindex")
-async def reindex_collection(collection: str, strategy: Strategy = "auto", sensitivity: Sensitivity = "public"):
+async def reindex_collection(collection: str, strategy: Strategy = "auto", sensitivity: Sensitivity = "public",
+                             user: CurrentUser = Depends(current_user)):
     """Re-index all source files of a collection with a new strategy.
 
     Uses source files saved by R7 to re-chunk and re-index without re-upload.
     """
+    await _exiger_gestion(collection, user)
     from app.models.db import SourceFile
     from app.database import async_session as db_session
 

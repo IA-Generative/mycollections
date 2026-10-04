@@ -50,7 +50,7 @@
 </head>
 <body>
     <div class="breadcrumb">
-        <a href="/graph?corpus_id={{ collection }}">{{ collection_titre or collection }}</a> &gt;
+        <a href="/graph?corpus_id={{ collection }}{{ sig_q }}">{{ collection_titre or collection }}</a> &gt;
         {% if livre %}Livre {{ livre }} &gt;{% endif %}
         {% if titre %}Titre {{ titre }} &gt;{% endif %}
         {% if chapitre %}Chapitre {{ chapitre }} &gt;{% endif %}
@@ -72,7 +72,7 @@
         <h2>Articles cités</h2>
         <ul class="ref-list">
             {% for ref in references %}
-            <li><a href="/articles/{{ collection }}/{{ ref }}">{{ ref }}</a></li>
+            <li><a href="/articles/{{ collection }}/{{ ref }}{{ '?' ~ sig_q[1:] if sig_q else '' }}">{{ ref }}</a></li>
             {% endfor %}
         </ul>
     </div>
@@ -83,15 +83,15 @@
         <h2>Cité par</h2>
         <ul class="ref-list">
             {% for ref in referenced_by %}
-            <li><a href="/articles/{{ collection }}/{{ ref }}">{{ ref }}</a></li>
+            <li><a href="/articles/{{ collection }}/{{ ref }}{{ '?' ~ sig_q[1:] if sig_q else '' }}">{{ ref }}</a></li>
             {% endfor %}
         </ul>
     </div>
     {% endif %}
 
     <div class="actions">
-        <a href="/graph?corpus_id={{ collection }}&query={{ article_id }}" class="btn btn-primary">📊 Voir les liens</a>
-        <a href="/graph/{{ collection }}/related?article={{ article_id }}&depth=2" class="btn btn-secondary">🔗 Articles liés</a>
+        <a href="/graph?corpus_id={{ collection }}&query={{ article_id }}{{ sig_q }}" class="btn btn-primary">📊 Voir les liens</a>
+        <a href="/graph/{{ collection }}/related?article={{ article_id }}&depth=2{{ sig_q }}" class="btn btn-secondary">🔗 Articles liés</a>
     </div>
     <!-- La barre commune de la bêta (« Mon avis ») — seulement quand la page est ouverte SEULE.
          Dans une iframe (la page « Liens entre documents » de Mes collections, l'assistant), la page

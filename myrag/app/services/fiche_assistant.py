@@ -23,6 +23,16 @@ from app.services.nommage import titre_de, titre_depuis_alias
 from app.services import owui_client
 
 
+class GroupeInconnu(ValueError):
+    """Un groupe saisi n'existe pas dans l'assistant : la fiche n'y viserait personne."""
+
+    def __init__(self, noms: list[str]):
+        self.noms = noms
+        super().__init__(
+            "groupe inconnu de l'assistant : " + ", ".join(noms)
+            + ". Indiquez le nom d'un groupe tel qu'il apparaît dans l'assistant.")
+
+
 class PasPubliee(Exception):
     pass
 
@@ -58,6 +68,9 @@ async def _voulue(name: str) -> dict:
             "tags_geres": set(categories.values()),
             "access_control": ac,
             "access_grants": owui_client.grants_de_partage(pub.visibility, groupes),
+            # Les noms saisis : traduits en identifiants de groupes de l'assistant au moment de
+            # poser la fiche (synchroniser_fiche), jamais envoyés tels quels.
+            "groupes_saisis": groupes if pub.visibility == "group" else [],
         }
 
 
@@ -72,7 +85,15 @@ async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None,
     rendu = {"collection": name, "model_id": v["model_id"], "nom": v["name"], "tags": v["tags"]}
     if a_sec:
         return {**rendu, "a_sec": True}
-    await (client or owui_client.OwuiClient()).upsert_model(**v)
+    client = client or owui_client.OwuiClient()
+    groupes = v.pop("groupes_saisis", [])
+    if groupes and not garder_les_droits:
+        ids, inconnus = await client.ids_de_groupes(groupes)
+        if inconnus:
+            raise GroupeInconnu(inconnus)
+        v["access_grants"] = owui_client.grants_de_partage("group", ids)
+        v["access_control"] = {"read": {"group_ids": ids, "user_ids": []}, "write": {"group_ids": ids, "user_ids": []}}
+    await client.upsert_model(**v)
     return {**rendu, "a_sec": False}
 
 

@@ -1,11 +1,13 @@
 """Sync router — Keycloak ↔ OpenRAG synchronization."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.routers._collectif_commun import exiger_superadmin
 from app.services.sync_service import SyncService
 
-router = APIRouter(prefix="/api/sync", tags=["Sync"])
+# Gestes d'administration du SSO (créer des groupes, synchroniser les droits) : superadmin seul.
+router = APIRouter(prefix="/api/sync", tags=["Sync"], dependencies=[Depends(exiger_superadmin)])
 
 
 class CreateGroupRequest(BaseModel):

@@ -10,7 +10,7 @@
         <div class="fr-upload-group">
           <label class="fr-label" for="file">Document à ajouter</label>
           <input id="file" type="file" class="fr-upload" @change="onFileChange"
-                 accept=".pdf,.txt,.md,.docx,.pptx,.doc,.eml,.png,.jpeg,.jpg" />
+                 accept=".txt,.md,.markdown,.csv" />
         </div>
 
         <!-- Strategy -->

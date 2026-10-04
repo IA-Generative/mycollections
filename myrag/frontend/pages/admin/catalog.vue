@@ -153,7 +153,8 @@
                 <span v-else class="fr-text--sm" style="color:#666;">Non renseigne</span>
               </td>
               <td>
-                <div class="fr-btns-group fr-btns-group--sm fr-btns-group--inline fr-btns-group--inline-sm">
+                <!-- Archiver, désarchiver, purger : gestes de qui GÈRE la collection (dit par l'API). -->
+                <div v-if="col.mes_droits?.ecrire" class="fr-btns-group fr-btns-group--sm fr-btns-group--inline fr-btns-group--inline-sm">
                   <button v-if="!col.archived_at"
                           class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-inbox-archive-line fr-btn--icon-left"
                           @click="onArchive(col)">

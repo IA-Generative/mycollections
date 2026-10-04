@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from app.auth import CurrentUser, current_user
+from app.auth import AUTH_REQUIRED, CurrentUser, current_user
+from app.routers._acces_navigateur import lecture_de_la_collection, lecture_du_corpus
 from app.services import access
 from app.services.collection_store import get_collection, update_collection
 from app.services.graph_builder import GraphBuilder, GraphImportError
@@ -59,7 +60,21 @@ async def graph_viewer(
         return HTMLResponse(content=injecter_config(f.read(), await config_du_visualiseur(corpus_id)))
 
 
-@router.get("/data")
+@router.get("/{collection}/lien")
+async def lien_du_visualiseur(collection: str, user: CurrentUser = Depends(current_user)):
+    """L'adresse du visualiseur pour cette collection, signée : la fiche l'ouvre dans une iframe,
+    qui ne porte pas de jeton. Rendue seulement à qui lit la collection."""
+    from urllib.parse import quote
+
+    from app.routers._acces_navigateur import peut_lire
+    from app.services import liens
+    if not peut_lire(await get_collection(collection), collection, user):
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
+    url = f"/graph?corpus_id={quote(collection)}"
+    return {"url": liens.signer(url, liens.portee_graphe(collection))}
+
+
+@router.get("/data", dependencies=[Depends(lecture_du_corpus)])
 async def graph_data(
     corpus_id: str = Query("", description="Collection name"),
     query: str = Query("", description="Search text to filter nodes"),
@@ -80,7 +95,7 @@ async def graph_data(
     )
 
 
-@router.get("/{collection}/related")
+@router.get("/{collection}/related", dependencies=[Depends(lecture_de_la_collection)])
 async def related_articles(
     collection: str,
     article: str = Query(..., description="Article ID (e.g., L421-1)"),
@@ -120,7 +135,7 @@ async def related_articles(
     }
 
 
-@router.get("/config")
+@router.get("/config", dependencies=AUTH_REQUIRED)
 async def graph_config():
     """Config for the graph viewer."""
     from app.config import settings

@@ -112,5 +112,5 @@ export function useApi() {
     return resp.json()
   }
 
-  return { get, post, patch, put, del, uploadFile, baseUrl }
+  return { get, post, patch, put, del, uploadFile, baseUrl, fetchWithAuth }
 }

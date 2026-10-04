@@ -118,10 +118,10 @@
               <div class="fr-upload-group fr-mt-2w">
                 <label class="fr-label">
                   Deposer un fichier depuis votre ordinateur
-                  <span class="fr-hint-text">Formats acceptes : PDF, MD, TXT, DOCX, PPTX, images, audio</span>
+                  <span class="fr-hint-text">Formats acceptés : texte ou Markdown (.txt, .md, .csv). Un PDF ou un document Word doit d'abord être enregistré au format texte.</span>
                 </label>
                 <input type="file" class="fr-upload" @change="onFile"
-                       accept=".pdf,.txt,.md,.docx,.pptx,.doc,.eml,.png,.jpeg,.jpg" />
+                       accept=".txt,.md,.markdown,.csv" />
               </div>
 
               <div v-if="file" class="fr-mt-2w">
@@ -136,7 +136,7 @@
               <div class="fr-input-group fr-mt-2w">
                 <label class="fr-label">
                   URL d'un fichier unique accessible en ligne
-                  <span class="fr-hint-text">Lien direct vers un PDF, DOCX, TXT, MD, etc.</span>
+                  <span class="fr-hint-text">Lien direct vers un fichier texte ou Markdown.</span>
                 </label>
                 <input class="fr-input" v-model="remoteUrl"
                        placeholder="https://example.gouv.fr/documents/rapport.pdf" />

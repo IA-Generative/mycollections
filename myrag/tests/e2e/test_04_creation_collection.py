@@ -72,24 +72,36 @@ def test_etape_4_tester_la_collection(session_testeur, captures):
     page.wait_for_url(re.compile(r"/admin/create/step-5"), timeout=30_000)
 
 
-def test_etape_5_publier(session_testeur, collection_essai, captures):
+def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_essai, captures):
     page = session_testeur.page
-    captures.prendre(page, "05-creation-5-publication")
-    page.get_by_role("button", name=re.compile("Publier la collection")).click()
-    attendre(lambda: re.search(r"publi[ée]e avec succ[èe]s|Erreur", session_testeur.texte()),
-             delai=90, motif="le résultat de la publication")
     texte = session_testeur.texte()
-    captures.prendre(page, "05-creation-5-resultat", mobile=False)
-    assert re.search(r"publi[ée]e avec succ[èe]s", texte), texte[-400:]
-    page.get_by_role("link", name=re.compile("Ouvrir la collection")).click()
+    captures.prendre(page, "05-creation-5-partage")
+    assert "en cours de vérification" in texte, "l'étape 5 doit dire que la collection est à vérifier avant d'être ouverte à tous"
+    for promesse in ("embed.js", "Extension navigateur", "Tool MyRAG", "localhost"):
+        assert promesse not in texte, f"l'étape 5 promet encore « {promesse} »"
+    page.get_by_role("button", name="Terminer").click()
+    page.get_by_role("link", name=re.compile("Ouvrir la fiche de la collection")).click()
     page.wait_for_url(re.compile(rf"/c/{collection_essai}"), timeout=30_000)
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
     assert "Note de contrôle" in page.locator("h1").first.inner_text()
     captures.prendre(page, "05-creation-6-fiche-creee")
 
 
-@pytest.mark.xfail(strict=True, reason="P0 : l'étape 5 montre un snippet <script src=…/widget/embed.js> et une adresse /widget/chat qui n'existent pas (aucune route ni fichier ne les sert)")
-def test_le_snippet_promis_a_l_etape_5_existe(cible):
+def test_un_pdf_est_refuse_avec_une_explication(session_testeur, collection_essai):
+    """Le découpage lit du texte : un PDF partait indexé illisible, sans un mot."""
+    r = session_testeur.page.request.post(
+        f"{session_testeur.base}/api/ingest/{collection_essai}",
+        headers={"Authorization": f"Bearer {session_testeur.jeton}"},
+        multipart={"file": {"name": "a.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.7 binaire"}})
+    assert r.status == 415 and "texte" in r.text()
+
+
+def test_un_lien_de_graphe_d_une_collection_non_publique_est_ferme_sans_signature(cible, collection_essai, session_testeur):
+    """Les vues ouvertes sans jeton (graphe, articles) ne servent une collection non publiée à
+    tous que par un lien signé ; la fiche en obtient un pour son iframe."""
+    import httpx
     with httpx.Client(timeout=20.0) as client:
-        reponse = client.get(cible["base"] + "/widget/embed.js")
-        assert reponse.status_code == 200 and "javascript" in reponse.headers.get("content-type", "")
+        assert client.get(f"{cible['base']}/graph/data?corpus_id={collection_essai}").status_code == 401
+        assert client.get(f"{cible['base']}/articles/{collection_essai}/1").status_code == 401
+        lien = session_testeur.get(f"/graph/{collection_essai}/lien").json()["url"]
+        assert client.get(cible["base"] + lien.replace("/graph?", "/graph/data?")).status_code == 200

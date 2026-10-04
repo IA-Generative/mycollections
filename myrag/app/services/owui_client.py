@@ -148,6 +148,34 @@ class OwuiClient:
             "Accept": "application/json",
         }
 
+    async def ids_de_groupes(self, noms: list[str]) -> tuple[list[str], list[str]]:
+        """Les identifiants des groupes de l'assistant qui portent ces noms, et les noms restés
+        sans groupe. L'assistant désigne un groupe par un identifiant interne, jamais par son
+        chemin dans l'annuaire : un partage « au groupe /myrag/x » posé tel quel ne vise
+        personne. On accepte le nom du groupe, son chemin (dernier segment) ou son identifiant."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(f"{self.base_url}/api/v1/groups/", headers=self._headers())
+        resp.raise_for_status()
+        groupes = [g for g in (resp.json() or []) if isinstance(g, dict)]
+        par_nom = {str(g.get("name", "")).strip().lower(): str(g.get("id")) for g in groupes}
+        par_id = {str(g.get("id")) for g in groupes}
+        ids, inconnus = [], []
+        for brut in noms:
+            n = (brut or "").strip()
+            if not n:
+                continue
+            if n in par_id:
+                ids.append(n)
+                continue
+            cle = n.strip("/").split("/")[-1].strip().lower()
+            if cle in par_nom:
+                ids.append(par_nom[cle])
+            elif n.strip("/").lower() in par_nom:
+                ids.append(par_nom[n.strip("/").lower()])
+            else:
+                inconnus.append(n)
+        return ids, inconnus
+
     async def get_model(self, model_id: str) -> dict | None:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(

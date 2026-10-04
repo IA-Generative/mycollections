@@ -13,7 +13,10 @@
          la hauteur qui reste sous l'en-tête. La largeur se MESURE (clientWidth) plutôt que `100vw`,
          qui compte la barre de défilement et ferait défiler la page de côté sous Windows. -->
     <div ref="cadre" class="graphe-cadre" :style="styleCadre">
-      <iframe :src="`${baseUrl}/graph?corpus_id=${id}`" title="Liens entre les documents de la collection" allowfullscreen></iframe>
+      <!-- L'iframe ne porte pas de jeton : le serveur remet une adresse signée, valable quelques heures. -->
+      <iframe v-if="adresse" :src="`${baseUrl}${adresse}`" title="Liens entre les documents de la collection" allowfullscreen></iframe>
+      <div v-else-if="erreurAdresse" class="fr-alert fr-alert--error fr-alert--sm fr-m-2w"><p>{{ erreurAdresse }}</p></div>
+      <p v-else class="fr-m-2w">Chargement…</p>
       <!-- En plein écran, l'en-tête de la page a disparu : la sortie doit se voir DANS le graphe.
            Le bouton reste ; le rappel « Échap » s'efface après quelques secondes. -->
       <div v-if="enPleinEcran" class="graphe-sortie">
@@ -30,7 +33,12 @@
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
-const { baseUrl } = useApi()
+const { baseUrl, get } = useApi()
+const adresse = ref('')
+const erreurAdresse = ref('')
+get<{ url: string }>(`/graph/${encodeURIComponent(id)}/lien`)
+  .then((r) => { adresse.value = r.url })
+  .catch((e) => { erreurAdresse.value = messageErreur(e) })
 
 const cadre = ref<HTMLElement | null>(null)
 const styleCadre = ref<Record<string, string>>({})

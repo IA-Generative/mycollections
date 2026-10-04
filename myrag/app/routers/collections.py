@@ -245,8 +245,29 @@ async def list_collections_endpoint(
     partages = await _etats_de_partage([c["name"] for c in collections])
     for c in collections:
         c["publication"] = partages.get(c["name"]) or {"state": "draft", "targets": []}
+        c["mes_droits"] = _droits(c, user)
 
     return {"collections": collections}
+
+
+def _droits(collection: dict, user: CurrentUser, *, garant: bool = False) -> dict:
+    """Ce que l'appelant peut faire de la collection : l'interface n'offre que ces gestes
+    (diagnostic d'octobre 2026 : Archiver, Purger, Publier… étaient offerts à tout lecteur,
+    et l'API les refusait ensuite). L'API reste seule juge."""
+    superadmin = access.is_superadmin(user.groups)
+    ecrire = access.can_write(name=collection["name"], created_by=collection.get("created_by"),
+                              user_groups=user.groups, user_sub=user.sub)
+    return {"lire": True, "ecrire": bool(ecrire), "garant": bool(garant or superadmin), "superadmin": superadmin}
+
+
+async def _est_garant(name: str, user: CurrentUser) -> bool:
+    try:
+        from app.services import collectif_store
+        from app.services.pseudo import condenser
+        f = await collectif_store.fiche(name)
+        return bool(f.get("garant_hash")) and f["garant_hash"] == condenser(user.sub)
+    except Exception:  # noqa: BLE001 — sel absent, fiche absente : pas garant, jamais une panne
+        return False
 
 
 async def _partition_existe(name: str) -> bool:
@@ -371,6 +392,7 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
         (await _etats_de_partage([name])).get(name) or {"state": "draft", "targets": []}
     )
     collection["acces"] = acces_a_la_collection(collection)
+    collection["mes_droits"] = _droits(collection, user, garant=await _est_garant(name, user))
     return collection
 
 

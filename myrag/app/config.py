@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     # la cloche du menu. Vide ⇒ les routes collaboratives répondent 503 plutôt que
     # d'écrire une identité en clair. En dev : MYRAG_PSEUDO_SEL=dev-sel.
     myrag_pseudo_sel: str = Field(default="")
+    # Clé des liens signés (sources, graphe, articles ouverts sans jeton). Vide ⇒ dérivée du
+    # sel des identités ; les deux vides ⇒ aucun lien signé n'est accepté.
+    myrag_liens_sel: str = Field(default="")
     # Où lire capacites.json du menu commun (service interne du cluster). Vide ⇒
     # drapeaux à false et seuil au défaut : rien ne s'affiche, rien ne s'écrit.
     capacites_url: str = Field(default="")

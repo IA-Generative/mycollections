@@ -9,11 +9,17 @@ import pytest
 from app.routers.playground import relier_au_proxy, retirer_le_pied_sources, situer_source
 
 
-def test_les_liens_de_la_reponse_sont_ramenes_sur_le_proxy():
+def test_les_liens_de_la_reponse_sont_ramenes_sur_le_proxy_et_signes():
+    import re
+    from app.services import liens
     texte = ("**Sources :** 1. [ssmsi_69.md](https://api.openrag-mirai.numerique-interieur.com/static/468450154026104240)"
              " 2. [x](http://openrag:8080/extract/12)")
-    assert relier_au_proxy(texte) == (
-        "**Sources :** 1. [ssmsi_69.md](/api/openrag/extract/468450154026104240) 2. [x](/api/openrag/extract/12)")
+    rendu = relier_au_proxy(texte)
+    trouves = re.findall(r"\(/api/openrag/extract/(\d+)\?exp=(\d+)&sig=([0-9a-f]+)\)", rendu)
+    assert [t[0] for t in trouves] == ["468450154026104240", "12"], rendu
+    for ident, exp, sig in trouves:
+        assert liens.valide(liens.portee_extrait(ident), exp, sig)
+        assert not liens.valide(liens.portee_extrait("autre"), exp, sig), "la signature vaut pour CE morceau"
 
 
 def test_un_texte_sans_lien_ne_bouge_pas():
@@ -26,9 +32,7 @@ class _Reponse:
         self.status_code, self.content, self.headers = status, content, headers or {}
 
 
-@pytest.mark.asyncio
-async def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch):
-    from app import main as m
+def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch, client):
     appels = []
 
     class FauxClient:
@@ -43,8 +47,8 @@ async def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch
                             {"content-type": "application/json"})
 
     monkeypatch.setattr(httpx, "AsyncClient", FauxClient)
-    r = await m.openrag_static_proxy("42")
-    assert r.status_code == 200 and b"8302" in r.body and b"kcContext" not in r.body
+    r = client.get("/api/openrag/static/42")
+    assert r.status_code == 200 and b"8302" in r.content and b"kcContext" not in r.content
     assert any("/extract/42" in u for u in appels), "le morceau est servi à la place de la page de connexion"
 
 

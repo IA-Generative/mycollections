@@ -1,9 +1,9 @@
 """Avant toute chose : le service est là, l'API est fermée sans jeton, un compte hors du groupe
 est refusé, et un lien partagé mène à la page qu'il désigne.
 
-Les routes « ouvertes » listées plus bas répondent AUJOURD'HUI sans jeton, alors que tout le
-reste de l'API exige un jeton : chaque ligne est un constat du diagnostic d'octobre 2026,
-documenté par un `xfail` strict qui cassera quand la garde sera posée.
+Les routes de FERMEES_P0 répondaient sans jeton jusqu'au lot P0 du diagnostic d'octobre 2026
+(avis des utilisateurs, relais OpenRAG, état du service). Les vues du graphe et des articles
+restent ouvertes pour une collection publiée à tous ; pour les autres, voir test_04.
 """
 from __future__ import annotations
 
@@ -18,17 +18,19 @@ FERMEES = [
     "/api/collections/templates", "/api/sources/check-url", "/api/bus/demandes",
 ]
 
-#: Routes qui devraient répondre 401 et ne le font pas (constats P0/P1 du diagnostic).
-OUVERTES_CONSTATEES = {
-    "/api/feedback/{collection}": "P0 : les questions et réponses des utilisateurs se lisent sans jeton (routeur feedback monté sans garde, app/main.py)",
-    "/api/feedback/{collection}/stats": "P0 : statistiques d'avis lisibles sans jeton",
-    "/api/openrag/extract/1": "P0 : relais vers OpenRAG avec le jeton admin, sans jeton côté appelant (404 au lieu de 401 : la route cherche l'objet avant de demander qui appelle)",
-    "/articles/{collection}/1": "P1 : vue article sans garde (404 au lieu de 401)",
-    "/graph/data?collection={collection}": "P1 : données du graphe sans garde (400 au lieu de 401)",
-    "/graph/config": "P2 : configuration du visualiseur lisible sans jeton",
-    "/api/owui/probe": "P2 : diagnostic du socle lisible sans jeton",
-    "/docs": "P2 : la description complète de l'API est publique (/docs, /openapi.json, /redoc)",
-}
+#: Routes fermées par le lot P0 du diagnostic d'octobre 2026 (elles répondaient sans jeton).
+FERMEES_P0 = [
+    "/api/feedback/{collection}",            # questions et réponses des utilisateurs
+    "/api/feedback/{collection}/stats",
+    "/api/openrag/extract/1",                # relais OpenRAG au jeton admin : lien signé ou jeton
+    "/api/openrag/static/1",
+    "/api/openrag/file/1",
+    "/graph/config",
+    "/api/owui/probe",
+]
+
+#: La description de l'API n'est plus servie (404) — ni publique, ni derrière jeton.
+DESCRIPTION_API = ["/docs", "/openapi.json", "/redoc"]
 
 
 def _anonyme(cible, chemin: str) -> int:
@@ -49,13 +51,15 @@ def test_l_api_est_fermee_sans_jeton(cible, chemin):
     assert _anonyme(cible, chemin) == 401
 
 
-@pytest.mark.parametrize("chemin", [
-    pytest.param(c, marks=pytest.mark.xfail(strict=True, reason=motif))
-    for c, motif in OUVERTES_CONSTATEES.items()
-])
+@pytest.mark.parametrize("chemin", FERMEES_P0)
 def test_les_routes_de_contenu_exigent_un_jeton(cible, collection_publiee, chemin):
-    """Attendu : 401. Ces routes servent du contenu d'une collection ou l'état du service."""
+    """Une collection publiée à tous ne fait pas exception pour ses avis ni pour l'état du service."""
     assert _anonyme(cible, chemin.format(collection=collection_publiee["name"])) == 401
+
+
+@pytest.mark.parametrize("chemin", DESCRIPTION_API)
+def test_la_description_de_l_api_n_est_pas_publique(cible, chemin):
+    assert _anonyme(cible, chemin) in (401, 404)
 
 
 def test_un_compte_hors_du_groupe_est_refuse(verdict_hors_groupe):

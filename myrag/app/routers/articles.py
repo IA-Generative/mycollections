@@ -2,13 +2,17 @@
 
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader
 
+from app.routers._acces_navigateur import lecture_de_la_collection
+from app.services import liens
 from app.services.graph_builder import GraphBuilder
 
-router = APIRouter(prefix="/articles", tags=["Articles"])
+# Servies sans jeton (lien, iframe) : la garde accepte une collection publiée à tous, un lien
+# signé ou un jeton qui lit la collection (app/routers/_acces_navigateur.py).
+router = APIRouter(prefix="/articles", tags=["Articles"], dependencies=[Depends(lecture_de_la_collection)])
 
 _builder = GraphBuilder()
 
@@ -18,7 +22,7 @@ _env = Environment(loader=FileSystemLoader(_template_dir), autoescape=True)
 
 
 @router.get("/{collection}/{article_id}", response_class=HTMLResponse)
-async def view_article(collection: str, article_id: str):
+async def view_article(collection: str, article_id: str, request: Request):
     """Render an article as HTML (iframe-friendly, DSFR styling)."""
     graph = _builder.get(collection)
 
@@ -49,6 +53,8 @@ async def view_article(collection: str, article_id: str):
         sensitivity=node.get("sensitivity", "public"),
         references=references,
         referenced_by=referenced_by,
+        # Les liens de la page portent la signature reçue, pour rester ouvrables.
+        sig_q=_signature_recue(request, collection),
     )
     return HTMLResponse(content=html)
 
@@ -77,3 +83,12 @@ async def article_json(collection: str, article_id: str):
         "referenced_by": referenced_by,
         "degree": graph.degree(article_id),
     }
+
+
+def _signature_recue(request: Request, collection: str) -> str:
+    """`&exp=…&sig=…` si la page a été ouverte par un lien signé encore valide, sinon vide."""
+    from urllib.parse import urlencode
+    q = request.query_params
+    if liens.valide(liens.portee_graphe(collection), q.get("exp"), q.get("sig")):
+        return "&" + urlencode({"exp": q["exp"], "sig": q["sig"]})
+    return ""
