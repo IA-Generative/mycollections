@@ -47,7 +47,7 @@ Tu travailles sur **MyRAG (beta)**, un module independant qui s'intercale entre 
 - **Tests** : pytest, 135 tests unitaires, TDD (tests avant le code)
 - **Docker** : Docker Compose + K8s Scaleway manifests (7 fichiers YAML)
 - **OWUI integration** : tool (4 methodes), pipe filter #collection, feedback outlet
-- **Repository** : `/Users/etiquet/Documents/GitHub/openrag/integrations/myrag/`
+- **Repository** : `openrag/integrations/myrag/`
 
 ### Fichiers cles
 
