@@ -1,5 +1,5 @@
 <template>
-  <nav class="fr-stepper fr-mb-4w" aria-label="Etapes de creation">
+  <nav class="fr-stepper fr-mb-4w" aria-label="Étapes de création">
     <div class="fr-stepper__steps" :data-fr-current-step="currentStep" :data-fr-steps="5">
     </div>
     <div class="fr-grid-row fr-grid-row--gutters fr-mt-2w">
@@ -9,9 +9,10 @@
           'myrag-step--active': currentStep === i + 1,
           'myrag-step--done': currentStep > i + 1,
           'myrag-step--future': currentStep < i + 1,
-        }]">
+        }]" :aria-current="currentStep === i + 1 ? 'step' : undefined">
           <span class="myrag-step__number">{{ i + 1 }}</span>
           <span class="myrag-step__label">{{ step }}</span>
+          <span class="fr-sr-only">{{ currentStep === i + 1 ? ' (étape en cours)' : currentStep > i + 1 ? ' (faite)' : ' (à venir)' }}</span>
         </div>
       </div>
     </div>
@@ -23,7 +24,7 @@ defineProps<{
   currentStep: number
 }>()
 
-const steps = ['Source', 'Identification', 'Donnees', 'Evaluation', 'Publication']
+const steps = ['Source', 'Identification', 'Données', 'Évaluation', 'Partage']
 </script>
 
 <style>

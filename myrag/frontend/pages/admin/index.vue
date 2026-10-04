@@ -18,8 +18,8 @@
         <div class="fr-card fr-enlarge-link">
           <div class="fr-card__body">
             <div class="fr-card__content">
-              <h3 class="fr-card__title"><NuxtLink to="/admin/create">Creer une collection</NuxtLink></h3>
-              <p class="fr-card__desc">Nouveau wizard en 5 etapes : source, identification, donnees, evaluation, publication</p>
+              <h3 class="fr-card__title"><NuxtLink to="/admin/create">Créer une collection</NuxtLink></h3>
+              <p class="fr-card__desc">Assistant guidé en 5 étapes : source, identification, données, évaluation, partage</p>
             </div>
           </div>
         </div>
@@ -69,7 +69,7 @@
     <h2 class="fr-h4 fr-mt-6w">Toutes les collections</h2>
 
     <div v-if="collections.length === 0" class="fr-callout">
-      <p>Aucune collection configuree dans MyRAG.</p>
+      <p>Aucune collection pour l'instant.</p>
     </div>
 
     <div v-else class="fr-table">
@@ -77,10 +77,10 @@
         <thead>
           <tr>
             <th>Collection</th>
-            <th>Strategie</th>
-            <th>Sensibilite</th>
+            <th>Découpage</th>
+            <th>Sensibilité</th>
             <th>Graph</th>
-            <th>Resume IA</th>
+            <th>Résumé IA</th>
             <th>Actions</th>
           </tr>
         </thead>

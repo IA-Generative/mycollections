@@ -3,13 +3,13 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Creer</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">Evaluation</a></li>
       </ol>
     </nav>
 
     <h1 class="fr-h3">Mesure d'evaluation — {{ collection }}</h1>
-    <p class="fr-text--lg fr-mb-4w">Etape 4 sur 5 — Testez la qualite du RAG avant publication</p>
+    <p class="fr-text--lg fr-mb-4w">Étape 4 sur 5 — Vérifiez la qualité des réponses avant de partager</p>
 
     <WizardStepper :current-step="4" />
 
@@ -85,7 +85,7 @@
             </div>
 
             <div v-if="generating" class="fr-mt-1w">
-              <p class="fr-text--xs" style="color:#666;">Le LLM analyse le contenu de la collection et genere les questions...</p>
+              <p class="fr-text--xs" style="color:#666;">Le modèle lit la collection et propose des questions…</p>
             </div>
 
             <div v-if="generateError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w">
@@ -204,7 +204,7 @@
       <!-- Navigation -->
       <div class="fr-btns-group fr-btns-group--inline">
         <NuxtLink :to="`/admin/create/step-3?collection=${collection}`" class="fr-btn fr-btn--secondary">
-          ← Precedent
+          ← Précédent
         </NuxtLink>
         <NuxtLink :to="`/admin/create/step-5?collection=${collection}`" class="fr-btn">
           Suivant →

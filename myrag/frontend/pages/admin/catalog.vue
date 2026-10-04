@@ -81,7 +81,7 @@
     <div v-else-if="filtered.length === 0 && search" class="fr-callout fr-mb-4w">
       <h3 class="fr-callout__title">Aucune collection trouvee pour "{{ search }}"</h3>
       <p class="fr-callout__text">Vous pouvez creer une nouvelle collection.</p>
-      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Creer une collection</NuxtLink>
+      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Créer une collection</NuxtLink>
     </div>
 
     <div v-else :aria-busy="chargement">
@@ -153,7 +153,7 @@
                     {{ col.contact_email }}
                   </a>
                 </div>
-                <span v-else class="fr-text--sm" style="color:#666;">Non renseigne</span>
+                <span v-else class="fr-text--sm" style="color:#666;">Non renseigné</span>
               </td>
               <td>
                 <!-- Archiver, désarchiver, purger : gestes de qui GÈRE la collection (dit par l'API). -->
@@ -210,9 +210,9 @@
                 </h1>
                 <p>Cette action est <strong>irreversible</strong>. Elle supprime :</p>
                 <ul>
-                  <li>La partition OpenRAG (tous les documents indexes)</li>
+                  <li>Tous les documents indexés</li>
                   <li>Les fichiers sources stockes sur disque</li>
-                  <li>Toutes les donnees liees (publications, jobs, feedback, evaluations)</li>
+                  <li>Toutes les données liées (partages, dépôts, avis, évaluations)</li>
                 </ul>
                 <div class="fr-input-group" :class="purgeError ? 'fr-input-group--error' : ''">
                   <label class="fr-label" for="purge-confirm">

@@ -3,13 +3,13 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Creer</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">Identification</a></li>
       </ol>
     </nav>
 
     <h1 class="fr-h3">Identification de la collection</h1>
-    <p class="fr-text--lg fr-mb-4w">Etape 2 sur 5 — Source : {{ sourceLabel }}</p>
+    <p class="fr-text--lg fr-mb-4w">Étape 2 sur 5 — Source : {{ sourceLabel }}</p>
 
     <WizardStepper :current-step="2" />
 
@@ -86,14 +86,14 @@
       <div class="fr-input-group fr-mt-2w">
         <label class="fr-label" for="desc">
           Description
-          <span class="fr-hint-text">Decrivez le contenu et l'objectif de cette collection. Ce texte apparaitra dans le catalogue et aidera les autres utilisateurs a trouver votre collection.</span>
+          <span class="fr-hint-text">Décrivez le contenu et l'objectif de cette collection. Ce texte apparaîtra dans le catalogue et aidera vos collègues à la trouver.</span>
         </label>
         <textarea id="desc" class="fr-input" v-model="form.description" rows="2"
                :placeholder="descPlaceholders[source] || 'Ex: Documentation juridique sur le droit des etrangers, mise a jour quotidiennement depuis Legifrance.'"></textarea>
       </div>
 
       <div class="fr-select-group fr-mt-2w">
-        <label class="fr-label">Type de collection (decoupage + prompt systeme)</label>
+        <label class="fr-label">Type de collection (découpage et consignes)</label>
         <select class="fr-select" v-model="selectedProfile" @change="applyProfile">
           <option v-for="p in profiles" :key="p.key" :value="p.key">
             {{ p.icon }} {{ p.label }}
@@ -134,13 +134,13 @@
         <div v-if="form.graph_enabled" class="fr-fieldset__element">
           <div class="fr-checkbox-group">
             <input type="checkbox" id="ai_summary" v-model="form.ai_summary_enabled" />
-            <label class="fr-label" for="ai_summary">Resume IA des articles longs dans le graph</label>
+            <label class="fr-label" for="ai_summary">Résumé IA des articles longs dans le graphe</label>
           </div>
           <details class="fr-mt-1w fr-ml-4w">
             <summary class="fr-text--sm" style="cursor:pointer;color:#000091;">En savoir plus</summary>
             <div class="fr-callout fr-mt-1w">
               <p class="fr-callout__text fr-text--sm">
-                Quand un article est tres long, le graph affiche un <strong>resume genere par l'IA</strong>
+                Quand un article est tres long, le graph affiche un <strong>résumé généré par l'IA</strong>
                 pour ameliorer la lisibilite. <strong>L'article original n'est jamais modifie</strong> —
                 le RAG utilise toujours le texte integral.
               </p>
@@ -157,9 +157,9 @@
               <span class="fr-hint-text">Niveau de classification des documents de la collection</span>
             </label>
             <select class="fr-select" v-model="form.sensitivity">
-              <option value="public">Donnees ouvertes</option>
+              <option value="public">Données ouvertes</option>
               <option value="internal">Interne au ministeriel</option>
-              <option value="personal">Donnees personnelles</option>
+              <option value="personal">Données personnelles</option>
               <option value="confidential">Confidentiel</option>
               <option value="restricted">Diffusion restreinte</option>
             </select>
@@ -169,12 +169,12 @@
           <div class="fr-select-group">
             <label class="fr-label">
               Portee
-              <span class="fr-hint-text">Qui pourra acceder a cette collection</span>
+              <span class="fr-hint-text">Qui pourra accéder à cette collection</span>
             </label>
             <select class="fr-select" v-model="form.scope">
               <option value="public">Tout le ministere</option>
               <option value="group">Un ou plusieurs groupes</option>
-              <option value="private">Prive (pour evaluation)</option>
+              <option value="private">Privé (pour évaluation)</option>
             </select>
           </div>
 
@@ -210,7 +210,7 @@
                 {{ g }}
               </span>
             </div>
-            <p v-else class="fr-text--sm fr-mt-1w" style="color:#666;">Aucun groupe selectionne</p>
+            <p v-else class="fr-text--sm fr-mt-1w" style="color:#666;">Aucun groupe sélectionné</p>
           </div>
 
           <!-- Private info -->
@@ -233,9 +233,9 @@
       </div>
 
       <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
-        <NuxtLink to="/admin/create" class="fr-btn fr-btn--secondary">← Precedent</NuxtLink>
+        <NuxtLink to="/admin/create" class="fr-btn fr-btn--secondary">← Précédent</NuxtLink>
         <button class="fr-btn" @click="createAndNext" :disabled="creating || !form.name.trim() || !form.titre.trim() || nameStatus === 'taken'">
-          {{ creating ? 'Creation...' : 'Suivant →' }}
+          {{ creating ? 'Création…' : 'Suivant →' }}
         </button>
       </div>
 

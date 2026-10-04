@@ -3,18 +3,18 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Creer</NuxtLink></li>
+        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
         <li><a class="fr-breadcrumb__link" aria-current="page">Donnees</a></li>
       </ol>
     </nav>
 
     <h1 class="fr-h3">Charger les donnees — {{ collection }}</h1>
-    <p class="fr-text--lg fr-mb-4w">Etape 3 sur 5 — Ajoutez vos documents a la collection</p>
+    <p class="fr-text--lg fr-mb-4w">Étape 3 sur 5 — Ajoutez vos documents à la collection</p>
 
     <WizardStepper :current-step="3" />
 
     <div v-if="!collection" class="fr-alert fr-alert--warning fr-mb-4w">
-      <p>Aucune collection specifiee. <NuxtLink to="/admin/create">Retour a l'etape 1</NuxtLink></p>
+      <p>Aucune collection specifiee. <NuxtLink to="/admin/create">Retour à l'étape 1</NuxtLink></p>
     </div>
 
     <div v-else class="fr-col-8">
@@ -224,8 +224,8 @@
             <p class="fr-text--sm fr-mt-1w">
               {{ job.uploaded_chunks }} / {{ job.total_chunks }} chunks indexes ({{ job.progress_pct }}%)
               <span v-if="job.status === 'uploading'"> — en cours</span>
-              <span v-if="job.status === 'done'" style="color:#18753c;"> — termine</span>
-              <span v-if="job.status === 'done_with_errors'" style="color:#b34000;"> — termine avec erreurs</span>
+              <span v-if="job.status === 'done'" style="color:#18753c;"> — terminé</span>
+              <span v-if="job.status === 'done_with_errors'" style="color:#b34000;"> — terminé avec erreurs</span>
             </p>
             <p class="fr-hint-text fr-mt-1w">
               Vous n'avez pas besoin d'attendre la fin de l'indexation pour continuer.
@@ -242,7 +242,7 @@
       <!-- Navigation -->
       <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
         <NuxtLink :to="`/admin/create/step-2?source=${source}`" class="fr-btn fr-btn--secondary">
-          ← Precedent
+          ← Précédent
         </NuxtLink>
 
         <!-- Main action button: changes role depending on state -->
@@ -251,14 +251,14 @@
         </button>
         <button v-else class="fr-btn" @click="handleMainAction"
                 :disabled="!isReadyToUpload || uploading">
-          {{ uploading ? 'Chargement en cours...' : 'Charger la donnee →' }}
+          {{ uploading ? 'Chargement en cours...' : 'Charger la donnée →' }}
         </button>
       </div>
 
       <p v-if="!uploaded && !uploading" class="fr-hint-text fr-mt-1w">
         <span v-if="tab === 'file' && !file">Selectionnez un fichier pour continuer.</span>
-        <span v-else-if="tab === 'url' && (!remoteCheck || remoteCheck.status !== 'ok')">Saisissez une URL et verifiez son accessibilite.</span>
-        <span v-else>Cliquez sur « Charger la donnee » pour lancer l'envoi et l'indexation.</span>
+        <span v-else-if="tab === 'url' && (!remoteCheck || remoteCheck.status !== 'ok')">Saisissez une adresse et vérifiez qu'elle est accessible.</span>
+        <span v-else>Cliquez sur « Charger la donnée » pour lancer l'envoi et l'indexation.</span>
       </p>
     </div>
   </div>
