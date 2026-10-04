@@ -2,12 +2,18 @@
 
 import os
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_title: str = Field(default="MyRAG (beta)")
+    """Réglages lus dans l'environnement.
+
+    L'application s'appelle Mes collections (« mycollections ») : chaque variable MYRAG_* se lit
+    aussi sous le nom MYCOLLECTIONS_* (ex. MYCOLLECTIONS_SUPERADMIN_GROUPES), qui est la forme à
+    privilégier ; l'ancien nom reste accepté le temps que les déploiements basculent. Si les
+    deux sont posés, MYCOLLECTIONS_* l'emporte."""
+    app_title: str = Field(default="Mes collections (bêta)")
     app_version: str = Field(default="0.1.0")
     debug: bool = Field(default=False)
 
@@ -36,13 +42,13 @@ class Settings(BaseSettings):
     # `full.path=false` : un homonyme créé dans keycloak-comu passerait). Les droits
     # de Mes collections (superadmin, groupes de collection) n'existent, eux, qu'en
     # chemins complets — cf. app/services/access.py.
-    myrag_groupe_exige: str = Field(default="")
+    myrag_groupe_exige: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GROUPE_EXIGE", "MYRAG_GROUPE_EXIGE", "myrag_groupe_exige"))
 
     # Les groupes dont les membres administrent Mes collections (toutes les collections, les
     # catégories, les amorces, le menu Administration). Liste de CHEMINS COMPLETS séparés par des
     # virgules, par ex. `/g/mirai-beta-testeurs-admin`. Vide ⇒ personne n'est superadmin (hors
     # développement sans authentification). Remplace le groupe codé en dur `/myrag/superadmin`.
-    myrag_superadmin_groupes: str = Field(default="")
+    myrag_superadmin_groupes: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_SUPERADMIN_GROUPES", "MYRAG_SUPERADMIN_GROUPES", "myrag_superadmin_groupes"))
 
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
     # false par défaut (dev/tests) ; true en prod via la configmap. Sert aussi
@@ -74,14 +80,14 @@ class Settings(BaseSettings):
 
     # Graph
     graphrag_viewer_url: str = Field(default="")
-    myrag_group_root: str = Field(default="/myrag")
+    myrag_group_root: str = Field(default="/myrag", validation_alias=AliasChoices("MYCOLLECTIONS_GROUP_ROOT", "MYRAG_GROUP_ROOT", "myrag_group_root"))
     # Préfixes refusés à la création d'une collection (séparés par des virgules) : ils disent
     # d'où vient la collection, pas ce qu'elle contient — et l'identifiant est ce que tapent
     # les applications (`openrag-<identifiant>`).
-    myrag_prefixes_bannis: str = Field(default="demo-,amorce-,rag-,test-")
+    myrag_prefixes_bannis: str = Field(default="demo-,amorce-,rag-,test-", validation_alias=AliasChoices("MYCOLLECTIONS_PREFIXES_BANNIS", "MYRAG_PREFIXES_BANNIS", "myrag_prefixes_bannis"))
 
     # Public URL (for iframe links)
-    myrag_public_url: str = Field(default="http://localhost:8200")
+    myrag_public_url: str = Field(default="http://localhost:8200", validation_alias=AliasChoices("MYCOLLECTIONS_PUBLIC_URL", "MYRAG_PUBLIC_URL", "myrag_public_url"))
 
     # CORS — liste d'origines autorisées (CSV). Vide => '*' SANS credentials
     # (l'API utilise des Bearer, pas de cookies). En prod, renseigner les
@@ -96,10 +102,10 @@ class Settings(BaseSettings):
     # de la bêta (Secret `obs-pseudo-salt`) : un abonné a le même condensé ici et dans
     # la cloche du menu. Vide ⇒ les routes collaboratives répondent 503 plutôt que
     # d'écrire une identité en clair. En dev : MYRAG_PSEUDO_SEL=dev-sel.
-    myrag_pseudo_sel: str = Field(default="")
+    myrag_pseudo_sel: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_PSEUDO_SEL", "MYRAG_PSEUDO_SEL", "myrag_pseudo_sel"))
     # Clé des liens signés (sources, graphe, articles ouverts sans jeton). Vide ⇒ dérivée du
     # sel des identités ; les deux vides ⇒ aucun lien signé n'est accepté.
-    myrag_liens_sel: str = Field(default="")
+    myrag_liens_sel: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_LIENS_SEL", "MYRAG_LIENS_SEL", "myrag_liens_sel"))
     # Où lire capacites.json du menu commun (service interne du cluster). Vide ⇒
     # drapeaux à false et seuil au défaut : rien ne s'affiche, rien ne s'écrit.
     capacites_url: str = Field(default="")
@@ -115,7 +121,7 @@ class Settings(BaseSettings):
     bus_url: str = Field(default="")
     bus_secret: str = Field(default="")
 
-    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore"}
+    model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore", "populate_by_name": True}
 
 
 settings = Settings()

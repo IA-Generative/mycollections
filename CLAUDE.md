@@ -246,6 +246,14 @@ Les droits viennent du claim `groups` du jeton (`app/services/access.py`, miroir
 - Basculer un mapper de noms courts vers chemins sans couper l'entree :
   `MYRAG_GROUPE_EXIGE=<nom>,/<chemin>` le temps de la bascule, puis `/<chemin>` seul.
 
+### Noms des variables
+
+L'application s'appelle Mes collections (« mycollections ») : chaque variable `MYRAG_*` se lit aussi
+sous le nom `MYCOLLECTIONS_*` (`MYCOLLECTIONS_SUPERADMIN_GROUPES`, `MYCOLLECTIONS_GROUPE_EXIGE`…),
+qui est la forme à privilégier ; si les deux sont posées, `MYCOLLECTIONS_*` l'emporte. Côté frontend,
+`MYCOLLECTIONS_API_URL` remplace `MYRAG_API_URL`. Les clients Keycloak (`myrag-front`, `myrag-admin`)
+se renomment dans la console du realm, puis dans les arguments de construction de l'image.
+
 ## Regles de travail
 
 - **`main` est protegee** : tout passe par une branche et une pull request. La construction des
