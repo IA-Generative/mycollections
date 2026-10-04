@@ -128,3 +128,12 @@ def test_la_fiche_obtient_l_adresse_signee_du_visualiseur(client, en_tant_que, c
     assert url.startswith(f"/graph?corpus_id={nom}&exp=") and "&sig=" in url
     en_tant_que(ETRANGER)
     assert client.get(f"/graph/{nom}/lien").status_code == 404
+
+
+def test_un_morceau_du_repli_recoit_un_lien_signe_depuis_son_identifiant():
+    from app.routers.playground import signer_les_liens_de_la_source
+    s = signer_les_liens_de_la_source({"_id": 468450154026104240, "content": "x"})
+    assert s["chunk_url"].startswith("/api/openrag/extract/468450154026104240?exp=")
+    exp, sig = s["chunk_url"].split("exp=")[1].split("&sig=")
+    assert liens.valide(liens.portee_extrait("468450154026104240"), exp, sig)
+    assert "chunk_url" not in signer_les_liens_de_la_source({"_id": "pas-un-nombre"})
