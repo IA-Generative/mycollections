@@ -192,7 +192,7 @@
     </div>
 
     <Teleport to="body">
-      <dialog v-if="confirmerArchivage" open class="fr-modal fr-modal--opened" aria-labelledby="archiver-titre"
+      <dialog v-if="confirmerArchivage" open class="fr-modal fr-modal--opened" @keydown="piegerLeFocus($event, $event.currentTarget as HTMLElement)" aria-labelledby="archiver-titre"
               style="display:block;background:rgba(22,22,22,.64);z-index:1000;" @click.self="confirmerArchivage = false" @keydown.esc="confirmerArchivage = false">
         <div class="fr-container fr-container--fluid fr-container-md">
           <div class="fr-grid-row fr-grid-row--center">

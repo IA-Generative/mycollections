@@ -13,6 +13,14 @@
                 <div class="fr-header__operator">
                   <img class="fr-responsive-img myrag-operator-logo" src="/favicon.svg" alt="Mes collections" />
                 </div>
+                <!-- Sur petit écran, le DSFR range la navigation derrière « Menu » (son JavaScript
+                     n'est pas chargé : Vue ouvre et ferme la fenêtre). -->
+                <div class="fr-header__navbar">
+                  <button type="button" class="fr-btn--menu fr-btn" title="Menu" aria-controls="menu-principal"
+                          aria-haspopup="menu" :aria-expanded="menuMobile" @click="ouvrirMenuMobile">
+                    Menu
+                  </button>
+                </div>
               </div>
               <div class="fr-header__service">
                 <NuxtLink to="/" class="fr-header__service-title">
@@ -26,8 +34,13 @@
           </div>
         </div>
       </div>
-      <div class="fr-header__menu">
+      <div id="menu-principal" ref="menuPrincipal" class="fr-header__menu fr-modal" :class="{ 'fr-modal--opened': menuMobile }"
+           aria-label="Menu" @keydown.esc="menuMobile = false" @keydown="menuMobile && piegerLeFocus($event, menuPrincipal)">
         <div class="fr-container">
+          <button ref="btnFermerMenu" type="button" class="fr-btn--close fr-btn" aria-controls="menu-principal" title="Fermer" @click="menuMobile = false">
+            Fermer
+          </button>
+          <div class="fr-header__menu-links"></div>
           <nav class="fr-nav" role="navigation" aria-label="Navigation principale">
             <ul class="fr-nav__list">
               <li class="fr-nav__item">
@@ -168,11 +181,18 @@ const { capacites, charger: chargerCapacites } = useCapacites()
 
 // Le menu « Mes collections » : celles dont je suis le créateur ou le garant.
 const menuOuvert = ref(false)
+const menuMobile = ref(false)
+const menuPrincipal = ref<HTMLElement | null>(null)
+const btnFermerMenu = ref<HTMLButtonElement | null>(null)
+function ouvrirMenuMobile() {
+  menuMobile.value = true
+  nextTick(() => btnFermerMenu.value?.focus())
+}
 const miennes = ref<any[]>([])
 async function chargerMiennes() {
   try { miennes.value = (await useApi().get('/api/accueil/mes-collections')).collections || [] } catch (e) {}
 }
-watch(() => route.fullPath, () => { menuOuvert.value = false; chargerMiennes() })
+watch(() => route.fullPath, () => { menuOuvert.value = false; menuMobile.value = false; chargerMiennes() })
 
 const { serviceIndisponible, rechercheIndisponible, retabli, fenetreOuverte, demarrer: surveillerEtat } = useEtatService()
 // Masqué par l'usager : jusqu'au prochain changement d'état, pas au-delà.
