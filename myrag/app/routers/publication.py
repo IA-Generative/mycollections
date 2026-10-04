@@ -73,7 +73,10 @@ async def get_publication_status(name: str, user: CurrentUser = Depends(current_
     async with async_session() as session:
         pub = await session.get(Publication, name)
         if not pub:
-            return {"collection": name, "state": "draft", "archivee": archivee}
+            # Jamais publiée : les valeurs par défaut du formulaire, dites par l'API (la case
+            # « proposer dans l'assistant » arrivait décochée et le partage ne publiait rien).
+            return {"collection": name, "state": "draft", "archivee": archivee, "alias_enabled": True,
+                    "tool_enabled": False, "embed_enabled": False, "visibility_groups": []}
         return {**pub.to_dict(), "archivee": archivee}
 
 

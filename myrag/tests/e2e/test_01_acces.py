@@ -59,7 +59,11 @@ def test_les_routes_de_contenu_exigent_un_jeton(cible, collection_publiee, chemi
 
 @pytest.mark.parametrize("chemin", DESCRIPTION_API)
 def test_la_description_de_l_api_n_est_pas_publique(cible, chemin):
-    assert _anonyme(cible, chemin) in (401, 404)
+    """Le backend ne la sert plus ; l'adresse retombe sur l'application (200, sa page HTML) ou 404."""
+    with httpx.Client(timeout=20.0, follow_redirects=False) as client:
+        r = client.get(cible["base"] + chemin)
+    assert r.status_code in (200, 401, 404)
+    assert not any(m in r.text.lower() for m in ("swagger", "redoc", '"openapi"')), "la description de l'API est servie"
 
 
 def test_un_compte_hors_du_groupe_est_refuse(verdict_hors_groupe):
