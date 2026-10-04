@@ -322,15 +322,16 @@ onMounted(async () => {
   try {
     pub.value = await get(`/api/collections/${id}/publication`)
     if (pub.value) {
-      form.value.alias_enabled = pub.value.alias_enabled
+      // Jamais publiée : l'API ne dit rien de la case ; elle doit rester cochée, c'est la façon normale de partager.
+      form.value.alias_enabled = pub.value.alias_enabled ?? true
       form.value.alias_name = pub.value.alias_name || ''
       form.value.alias_description = pub.value.alias_description || ''
-      form.value.tool_enabled = pub.value.tool_enabled
+      form.value.tool_enabled = pub.value.tool_enabled ?? false
       form.value.tool_methods = pub.value.tool_methods || [...allMethods]
-      form.value.embed_enabled = pub.value.embed_enabled
+      form.value.embed_enabled = pub.value.embed_enabled ?? false
       form.value.visibility = pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
       if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
-      form.value.visibility_group = (pub.value.visibility_groups || [])[0] || pub.value.visibility_group || `myrag/${id}`
+      form.value.visibility_group = (pub.value.visibility_groups || [])[0] || pub.value.visibility_group || ''
     }
   } catch (e) {}
 })

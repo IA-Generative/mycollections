@@ -62,3 +62,10 @@ def test_publier_une_collection_inconnue_rend_404_a_qui_ne_peut_pas_la_gerer(cli
     en_tant_que(personne("quelqu-un"))
     assert client.post("/api/collections/inconnue-de-tous/publish", json=PUBLIER).status_code == 404
     socle.assert_not_awaited()
+
+
+def test_une_collection_jamais_publiee_propose_la_case_cochee(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    pub = client.get(f"/api/collections/{nom}/publication").json()
+    assert pub["state"] == "draft" and pub["alias_enabled"] is True
