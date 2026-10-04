@@ -82,7 +82,15 @@
     </div>
 
     <div v-else :aria-busy="chargement">
-      <div class="fr-table" :class="{ 'catalogue-rechargement': chargement }">
+      <!-- Les catégories sont repliées par défaut : on parcourt les rubriques, on ouvre celle qui intéresse.
+           Une recherche ou un filtre de catégorie les déplie, sinon le résultat serait caché. -->
+      <div class="catalogue-replis">
+        <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-down-s-line fr-btn--icon-left"
+                :disabled="toutOuvert" @click="toutDeplier">Tout déplier</button>
+        <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-up-s-line fr-btn--icon-left"
+                :disabled="!ouvertes.size" @click="toutReplier">Tout replier</button>
+      </div>
+      <div class="fr-table catalogue-table" :class="{ 'catalogue-rechargement': chargement }">
         <table>
           <thead>
             <tr>
@@ -97,14 +105,20 @@
           <tbody v-for="groupe in groupes" :key="groupe.cle || '__aucune__'">
             <tr>
               <th colspan="6" scope="colgroup" class="catalogue-categorie">
-                <span class="fr-icon-folder-2-line fr-icon--sm" aria-hidden="true"></span>
-                {{ groupe.libelle }}
-                <span class="catalogue-categorie__compte">
-                  {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
-                </span>
+                <button type="button" class="catalogue-categorie__bascule"
+                        :aria-expanded="estOuverte(groupe) ? 'true' : 'false'"
+                        @click="basculer(groupe)">
+                  <span class="catalogue-categorie__chevron fr-icon-arrow-right-s-line fr-icon--sm"
+                        :class="{ 'catalogue-categorie__chevron--ouvert': estOuverte(groupe) }" aria-hidden="true"></span>
+                  <span class="fr-icon-folder-2-line fr-icon--sm" aria-hidden="true"></span>
+                  {{ groupe.libelle }}
+                  <span class="catalogue-categorie__compte">
+                    {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
+                  </span>
+                </button>
               </th>
             </tr>
-            <tr v-for="col in groupe.collections" :key="col.name" :style="col.archived_at ? 'opacity:0.65;' : ''">
+            <tr v-for="col in groupe.collections" v-show="estOuverte(groupe)" :key="col.name" :style="col.archived_at ? 'opacity:0.65;' : ''">
               <td>
                 <NuxtLink :to="`/c/${col.name}`" class="fr-link">{{ titreDe(col) }}</NuxtLink>
                 <br />
@@ -257,6 +271,23 @@ const filtered = computed(() => {
 })
 const groupes = computed(() => grouperParCategorie(filtered.value, categories.value))
 
+// Catégories dépliées, par clé (« __aucune__ » pour les non classées). Vide au départ : tout est replié.
+const ouvertes = ref(new Set<string>())
+const cleDe = (g: { cle?: string | null }) => g.cle || '__aucune__'
+const estOuverte = (g: { cle?: string | null }) => ouvertes.value.has(cleDe(g))
+const toutOuvert = computed(() => groupes.value.length > 0 && groupes.value.every(estOuverte))
+function basculer(g: { cle?: string | null }) {
+  const suivantes = new Set(ouvertes.value)
+  suivantes.has(cleDe(g)) ? suivantes.delete(cleDe(g)) : suivantes.add(cleDe(g))
+  ouvertes.value = suivantes
+}
+function toutDeplier() { ouvertes.value = new Set(groupes.value.map(cleDe)) }
+function toutReplier() { ouvertes.value = new Set() }
+// Chercher ou filtrer déplie ce qui répond — y compris l'arrivée par ?categorie= depuis l'accueil.
+watch([search, categorieChoisie, groupes], () => {
+  if (search.value.trim() || categorieChoisie.value) toutDeplier()
+}, { immediate: true })
+
 function stateBadge(state: string) {
   return {
     draft: 'fr-badge--info', published: 'fr-badge--success',
@@ -343,7 +374,20 @@ onMounted(async () => {
 .fr-table tbody th.catalogue-categorie { background: var(--background-action-low-blue-france) !important;
   color: var(--text-title-blue-france); box-shadow: inset 4px 0 0 var(--border-action-high-blue-france);
   text-align: left; font-size: 1rem; font-weight: 700; padding-top: .75rem; padding-bottom: .75rem; }
-tbody + tbody th.catalogue-categorie { border-top: 1.5rem solid var(--background-default-grey); }
+tbody + tbody th.catalogue-categorie { border-top: .75rem solid var(--background-default-grey); }
+.catalogue-categorie__bascule { display: flex; align-items: center; gap: .4rem; width: 100%; margin: 0; padding: 0;
+  background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.catalogue-categorie__bascule:hover, .catalogue-categorie__bascule:active { background: none !important; text-decoration: underline; }
+/* Largeurs fixes : sans elles, replier une catégorie resserrait les colonnes et le tableau sautait. */
+.catalogue-table table { width: 100%; min-width: 56rem; table-layout: fixed; }
+.catalogue-table thead th:nth-child(1) { width: 22%; } .catalogue-table thead th:nth-child(2) { width: 34%; }
+.catalogue-table thead th:nth-child(3) { width: 8%; } .catalogue-table thead th:nth-child(4) { width: 12%; }
+.catalogue-table thead th:nth-child(5) { width: 15%; } .catalogue-table thead th:nth-child(6) { width: 9%; }
+.catalogue-table td { overflow-wrap: anywhere; }
+.catalogue-categorie__chevron { transition: transform .15s; }
+.catalogue-categorie__chevron--ouvert { transform: rotate(90deg); }
+.catalogue-replis { display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .5rem; }
+@media (prefers-reduced-motion: reduce) { .catalogue-categorie__chevron { transition: none; } }
 .catalogue-categorie__compte { margin-left: .5rem; padding: 0 .5rem; border-radius: 1rem; font-size: .75rem; font-weight: 500;
   background: var(--background-default-grey); color: var(--text-mention-grey); vertical-align: middle; }
 .catalogue-chargement { border: 1px solid var(--border-default-grey); padding: 1.25rem 1.5rem; }
