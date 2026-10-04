@@ -156,10 +156,11 @@ class TestBuildAndSummarizeAreReservedToManagers:
         _create(app, client, "grimp-ceseda")
         _as(app, GESTIONNAIRE)
         client.put("/graph/grimp-ceseda", json=GRAPHE)
-        documents = [{"content": "Voir l'article L. 423-1.", "metadata": {"filename": "Article-L423-3.md"}},
-                     {"content": "Conjoint de Français.", "metadata": {"filename": "Article-L423-1.md"}}]
+        fichiers = [{"file_id": "1", "filename": "Article-L423-3.md"}, {"file_id": "2", "filename": "Article-L423-1.md"}]
+        contenus = {"1": "Voir l'article L. 423-1.", "2": "Conjoint de Français."}
         with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            mock_cls.return_value.search = AsyncMock(return_value={"documents": documents})
+            mock_cls.return_value.list_files = AsyncMock(return_value=fichiers)
+            mock_cls.return_value.get_file_content = AsyncMock(side_effect=lambda p, f: contenus[f])
             r = client.post("/graph/grimp-ceseda/build", params={"force": "true"})
         assert r.status_code == 200, r.text
         assert r.json()["nodes"] == 2
@@ -168,9 +169,9 @@ class TestBuildAndSummarizeAreReservedToManagers:
         app, client = app_client
         _as(app, SUPERADMIN)
         with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            mock_cls.return_value.search = AsyncMock(return_value={"documents": []})
+            mock_cls.return_value.list_files = AsyncMock(return_value=[])
             r = client.post("/graph/grimp-sans-fiche/build")
-        assert r.status_code == 404 and "No documents" in r.json()["detail"]
+        assert r.status_code == 422 and "Aucun article" in r.json()["detail"]
 
     def test_non_manager_cannot_summarize(self, app_client):
         app, client = app_client

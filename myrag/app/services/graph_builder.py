@@ -291,78 +291,56 @@ class GraphBuilder:
         collection: str,
         chunks: list[dict],
         threshold: int = 1000,
-        llm_url: str | None = None,
-        llm_api_key: str | None = None,
-        llm_model: str | None = None,
+        resumer=None,
     ) -> dict:
-        """Generate AI summaries for articles longer than threshold.
+        """Résume par l'IA les articles plus longs que `threshold`, stocke `ai_summary` dans le nœud.
 
-        Requires LLM access (Scaleway, OpenAI-compatible).
-        Stores summaries in graph nodes as ai_summary field.
-        """
-        import httpx
-        from app.config import settings
-
+        `resumer(texte) -> str` appelle le modèle ; par défaut, celui d'OpenRAG sur la partition
+        (« openrag-<collection> »), avec le jeton du serveur. L'adresse du modèle n'est JAMAIS
+        fournie par l'appelant (avant : `llm_url` en paramètre, le serveur appelait l'adresse
+        qu'on lui donnait), ni codée en dur vers un fournisseur sans clé."""
         graph = self.get(collection)
         if not graph:
             return {"summarized": 0, "skipped": 0, "errors": 0}
 
-        url = llm_url or settings.openrag_url.replace(":8080", "")  # fallback
-        # Use the configured LLM from .env if available
-        base_url = llm_url or "https://api.scaleway.ai/v1"
-        api_key = llm_api_key or ""
-        model = llm_model or "mistral-small-3.2-24b-instruct-2506"
+        if resumer is None:
+            from app.services.openrag_client import OpenRAGClient
+            client = OpenRAGClient(timeout=60.0)
 
-        # Index chunks by article for full content
-        chunk_by_article = {}
+            async def resumer(texte: str) -> str:
+                r = await client.chat(
+                    model=f"openrag-{collection}",
+                    messages=[
+                        {"role": "system", "content": "Tu es un assistant juridique. Résume l'article suivant en 3 à 5 phrases. Conserve les numéros d'articles cités. Commence par « Cet article… »."},
+                        {"role": "user", "content": texte[:8000]},
+                    ],
+                    temperature=0.1, max_tokens=300,
+                )
+                return r["choices"][0]["message"]["content"]
+
+        texte_par_article = {}
         for chunk in chunks:
             article = chunk.get("metadata", {}).get("article")
             if article:
-                chunk_by_article[article] = chunk.get("content", "")
+                texte_par_article[article] = chunk.get("content", "")
 
-        summarized = 0
-        skipped = 0
-        errors = 0
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            for node_id in graph.nodes:
-                full_text = chunk_by_article.get(node_id, "")
-                if len(full_text) < threshold:
-                    skipped += 1
-                    continue
-
-                try:
-                    resp = await client.post(
-                        f"{base_url}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": model,
-                            "messages": [
-                                {
-                                    "role": "system",
-                                    "content": "Tu es un assistant juridique. Resume l'article suivant en 3-5 phrases. Conserve les numeros d'articles cites. Commence par 'Cet article...'",
-                                },
-                                {"role": "user", "content": full_text[:8000]},
-                            ],
-                            "max_tokens": 300,
-                            "temperature": 0.1,
-                        },
-                    )
-                    if resp.status_code == 200:
-                        summary = resp.json()["choices"][0]["message"]["content"]
-                        graph.nodes[node_id]["ai_summary"] = summary
-                        summarized += 1
-                    else:
-                        errors += 1
-                except Exception:
+        summarized = skipped = errors = 0
+        for node_id in graph.nodes:
+            texte = texte_par_article.get(node_id, "")
+            if len(texte) < threshold:
+                skipped += 1
+                continue
+            try:
+                resume = await resumer(texte)
+                if resume:
+                    graph.nodes[node_id]["ai_summary"] = resume
+                    summarized += 1
+                else:
                     errors += 1
+            except Exception:  # noqa: BLE001 — un article raté n'arrête pas les autres
+                errors += 1
 
-        # Save updated graph
         self.save(collection)
-
         return {"summarized": summarized, "skipped": skipped, "errors": errors}
 
     def to_graph_data_response(
