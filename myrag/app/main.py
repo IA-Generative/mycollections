@@ -1,6 +1,7 @@
 """MyRAG (beta) — Front augmente DSFR pour OpenRAG."""
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -62,7 +63,8 @@ async def root():
     )
 
 
-from app.auth import AUTH_REQUIRED, CurrentUser, current_user
+from app.auth import AUTH_REQUIRED, CurrentUser, _bearer_scheme, current_user
+from app.routers._acces_navigateur import acces_extrait, peut_lire
 from app.services import access
 
 # Routes XHR (le front attache un Bearer via useApi) → garde JWT activable par
@@ -213,8 +215,36 @@ def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status
 <body>{body}</body></html>"""
 
 
+async def _exiger_lecture_du_morceau(contenu: bytes, user: CurrentUser) -> None:
+    """Le morceau appartient à une collection (sa partition) : son lecteur doit pouvoir la lire.
+    Une réponse sans partition lisible (erreur d'OpenRAG) passe : il n'y a rien à protéger."""
+    import json as _json
+    try:
+        charge = _json.loads(contenu)
+    except Exception:
+        return
+    meta = charge.get("metadata") if isinstance(charge, dict) and isinstance(charge.get("metadata"), dict) else {}
+    partition = (charge.get("partition") if isinstance(charge, dict) else None) or meta.get("partition")
+    if not partition:
+        return
+    from app.services.collection_store import get_collection
+    if not peut_lire(await get_collection(partition), partition, user):
+        raise HTTPException(status_code=404, detail="Extrait introuvable")
+
+
 @app.get("/api/openrag/extract/{chunk_id}")
-async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
+async def openrag_extract_proxy(chunk_id: str, request: Request, raw: bool = False,
+                                credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
+    """Un morceau d'OpenRAG, relayé avec le jeton admin — pour qui présente un lien signé
+    par Mes collections, ou un jeton qui lit la collection du morceau (P0, octobre 2026 :
+    la route était ouverte à tous, les identifiants sont des entiers devinables)."""
+    from app.security_utils import reject_path_traversal
+    reject_path_traversal(chunk_id, field="chunk_id")
+    user = await acces_extrait(chunk_id, request, credentials)
+    return await _extrait(chunk_id, raw, user)
+
+
+async def _extrait(chunk_id: str, raw: bool, user: CurrentUser | None):
     """Proxy for OpenRAG's /extract/{chunk_id} endpoint.
 
     Those endpoints require a Bearer admin token; a bare link opened in a
@@ -230,12 +260,12 @@ async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
     import json as _json
     from fastapi import Response
     from fastapi.responses import HTMLResponse
-    from app.security_utils import reject_path_traversal
-    reject_path_traversal(chunk_id, field="chunk_id")
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/extract/{chunk_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         upstream = await client.get(url, headers=headers)
+    if user is not None:
+        await _exiger_lecture_du_morceau(upstream.content, user)
     if raw:
         return Response(
             content=upstream.content,
@@ -254,7 +284,8 @@ async def openrag_extract_proxy(chunk_id: str, raw: bool = False):
 
 
 @app.get("/api/openrag/file/{file_id}")
-async def openrag_file_proxy(file_id: str):
+async def openrag_file_proxy(file_id: str, request: Request,
+                             credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
     """Proxy for OpenRAG's /file/<id> endpoint (rarely emitted in practice,
     but kept for completeness).
     """
@@ -262,6 +293,7 @@ async def openrag_file_proxy(file_id: str):
     from fastapi import Response
     from app.security_utils import reject_path_traversal
     reject_path_traversal(file_id, field="file_id")
+    await acces_extrait(file_id, request, credentials)
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/file/{file_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -319,7 +351,8 @@ async def owui_probe(user: CurrentUser = Depends(current_user)):
 
 
 @app.get("/api/openrag/static/{filepath:path}")
-async def openrag_static_proxy(filepath: str, raw: bool = False):
+async def openrag_static_proxy(filepath: str, request: Request, raw: bool = False,
+                               credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
     """Proxy for OpenRAG's /static/<hashname> URLs — what source.file_url
     points to for whole-document access. Auth-protected on OpenRAG's side
     (redirects to /auth/login for anonymous callers), relayed here with
@@ -332,6 +365,7 @@ async def openrag_static_proxy(filepath: str, raw: bool = False):
     from fastapi import Response
     from app.security_utils import reject_path_traversal
     reject_path_traversal(filepath, field="filepath")
+    user = await acces_extrait(filepath, request, credentials)
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/static/{filepath}"
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
@@ -342,7 +376,7 @@ async def openrag_static_proxy(filepath: str, raw: bool = False):
     # connexion à un service que l'utilisateur ne connaît pas.
     if upstream.status_code in (301, 302, 303, 307, 308) or \
             upstream.headers.get("content-type", "").startswith("text/html"):
-        return await openrag_extract_proxy(filepath, raw=raw)
+        return await _extrait(filepath, raw, user)
     # Preserve content-disposition so browsers can hint a filename on save.
     resp_headers = {}
     if "content-disposition" in upstream.headers:

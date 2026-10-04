@@ -109,6 +109,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const config = useRuntimeConfig()
+const { fetchWithAuth } = useApi()
 const chargement = ref(false)
 const contenu = ref('')
 const meta = ref<Record<string, any>>({})
@@ -155,7 +156,8 @@ async function charger() {
   if (!props.url) return
   chargement.value = true
   try {
-    const resp = await fetch(urlAbsolue(props.url), { credentials: 'same-origin' })
+    // Avec le jeton de la session : le lien signé peut avoir expiré, la session, elle, vaut toujours.
+    const resp = await fetchWithAuth(urlAbsolue(props.url), { credentials: 'same-origin' })
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const type = resp.headers.get('content-type') || ''
     if (type.includes('json')) {

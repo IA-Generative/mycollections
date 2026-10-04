@@ -2503,6 +2503,9 @@
       const params = new URLSearchParams();
       const existingParams = new URLSearchParams(location.search);
       if (existingParams.get("corpus_id")) params.set("corpus_id", existingParams.get("corpus_id"));
+      // Lien signé par Mes collections : la signature suit l'adresse, sans quoi la page
+      // rechargée perdrait l'accès.
+      for (const cle of ["exp", "sig"]) if (existingParams.get(cle)) params.set(cle, existingParams.get(cle));
       if (queryInput.value.trim()) params.set("query", queryInput.value.trim());
       if (sourceSelect.value) params.set("source_prefix", sourceSelect.value);
       params.set("max_nodes", String(maxNodesInput.value || 80));
@@ -2752,6 +2755,7 @@
         if (urlParams.get("corpus_id")) {
           params.set("corpus_id", urlParams.get("corpus_id"));
         }
+        for (const cle of ["exp", "sig"]) if (urlParams.get(cle)) params.set(cle, urlParams.get(cle));
 
         const response = await fetch(`/graph/data?${params.toString()}`, {
           headers: authHeaders(),
@@ -2759,7 +2763,7 @@
 
         if (response.status === 401) {
           accessToken = "";
-          setOverlayState("Session expirée", "Le bridge a refusé le jeton courant. Une nouvelle connexion Keycloak va être demandée.", true);
+          setOverlayState("Graphe non accessible", "Ce lien n'est plus valable, ou ce graphe n'est pas public : ouvrez-le depuis la fiche de la collection, dans Mes collections.", true);
           await redirectToLogin();
           return;
         }

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
-from app.services import accueil
+from app.services import accueil, liens
 from app.services.openrag_client import OpenRAGClient
 from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 
@@ -324,14 +324,38 @@ def situer_source(s: dict) -> dict:
 _LIEN_OPENRAG_RE = re.compile(r"https?://[^\s)\]\"']+/(?:static|extract)/(\d+)")
 
 
+def _lien_extrait(ident: str) -> str:
+    """Le lien de même origine vers notre proxy, signé : il s'ouvre dans un onglet neuf,
+    sans jeton (app/services/liens.py)."""
+    return liens.signer(f"/api/openrag/extract/{ident}", liens.portee_extrait(ident))
+
+
 def relier_au_proxy(texte: str) -> str:
     """Un lien OpenRAG (`…/static/<id>` ou `…/extract/<id>`) devient un lien de
-    même origine vers notre proxy : `/api/openrag/extract/<id>`. Le morceau et le
+    même origine vers notre proxy : `/api/openrag/extract/<id>`, signé. Le morceau et le
     document portent le même identifiant chez OpenRAG ; `/static` exige une
     session de son SSO que le navigateur n'a pas, `/extract` accepte le jeton."""
     if not texte:
         return texte
-    return _LIEN_OPENRAG_RE.sub(lambda m: f"/api/openrag/extract/{m.group(1)}", texte)
+    return _LIEN_OPENRAG_RE.sub(lambda m: _lien_extrait(m.group(1)), texte)
+
+
+_URL_OPENRAG_RE = re.compile(r"/(extract|file|static)/([^?#\s]+)")
+
+
+def signer_les_liens_de_la_source(s: dict) -> dict:
+    """`chunk_url` et `file_url` d'une source visent l'API d'OpenRAG : on les ramène sur notre
+    proxy, avec une signature, pour que les puces s'ouvrent sans jeton dans un onglet."""
+    for cle in ("chunk_url", "file_url"):
+        url = s.get(cle)
+        if not isinstance(url, str) or not url:
+            continue
+        m = _URL_OPENRAG_RE.search(url)
+        if not m or "/api/openrag/" in url:
+            continue
+        genre, ident = m.group(1), m.group(2)
+        s[cle] = liens.signer(f"/api/openrag/{genre}/{ident}", liens.portee_extrait(ident))
+    return s
 
 
 @router.post("/{collection}/chat")
@@ -341,6 +365,10 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
 
     If OpenRAG RAG returns no sources, falls back to manual context injection.
     """
+    # Poser une question à une collection demande de pouvoir la lire : la réponse cite ses
+    # sources et en remet des liens signés (diagnostic d'octobre 2026, P0).
+    from app.routers.publication import _fiche_pour
+    await _fiche_pour(collection, user, ecrire=False)
     # La mesure d'usage : une ligne par question (sans son texte). Ne bloque jamais.
     await accueil.noter_question(collection, user.sub)
     client = OpenRAGClient(timeout=120.0)
@@ -491,6 +519,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
     content = relier_au_proxy(retirer_le_pied_sources(content))
     for s in sources:
         situer_source(s)
+        signer_les_liens_de_la_source(s)
 
     # Règle 3 : une collection non publiée à tous répond avec la mention.
     mention = None

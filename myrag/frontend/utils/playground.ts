@@ -39,6 +39,9 @@ export function toHttps(url: string | undefined | null): string {
  */
 export function proxiedSourceUrl(url: string | undefined | null): string {
   if (!url) return ''
+  // Déjà ramenée sur notre proxy par le serveur, et signée (`?exp=…&sig=…`) : on la garde telle
+  // quelle — la réécrire perdrait la signature, et l'onglet neuf, qui n'a pas de jeton, un 401.
+  if (url.startsWith('/api/openrag/')) return url
   const https = toHttps(url)
   // /static/<file> serves the original document.
   const staticM = https.match(/\/static\/(.+)$/i)
