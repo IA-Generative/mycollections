@@ -8,11 +8,24 @@ groupes MyRAG (pas de colonne en base) :
   - ``<root>/superadmin``          → opérateur global (lit et écrit tout).
 
 où ``<root>`` = ``settings.myrag_group_root`` (défaut ``/myrag``). Les groupes
-arrivent dans le claim ``groups`` de l'access token (chemins, avec ou sans
-slash initial). Tout compte sans groupe MyRAG ne voit aucune collection.
+arrivent dans le claim ``groups`` de l'access token. Tout compte sans groupe
+MyRAG ne voit aucune collection.
+
+**Seuls des chemins complets donnent des droits** (mapper Keycloak
+``full.path=true``). Un nom court n'est pas unique dans un realm, et dans un
+realm où les utilisateurs créent eux-mêmes leurs groupes (keycloak-comu, sous
+``/g``) il est à la portée de n'importe qui : reconnaître ``superadmin``, ou un
+nom qui *ressemble* à un chemin (``myrag/superadmin`` — Keycloak accepte la barre
+oblique dans un nom), serait une élévation de privilèges. Un claim qui porte ne
+serait-ce qu'une valeur sans ``/`` initial est donc en noms courts : on n'en tire
+AUCUN droit (cf. ``chemins``).
 """
 
+import logging
+
 from app.config import settings
+
+logger = logging.getLogger("myrag.access")
 
 SUPERADMIN = "superadmin"
 ADMIN_SUFFIX = "-admin"
@@ -27,14 +40,41 @@ def _normalise(path: str) -> str:
     return "/" + path.strip("/")
 
 
+_noms_courts_signales = False
+
+
+def chemins(groups: list[str] | None) -> list[str]:
+    """Les groupes du claim s'il est en chemins complets, sinon une liste vide.
+
+    Keycloak en ``full.path=true`` émet TOUJOURS un ``/`` initial. Une seule valeur
+    sans lui trahit un mapper en ``full.path=false`` : toutes les valeurs sont alors
+    des noms courts, y compris celles qui commencent par ``/`` (un groupe peut
+    s'appeler ``/myrag/superadmin``). On ne peut pas les distinguer d'un chemin :
+    on les écarte toutes. En bêta, le groupe exigé (``MYRAG_GROUPE_EXIGE``) garantit
+    qu'un claim en noms courts porte au moins une valeur sans ``/``.
+    """
+    global _noms_courts_signales
+    valeurs = [g for g in groups or [] if isinstance(g, str)]
+    if any(not g.startswith("/") for g in valeurs):
+        if not _noms_courts_signales:
+            _noms_courts_signales = True
+            logger.warning(
+                "Claim `groups` en noms courts (mapper full.path=false) : aucun droit "
+                "n'en est tiré — superadmin et groupes de collection restent inopérants"
+            )
+        return []
+    return valeurs
+
+
 def _leaf(path: str) -> str | None:
     """Renvoie le nom de l'enfant direct de <root>, ou None si hors périmètre.
 
     N'accepte que les enfants directs : ``/myrag/x`` → ``x`` ; ``/myrag`` → None ;
-    ``/myrag/x/y`` (imbriqué) → None ; ``/autre/x`` → None.
+    ``/myrag/x/y`` (imbriqué) → None ; ``/autre/x`` → None. Reçoit un chemin
+    complet (cf. ``chemins``).
     """
     prefix = _root() + "/"
-    p = _normalise(path)
+    p = path.rstrip("/")
     if not p.startswith(prefix):
         return None
     leaf = p[len(prefix):]
@@ -44,12 +84,12 @@ def _leaf(path: str) -> str | None:
 
 
 def is_superadmin(groups: list[str] | None) -> bool:
-    return any(_leaf(g) == SUPERADMIN for g in (groups or []))
+    return any(_leaf(g) == SUPERADMIN for g in chemins(groups))
 
 
 def _collections(groups: list[str] | None, *, admin_only: bool) -> set[str]:
     names: set[str] = set()
-    for g in groups or []:
+    for g in chemins(groups):
         leaf = _leaf(g)
         if leaf is None or leaf == SUPERADMIN:
             continue
@@ -106,10 +146,16 @@ def can_create_collection(groups: list[str] | None) -> bool:
 
 
 def groups_match(user_groups: list[str] | None, authorized_paths: list[str] | None) -> bool:
-    """Vrai si l'utilisateur appartient à au moins un des groupes autorisés."""
-    if not user_groups or not authorized_paths:
+    """Vrai si l'utilisateur appartient à au moins un des groupes autorisés.
+
+    Comparaison de chemins complets : côté utilisateur, un claim en noms courts ne
+    correspond à rien (cf. ``chemins``) ; côté fiche, un nom court enregistré du
+    temps du mapper ``full.path=false`` ne désigne plus aucun groupe.
+    """
+    user_paths = chemins(user_groups)
+    if not user_paths or not authorized_paths:
         return False
-    norm_user = {_normalise(g) for g in user_groups}
+    norm_user = {_normalise(g) for g in user_paths}
     norm_auth = {_normalise(p) for p in authorized_paths}
     return bool(norm_user & norm_auth)
 

@@ -201,11 +201,35 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
 | `AUTH_ENABLED` | `true` | Activer l'auth Keycloak sur le frontend |
+| `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
+| `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes de droits (`<root>/superadmin`, `<root>/<collection>[-admin]`) |
 | `MYRAG_PSEUDO_SEL` | `` | Sel HMAC des identités du collectif (le même que `obs-pseudo-salt` du bus) ; vide ⇒ routes du collectif en 503. En dev : `dev-sel` |
 | `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |
 | `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
 | `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
+
+## Groupes et droits
+
+Les droits viennent du claim `groups` du jeton (`app/services/access.py`, miroir dans
+`frontend/utils/access.ts`) : `/myrag/superadmin`, `/myrag/<collection>`, `/myrag/<collection>-admin`.
+
+- **Seuls des chemins complets donnent des droits** : le mapper `groups` du client doit etre en
+  `full.path=true` (c'est le cas de `setup-keycloak.sh`). Un nom court n'est pas unique dans un
+  realm, et la ou les utilisateurs creent leurs groupes (keycloak-comu, sous `/g`) il est a la
+  portee de tous — `superadmin`, ou meme un groupe NOMME `/myrag/superadmin` (Keycloak accepte
+  « / » dans un nom).
+- **Un claim en noms courts ne donne aucun droit** : une seule valeur sans `/` initial suffit a
+  l'ecarter en bloc (`chemins()`), sans quoi on ne distingue pas un nom qui imite un chemin d'un
+  vrai chemin. Consequence : avec un mapper `full.path=false`, ni superadmin ni groupe de
+  collection ne fonctionnent — seul le createur (reconnu par `sub`) gere sa collection.
+  L'avertissement « Claim `groups` en noms courts » dans les journaux le signale.
+- Les groupes `/myrag/...` se creent a la racine du realm, ou seul un administrateur du realm peut
+  creer un groupe.
+- `scope_groups` d'une fiche : compare en chemins ; un nom court enregistre avant la bascule du
+  mapper ne designe plus rien (il faut le remplacer par le chemin).
+- Basculer un mapper de noms courts vers chemins sans couper l'entree :
+  `MYRAG_GROUPE_EXIGE=<nom>,/<chemin>` le temps de la bascule, puis `/<chemin>` seul.
 
 ## Regles de travail
 
