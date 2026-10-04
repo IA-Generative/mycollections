@@ -45,4 +45,6 @@ jobs:
           cache: npm
           cache-dependency-path: myrag/frontend/package-lock.json
       - run: npm ci
+      # .nuxt/tsconfig.json, que tsconfig.json étend : sans lui vitest ne transforme rien.
+      - run: npx nuxi prepare
       - run: npx vitest run
