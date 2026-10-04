@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: myrag-sync-owui-feedback
-  namespace: miraiku
+  namespace: myrag
   labels:
     app: myrag-sync-owui-feedback
 spec:
@@ -24,7 +24,7 @@ spec:
             - name: owui-registry
           containers:
             - name: sync
-              image: rg.fr-par.scw.cloud/funcscwnspricelessmontalcinhiacgnzi/myrag-backend:latest
+              image: registry.example.invalid/mon-organisation/myrag-backend:latest
               imagePullPolicy: Always
               # Same DATABASE_URL composition trick as the backend deployment:
               # we compose two URLs from owui-socle-secrets, one pointed at
@@ -48,11 +48,11 @@ spec:
                       name: owui-socle-secrets
                       key: POSTGRES_PASSWORD
                 - name: DATABASE_URL
-                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/myrag"
+                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.myrag.svc.cluster.local:5432/myrag"
                 - name: OWUI_DB_URL
                   # DB name is `owui`, hardcoded by owuicore-main postgres init
                   # (POSTGRES_DB: ${POSTGRES_DB:-owui}). Not `openwebui`.
-                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.miraiku.svc.cluster.local:5432/owui"
+                  value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.myrag.svc.cluster.local:5432/owui"
               resources:
                 requests:
                   cpu: 50m

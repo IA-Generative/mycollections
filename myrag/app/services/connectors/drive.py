@@ -1,6 +1,6 @@
 """Suite Numerique Drive connector.
 
-Ported from /Users/etiquet/Documents/GitHub/openrag/openrag/components/connectors/drive.py
+Ported from openrag/components/connectors/drive.py (projet OpenRAG)
 and adapted to the BaseConnector interface used by mycollections. The client
 talks to the Drive REST API (/api/v1.0/items/*) with a Bearer OIDC access
 token minted server-side via client_credentials on Keycloak.

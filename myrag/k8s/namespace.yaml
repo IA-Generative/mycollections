@@ -1,6 +1,6 @@
-# Namespace 'miraiku' is already provisioned by owuicore-main.
+# Namespace 'myrag' is already provisioned by owuicore-main.
 # This file is kept for reference/documentation only; no-op on apply.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: miraiku
+  name: myrag

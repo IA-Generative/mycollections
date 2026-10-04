@@ -30,9 +30,12 @@ class Settings(BaseSettings):
     keycloak_admin_password: str = Field(default="")
 
     # Restriction d'accès à un groupe du realm. Vide = pas de restriction (dev,
-    # tests, intégration). Renseigné en bêta avec le NOM FEUILLE du groupe des
-    # testeurs — le mapper Keycloak émet les groupes en `full.path=false`, donc le
-    # claim porte `mirai-beta-testeurs`, jamais `/g/mirai-beta-testeurs`.
+    # tests, intégration). Liste séparée par des virgules ; une entrée qui commence
+    # par « / » est un CHEMIN (`/g/mirai-beta-testeurs`, mapper `full.path=true`,
+    # la forme sûre), sinon un NOM COURT comparé tel quel (forme héritée du mapper
+    # `full.path=false` : un homonyme créé dans keycloak-comu passerait). Les droits
+    # de Mes collections (superadmin, groupes de collection) n'existent, eux, qu'en
+    # chemins complets — cf. app/services/access.py.
     myrag_groupe_exige: str = Field(default="")
 
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
@@ -55,7 +58,9 @@ class Settings(BaseSettings):
     drive_public_host: str = Field(default="")
 
     # Open WebUI (used by /publish to create model aliases)
-    owui_url: str = Field(default="http://openwebui.miraiku.svc.cluster.local")
+    # Défaut d'EXEMPLE : chaque déploiement pose son adresse par OWUI_URL. Nommer ici
+    # un namespace réel ferait de ce dépôt public une carte de l'infrastructure.
+    owui_url: str = Field(default="http://openwebui.mon-namespace.svc.cluster.local")
     owui_admin_api_key: str = Field(default="")
     # Adresse PUBLIQUE de l'assistant (celle qu'ouvre un navigateur) — `owui_url` est l'adresse interne,
     # pour les appels de service. Vide : les écrans ne proposent pas d'ouvrir l'assistant.

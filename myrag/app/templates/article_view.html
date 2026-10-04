@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ article_id }} — MyRAG</title>
+    <title>{{ article_id }} — Mes collections</title>
     <style>
         :root {
             --blue-france: #000091;
@@ -69,7 +69,7 @@
 
     {% if references %}
     <div class="references">
-        <h2>Articles cites</h2>
+        <h2>Articles cités</h2>
         <ul class="ref-list">
             {% for ref in references %}
             <li><a href="/articles/{{ collection }}/{{ ref }}">{{ ref }}</a></li>
@@ -80,7 +80,7 @@
 
     {% if referenced_by %}
     <div class="references" style="margin-top: 12px;">
-        <h2>Cite par</h2>
+        <h2>Cité par</h2>
         <ul class="ref-list">
             {% for ref in referenced_by %}
             <li><a href="/articles/{{ collection }}/{{ ref }}">{{ ref }}</a></li>
@@ -90,8 +90,20 @@
     {% endif %}
 
     <div class="actions">
-        <a href="/graph?corpus_id={{ collection }}&query={{ article_id }}" class="btn btn-primary">📊 Voir le graph</a>
-        <a href="/graph/{{ collection }}/related?article={{ article_id }}&depth=2" class="btn btn-secondary">🔗 Articles lies</a>
+        <a href="/graph?corpus_id={{ collection }}&query={{ article_id }}" class="btn btn-primary">📊 Voir les liens</a>
+        <a href="/graph/{{ collection }}/related?article={{ article_id }}&depth=2" class="btn btn-secondary">🔗 Articles liés</a>
     </div>
+    <!-- La barre commune de la bêta (« Mon avis ») — seulement quand la page est ouverte SEULE.
+         Dans une iframe (la page « Liens entre documents » de Mes collections, l'assistant), la page
+         qui l'accueille a déjà la sienne : on ne la double pas. Absent, le menu ne casse rien. -->
+    <script>
+      (function () {
+        try { if (window.top !== window) return; } catch (e) { return; }
+        var s = document.createElement("script");
+        s.src = "/_beta/menu.js";
+        s.onerror = function () { void 0; };
+        document.body.appendChild(s);
+      })();
+    </script>
 </body>
 </html>

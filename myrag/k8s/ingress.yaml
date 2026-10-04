@@ -7,7 +7,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: mycorpus
-  namespace: miraiku
+  namespace: myrag
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
@@ -68,7 +68,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: mycorpus-redirect
-  namespace: miraiku
+  namespace: myrag
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/permanent-redirect: https://mycollections.fake-domain.name

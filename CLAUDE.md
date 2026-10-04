@@ -203,9 +203,9 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `LEGIFRANCE_CLIENT_ID` | `` | Client ID API PISTE Legifrance |
 | `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
-| `AUTH_ENABLED` | `false` | Activer la garde JWT Keycloak sur le backend (routes XHR) ; false en dev |
-| `MYRAG_GROUPE_EXIGE` | `` | Restreindre l'acces a un groupe du realm (vide = pas de restriction en dev) |
-| `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes MyRAG |
+| `AUTH_ENABLED` | `false` (backend) ; `true` dans l'image du frontend | Garde JWT Keycloak sur les routes XHR du backend ; false en dev |
+| `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
+| `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes de droits (`<root>/superadmin`, `<root>/<collection>[-admin]`) |
 | `GRAPHRAG_VIEWER_URL` | `` | URL du viewer graph (Cytoscape) ; vide => `/graph` repli sur le local |
 | `MYRAG_PREFIXES_BANNIS` | `demo-,amorce-,rag-,test-` | Prefixes refuses a la creation d'une collection |
 | `MYRAG_PUBLIC_URL` | `http://localhost:8200` | URL publique (liens iframe) |
@@ -222,6 +222,28 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
+
+## Groupes et droits
+
+Les droits viennent du claim `groups` du jeton (`app/services/access.py`, miroir dans
+`frontend/utils/access.ts`) : `/myrag/superadmin`, `/myrag/<collection>`, `/myrag/<collection>-admin`.
+
+- **Seuls des chemins complets donnent des droits** : le mapper `groups` du client doit etre en
+  `full.path=true` (c'est le cas de `setup-keycloak.sh`). Un nom court n'est pas unique dans un
+  realm, et la ou les utilisateurs creent leurs groupes (keycloak-comu, sous `/g`) il est a la
+  portee de tous — `superadmin`, ou meme un groupe NOMME `/myrag/superadmin` (Keycloak accepte
+  « / » dans un nom).
+- **Un claim en noms courts ne donne aucun droit** : une seule valeur sans `/` initial suffit a
+  l'ecarter en bloc (`chemins()`), sans quoi on ne distingue pas un nom qui imite un chemin d'un
+  vrai chemin. Consequence : avec un mapper `full.path=false`, ni superadmin ni groupe de
+  collection ne fonctionnent — seul le createur (reconnu par `sub`) gere sa collection.
+  L'avertissement « Claim `groups` en noms courts » dans les journaux le signale.
+- Les groupes `/myrag/...` se creent a la racine du realm, ou seul un administrateur du realm peut
+  creer un groupe.
+- `scope_groups` d'une fiche : compare en chemins ; un nom court enregistre avant la bascule du
+  mapper ne designe plus rien (il faut le remplacer par le chemin).
+- Basculer un mapper de noms courts vers chemins sans couper l'entree :
+  `MYRAG_GROUPE_EXIGE=<nom>,/<chemin>` le temps de la bascule, puis `/<chemin>` seul.
 
 ## Regles de travail
 

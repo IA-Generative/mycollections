@@ -10,7 +10,7 @@ Référence à froid des 3 services "fichiers/recherche" de l'écosystème Mirai
 | **Find** | **Recherche fédérée** plein-texte + vectoriel sur plusieurs services, filtrage ACL à la query | Django + OpenSearch + `lasuite.oidc_resource_server` | (à déployer) |
 | **MyRAG / Mes collections** | **RAG** : chunking intelligent + indexation OpenRAG + admin des collections + intégration OWUI | FastAPI + SQLAlchemy + Nuxt DSFR | `mycollections.fake-domain.name` |
 
-Tous partagent le même realm Keycloak `openwebui` et le même cluster Kapsule `k8s-par-brave-bassi` namespace `miraiku`.
+Tous partagent le même realm Keycloak `openwebui`, et le même cluster et namespace (voir la configuration de votre déploiement).
 
 ---
 
@@ -188,10 +188,10 @@ Aujourd'hui, MyRAG maintient **son propre pipeline** Drive → chunks → OpenRA
 
 ## Déploiement cible
 
-Trois services, trois déploiements dans `miraiku` :
+Trois services, trois déploiements dans un même namespace :
 
 ```
-miraiku/
+<votre-namespace>/
   ├── drive-backend + celery + frontend (chart: drive-0.16.0, Helm)
   ├── find-backend + opensearch (chart: find-X.X, Helm) ← à déployer
   └── myrag-backend + myrag-frontend (manifests kubectl dans myrag/k8s/)

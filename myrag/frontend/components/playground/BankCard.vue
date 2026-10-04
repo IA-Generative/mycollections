@@ -38,10 +38,10 @@ const emit = defineEmits<{
 
 const badge = computed(() => {
   switch (props.item.source) {
-    case 'generated': return '🤖 Generee'
-    case 'imported':  return '📄 Importee'
-    case 'fb_neg':    return '👎 Retour negatif'
-    case 'promoted':  return '👍 Promue'
+    case 'generated': return '🤖 Générée'
+    case 'imported':  return '📄 Importée'
+    case 'fb_neg':    return '👎 Retour négatif'
+    case 'promoted':  return '👍 Validée'
     default:          return props.item.source
   }
 })
@@ -56,7 +56,7 @@ const removeWarning = computed(() => {
   if (props.item.source === 'generated' || props.item.source === 'imported') {
     return 'Supprime tout le jeu de test (peut contenir d\'autres questions)'
   }
-  return 'Retire du cache Q&R'
+  return 'Retire des réponses validées'
 })
 
 function onRemove() {

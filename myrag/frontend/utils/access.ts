@@ -6,19 +6,26 @@
  *   /myrag/<collection>-admin  → admin de la collection
  *   /myrag/superadmin          → opérateur global (voit le menu Administration)
  *
- * Le claim `groups` peut arriver avec ou sans slash initial : on normalise.
+ * Seuls des CHEMINS COMPLETS (mapper Keycloak `full.path=true`) donnent des droits,
+ * exactement comme côté backend : un nom court n'est pas unique dans le realm, et
+ * n'importe qui peut en créer un homonyme dans keycloak-comu — y compris un nom qui
+ * ressemble à un chemin (`myrag/superadmin`). Un claim dont une seule valeur n'a pas
+ * de « / » initial est en noms courts : on n'en tire rien.
  */
 
 const ROOT = 'myrag'
 const SUPERADMIN = 'superadmin'
 
-function normalise(path: string): string {
-  return '/' + String(path).replace(/^\/+|\/+$/g, '')
+/** Les groupes du claim s'ils sont en chemins complets, sinon une liste vide. */
+export function groupPaths(groups: unknown): string[] {
+  if (!Array.isArray(groups)) return []
+  const valeurs = groups.filter((g): g is string => typeof g === 'string')
+  if (valeurs.some((g) => !g.startsWith('/'))) return []
+  return valeurs
 }
 
 /** Vrai si l'utilisateur est super-admin MyRAG (membre de /myrag/superadmin). */
 export function isAdminGroup(groups: string[] | null | undefined): boolean {
-  if (!Array.isArray(groups)) return false
   const target = `/${ROOT}/${SUPERADMIN}`
-  return groups.some((g) => normalise(g) === target)
+  return groupPaths(groups).some((g) => g.replace(/\/+$/, '') === target)
 }

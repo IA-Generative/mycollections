@@ -1,0 +1,4 @@
+# Suite de bout en bout (tests/e2e) : un navigateur sans écran contre une cible réelle.
+# Séparé de requirements.txt : rien de ceci n'entre dans l'image.
+#   pip install -r requirements-e2e.txt && python -m playwright install chromium
+playwright>=1.47

@@ -480,10 +480,9 @@ onMounted(async () => {
     allCollections.value = colData.collections || []
   } catch (e) {}
 
-  // Load user groups from Keycloak (via auth profile)
-  if (user.value?.profile?.groups) {
-    userGroups.value = user.value.profile.groups.map((g: string) => ({ name: g.split('/').pop(), path: g }))
-  }
+  // Groupes proposés : chemins complets seulement, les seuls que l'API sait comparer
+  // (un nom court enregistré ne donnerait jamais accès — cf. utils/access.ts).
+  userGroups.value = groupPaths(user.value?.profile?.groups).map((g: string) => ({ name: g.split('/').pop(), path: g }))
 
   // Pre-fill contact from session
   if (user.value?.profile) {

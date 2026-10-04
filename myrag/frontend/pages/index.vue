@@ -45,7 +45,7 @@
             <div><b>{{ loading ? '…' : nombre(chiffres.collections) }}</b><span>collection{{ chiffres.collections > 1 ? 's' : '' }} à interroger</span></div>
             <div><b>{{ loading ? '…' : nombre(chiffres.categories) }}</b><span>catégorie{{ chiffres.categories > 1 ? 's' : '' }}</span></div>
             <!-- Le compte vient d'OpenRAG : s'il ne répond pas, on ne montre pas un « 0 » qui mentirait. -->
-            <div v-if="loading || chiffres.documents"><b>{{ loading ? '…' : nombre(chiffres.documents) }}</b><span>documents indexés</span></div>
+            <div v-if="loading || chiffres.documents"><b>{{ loading ? '…' : nombre(chiffres.documents) }}</b><span>documents</span></div>
           </div>
           <div v-if="exemple" class="accueil-decouvrir__exemple" aria-live="polite">
             <span v-if="exemple.categorie_libelle" class="accueil-decouvrir__rubrique">{{ exemple.categorie_libelle }}</span>

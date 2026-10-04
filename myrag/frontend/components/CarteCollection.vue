@@ -11,26 +11,26 @@
         {{ stateLabel(col.publication?.state) }}
       </span>
       <span class="fr-badge fr-badge--sm" :class="sensitivityBadge(col.sensitivity)">
-        {{ col.sensitivity }}
+        {{ libelleSensibilite(col.sensitivity) }}
       </span>
-      <span class="fr-badge fr-badge--sm fr-badge--info">{{ col.strategy }}</span>
-      <span v-if="col.graph_enabled" class="fr-badge fr-badge--sm fr-badge--new">graph</span>
+      <span class="fr-badge fr-badge--sm fr-badge--info">{{ libelleStrategie(col.strategy) }}</span>
+      <span v-if="col.graph_enabled" class="fr-badge fr-badge--sm fr-badge--new">liens entre documents</span>
       <span v-if="col.etat_collab && col.etat_collab !== 'publiee_tous'" class="fr-badge fr-badge--sm fr-badge--warning fr-badge--no-icon" title="Non publiée à tous : servie à son groupe seulement, réponses en cours de vérification.">
         {{ libelleEtat(col.etat_collab) }}
       </span>
-      <span v-if="col.orphan" class="fr-badge fr-badge--sm fr-badge--warning" title="Partition OpenRAG sans fiche MyRAG — ouvrez la collection pour l'adopter.">
+      <span v-if="col.orphan" class="fr-badge fr-badge--sm fr-badge--warning" title="Présente dans le moteur de recherche, mais sans fiche dans Mes collections — ouvrez la collection pour la rattacher.">
         sans fiche
       </span>
     </div>
 
     <p class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);font-style:italic;" v-if="col.orphan">
-      Collection importee depuis OpenRAG, pas encore decrite dans Mes collections.
+      Collection présente dans le moteur de recherche, pas encore décrite dans Mes collections.
     </p>
     <p v-else class="fr-text--sm fr-mb-1w" style="color:var(--text-mention-grey);">
       {{ col.description || 'Pas de description' }}
     </p>
     <p v-if="col.file_count" class="fr-text--xs fr-mb-2w" style="color:var(--text-mention-grey);">
-      📊 {{ col.file_count }} document{{ col.file_count > 1 ? 's' : '' }} indexe{{ col.file_count > 1 ? 's' : '' }}
+      📊 {{ col.file_count }} document{{ col.file_count > 1 ? 's' : '' }}
     </p>
 
     <p v-if="col.contact_name" class="fr-text--xs fr-mb-2w" style="color:var(--text-mention-grey);">
@@ -44,10 +44,10 @@
       <NuxtLink :to="`/c/${col.name}/playground`"
                 class="fr-btn fr-btn--icon-left fr-icon-chat-3-line"
                 style="width:100%;justify-content:center;">
-        Tester le RAG
+        Poser une question
       </NuxtLink>
       <p class="fr-text--xs fr-mb-0" style="color:var(--text-mention-grey);text-align:center;">
-        Playground avec debug et sources
+        La réponse, et les passages sur lesquels elle s'appuie
       </p>
 
       <NuxtLink :to="`/c/${col.name}`"
@@ -58,8 +58,9 @@
 
       <div style="display:flex;justify-content:flex-end;margin-top:0.25rem;">
         <NuxtLink :to="`/c/${col.name}/config`"
-                  class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-btn--icon-left fr-icon-edit-line">
-          Configurer
+                  class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-btn--icon-left fr-icon-settings-5-line"
+                  title="Titre, description, type de collection, sensibilité, portée, contact.">
+          Réglages
         </NuxtLink>
       </div>
     </div>
@@ -71,6 +72,7 @@
 import type { Collection } from '~/types/collection'
 import { libelleEtat } from '~/utils/collectif'
 import { titreDe } from '~/utils/catalogue'
+import { libelleSensibilite, libelleStrategie } from '~/utils/libelles'
 
 defineProps<{ col: Collection }>()
 
@@ -78,7 +80,7 @@ function stateBadge(state?: string) {
   return { draft: 'fr-badge--grey', published: 'fr-badge--success', disabled: 'fr-badge--warning' }[state || ''] || 'fr-badge--grey'
 }
 function stateLabel(state?: string) {
-  return { draft: 'Brouillon', published: 'Publie', disabled: 'Desactive', archived: 'Archive' }[state || ''] || 'Brouillon'
+  return { draft: 'Brouillon', published: 'Publiée', disabled: 'Désactivée', archived: 'Archivée' }[state || ''] || 'Brouillon'
 }
 function sensitivityBadge(s?: string) {
   return { public: 'fr-badge--green-emeraude', internal: 'fr-badge--yellow-tournesol', restricted: 'fr-badge--orange-terre-battue', confidential: 'fr-badge--pink-macaron' }[s || ''] || ''

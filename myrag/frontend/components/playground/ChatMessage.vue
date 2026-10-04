@@ -14,7 +14,7 @@
     <!-- No-source warning when RAG returned nothing -->
     <p v-if="message.role === 'assistant' && !message.error && !message.sources?.length && message.content"
        class="fr-text--xs" style="color:#b34000;margin-top:0.4rem;">
-      Aucune source retrouvee — le RAG n'a pas trouve de chunks pertinents.
+      Aucune source retrouvée — la recherche n'a trouvé aucun passage pertinent dans les documents de la collection.
     </p>
 
     <!-- Debug accordion & vote bar only on assistant turns -->
