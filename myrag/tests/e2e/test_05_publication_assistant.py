@@ -45,6 +45,8 @@ def test_la_collection_avance_jusqu_a_publiee_a_tous(session_testeur, collection
         if attendu == "en_controle":
             captures.prendre(page, "06-etat-amorcee", mobile=False)
         bouton.click()
+        if attendu == "publiee_tous":  # geste qui engage : il se confirme
+            page.get_by_role("button", name="Confirmer").click()
         attendre(lambda: session_testeur.get(f"/api/collections/{collection_essai}/etat").json().get("etat") == attendu,
                  delai=30, pas=1, motif=f"l'état « {attendu} »")
         page.wait_for_timeout(800)

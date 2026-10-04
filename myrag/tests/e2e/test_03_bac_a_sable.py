@@ -60,8 +60,8 @@ def test_l_avis_dit_ce_qu_il_fait(reponse_obtenue):
     """Deux boutons 👍 👎 : la personne doit lire, sans infobulle, ce que son avis déclenche."""
     texte = reponse_obtenue.locator(".myrag-msg--assistant").first.inner_text()
     assert "Cette reponse est-elle utile" in texte or "Cette réponse est-elle utile" in texte
-    if not re.search(r"cache|promou|ticket|valid", texte, re.I):
-        pytest.xfail("P1 ergonomie : 👍 écrit la réponse dans le cache des réponses validées et 👎 ouvre un ticket, mais la page ne le dit que dans un `title` (VoteBar.vue)")
+    assert re.search(r"réponse validée", texte) and re.search(r"gestionnaire", texte), \
+        "la page doit dire ce que 👍 et 👎 déclenchent, sans infobulle"
 
 
 def test_le_bac_a_sable_vouvoie(session_testeur, collection_publiee):

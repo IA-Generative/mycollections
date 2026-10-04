@@ -41,6 +41,9 @@
         <div v-if="saved" class="fr-alert fr-alert--success fr-mt-2w">
           <p>Consignes enregistrées.</p>
         </div>
+        <div v-if="erreurEnregistrement" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w" role="alert">
+          <p>{{ erreurEnregistrement }}</p>
+        </div>
       </div>
 
       <!-- Right: Playground -->
@@ -72,7 +75,8 @@
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
-const { get, patch } = useApi()
+const { get, patch, post } = useApi()
+const erreurEnregistrement = ref('')
 
 const prompt = ref('')
 const originalPrompt = ref('')
@@ -99,12 +103,17 @@ async function savePrompt() {
     await patch(`/api/collections/${id}/system-prompt`, { system_prompt: prompt.value })
     originalPrompt.value = prompt.value
     saved.value = true
+    erreurEnregistrement.value = ''
     setTimeout(() => saved.value = false, 3000)
-  } catch (e) {}
+  } catch (e) {
+    // Avant : l'échec était avalé, la personne croyait ses consignes enregistrées.
+    erreurEnregistrement.value = `Les consignes n'ont pas été enregistrées : ${messageErreur(e)}`
+  }
   saving.value = false
 }
 
 function resetPrompt() {
+  if (prompt.value !== originalPrompt.value && !window.confirm('Revenir aux consignes enregistrées ? Vos modifications non enregistrées seront perdues.')) return
   prompt.value = originalPrompt.value
 }
 
@@ -113,15 +122,9 @@ async function testPrompt() {
   testing.value = true
   testResponse.value = ''
   try {
-    // Call OpenRAG directly with the current prompt
-    const config = useRuntimeConfig()
-    const resp = await fetch(`${config.public.myragApiUrl}/api/playground/${id}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: testQuestion.value, system_prompt: prompt.value }),
-    })
-    const data = await resp.json()
-    testResponse.value = data.response || data.detail || 'Pas de réponse'
+    // Avec le jeton de la session (avant : un fetch nu, refusé en 401 dès que l'authentification est active).
+    const data: any = await post(`/api/playground/${id}/chat`, { question: testQuestion.value, system_prompt: prompt.value })
+    testResponse.value = data.response || 'Pas de réponse'
   } catch (e: any) {
     testResponse.value = messageErreur(e)
   }
