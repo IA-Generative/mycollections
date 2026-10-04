@@ -6,7 +6,7 @@ from app.services import access
 
 
 # Groupes typiques (chemins Keycloak)
-G_SUPER = "/myrag/superadmin"
+G_SUPER = "/g/administration-de-test"
 G_USER1 = "/myrag/collec-user1"
 G_USER1_ADMIN = "/myrag/collec-user1-admin"
 G_AUDIT = "/myrag/collec-audit"
@@ -84,7 +84,7 @@ class TestFormeDeLaBeta:
     def test_homonyme_imitant_un_chemin_refuse(self):
         # Groupe keycloak-comu NOMMÉ « /myrag/superadmin » : en noms courts, le claim
         # porte cette valeur, mais aussi le groupe exigé des testeurs, sans « / ».
-        forge = self.COURTS + ["/myrag/superadmin", "/myrag/collec-user1-admin"]
+        forge = self.COURTS + ["/g/administration-de-test", "/myrag/collec-user1-admin"]
         assert access.is_superadmin(forge) is False
         assert access.writable_collection_names(forge) == set()
         assert access.visible_collection_names(forge) == set()
@@ -121,3 +121,26 @@ class TestCheminsCompletsDeLaBeta:
         assert access.chemins([self.TESTEUR, G_SUPER]) == [self.TESTEUR, G_SUPER]
         assert access.chemins([self.TESTEUR, "superadmin"]) == []
         assert access.chemins(None) == []
+
+
+class TestSuperadminParVariable:
+    """MYRAG_SUPERADMIN_GROUPES remplace le groupe codé en dur /myrag/superadmin."""
+
+    def test_seuls_les_chemins_configures_comptent(self):
+        assert access.is_superadmin(["/g/administration-de-test"]) is True
+        assert access.is_superadmin(["/myrag/superadmin"]) is False, "l'ancien groupe ne donne plus rien"
+        assert access.is_superadmin(["/g/administration-de-test/sous-groupe"]) is False
+
+    def test_une_liste_de_plusieurs_groupes(self, monkeypatch):
+        from app.config import settings
+        monkeypatch.setattr(settings, "myrag_superadmin_groupes", "/g/a , /g/b, nom-court")
+        assert access.is_superadmin(["/g/b"]) is True
+        assert access.is_superadmin(["/x/nom-court"]) is False
+        assert access.groupes_superadmin() >= {"/g/a", "/g/b"}
+
+    def test_vide_personne_n_est_superadmin_sauf_le_developpeur_sans_authentification(self, monkeypatch):
+        from app.config import settings
+        monkeypatch.setattr(settings, "myrag_superadmin_groupes", "")
+        assert access.is_superadmin([access.GROUPE_DEV]) is True  # AUTH_ENABLED=false dans les tests
+        monkeypatch.setattr(settings, "auth_enabled", True)
+        assert access.is_superadmin([access.GROUPE_DEV]) is False

@@ -204,8 +204,8 @@ async def current_user(
     afin de préserver le comportement « tout visible » sans token.
     """
     if not settings.auth_enabled:
-        root = settings.myrag_group_root.rstrip("/")
-        return CurrentUser(sub="dev", username="dev", groups=[f"{root}/superadmin"])
+        from app.services.access import GROUPE_DEV
+        return CurrentUser(sub="dev", username="dev", groups=[GROUPE_DEV])
 
     groups = claims.get("groups") or []
     if not isinstance(groups, list):

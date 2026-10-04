@@ -481,7 +481,7 @@ onMounted(async () => {
   } catch (e) {}
 
   // Groupes proposés : chemins complets seulement, les seuls que l'API sait comparer
-  // (un nom court enregistré ne donnerait jamais accès — cf. utils/access.ts).
+  // (un nom court enregistré ne donnerait jamais accès — cf. utils/groupes.ts).
   userGroups.value = groupPaths(user.value?.profile?.groups).map((g: string) => ({ name: g.split('/').pop(), path: g }))
 
   // Pre-fill contact from session

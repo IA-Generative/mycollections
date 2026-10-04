@@ -120,6 +120,11 @@ class Session:
         """Le texte visible de la page, espaces repliés : ce qu'une personne lit."""
         return re.sub(r"[ \t]+", " ", self.page.locator("body").inner_text())
 
+    def superadmin(self) -> bool:
+        """Ce que le serveur dit de l'appelant (MYRAG_SUPERADMIN_GROUPES)."""
+        r = self.get("/api/moi")
+        return r.status == 200 and bool((r.json() or {}).get("superadmin"))
+
     def groupes(self) -> list[str]:
         """Les groupes portés par le jeton (lecture sans vérification : l'API, elle, vérifie)."""
         import base64
@@ -168,9 +173,10 @@ def session_admin(navigateur, cible) -> Session:
         contexte.close()
         pytest.skip(f"le compte E2E_ADMIN n'entre pas ({issue} : {detail}) : parcours d'administration ignoré")
     session = Session(contexte, contexte.pages[0], detail, cible)
-    if not any(g.endswith("/superadmin") for g in session.groupes()):
+    if not session.superadmin():
         contexte.close()
-        pytest.skip("E2E_ADMIN n'est pas superadmin (aucun groupe …/superadmin dans le jeton)")
+        pytest.skip("E2E_ADMIN n'est pas administrateur (aucun de ses groupes n'est dans MYRAG_SUPERADMIN_GROUPES, "
+                    "ou le jeton porte des noms courts)")
     yield session
     contexte.close()
 

@@ -205,6 +205,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
 | `AUTH_ENABLED` | `false` (backend) ; `true` dans l'image du frontend | Garde JWT Keycloak sur les routes XHR du backend ; false en dev |
 | `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
+| `MYRAG_SUPERADMIN_GROUPES` | `` | Groupes administrateurs de Mes collections, en chemins complets séparés par des virgules (ex. `/g/mirai-beta-testeurs-admin`). Vide ⇒ personne (hors développement sans authentification). Remplace `/myrag/superadmin` |
 | `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes de droits (`<root>/superadmin`, `<root>/<collection>[-admin]`) |
 | `GRAPHRAG_VIEWER_URL` | `` | URL du viewer graph (Cytoscape) ; vide => `/graph` repli sur le local |
 | `MYRAG_PREFIXES_BANNIS` | `demo-,amorce-,rag-,test-` | Prefixes refuses a la creation d'une collection |

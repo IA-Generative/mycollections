@@ -7,7 +7,7 @@ import pytest
 
 
 def test_un_testeur_simple_n_entre_pas_dans_l_administration(session_testeur):
-    if any(g.endswith("/superadmin") for g in session_testeur.groupes()):
+    if session_testeur.superadmin():
         pytest.skip("le compte testeur est superadmin")
     page = session_testeur.aller("/admin")
     page.wait_for_timeout(4_000)

@@ -59,7 +59,7 @@ def test_la_recherche_du_catalogue_filtre(session_testeur, collection_publiee):
 
 def test_un_lecteur_ne_voit_pas_les_gestes_d_administration_du_catalogue(session_testeur):
     """Archiver et Purger sont des gestes de gestion : un simple lecteur ne doit pas les voir."""
-    if any(g.endswith("/superadmin") for g in session_testeur.groupes()):
+    if session_testeur.superadmin():
         pytest.skip("le compte testeur est superadmin : le constat ne se joue qu'avec un lecteur")
     page = session_testeur.aller("/admin/catalog")
     page.locator("tbody tr").first.wait_for(state="visible", timeout=30_000)

@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # chemins complets — cf. app/services/access.py.
     myrag_groupe_exige: str = Field(default="")
 
+    # Les groupes dont les membres administrent Mes collections (toutes les collections, les
+    # catégories, les amorces, le menu Administration). Liste de CHEMINS COMPLETS séparés par des
+    # virgules, par ex. `/g/mirai-beta-testeurs-admin`. Vide ⇒ personne n'est superadmin (hors
+    # développement sans authentification). Remplace le groupe codé en dur `/myrag/superadmin`.
+    myrag_superadmin_groupes: str = Field(default="")
+
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
     # false par défaut (dev/tests) ; true en prod via la configmap. Sert aussi
     # de coupe-circuit (repasser à false + restart désactive la garde).

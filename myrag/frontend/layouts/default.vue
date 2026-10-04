@@ -161,7 +161,7 @@ import { libelleEtat } from '~/utils/collectif'
 const config = useRuntimeConfig()
 const route = useRoute()
 const { loading: authLoading, authError, init: initAuth } = useAuth()
-const { isAdmin } = useAdminAuth()
+const { isAdmin, charger: chargerDroits } = useAdminAuth()
 // Aucun bouton n'apparaît si le service ne sait pas le faire : l'onglet des demandes
 // n'existe que si capacites.json le déclare.
 const { capacites, charger: chargerCapacites } = useCapacites()
@@ -192,6 +192,7 @@ onMounted(async () => {
   // Init auth (redirect to Keycloak if not logged in)
   if (config.public.authEnabled) {
     await initAuth()
+    await chargerDroits()
     garderLAdministration()
   }
 
