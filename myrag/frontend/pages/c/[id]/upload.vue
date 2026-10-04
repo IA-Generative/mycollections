@@ -1,39 +1,35 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Upload</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Ajouter des documents" />
 
-    <h1 class="fr-h3">Uploader des documents — {{ titre }}</h1>
+    <h1 class="fr-h3">Ajouter des documents — {{ titre }}</h1>
 
     <div class="fr-grid-row fr-grid-row--gutters">
       <div class="fr-col-8">
         <!-- File upload -->
         <div class="fr-upload-group">
-          <label class="fr-label" for="file">Fichier a indexer</label>
+          <label class="fr-label" for="file">Document à ajouter</label>
           <input id="file" type="file" class="fr-upload" @change="onFileChange"
                  accept=".pdf,.txt,.md,.docx,.pptx,.doc,.eml,.png,.jpeg,.jpg" />
         </div>
 
         <!-- Strategy -->
         <div class="fr-select-group fr-mt-2w">
-          <label class="fr-label" for="strategy">Strategie de decoupage</label>
+          <label class="fr-label" for="strategy">Découpage du document
+            <span class="fr-hint-text">Comment le document est coupé en passages, que l'assistant retrouve et cite.</span>
+          </label>
           <select id="strategy" class="fr-select" v-model="strategy">
-            <option value="auto">Automatique (detection du type)</option>
+            <option value="auto">Automatique (détection du type)</option>
             <option value="article">Par article (code juridique)</option>
             <option value="section">Par section (rapport)</option>
-            <option value="qr">Par Q&R (FAQ)</option>
+            <option value="qr">Par question-réponse (FAQ)</option>
             <option value="length">Par longueur fixe</option>
           </select>
         </div>
 
         <!-- Sensitivity -->
         <div class="fr-select-group fr-mt-2w">
-          <label class="fr-label" for="sensitivity">Sensibilite</label>
+          <label class="fr-label" for="sensitivity">Sensibilité</label>
           <select id="sensitivity" class="fr-select" v-model="sensitivity">
             <option value="public">Public</option>
             <option value="internal">Interne</option>
@@ -44,13 +40,13 @@
 
         <!-- Submit -->
         <button class="fr-btn fr-mt-4w" @click="upload" :disabled="!file || uploading">
-          {{ uploading ? 'Envoi en cours...' : 'Indexer le document' }}
+          {{ uploading ? 'Envoi en cours…' : 'Ajouter le document' }}
         </button>
 
         <!-- Result -->
         <div v-if="result" class="fr-alert fr-alert--success fr-mt-4w">
-          <p>{{ result.total_chunks }} chunks crees (job {{ result.job_id }})</p>
-          <p class="fr-text--sm">Suivi : <a :href="`${baseUrl}/api/ingest/jobs/${result.job_id}`" target="_blank">{{ result.job_id }}</a></p>
+          <p>Document reçu et découpé en {{ result.total_chunks }} passage(s) : son ajout à la collection se poursuit.</p>
+          <p class="fr-text--sm">Suivi du traitement : <a :href="`${baseUrl}/api/ingest/jobs/${result.job_id}`" target="_blank">{{ result.job_id }}</a></p>
         </div>
 
         <div v-if="error" class="fr-alert fr-alert--error fr-mt-4w">

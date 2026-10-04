@@ -6,7 +6,7 @@
     <div class="myrag-debug__body">
       <p class="fr-text--xs" style="margin:0.3rem 0;">
         <strong>Modèle :</strong> {{ model || '—' }}
-        <span v-if="fallbackUsed" style="color:#b34000;"> — fallback (pas de chunks RAG)</span>
+        <span v-if="fallbackUsed" style="color:#b34000;"> — réponse de secours : la recherche habituelle n'a trouvé aucun passage</span>
       </p>
       <p v-if="sources?.length" class="fr-text--xs" style="margin:0.3rem 0;">
         <strong>{{ sources.length }} source(s) retrouvée(s)</strong> — extraits injectés au modèle :

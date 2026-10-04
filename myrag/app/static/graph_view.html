@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Visualiseur GraphRAG</title>
+  <title>Liens entre documents</title>
   <meta name="theme-color" content="#000091">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -964,7 +964,7 @@
               </g>
             </svg>
           </div>
-          <p class="lede"><strong>MirAI</strong> vous permet de visualiser votre corpus sous forme de graphes. Explorez les liens, changez de mode de lecture et repérez rapidement les éléments clés ou les repères temporels.</p>
+          <p class="lede"><strong>MirAI</strong> vous permet de visualiser les liens entre les documents de votre collection. Explorez les liens, changez de mode de lecture et repérez rapidement les éléments clés ou les repères temporels.</p>
         </div>
       </div>
 
@@ -991,7 +991,7 @@
         </div>
 
         <div class="field">
-          <label for="source" title="Ne montrer que les éléments d'une partie du corpus — un Livre, pour un code. Puis « Actualiser ».">Partie du corpus</label>
+          <label for="source" title="Ne montrer que les éléments d'une partie de la collection — un Livre, pour un code. Puis « Actualiser ».">Partie de la collection</label>
           <select id="source" name="source"></select>
         </div>
 
@@ -1067,11 +1067,11 @@
         <h2>Export</h2>
         <p><a id="downloadLink" class="download-link" href="/graph/raw" target="_blank" rel="noreferrer">Télécharger le fichier du graphe</a></p>
         <div class="stack-actions">
-          <button id="downloadFragmentsButton" class="secondary small-button" type="button">Télécharger les fragments sélectionnés</button>
-          <button id="downloadSynthesisPromptButton" class="secondary small-button" type="button">Télécharger le prompt de synthèse</button>
-          <button id="copySynthesisPromptButton" class="secondary small-button" type="button">Copier le prompt de synthèse</button>
+          <button id="downloadFragmentsButton" class="secondary small-button" type="button">Télécharger les extraits sélectionnés</button>
+          <button id="downloadSynthesisPromptButton" class="secondary small-button" type="button">Télécharger la consigne de synthèse</button>
+          <button id="copySynthesisPromptButton" class="secondary small-button" type="button">Copier la consigne de synthèse</button>
         </div>
-        <span id="exportHint" class="helper">Sélectionnez des fragments dans le panneau de détail pour préparer un export de synthèse.</span>
+        <span id="exportHint" class="helper">Sélectionnez des extraits dans le panneau de détail pour préparer un export de synthèse.</span>
       </div>
     </aside>
 
@@ -1110,9 +1110,9 @@
           <h2>Synthèse en cours</h2>
           <button id="clearSynthesisButton" class="secondary small-button" type="button">Vider</button>
         </div>
-        <p id="synthesisMeta" class="meta">Aucun fragment retenu pour le moment.</p>
+        <p id="synthesisMeta" class="meta">Aucun extrait retenu pour le moment.</p>
         <div id="synthesisBody" class="details-body synthesis-body">
-          <p class="empty">Cochez un fragment dans le panneau de détail pour constituer votre dossier de synthèse.</p>
+          <p class="empty">Cochez un extrait dans le panneau de détail pour constituer votre dossier de synthèse.</p>
         </div>
       </div>
       <div class="section">
@@ -1599,7 +1599,7 @@
             return `
               <article class="fragment-card ${isSelected ? "is-selected" : ""}">
                 <div class="fragment-head">
-                  <strong>Fragment ${index + 1}</strong>
+                  <strong>Extrait ${index + 1}</strong>
                   <label class="fragment-toggle">
                     <input
                       type="checkbox"
@@ -1617,7 +1617,7 @@
                 </div>
                 <div class="fragment-origin">
                   <strong>Sources :</strong> ${fragment.document_paths?.length ? escapeHtml(fragment.document_paths.join(" · ")) : "Aucune source déterminée"}
-                  ${fragment.token_count ? `<br><strong>Taille estimée :</strong> ${fragment.token_count} tokens` : ""}
+                  ${fragment.token_count ? `<br><strong>Taille estimée :</strong> environ ${Math.max(1, Math.round(fragment.token_count * 0.75))} mots` : ""}
                 </div>
               </article>
             `;
@@ -1685,19 +1685,19 @@
         metaParts.push(`année estimée ${nodeData.timeline_year}`);
       }
       if (selectedCount) {
-        metaParts.push(`${selectedCount} fragment(s) retenu(s)`);
+        metaParts.push(`${selectedCount} extrait(s) retenu(s)`);
       }
       detailsMeta.textContent = metaParts.join(" · ");
       detailsBody.innerHTML = `
         <p>${formatText(nodeData.description || "Aucune description d'entité n'a été extraite.")}</p>
         <h2 style="margin-top:14px;">Sources associées</h2>
         ${renderDocuments(nodeData.document_paths, "Aucune source n'est rattachée à cette entité.")}
-        <h2 style="margin-top:14px;">Fragments exploitables</h2>
+        <h2 style="margin-top:14px;">Extraits exploitables</h2>
         ${renderFragmentCards(
           nodeData.fragments,
           "node",
           ownerKey,
-          "Aucun fragment textuel exploitable n'a été rattaché à cette entité."
+          "Aucun extrait de texte exploitable n'a été rattaché à cette entité."
         )}
       `;
     }
@@ -1711,19 +1711,19 @@
       detailsTitle.textContent = `${edgeData.source} → ${edgeData.target}`;
       const metaParts = [`poids ${Number(edgeData.weight || 0).toFixed(1)}`];
       if (selectedCount) {
-        metaParts.push(`${selectedCount} fragment(s) retenu(s)`);
+        metaParts.push(`${selectedCount} extrait(s) retenu(s)`);
       }
       detailsMeta.textContent = metaParts.join(" · ");
       detailsBody.innerHTML = `
         <p>${formatText(edgeData.description || "Aucune description de lien n'a été extraite.")}</p>
         <h2 style="margin-top:14px;">Sources associées</h2>
         ${renderDocuments(edgeData.document_paths, "Aucune source n'est rattachée à ce lien.")}
-        <h2 style="margin-top:14px;">Fragments exploitables</h2>
+        <h2 style="margin-top:14px;">Extraits exploitables</h2>
         ${renderFragmentCards(
           edgeData.fragments,
           "edge",
           ownerKey,
-          "Aucun fragment textuel exploitable n'a été rattaché à ce lien."
+          "Aucun extrait de texte exploitable n'a été rattaché à ce lien."
         )}
       `;
     }
@@ -1747,10 +1747,10 @@
     function renderSynthesisSelection() {
       const entries = Array.from(synthesisSelection.values());
       if (!entries.length) {
-        synthesisMeta.textContent = "Aucun fragment retenu pour le moment.";
-        synthesisBody.innerHTML = '<p class="empty">Cochez un fragment dans le panneau de détail pour constituer votre dossier de synthèse.</p>';
+        synthesisMeta.textContent = "Aucun extrait retenu pour le moment.";
+        synthesisBody.innerHTML = '<p class="empty">Cochez un extrait dans le panneau de détail pour constituer votre dossier de synthèse.</p>';
         clearSynthesisButton.disabled = true;
-        exportHint.textContent = "Sélectionnez des fragments dans le panneau de détail pour préparer un export de synthèse.";
+        exportHint.textContent = "Sélectionnez des extraits dans le panneau de détail pour préparer un export de synthèse.";
         downloadFragmentsButton.disabled = true;
         downloadSynthesisPromptButton.disabled = true;
         copySynthesisPromptButton.disabled = true;
@@ -1762,7 +1762,7 @@
       entries.forEach((entry) => {
         (entry.fragment.document_paths || []).forEach((path) => uniqueSources.add(path));
       });
-      synthesisMeta.textContent = `${entries.length} fragment(s) retenu(s) · ${uniqueSources.size} source(s) mobilisée(s).`;
+      synthesisMeta.textContent = `${entries.length} extrait(s) retenu(s) · ${uniqueSources.size} source(s) mobilisée(s).`;
       synthesisBody.innerHTML = `
         <div class="synthesis-list">
           ${entries.map((entry, index) => `
@@ -1786,7 +1786,7 @@
         </div>
       `;
       clearSynthesisButton.disabled = false;
-      exportHint.textContent = "Les exports incluent les fragments retenus, leurs sources et un prompt de synthèse prêt à rejouer.";
+      exportHint.textContent = "Les exports incluent les extraits retenus, leurs sources et une consigne de synthèse prête à réutiliser.";
       downloadFragmentsButton.disabled = false;
       downloadSynthesisPromptButton.disabled = false;
       copySynthesisPromptButton.disabled = false;
@@ -1846,12 +1846,12 @@
       const entries = Array.from(synthesisSelection.values());
       const question = queryInput.value.trim();
       const fragmentsMarkdown = [
-        "# Fragments sélectionnés",
+        "# Extraits sélectionnés",
         "",
         question ? `Question de travail : ${question}` : "Question de travail : non renseignée",
         "",
         ...entries.flatMap((entry, index) => [
-          `## Fragment ${index + 1} - ${entry.ownerLabel}`,
+          `## Extrait ${index + 1} - ${entry.ownerLabel}`,
           "",
           `Sources : ${(entry.fragment.document_paths || []).join(" · ") || "Aucune source déterminée"}`,
           "",
@@ -1861,20 +1861,20 @@
       ].join("\n");
 
       const promptMarkdown = [
-        "# Prompt de synthèse prêt à rejouer",
+        "# Consigne de synthèse prête à réutiliser",
         "",
         "## Consigne",
-        "À partir des fragments ci-dessous, rédige une synthèse structurée en français.",
-        "- utilise uniquement les informations présentes dans les fragments sélectionnés ;",
+        "À partir des extraits ci-dessous, rédige une synthèse structurée en français.",
+        "- utilise uniquement les informations présentes dans les extraits sélectionnés ;",
         "- signale explicitement les points incertains ou contradictoires ;",
         "- cite les sources entre parenthèses quand c'est pertinent ;",
         "- termine par une courte liste de points clés.",
         "",
         question ? `## Question de départ\n${question}\n` : "",
-        "## Fragments",
+        "## Extraits",
         "",
         ...entries.flatMap((entry, index) => [
-          `### Fragment ${index + 1} - ${entry.ownerLabel}`,
+          `### Extrait ${index + 1} - ${entry.ownerLabel}`,
           `Sources : ${(entry.fragment.document_paths || []).join(" · ") || "Aucune source déterminée"}`,
           "",
           entry.fragment.text || "",
@@ -2972,8 +2972,8 @@
         return;
       }
       const { fragmentsMarkdown } = buildSynthesisExports();
-      downloadTextFile("fragments-selectionnes.md", fragmentsMarkdown);
-      setOverlayState("Export prêt", "Les fragments sélectionnés ont été téléchargés au format Markdown.");
+      downloadTextFile("extraits-selectionnes.md", fragmentsMarkdown);
+      setOverlayState("Export prêt", "Les extraits sélectionnés ont été téléchargés au format Markdown.");
     });
 
     downloadSynthesisPromptButton.addEventListener("click", () => {
@@ -2981,8 +2981,8 @@
         return;
       }
       const { promptMarkdown } = buildSynthesisExports();
-      downloadTextFile("prompt-synthese-graphrag.md", promptMarkdown);
-      setOverlayState("Export prêt", "Le prompt de synthèse a été téléchargé au format Markdown.");
+      downloadTextFile("consigne-synthese.md", promptMarkdown);
+      setOverlayState("Export prêt", "La consigne de synthèse a été téléchargée au format Markdown.");
     });
 
     copySynthesisPromptButton.addEventListener("click", async () => {
@@ -2992,10 +2992,10 @@
       const { promptMarkdown } = buildSynthesisExports();
       const copied = await copyTextToClipboard(promptMarkdown);
       if (copied) {
-        setOverlayState("Prompt copié", "Le prompt de synthèse a été copié dans le presse-papiers.");
+        setOverlayState("Consigne copiée", "La consigne de synthèse a été copiée dans le presse-papiers.");
         return;
       }
-      setOverlayState("Copie impossible", "Le navigateur n'a pas permis la copie automatique du prompt.", true);
+      setOverlayState("Copie impossible", "Le navigateur n'a pas permis la copie automatique de la consigne.", true);
     });
 
     initializeViewer();
@@ -3085,6 +3085,18 @@
           if (!vide && shell.classList.contains("replie-droite")) poser("droite", false, false);
         }).observe(titre, { childList: true, characterData: true, subtree: true });
       }
+    })();
+  </script>
+  <!-- La barre commune de la bêta (« Mon avis ») — seulement quand la page est ouverte SEULE.
+       Dans une iframe (la page « Liens entre documents » de Mes collections, l'assistant), la page
+       qui l'accueille a déjà la sienne : on ne la double pas. Absent, le menu ne casse rien. -->
+  <script>
+    (function () {
+      try { if (window.top !== window) return; } catch (e) { return; }
+      var s = document.createElement("script");
+      s.src = "/_beta/menu.js";
+      s.onerror = function () { void 0; };
+      document.body.appendChild(s);
     })();
   </script>
 </body>

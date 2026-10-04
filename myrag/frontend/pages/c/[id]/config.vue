@@ -1,36 +1,31 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Configuration</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Réglages" />
 
-    <h1 class="fr-h3">Configuration — {{ titre }}</h1>
+    <h1 class="fr-h3">Réglages — {{ titre }}</h1>
 
-    <div v-if="loading" class="fr-callout"><p>Chargement...</p></div>
+    <div v-if="loading" class="fr-callout"><p>Chargement…</p></div>
 
     <div v-else class="fr-col-8">
-      <!-- Etat de partage : ou cette collection est-elle servie ? -->
+      <!-- État de partage : où cette collection est-elle servie ? -->
       <div class="fr-callout fr-mb-2w" :class="estServie ? 'fr-callout--green-emeraude' : ''">
         <h2 class="fr-callout__title fr-h6">Partage</h2>
         <p v-if="estServie" class="fr-callout__text fr-text--sm">
-          Cette collection est <strong>partagee</strong> — servie dans :
+          Cette collection est <strong>partagée</strong> — disponible dans :
           <span v-for="t in partage.targets" :key="t.app" class="fr-badge fr-badge--sm fr-badge--success fr-ml-1v"
                 :title="t.model_id">{{ appLabel(t.app) }}</span>
           <br />
-          Alias : <strong>{{ partage.alias_name || '—' }}</strong> ·
-          Visibilite : <strong>{{ visibiliteLabel(partage.visibility) }}</strong>
+          Nom dans l'assistant : <strong>{{ partage.alias_name || '—' }}</strong> ·
+          Visible par : <strong>{{ visibiliteLabel(partage.visibility) }}</strong>
           <span v-if="partage.published_at"> · depuis le {{ partage.published_at.slice(0, 10) }}</span>
         </p>
         <p v-else class="fr-callout__text fr-text--sm">
-          Cette collection <strong>n'est partagee dans aucune application</strong>
-          ({{ etatLabel(partage.state) }}) : elle n'apparait pas dans l'agent conversationnel.
+          Cette collection <strong>n'est partagée dans aucune application</strong>
+          ({{ etatLabel(partage.state) }}) : elle n'apparaît pas dans l'assistant.
         </p>
-        <NuxtLink :to="`/c/${id}/publish`" class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w">
-          {{ estServie ? 'Modifier le partage' : 'Publier la collection' }}
+        <NuxtLink :to="`/c/${id}/publish`" class="fr-btn fr-btn--sm fr-btn--secondary fr-btn--icon-left fr-icon-share-forward-line fr-mt-1w"
+                  title="Rendre la collection disponible dans Mon assistant, et choisir qui la voit.">
+          {{ estServie ? 'Modifier le partage' : 'Partager dans Mon assistant' }}
         </NuxtLink>
       </div>
 
@@ -51,14 +46,14 @@
       <div class="fr-input-group">
         <label class="fr-label">
           Description
-          <span class="fr-hint-text">Ce texte apparait dans le catalogue et aide les autres utilisateurs a trouver votre collection.</span>
+          <span class="fr-hint-text">Ce texte apparaît dans le catalogue et aide les autres utilisateurs à trouver votre collection.</span>
         </label>
         <textarea class="fr-input" v-model="form.description" rows="2"
-                  placeholder="Ex: Documentation juridique sur le droit des etrangers"></textarea>
+                  placeholder="Ex. : documentation juridique sur le droit des étrangers"></textarea>
         <div class="fr-mt-1w">
           <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-magic-line fr-btn--icon-left"
                   @click="guessDescription" :disabled="guessing">
-            {{ guessing ? 'Analyse en cours…' : 'Deviner depuis le contenu indexé' }}
+            {{ guessing ? 'Analyse en cours…' : 'Proposer une description à partir des documents' }}
           </button>
           <span v-if="guessError" class="fr-text--sm fr-ml-2w" style="color:#ce0500;">
             {{ guessError }}
@@ -66,9 +61,11 @@
         </div>
       </div>
 
-      <!-- Type de collection (profil couple) -->
+      <!-- Type de collection (profil couplé) -->
       <div class="fr-select-group fr-mt-2w">
-        <label class="fr-label">Type de collection (decoupage + prompt systeme)</label>
+        <label class="fr-label">Type de collection
+          <span class="fr-hint-text">Il règle ensemble la façon de découper les documents et les consignes données à l'assistant.</span>
+        </label>
         <select class="fr-select" v-model="selectedProfile" @change="applyProfile">
           <option v-for="p in profiles" :key="p.key" :value="p.key">
             {{ p.icon }} {{ p.label }}
@@ -80,21 +77,21 @@
       <!-- Reindex warning -->
       <div v-if="needsReindex" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w">
         <p>
-          <strong>Attention :</strong> vous avez modifie le type de collection (strategie de decoupage ou prompt).
-          Les documents deja indexes ne seront pas re-decoupes automatiquement.
+          <strong>Attention :</strong> vous avez modifié le type de collection (découpage des documents ou consignes).
+          Les documents déjà ajoutés ne seront pas redécoupés automatiquement.
         </p>
         <div class="fr-btns-group fr-btns-group--inline fr-mt-1w">
           <button v-if="hasSourceFiles" class="fr-btn fr-btn--sm" @click="reindex" :disabled="reindexing">
-            {{ reindexing ? 'Re-indexation...' : 'Re-indexer avec la nouvelle strategie' }}
+            {{ reindexing ? 'Redécoupage en cours…' : 'Redécouper les documents selon le nouveau type' }}
           </button>
           <span v-else class="fr-text--sm" style="color:#666;">
-            Aucun fichier source enregistre —
-            <NuxtLink :to="`/c/${id}/upload`" class="fr-link">re-chargez vos documents</NuxtLink>.
+            Aucun fichier d'origine enregistré —
+            <NuxtLink :to="`/c/${id}/upload`" class="fr-link">ajoutez à nouveau vos documents</NuxtLink>.
           </span>
         </div>
         <div v-if="reindexResult" class="fr-mt-1w">
           <p class="fr-text--sm" style="color:#18753c;">
-            Re-indexation lancee : {{ reindexResult.files_reindexed }} fichier(s) en cours de traitement.
+            Redécoupage lancé : {{ reindexResult.files_reindexed }} fichier(s) en cours de traitement.
           </p>
         </div>
       </div>
@@ -105,15 +102,15 @@
         <div class="fr-fieldset__element">
           <div class="fr-checkbox-group">
             <input type="checkbox" id="graph" v-model="form.graph_enabled" />
-            <label class="fr-label" for="graph">Activer le graph de references</label>
+            <label class="fr-label" for="graph">Activer les liens entre documents</label>
           </div>
           <details class="fr-mt-1w fr-ml-4w">
-            <summary class="fr-text--sm" style="cursor:pointer;color:#000091;">En savoir plus sur le graph</summary>
+            <summary class="fr-text--sm" style="cursor:pointer;color:#000091;">En savoir plus sur les liens entre documents</summary>
             <div class="fr-callout fr-callout--green-emeraude fr-mt-1w">
               <p class="fr-callout__text fr-text--sm">
-                Le <strong>graph de references</strong> cartographie les liens entre les documents
-                (renvois entre articles, references croisees). Il permet de naviguer visuellement
-                et d'enrichir les reponses du RAG.
+                Les <strong>liens entre documents</strong> cartographient les renvois entre les documents
+                (renvois entre articles, références croisées). Ils permettent de naviguer visuellement
+                et d'enrichir les réponses de l'assistant.
               </p>
             </div>
           </details>
@@ -121,29 +118,29 @@
         <div v-if="form.graph_enabled" class="fr-fieldset__element">
           <div class="fr-checkbox-group">
             <input type="checkbox" id="ai_summary" v-model="form.ai_summary_enabled" />
-            <label class="fr-label" for="ai_summary">Resume IA des articles longs dans le graph</label>
+            <label class="fr-label" for="ai_summary">Résumé automatique des articles longs dans la carte des liens</label>
           </div>
         </div>
         <div v-if="form.ai_summary_enabled" class="fr-fieldset__element fr-ml-4w">
           <div class="fr-input-group">
-            <label class="fr-label">Seuil (caracteres)</label>
+            <label class="fr-label">Longueur à partir de laquelle un article est résumé (en caractères)</label>
             <input class="fr-input" type="number" v-model.number="form.ai_summary_threshold" min="100" />
           </div>
         </div>
       </fieldset>
 
-      <!-- Sensibilite + Portee -->
+      <!-- Sensibilité + portée -->
       <div class="fr-grid-row fr-grid-row--gutters fr-mt-2w" style="align-items:flex-start;">
         <div class="fr-col-6">
           <div class="fr-select-group">
             <label class="fr-label">
-              Sensibilite
+              Sensibilité
               <span class="fr-hint-text">Niveau de classification des documents</span>
             </label>
             <select class="fr-select" v-model="form.sensitivity">
-              <option value="public">Donnees ouvertes</option>
-              <option value="internal">Interne au ministeriel</option>
-              <option value="personal">Donnees personnelles</option>
+              <option value="public">Données ouvertes</option>
+              <option value="internal">Interne au ministère</option>
+              <option value="personal">Données personnelles</option>
               <option value="confidential">Confidentiel</option>
               <option value="restricted">Diffusion restreinte</option>
             </select>
@@ -152,13 +149,13 @@
         <div class="fr-col-6">
           <div class="fr-select-group">
             <label class="fr-label">
-              Portee
-              <span class="fr-hint-text">Qui pourra acceder a cette collection</span>
+              Portée
+              <span class="fr-hint-text">Qui pourra ouvrir cette collection dans Mes collections</span>
             </label>
             <select class="fr-select" v-model="form.scope">
-              <option value="public">Tout le ministere</option>
+              <option value="public">Tout le ministère</option>
               <option value="group">Un ou plusieurs groupes</option>
-              <option value="private">Prive (pour evaluation)</option>
+              <option value="private">Privé (pour évaluation)</option>
             </select>
           </div>
         </div>
@@ -178,7 +175,7 @@
       <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
         <NuxtLink :to="`/c/${id}`" class="fr-btn fr-btn--secondary">← Retour</NuxtLink>
         <button class="fr-btn" @click="save" :disabled="saving">
-          {{ saving ? 'Sauvegarde...' : 'Sauvegarder' }}
+          {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
         </button>
       </div>
 
@@ -218,12 +215,12 @@ const needsReindex = computed(() => {
 })
 
 const profiles = [
-  { key: 'generique', icon: '📄', label: 'Generique', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Pour tout type de document sans specialisation. Decoupage automatique.' },
-  { key: 'juridique', icon: '⚖️', label: 'Juridique (codes, lois)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Decoupage par article avec hierarchie Livre/Titre/Chapitre. Citations d\'articles dans les reponses.' },
-  { key: 'faq', icon: '❓', label: 'FAQ / Questions-reponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Decoupage par question/reponse. Reponses directes avec source.' },
-  { key: 'technique', icon: '🔧', label: 'Documentation technique', strategy: 'section', prompt: 'technique', graph: false, desc: 'Decoupage par section/chapitre. References croisees entre sections.' },
-  { key: 'multimedia', icon: '🎬', label: 'Multimedia (images, audio, video)', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions audio, descriptions d\'images. Citations avec timecodes.' },
-  { key: 'multi', icon: '📚', label: 'Corpus multi-thematique', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Gros corpus couvrant plusieurs domaines avec des documents varies.' },
+  { key: 'generique', icon: '📄', label: 'Générique', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Pour tout type de document sans spécialisation. Découpage automatique.' },
+  { key: 'juridique', icon: '⚖️', label: 'Juridique (codes, lois)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Découpage par article avec hiérarchie Livre/Titre/Chapitre. Citations d\'articles dans les réponses.' },
+  { key: 'faq', icon: '❓', label: 'FAQ / Questions-réponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Découpage par question/réponse. Réponses directes avec source.' },
+  { key: 'technique', icon: '🔧', label: 'Documentation technique', strategy: 'section', prompt: 'technique', graph: false, desc: 'Découpage par section/chapitre. Références croisées entre sections.' },
+  { key: 'multimedia', icon: '🎬', label: 'Multimédia (images, audio, vidéo)', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions audio, descriptions d\'images. Citations avec minutage.' },
+  { key: 'multi', icon: '📚', label: 'Collection multi-thématique', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Grande collection couvrant plusieurs domaines avec des documents variés.' },
 ]
 
 const currentProfileDesc = computed(() => {
@@ -250,17 +247,17 @@ const partage = ref<{ state: string, targets: any[], alias_name?: string,
 const estServie = computed(() => (partage.value.targets || []).length > 0)
 
 function appLabel(app: string) {
-  return { assistant: 'Agent conversationnel' }[app] || app
+  return { assistant: 'Mon assistant' }[app] || app
 }
 
 function etatLabel(s: string) {
-  return { draft: 'brouillon, jamais publiee', disabled: 'publication desactivee',
-           archived: 'archivee' }[s] || 'brouillon'
+  return { draft: 'brouillon, jamais partagée', disabled: 'partage désactivé',
+           archived: 'archivée' }[s] || 'brouillon'
 }
 
 function visibiliteLabel(v?: string) {
-  return { all: 'tous les utilisateurs connectes', group: 'groupes autorises',
-           users: 'utilisateurs nommes' }[v || ''] || v || '—'
+  return { all: 'tous les utilisateurs connectés', group: 'groupes autorisés',
+           users: 'utilisateurs nommés' }[v || ''] || v || '—'
 }
 
 function applyProfile() {
@@ -339,12 +336,12 @@ async function guessDescription() {
     })
     const text = (result?.response || '').trim()
     if (!text || text.toLowerCase().startsWith('contenu non determinable')) {
-      guessError.value = "Pas assez de contenu indexé pour en deduire une description."
+      guessError.value = "Pas assez de contenu dans les documents pour en déduire une description."
     } else {
       form.value.description = text
     }
   } catch (e: any) {
-    guessError.value = e?.message || 'Echec de la generation.'
+    guessError.value = e?.message || 'Échec de la génération.'
   } finally {
     guessing.value = false
   }
@@ -357,7 +354,7 @@ async function reindex() {
     const result = await post(`/api/ingest/${id}/reindex?strategy=${form.value.strategy}&sensitivity=${form.value.sensitivity}`, {})
     reindexResult.value = result
   } catch (e: any) {
-    savedMsg.value = `Erreur re-indexation: ${e.message}`
+    savedMsg.value = `Erreur pendant le redécoupage : ${e.message}`
     savedClass.value = 'fr-alert--error'
   }
   reindexing.value = false
@@ -374,13 +371,13 @@ async function save() {
       await patch(`/api/collections/${id}`, form.value)
     }
     retenir({ name: id, titre: form.value.titre })
-    savedMsg.value = 'Configuration sauvegardee. Retour a la liste dans un instant…'
+    savedMsg.value = 'Réglages enregistrés. Retour à la fiche de la collection dans un instant…'
     savedClass.value = 'fr-alert--success'
-    // Leave the success banner visible briefly, then send the user back
-    // to the home page listing all collections.
-    setTimeout(() => { navigateTo('/') }, 1500)
+    // Le bandeau reste visible un instant, puis on revient à la fiche de la collection :
+    // c'est d'elle que l'on est parti, pas de l'accueil.
+    setTimeout(() => { navigateTo(`/c/${id}`) }, 1500)
   } catch (e: any) {
-    savedMsg.value = `Erreur: ${e.message}`
+    savedMsg.value = `Erreur : ${e.message}`
     savedClass.value = 'fr-alert--error'
     setTimeout(() => { savedMsg.value = '' }, 4000)
   }

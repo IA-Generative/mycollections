@@ -1,26 +1,20 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/">Collections</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" :to="`/c/${id}`">{{ titre }}</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Publication</a></li>
-      </ol>
-    </nav>
+    <FilAriane :collection="id" :titre="titre" rubrique="Partager dans Mon assistant" />
 
-    <h1 class="fr-h3">Publication — {{ titre }}</h1>
+    <h1 class="fr-h3">Partager dans Mon assistant — {{ titre }}</h1>
 
     <div class="fr-callout fr-mb-4w">
-      <h2 class="fr-callout__title fr-h6">Publier, qu'est-ce que ça change ?</h2>
+      <h2 class="fr-callout__title fr-h6">Partager dans Mon assistant, qu'est-ce que ça change ?</h2>
       <p class="fr-callout__text fr-text--sm">
-        Tant qu'une collection n'est pas publiée, elle ne s'interroge qu'ici, dans son bac à sable.
-        <strong>La publier la fait apparaître dans l'assistant MirAI</strong>, là où vos collègues posent
+        Tant qu'une collection n'est pas partagée, elle ne s'interroge qu'ici, dans son bac à sable.
+        <strong>La partager la fait apparaître dans Mon assistant</strong>, là où vos collègues posent
         leurs questions : ils la choisissent dans la liste des modèles, et l'assistant leur répond à
         partir de vos documents, en citant ses sources.
       </p>
       <p class="fr-text--sm fr-mb-0">
         Rien n'est définitif : « Désactiver » la retire de l'assistant sans toucher aux documents,
-        et vous pouvez republier quand vous voulez.
+        et vous pouvez la partager à nouveau quand vous voulez.
       </p>
     </div>
 
@@ -44,7 +38,7 @@
         <div class="fr-col-8">
           <!-- 1. Dans l'assistant -->
           <fieldset class="fr-fieldset fr-mb-4w">
-            <legend class="fr-fieldset__legend fr-h5">1. Dans l'assistant MirAI</legend>
+            <legend class="fr-fieldset__legend fr-h5">1. Dans Mon assistant</legend>
             <div class="fr-fieldset__element">
               <div class="fr-checkbox-group">
                 <input type="checkbox" id="alias" v-model="form.alias_enabled" />
@@ -53,7 +47,7 @@
                   <span class="fr-hint-text">
                     Vos collègues la verront sous le nom ci-dessous, à côté des autres modèles. Ils la
                     sélectionnent, posent leur question, et la réponse s'appuie sur vos documents.
-                    C'est la façon normale de publier — laissez cette case cochée.
+                    C'est la façon normale de partager — laissez cette case cochée.
                   </span>
                 </label>
               </div>
@@ -110,7 +104,7 @@
             </div>
             <p class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
               Ce réglage ne concerne que l'assistant. Qui peut ouvrir cette fiche et son bac à sable se règle dans
-              <NuxtLink :to="`/c/${id}/config`" class="fr-link fr-text--xs">Configurer → Portée</NuxtLink>.
+              <NuxtLink :to="`/c/${id}/config`" class="fr-link fr-text--xs">Réglages → Portée</NuxtLink>.
             </p>
           </fieldset>
 
@@ -145,7 +139,7 @@
           <div class="fr-btns-group fr-btns-group--inline">
             <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
                     title="Fait apparaître la collection dans l'assistant, pour les personnes choisies ci-dessus.">
-              {{ publishing ? 'Publication…' : 'Publier' }}
+              {{ publishing ? 'Partage en cours…' : 'Partager dans Mon assistant' }}
             </button>
             <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
                     title="Applique vos changements (nom, description, qui la voit) à la collection déjà publiée.">
@@ -162,7 +156,7 @@
                :class="owuiError ? 'fr-alert--warning' : 'fr-alert--success'">
             <p>{{ result }}</p>
             <p v-if="owuiError" class="fr-text--sm" style="margin-top:0.4rem;">
-              <strong>OWUI :</strong> {{ owuiError }}
+              <strong>Assistant :</strong> {{ owuiError }}
             </p>
           </div>
         </div>
@@ -187,7 +181,7 @@
           <div v-if="pub.history && pub.history.length > 0">
             <div v-for="(h, i) in pub.history.slice().reverse()" :key="i" class="fr-mb-1w">
               <p class="fr-text--sm">
-                <strong>{{ h.action }}</strong> — {{ h.at }}<br>
+                <strong>{{ libelleActionPublication(h.action) }}</strong> — {{ h.at }}<br>
                 <span v-if="h.by">par {{ h.by }}</span>
               </p>
             </div>
@@ -229,6 +223,7 @@
 
 <script setup lang="ts">
 import { libelleEtat, messageErreur } from '~/utils/collectif'
+import { libelleActionPublication } from '~/utils/libelles'
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
@@ -284,7 +279,7 @@ async function publish() {
     const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' && groupe ? [groupe] : [] }
     const data = await post(`/api/collections/${id}/publish`, corps)
     pub.value = await get(`/api/collections/${id}/publication`)
-    const base = 'Collection publiée'
+    const base = 'Collection partagée'
     if (data?.owui?.synced) {
       result.value = `${base} : elle apparaît dans l'assistant sous le modèle « ${data.owui.model_id} ».`
     } else if (data?.owui?.error) {
