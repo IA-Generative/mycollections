@@ -15,6 +15,7 @@ from app import version as version_module
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
 from app.routers import accueil as accueil_routeur
 from app.routers import amorces, bus, categories, collectif, corpus, demandes, fiches, guide
+from app.routers import recherche
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -149,6 +150,9 @@ app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
 app.include_router(version_module.router)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.
 app.include_router(bus.router)
+# La recherche de Mon portail (contrat de recherche MirAI) : sa garde (audience, groupe) et son CORS.
+app.include_router(recherche.router)
+app.add_middleware(recherche.CorsRecherche)
 
 
 @app.get("/api/moi", dependencies=AUTH_REQUIRED)
