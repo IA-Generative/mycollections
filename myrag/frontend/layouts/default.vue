@@ -179,10 +179,20 @@ const { serviceIndisponible, rechercheIndisponible, retabli, fenetreOuverte, dem
 const bandeauMasque = ref(false)
 watch([serviceIndisponible, rechercheIndisponible], () => { bandeauMasque.value = false })
 
+/** Le garde `admin-only` laisse passer tant que le compte n'est pas chargé (il ne peut pas
+ *  l'attendre : c'est ce gabarit qui le charge). Une fois chargé, on refait le contrôle :
+ *  un simple testeur qui tape /admin repart à l'accueil au lieu de voir une page vide. */
+function garderLAdministration() {
+  const mw = route.meta.middleware
+  const protegee = Array.isArray(mw) ? mw.includes('admin-only') : mw === 'admin-only'
+  if (protegee && !isAdmin.value) navigateTo('/')
+}
+
 onMounted(async () => {
   // Init auth (redirect to Keycloak if not logged in)
   if (config.public.authEnabled) {
     await initAuth()
+    garderLAdministration()
   }
 
   chargerCapacites()

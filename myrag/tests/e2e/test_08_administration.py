@@ -6,12 +6,11 @@ import re
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="P1 : en tapant /admin, un simple testeur voit la page d'administration (le garde admin-only laisse passer tant que le compte n'est pas chargé) ; l'API refuse ensuite, la page reste vide")
 def test_un_testeur_simple_n_entre_pas_dans_l_administration(session_testeur):
     if any(g.endswith("/superadmin") for g in session_testeur.groupes()):
         pytest.skip("le compte testeur est superadmin")
     page = session_testeur.aller("/admin")
-    page.wait_for_timeout(3_000)
+    page.wait_for_timeout(4_000)
     assert "Administration MyRAG" not in session_testeur.texte(), "la page d'administration s'affiche à un simple testeur"
 
 
