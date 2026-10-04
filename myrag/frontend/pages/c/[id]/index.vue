@@ -424,7 +424,7 @@ async function adoptCollection() {
     // Reload the whole page so onMounted re-runs with the new DB record.
     window.location.reload()
   } catch (e: any) {
-    adoptError.value = e?.message || 'Échec de la création.'
+    adoptError.value = messageErreur(e)
     adopting.value = false
   }
 }

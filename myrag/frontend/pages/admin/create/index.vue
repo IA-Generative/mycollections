@@ -3,12 +3,12 @@
     <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Creer une collection</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Créer une collection</a></li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">Creer une collection</h1>
-    <p class="fr-text--lg fr-mb-2w">Etape 1 sur 5 — D'ou viennent vos documents ?</p>
+    <h1 class="fr-h3">Créer une collection</h1>
+    <p class="fr-text--lg fr-mb-2w">Étape 1 sur 5 — D'où viennent vos documents ?</p>
 
     <div class="fr-callout fr-mb-4w">
       <p class="fr-callout__text">

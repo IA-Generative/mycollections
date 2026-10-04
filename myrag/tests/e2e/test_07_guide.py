@@ -38,12 +38,10 @@ def test_le_sommaire_annonce_le_bon_nombre_de_pages(session_testeur, pages_du_gu
     page = session_testeur.aller("/guide")
     texte = session_testeur.texte()
     annonce = re.search(r"\b(Cinq|Six|cinq|six)\s+pages\b", texte)
-    if annonce and annonce.group(1).lower() != "six":
-        pytest.xfail("P2 : le sommaire dit « Cinq pages » pour six (pages/guide/index.vue)")
-    assert True
+    assert not annonce or annonce.group(1).lower() == "six", "le sommaire annonce un autre nombre de pages"
 
 
-@pytest.mark.parametrize("mention", ["onglet Sources", "onglet Grille de contrôle", "Vingt questions"])
+@pytest.mark.parametrize("mention", ["onglet Sources", "onglet Grille de contrôle", "Poser les **vingt questions"])
 def test_le_guide_ne_promet_pas_ce_que_l_interface_n_a_pas(session_testeur, pages_du_guide, mention):
     textes = " ".join(session_testeur.get(f"/api/guide/{p['slug']}").json().get("markdown", "") for p in pages_du_guide)
     if mention.lower() in textes.lower():

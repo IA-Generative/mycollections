@@ -17,11 +17,21 @@
       <template v-else-if="etat.garant_pressenti">Garant pressenti : {{ etat.garant_pressenti }} (à confirmer).</template>
       <template v-else>Pas encore de garant.</template>
     </p>
-    <div v-if="etat.transitions_possibles && etat.transitions_possibles.length" class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-2w">
+    <div v-if="etat.transitions_possibles && etat.transitions_possibles.length && !aConfirmer" class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-2w">
       <button v-for="cible in etat.transitions_possibles" :key="cible" class="fr-btn fr-btn--sm"
-              :class="indexEtat(cible) < indexEtat(etat.etat) ? 'fr-btn--secondary' : ''" @click="$emit('changer', cible)">
+              :class="indexEtat(cible) < indexEtat(etat.etat) ? 'fr-btn--secondary' : ''" @click="demander(cible)">
         {{ indexEtat(cible) < indexEtat(etat.etat) ? 'Retirer de la diffusion à tous' : `Passer en « ${libelleEtat(cible)} »` }}
       </button>
+    </div>
+    <!-- Ouvrir à tout le ministère, ou en retirer : deux gestes qui engagent, jamais sur un seul clic. -->
+    <div v-if="aConfirmer" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w" role="alertdialog" aria-labelledby="etapes-confirmer">
+      <p id="etapes-confirmer">{{ aConfirmer === 'publiee_tous'
+        ? "Passer en « Publiée à tous » : la collection pourra être partagée avec tout le ministère, et ses réponses ne porteront plus la mention « en cours de vérification ». Confirmer ?"
+        : "Retirer la collection de la diffusion à tous : elle ne restera visible que de son groupe. Confirmer ?" }}</p>
+      <div class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-1w">
+        <button class="fr-btn fr-btn--sm" @click="confirmer">Confirmer</button>
+        <button ref="btnAnnuler" class="fr-btn fr-btn--sm fr-btn--tertiary" @click="aConfirmer = ''">Annuler</button>
+      </div>
     </div>
     <p v-else-if="etat.je_suis_garant && etat.etat === 'publiee_groupe' && !etat.grille_complete" class="fr-text--xs fr-mt-1w" style="color:var(--text-default-warning)">
       Publier à tous demande la grille de contrôle complète (source et licence, données personnelles, fraîcheur, une relecture).
@@ -42,10 +52,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { ETATS_COLLECTION, indexEtat, libelleEtat } from '~/utils/collectif'
-defineProps<{ etat: any; superadmin?: boolean }>()
-defineEmits<{ (e: 'changer', cible: string): void; (e: 'forcer', cible: string, motif: string): void }>()
+const props = defineProps<{ etat: any; superadmin?: boolean }>()
+const emit = defineEmits<{ (e: 'changer', cible: string): void; (e: 'forcer', cible: string, motif: string): void }>()
+const aConfirmer = ref('')
+const btnAnnuler = ref<HTMLButtonElement | null>(null)
+/** Les passages qui touchent « publiée à tous » se confirment ; les autres partent au clic. */
+function demander(cible: string) {
+  if (cible === 'publiee_tous' || props.etat?.etat === 'publiee_tous') {
+    aConfirmer.value = cible
+    nextTick(() => btnAnnuler.value?.focus())
+    return
+  }
+  emit('changer', cible)
+}
+function confirmer() {
+  const cible = aConfirmer.value
+  aConfirmer.value = ''
+  emit('changer', cible)
+}
 const cibleForcee = ref('')
 const motifForce = ref('')
 </script>

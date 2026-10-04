@@ -121,17 +121,20 @@ async def _ingest_content(
     from app.models.db import SourceFile
     checksum = hashlib.sha256(content).hexdigest()
     async with async_session() as session:
-        sf = SourceFile(
-            collection_name=collection,
-            filename=filename,
-            original_url=source_path if source_path.startswith("http") else "",
-            storage_path=saved_path,
-            file_size=len(content),
-            checksum=checksum,
-            strategy_used=strategy,
-            chunks_produced=len(chunks),
-        )
-        session.add(sf)
+        # Une ligne par (collection, fichier) : redéposer ou réindexer met la ligne à jour au lieu
+        # d'en ajouter une (avant : N lignes, puis 2N, puis 4N à chaque réindexation).
+        sf = (await session.execute(select(SourceFile).where(
+            SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
+        if sf is None:
+            sf = SourceFile(collection_name=collection, filename=filename)
+            session.add(sf)
+        if source_path.startswith("http") or not sf.original_url:
+            sf.original_url = source_path if source_path.startswith("http") else ""
+        sf.storage_path = saved_path
+        sf.file_size = len(content)
+        sf.checksum = checksum
+        sf.strategy_used = strategy
+        sf.chunks_produced = len(chunks)
         await session.commit()
 
     # Create job in DB and start background upload
@@ -238,22 +241,29 @@ async def reindex_collection(collection: str, strategy: Strategy = "auto", sensi
     if not source_files:
         raise HTTPException(status_code=400, detail="Aucun fichier source enregistre pour cette collection. Re-uploadez vos documents.")
 
-    # Delete existing partition and recreate
-    client = OpenRAGClient()
-    try:
-        await client._post(f"/partition/{collection}", json=None)  # create if not exists
-    except Exception:
-        pass
-
-    # Re-ingest each source file
-    total_jobs = []
+    # Tout vérifier AVANT d'effacer : chaque source est présente, lisible et produit des
+    # morceaux avec la nouvelle stratégie. Sinon on refuse, et la collection reste intacte.
+    uniques: dict[str, SourceFile] = {}
     for sf in source_files:
+        uniques.setdefault(sf.filename, sf)  # d'anciennes lignes en double : une seule par fichier
+    contenus = []
+    for sf in uniques.values():
         path = Path(sf.storage_path)
         if not path.exists():
-            logger.warning(f"Source file missing: {sf.storage_path}")
-            continue
-
+            raise HTTPException(status_code=409, detail=f"Le fichier source « {sf.filename} » n'est plus conservé : redéposez-le avant de réindexer.")
         content = path.read_bytes()
+        if not chunk_document(texte_ou_refus(content, sf.filename), strategy=strategy, max_chars=512, overlap=50, sensitivity=sensitivity):
+            raise HTTPException(status_code=422, detail=f"Avec ce découpage, « {sf.filename} » ne produirait aucun passage : choisissez un autre découpage.")
+        contenus.append((sf, content))
+
+    # Vider la partition puis la recréer : avant, les anciens morceaux restaient à côté des
+    # nouveaux, et chaque réindexation doublait le corpus dans OpenRAG.
+    client = OpenRAGClient()
+    await client.delete_partition(collection)
+    await client.create_partition(collection)
+
+    total_jobs = []
+    for sf, content in contenus:
         result = await _ingest_content(
             collection=collection,
             filename=sf.filename,

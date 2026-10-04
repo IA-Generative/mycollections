@@ -230,7 +230,7 @@ async function runAll() {
       } catch (e: any) {
         batchResults.value.push({
           question: q.question,
-          response: `Erreur : ${e?.message || e}`,
+          response: messageErreur(e),
           source_count: 0,
         })
       }

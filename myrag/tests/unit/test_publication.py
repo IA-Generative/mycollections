@@ -69,3 +69,24 @@ def test_une_collection_jamais_publiee_propose_la_case_cochee(client, en_tant_qu
     en_tant_que(personne("createur"))
     pub = client.get(f"/api/collections/{nom}/publication").json()
     assert pub["state"] == "draft" and pub["alias_enabled"] is True
+
+
+def test_l_historique_est_rendu_avec_l_etat_sans_courriel_et_signe_par_l_appelant(client, en_tant_que, creer_collection, nom, socle):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    client.post(f"/api/collections/{nom}/publish", json=PUBLIER)
+    client.post(f"/api/collections/{nom}/unpublish")
+    hist = client.get(f"/api/collections/{nom}/publication").json()["history"]
+    assert [h["action"] for h in hist][-2:] == ["published", "disabled"]
+    assert all(set(h) == {"action", "at"} for h in hist), "ni nom ni courriel dans l'historique servi à la page"
+    complet = client.get(f"/api/collections/{nom}/publication/history").json()["history"]
+    assert complet[0]["by"] == "pcreateur", "le geste est signé par l'appelant, plus « admin »"
+
+
+def test_archiver_une_collection_servie_la_retire_de_l_assistant(client, en_tant_que, creer_collection, nom, socle):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    client.post(f"/api/collections/{nom}/publish", json=PUBLIER)
+    with patch("app.routers.publication._retirer_du_socle", new=AsyncMock(return_value=None)) as retrait:
+        assert client.post(f"/api/collections/{nom}/archive").status_code == 200
+    retrait.assert_awaited_once_with(nom)

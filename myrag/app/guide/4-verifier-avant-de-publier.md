@@ -21,7 +21,8 @@ complète : trois champs renseignés et une relecture. Un administrateur peut fo
 
 ## Vérifier, concrètement
 
-- Poser les **vingt questions de test** dans le bac à sable ; noter ce qui est faux.
+- Poser les **questions de test** de sa banque dans le bac à sable (vingt pour une amorce, quatre
+  proposées pour une collection neuve, à compléter) ; noter ce qui est faux.
 - Pour chaque réponse, **lire ses sources** : survoler une puce montre le début du passage ;
   cliquer dessus ouvre le passage entier, avec un résumé du document dont il vient.
   « Document complet » ouvre l'original. Une réponse juste appuyée sur le mauvais passage

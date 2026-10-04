@@ -88,7 +88,6 @@ def test_la_fiche_d_une_collection_se_lit(session_testeur, collection_publiee, c
     captures.prendre(page, "03-fiche-documents", mobile=False)
 
 
-@pytest.mark.xfail(strict=True, reason="P1 : aucune page d'erreur de l'application (error.vue) : une adresse inconnue montre la page par défaut de Nuxt, en anglais")
 def test_une_adresse_inconnue_est_dite_en_francais(session_testeur, captures):
     page = session_testeur.aller("/cette-page-n-existe-pas")
     page.wait_for_timeout(1_500)

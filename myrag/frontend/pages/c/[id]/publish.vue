@@ -30,7 +30,7 @@
           {{ stateLabel(pub.state) }}
         </span>
         <span v-if="pub.published_at" class="fr-text--sm fr-ml-2w">
-          Publiée le {{ pub.published_at }} par {{ pub.published_by }}
+          Publiée le {{ dateCourte(pub.published_at) }}
         </span>
       </div>
 
@@ -181,7 +181,7 @@
           <div v-if="pub.history && pub.history.length > 0">
             <div v-for="(h, i) in pub.history.slice().reverse()" :key="i" class="fr-mb-1w">
               <p class="fr-text--sm">
-                <strong>{{ libelleActionPublication(h.action) }}</strong> — {{ h.at }}<br>
+                <strong>{{ libelleActionPublication(h.action) }}</strong> — {{ dateCourte(h.at) }}<br>
                 <span v-if="h.by">par {{ h.by }}</span>
               </p>
             </div>
@@ -222,7 +222,7 @@
 </template>
 
 <script setup lang="ts">
-import { libelleEtat, messageErreur } from '~/utils/collectif'
+import { dateCourte, libelleEtat, messageErreur } from '~/utils/collectif'
 import { libelleActionPublication } from '~/utils/libelles'
 const route = useRoute()
 const id = route.params.id as string

@@ -71,7 +71,6 @@ def test_un_compte_hors_du_groupe_est_refuse(verdict_hors_groupe):
     assert issue == "refuse", f"le compte hors groupe n'est pas refusé : {issue} : {detail}"
 
 
-@pytest.mark.xfail(strict=True, reason="P1 : après la connexion, l'application remplace l'adresse par « / » (useAuth.ts) : un lien partagé atterrit à l'accueil")
 def test_un_lien_partage_mene_a_la_page_demandee(navigateur, cible):
     """Un collègue reçoit le lien du guide, se connecte, et doit arriver SUR le guide."""
     from tests.e2e.conftest import _ouvrir

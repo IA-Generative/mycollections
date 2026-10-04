@@ -341,7 +341,7 @@ async function guessDescription() {
       form.value.description = text
     }
   } catch (e: any) {
-    guessError.value = e?.message || 'Échec de la génération.'
+    guessError.value = messageErreur(e)
   } finally {
     guessing.value = false
   }
@@ -354,7 +354,7 @@ async function reindex() {
     const result = await post(`/api/ingest/${id}/reindex?strategy=${form.value.strategy}&sensitivity=${form.value.sensitivity}`, {})
     reindexResult.value = result
   } catch (e: any) {
-    savedMsg.value = `Erreur pendant le redécoupage : ${e.message}`
+    savedMsg.value = `Le redécoupage n'a pas abouti : ${messageErreur(e)}`
     savedClass.value = 'fr-alert--error'
   }
   reindexing.value = false
@@ -377,7 +377,7 @@ async function save() {
     // c'est d'elle que l'on est parti, pas de l'accueil.
     setTimeout(() => { navigateTo(`/c/${id}`) }, 1500)
   } catch (e: any) {
-    savedMsg.value = `Erreur : ${e.message}`
+    savedMsg.value = messageErreur(e)
     savedClass.value = 'fr-alert--error'
     setTimeout(() => { savedMsg.value = '' }, 4000)
   }

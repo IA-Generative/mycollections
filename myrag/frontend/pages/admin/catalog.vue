@@ -8,6 +8,9 @@
     </nav>
 
     <h1 class="fr-h3">Catalogue des collections existantes</h1>
+    <div v-if="erreurAction" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w" role="alert">
+      <p>{{ erreurAction }}</p>
+    </div>
     <p class="fr-text--sm fr-mb-3w">
       Une collection <strong>publiée à tous</strong> s'interroge ici, dans son bac à sable, mais aussi dans
       l'agent conversationnel de MirAI Next et par l'API depuis vos SI — le détail est sur sa fiche.
@@ -78,7 +81,7 @@
     <div v-else-if="filtered.length === 0 && search" class="fr-callout fr-mb-4w">
       <h3 class="fr-callout__title">Aucune collection trouvee pour "{{ search }}"</h3>
       <p class="fr-callout__text">Vous pouvez creer une nouvelle collection.</p>
-      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Creer une collection</NuxtLink>
+      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Créer une collection</NuxtLink>
     </div>
 
     <div v-else :aria-busy="chargement">
@@ -150,7 +153,7 @@
                     {{ col.contact_email }}
                   </a>
                 </div>
-                <span v-else class="fr-text--sm" style="color:#666;">Non renseigne</span>
+                <span v-else class="fr-text--sm" style="color:#666;">Non renseigné</span>
               </td>
               <td>
                 <!-- Archiver, désarchiver, purger : gestes de qui GÈRE la collection (dit par l'API). -->
@@ -207,9 +210,9 @@
                 </h1>
                 <p>Cette action est <strong>irreversible</strong>. Elle supprime :</p>
                 <ul>
-                  <li>La partition OpenRAG (tous les documents indexes)</li>
+                  <li>Tous les documents indexés</li>
                   <li>Les fichiers sources stockes sur disque</li>
-                  <li>Toutes les donnees liees (publications, jobs, feedback, evaluations)</li>
+                  <li>Toutes les données liées (partages, dépôts, avis, évaluations)</li>
                 </ul>
                 <div class="fr-input-group" :class="purgeError ? 'fr-input-group--error' : ''">
                   <label class="fr-label" for="purge-confirm">
@@ -247,6 +250,7 @@ import { NON_CLASSEES, filtrerCollections, grouperParCategorie, titreDe } from '
 
 const { get, post, del } = useApi()
 const { isAdmin } = useAdminAuth()
+const erreurAction = ref('')
 const { lister: listerCategories } = useCategories()
 
 const collections = ref<Collection[]>([])
@@ -317,7 +321,7 @@ async function loadCollections() {
     collections.value = data.collections || []
   } catch (e: any) {
     console.error(e)
-    erreurChargement.value = e?.message || 'Le service ne répond pas. Réessayez dans un instant.'
+    erreurChargement.value = messageErreur(e)
   } finally {
     chargement.value = false
   }
@@ -328,14 +332,14 @@ async function onArchive(col: any) {
   try {
     await post(`/api/collections/${col.name}/archive`)
     await loadCollections()
-  } catch (e: any) { alert(`Erreur: ${e.message}`) }
+  } catch (e: any) { erreurAction.value = messageErreur(e) }
 }
 
 async function onUnarchive(col: any) {
   try {
     await post(`/api/collections/${col.name}/unarchive`)
     await loadCollections()
-  } catch (e: any) { alert(`Erreur: ${e.message}`) }
+  } catch (e: any) { erreurAction.value = messageErreur(e) }
 }
 
 function askPurge(col: any) {
@@ -357,7 +361,7 @@ async function confirmPurge() {
     purgeTarget.value = null
     await loadCollections()
   } catch (e: any) {
-    purgeError.value = e.message
+    purgeError.value = messageErreur(e)
   } finally {
     purging.value = false
   }

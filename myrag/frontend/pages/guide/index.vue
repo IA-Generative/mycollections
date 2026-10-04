@@ -1,7 +1,7 @@
 <template>
   <div class="collectif-guide">
     <h1 class="fr-h2">Soyez acteurs vous-mêmes</h1>
-    <p class="fr-text--lead">Cinq pages pour dire ce qui manque, rassembler, amorcer, vérifier et entretenir un jeu de données — chacune finit par le geste dans l'outil et un exemple tiré des premières collections.</p>
+    <p class="fr-text--lead">Six pages pour dire ce qui manque, rassembler, amorcer, vérifier, entretenir un jeu de données et l'interroger depuis vos applications — chacune finit par le geste dans l'outil et un exemple tiré des premières collections.</p>
     <p v-if="pages === null" class="fr-text--sm">Guide indisponible.</p>
     <ol v-else class="fr-mt-3w">
       <li v-for="p in pages" :key="p.slug" class="fr-mb-2w"><NuxtLink :to="`/guide/${p.slug}`" class="fr-link fr-text--lg">{{ p.titre }}</NuxtLink></li>

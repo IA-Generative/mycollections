@@ -99,10 +99,9 @@ export function useAuth() {
           const signed = await mgr.signinRedirectCallback()
           poserUtilisateur(signed)
           loading.value = false
-          // Full navigation to "/" — window.history.replaceState alone would
-          // change the URL bar but Nuxt router would keep rendering the
-          // callback page forever (stuck on "Connexion en cours...").
-          window.location.replace('/')
+          // Navigation complète (un replaceState laisserait Nuxt sur « Connexion en cours… »),
+          // vers la page DEMANDÉE avant la connexion, gardée dans l'état OIDC (utils/retour.ts).
+          window.location.replace(cheminDeRetour((signed.state as any)?.retour))
           return
         } catch (cbError: any) {
           // Do NOT auto-retry signinRedirect here — if the callback itself is
@@ -130,8 +129,8 @@ export function useAuth() {
         await mgr.removeUser()
       }
 
-      // Case 3: no session — redirect to Keycloak
-      await mgr.signinRedirect()
+      // Case 3: no session — redirect to Keycloak, en retenant la page demandée
+      await mgr.signinRedirect({ state: { retour: adresseCourante(window.location) } })
 
     } catch (e: any) {
       console.error('Auth init error:', e)
