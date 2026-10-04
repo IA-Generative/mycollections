@@ -51,7 +51,7 @@ gestionnaire de secrets de votre plateforme.
 | `test_01_acces` | le service est sain ; l'API refuse tout appel sans jeton ; un compte hors groupe est refusé ; un lien partagé mène à sa page |
 | `test_02_accueil_catalogue` | l'accueil dit quoi faire et son exemple préremplit le bac à sable ; le catalogue liste, cherche, mène aux fiches ; une fiche se lit ; une adresse inconnue est dite en français |
 | `test_03_bac_a_sable` | une question reçoit une réponse sans erreur, qui cite ses sources, lisibles au survol puis en fenêtre ; l'avis dit ce qu'il fait ; l'écran vouvoie |
-| `test_04_creation_collection` | les cinq étapes, par l'interface : source, identification (identifiant vérifié), dépôt et indexation d'un document, question témoin à l'étape 4, publication à l'étape 5, fiche créée |
+| `test_04_creation_collection` | les cinq étapes, par l'interface : source, identification (identifiant vérifié), dépôt et indexation d'un document, question témoin à l'étape 4, étape 5 qui ne promet que ce qui existe, fiche créée ; un PDF refusé avec une explication ; graphe d'une collection non publique fermé sans lien signé |
 | `test_05_publication_assistant` | grille de contrôle complétée et relue ; passages d'état jusqu'à « publiée à tous » ; publication « à tous » ; **le testeur voit le modèle dans l'assistant et il répond avec le témoin** ; dépublier le retire |
 | `test_06_demandes` | la page explique seuil et garant ; déposer une demande ; la lire ; soutenir puis retirer ; l'auteur peut la clore |
 | `test_07_guide` | six pages ordonnées, un sommaire qui mène à chacune, un contenu cohérent avec l'interface |
