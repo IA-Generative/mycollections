@@ -24,9 +24,9 @@ async def lifespan(app: FastAPI):
     # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
     import asyncio
     from app.routers.ingest import reprendre_les_travaux_interrompus
-    reprise = asyncio.create_task(reprendre_les_travaux_interrompus())
+    reprise = asyncio.create_task(reprendre_les_travaux_interrompus()) if settings.reprise_au_demarrage else None
     yield
-    if not reprise.done():
+    if reprise and not reprise.done():
         reprise.cancel()
 
 

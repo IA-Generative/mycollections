@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # catégories, les amorces, le menu Administration). Liste de CHEMINS COMPLETS séparés par des
     # virgules, par ex. `/g/mirai-beta-testeurs-admin`. Vide ⇒ personne n'est superadmin (hors
     # développement sans authentification). Remplace le groupe codé en dur `/myrag/superadmin`.
+    # Reprendre au démarrage les indexations coupées par l'arrêt précédent (désactivé en test :
+    # la tâche de fond survivrait au client de test).
+    reprise_au_demarrage: bool = Field(default=True, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_REPRISE_AU_DEMARRAGE", "reprise_au_demarrage"))
+
     myrag_superadmin_groupes: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_SUPERADMIN_GROUPES", "MYRAG_SUPERADMIN_GROUPES", "myrag_superadmin_groupes"))
 
     # Garde d'auth du backend (validation JWT Keycloak sur les routes XHR).
