@@ -29,6 +29,7 @@ LECTURES = [
     ("get", "/api/eval/{n}/datasets", None),
     ("get", "/api/sources/legifrance/status/{n}", None),
     ("get", "/api/sources/drive/status/{n}", None),
+    ("get", "/api/ingest/{n}/sources", None),
 ]
 
 ECRITURES = [

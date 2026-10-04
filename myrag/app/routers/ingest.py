@@ -284,8 +284,10 @@ async def reindex_collection(collection: str, strategy: Strategy = "auto", sensi
 
 
 @router.get("/{collection}/sources")
-async def list_source_files(collection: str):
+async def list_source_files(collection: str, user: CurrentUser = Depends(current_user)):
     """List all stored source files for a collection."""
+    from app.routers._droits import lire_la_collection
+    await lire_la_collection(collection, user)
     from app.models.db import SourceFile
     from app.database import async_session as db_session
 
