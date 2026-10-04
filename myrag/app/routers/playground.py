@@ -345,7 +345,13 @@ _URL_OPENRAG_RE = re.compile(r"/(extract|file|static)/([^?#\s]+)")
 
 def signer_les_liens_de_la_source(s: dict) -> dict:
     """`chunk_url` et `file_url` d'une source visent l'API d'OpenRAG : on les ramène sur notre
-    proxy, avec une signature, pour que les puces s'ouvrent sans jeton dans un onglet."""
+    proxy, avec une signature, pour que les puces s'ouvrent sans jeton dans un onglet.
+
+    Un morceau rendu par le repli (/search) n'a pas de `chunk_url`, seulement son `_id` : sans
+    lien, sa puce n'offrait pas « Lire l'extrait ». On le construit depuis l'identifiant."""
+    ident_morceau = s.get("_id") or s.get("chunk_id")
+    if not s.get("chunk_url") and ident_morceau and str(ident_morceau).isdigit():
+        s["chunk_url"] = _lien_extrait(str(ident_morceau))
     for cle in ("chunk_url", "file_url"):
         url = s.get(cle)
         if not isinstance(url, str) or not url:
