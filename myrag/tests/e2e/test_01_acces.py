@@ -41,7 +41,11 @@ def _anonyme(cible, chemin: str) -> int:
 def test_le_service_se_declare_sain(cible):
     with httpx.Client(timeout=20.0) as client:
         sante = client.get(cible["base"] + "/health")
-        assert sante.status_code == 200 and sante.json().get("status") == "ok"
+        assert sante.status_code == 200 and sante.json().get("status") == "ok", sante.text
+        version = client.get(cible["base"] + "/__version__")
+        assert version.status_code == 200
+        assert version.json()["version"] not in ("", "dev"), "l'image doit porter sa version (build-args VERSION…)"
+        assert sante.json()["version"] == version.json()["version"]
         config = client.get(cible["base"] + "/api/config")
         assert config.status_code == 200 and config.json().get("app_title")
 
