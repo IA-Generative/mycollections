@@ -26,7 +26,13 @@
              'fr-card--shadow': selected === src.key,
              'fr-enlarge-link': !src.soon,
            }]"
+           :role="src.soon ? undefined : 'button'"
+           :tabindex="src.soon ? -1 : 0"
+           :aria-pressed="src.soon ? undefined : selected === src.key"
+           :aria-disabled="src.soon ? 'true' : undefined"
            @click="!src.soon && (selected = src.key)"
+           @keydown.enter.prevent="!src.soon && (selected = src.key)"
+           @keydown.space.prevent="!src.soon && (selected = src.key)"
            :style="src.soon ? 'opacity:0.5;cursor:not-allowed;' : 'cursor:pointer;'">
         <div class="fr-card__body">
           <div class="fr-card__content">
@@ -35,14 +41,14 @@
             </h3>
             <p class="fr-card__desc">{{ src.description }}</p>
             <div class="fr-card__start">
-              <span v-if="src.soon" class="fr-badge fr-badge--sm fr-badge--grey">Bientot disponible</span>
+              <span v-if="src.soon" class="fr-badge fr-badge--sm fr-badge--grey">Bientôt disponible</span>
               <span v-if="src.refresh && !src.soon" class="fr-badge fr-badge--sm fr-badge--new">Refresh auto</span>
               <span v-if="!src.soon" class="fr-badge fr-badge--sm fr-badge--info">{{ src.strategy }}</span>
             </div>
           </div>
         </div>
         <div v-if="selected === src.key && !src.soon" class="fr-card__header" style="background:#000091;padding:4px;text-align:center;">
-          <span style="color:white;font-size:0.8rem;font-weight:bold;">✓ Selectionne</span>
+          <span style="color:white;font-size:0.8rem;font-weight:bold;">✓ Sélectionnée</span>
         </div>
       </div>
     </div>
@@ -63,17 +69,18 @@ const sources = [
   {
     key: 'legifrance',
     icon: '⚖️',
-    name: 'Legifrance',
-    description: 'Code, loi, ordonnance depuis l\'API PISTE. Decoupage automatique par article avec hierarchie.',
+    name: 'Légifrance',
+    description: 'Code, loi, ordonnance depuis l\'API PISTE, découpés par article.',
     refresh: true,
     strategy: 'article',
     prompt_template: 'juridique',
+    soon: true,
   },
   {
     key: 'file',
     icon: '📄',
     name: 'Fichier unique',
-    description: 'Upload un fichier (PDF, MD, TXT, DOCX, images, audio). Detection automatique du type.',
+    description: 'Un fichier texte ou Markdown (.txt, .md, .csv). Les PDF et documents Word ne sont pas encore lus : enregistrez-les d\'abord au format texte.',
     refresh: false,
     strategy: 'auto',
     prompt_template: 'generic',
@@ -81,17 +88,18 @@ const sources = [
   {
     key: 'directory',
     icon: '📁',
-    name: 'Repertoire local',
-    description: 'Upload un dossier ou un ZIP contenant plusieurs fichiers a indexer ensemble.',
+    name: 'Répertoire local',
+    description: 'Un dossier ou un ZIP de plusieurs fichiers, indexés ensemble.',
     refresh: false,
     strategy: 'auto',
     prompt_template: 'multi_thematique',
+    soon: true,
   },
   {
     key: 'drive',
     icon: '☁️',
-    name: 'Suite Numerique Drive',
-    description: 'Connecter un dossier Drive (Suite Numerique). Synchronisation automatique des modifications.',
+    name: 'Suite Numérique Drive',
+    description: 'Un dossier de Drive (Suite Numérique), resynchronisé quand il change.',
     refresh: true,
     strategy: 'auto',
     prompt_template: 'multi_thematique',
@@ -100,10 +108,11 @@ const sources = [
     key: 'nextcloud',
     icon: '📦',
     name: 'Nextcloud',
-    description: 'Connecter un dossier Nextcloud via l\'API OCS. Synchronisation automatique.',
+    description: 'Un dossier Nextcloud, resynchronisé quand il change.',
     refresh: true,
     strategy: 'auto',
     prompt_template: 'multi_thematique',
+    soon: true,
   },
   {
     key: 'resana',
