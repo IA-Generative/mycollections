@@ -472,3 +472,64 @@ async def test_client_openrag_plusieurs_partitions():
         assert str(httpx.URL("http://o/search", params={"partitions": ["a", "b"]})).endswith("partitions=a&partitions=b")
     with pytest.raises(ValueError):
         await c.search([], "budget")
+
+
+# ─── Identité obligatoire ────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("chemin", ["/api/v1/search/scopes", "/api/v1/search?q=budget"])
+def test_sans_sub_401(client, en_tant_que, jeu, moteur, chemin):
+    """Sans `sub`, pas de personne : ni droit « owner », ni compteur partagé entre jetons."""
+    en_tant_que(CurrentUser(sub="", username="x", groups=[GROUPE_TESTEURS]))
+    r = client.get(chemin)
+    assert r.status_code == 401 and r.json()["error"]["code"] == "invalid_token"
+    moteur.assert_not_called()
+
+
+def test_jeton_sans_sub_ni_userinfo_401(client, jetons, monkeypatch):
+    async def sans_identite(_jeton):
+        return None
+    monkeypatch.setattr(app.auth, "_sub_depuis_userinfo", sans_identite)
+    r = client.get("/api/v1/search/scopes", headers=jetons(azp="mysearch", aud="mycollections-front", sub=""))
+    assert r.status_code == 401 and r.json()["error"]["code"] == "invalid_token"
+
+
+# ─── Journal d'accès : jamais la question ────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("chemin", [
+    "/api/v1/search?q=budget%20confidentiel&limit=5",
+    "/api/v1/search/scopes?q=budget",
+    "/mycollections/api/v1/search?scope=a&q=budget",
+])
+def test_journal_d_acces_sans_la_question(caplog, chemin):
+    """uvicorn journalise la ligne de requête entière : le filtre de `uvicorn.access` la garde,
+    sans sa chaîne de requête."""
+    import logging
+    import app.main  # noqa: F401 — installe le filtre
+    with caplog.at_level(logging.INFO, logger="uvicorn.access"):
+        logging.getLogger("uvicorn.access").info(
+            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", chemin, "1.1", 200)
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert "q=" not in caplog.text and "budget" not in caplog.text
+    assert chemin.split("?")[0] in record.getMessage()
+    assert len(record.args) == 5  # le formateur d'accès d'uvicorn lit ces cinq valeurs
+
+
+def test_journal_d_acces_forme_inattendue_reecrite(caplog):
+    import logging
+    import app.main  # noqa: F401
+    with caplog.at_level(logging.INFO, logger="uvicorn.access"):
+        logging.getLogger("uvicorn.access").info('GET %s', "/api/v1/search?q=budget")
+    assert "q=" not in caplog.text and "/api/v1/search" in caplog.text
+
+
+def test_journal_d_acces_autres_routes_inchangees(caplog):
+    import logging
+    import app.main  # noqa: F401
+    with caplog.at_level(logging.INFO, logger="uvicorn.access"):
+        logging.getLogger("uvicorn.access").info(
+            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/api/collections?include_archived=true", "1.1", 200)
+        logging.getLogger("uvicorn.access").info(
+            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/health", "1.1", 200)
+    assert [r.getMessage() for r in caplog.records] == [
+        '10.0.0.1:5000 - "GET /api/collections?include_archived=true HTTP/1.1" 200']

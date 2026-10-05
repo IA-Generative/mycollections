@@ -151,6 +151,14 @@ def _limiter(cle: str) -> None:
                               {"Retry-After": str(60 - int(maintenant) % 60)})
 
 
+async def _utilisateur(user: CurrentUser = Depends(current_user)) -> CurrentUser:
+    """L'identité de l'appelant, qui DOIT porter un `sub` (jeton, ou /userinfo à défaut) :
+    sans lui, ni « owner » ni le compte des recherches ne se rapportent à une personne."""
+    if not user.sub:
+        raise ErreurRecherche(401, "invalid_token", "Jeton sans identité (sub)")
+    return user
+
+
 router = APIRouter(prefix=PREFIXE, tags=["recherche"], route_class=_RouteRecherche,
                    dependencies=[Depends(_garde)])
 
@@ -181,7 +189,7 @@ _ORDRE_GROUPES = {"mine": 0, "shared": 1, "public": 2}
 
 
 @router.get("/scopes")
-async def perimetres(user: CurrentUser = Depends(current_user)):
+async def perimetres(user: CurrentUser = Depends(_utilisateur)):
     """Les collections à cocher. Légère : la base seule, aucun appel au moteur."""
     scopes = []
     for f in await _collections_lisibles(user):
@@ -481,9 +489,9 @@ def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser,
 
 @router.get("")
 async def rechercher(request: Request, q: str | None = None, limit: str | None = None,
-                     user: CurrentUser = Depends(current_user)):
+                     user: CurrentUser = Depends(_utilisateur)):
     """Les documents des collections lisibles qui répondent à `q`."""
-    _limiter(user.sub or "anonyme")
+    _limiter(user.sub)
     texte = (q or "").strip()
     if not texte:
         raise _invalide("q est obligatoire")

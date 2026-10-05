@@ -55,10 +55,25 @@ app.add_middleware(
 
 class _SansSondes:
     """Les sondes (/health, /__version__) n'encombrent pas le journal d'accès : appelées toutes
-    les quelques secondes, elles en faisaient l'essentiel (24 000 lignes en 72 h)."""
+    les quelques secondes, elles en faisaient l'essentiel (24 000 lignes en 72 h).
+
+    La recherche de Mon portail (/api/v1/search) garde sa ligne, mais sans sa chaîne de requête :
+    `q` est ce que cherche une personne, il ne se journalise pas en clair (contrat de recherche)."""
+
+    _RECHERCHE = "/api/v1/search"
 
     def filter(self, record) -> bool:  # noqa: A003 — interface de logging.Filter
+        args = record.args
+        # uvicorn : (client, méthode, chemin avec sa requête, version HTTP, statut)
+        forme_uvicorn = isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str)
+        if forme_uvicorn and self._RECHERCHE in args[2].split("?", 1)[0] and "?" in args[2]:
+            record.args = (*args[:2], args[2].split("?", 1)[0], *args[3:])
         msg = record.getMessage()
+        if self._RECHERCHE + "?" in msg and not forme_uvicorn:
+            # Forme inattendue : la ligne est réécrite plutôt que de laisser passer la requête.
+            import re
+            record.msg, record.args = re.sub(r"(/api/v1/search[^?\s\"]*)\?[^\s\"]*", r"\1", msg), ()
+            msg = record.msg
         return '"GET /health ' not in msg and '"GET /__version__ ' not in msg
 
 
