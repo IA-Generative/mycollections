@@ -4,6 +4,8 @@ Vérifie la signature RS256 via le JWKS du realm, l'émetteur (iss) et
 l'expiration. L'audience n'est PAS vérifiée : les access tokens Keycloak
 portent souvent ``aud=account`` et le client effectif peut varier (front
 public vs service account), ce qui rendrait une vérification stricte cassante.
+Exception : les routes de recherche de Mon portail (``app/routers/recherche.py``),
+appelées depuis une autre origine, vérifient l'audience (``audience_acceptee``).
 
 Pilotage par ``AUTH_ENABLED`` (settings.auth_enabled) :
 - ``false`` (défaut) → no-op (dev local, tests) ;
@@ -115,10 +117,18 @@ def verify_jwt(
     if credentials is None or not credentials.credentials:
         raise HTTPException(status_code=401, detail="Authentification requise")
 
-    token = credentials.credentials
+    claims = decoder_le_jeton(credentials.credentials)
+    _exiger_le_groupe(claims)
+    return claims
+
+
+def decoder_le_jeton(token: str) -> dict:
+    """Signature (JWKS), émetteur, expiration — sans l'audience ni le groupe exigé.
+
+    401 pour un jeton invalide ou expiré, 503 si le JWKS est injoignable."""
     try:
         signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
-        claims = jwt.decode(
+        return jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
@@ -134,8 +144,35 @@ def verify_jwt(
         logger.exception("Échec de validation JWT (JWKS injoignable ?)")
         raise HTTPException(status_code=503, detail="Service d'authentification indisponible")
 
-    _exiger_le_groupe(claims)
-    return claims
+
+def _csv(valeur: str) -> set[str]:
+    return {v.strip() for v in (valeur or "").split(",") if v.strip()}
+
+
+def audience_acceptee(claims: dict) -> bool:
+    """Le jeton est-il destiné à Mes collections ? (routes de recherche de Mon portail)
+
+    Les routes historiques ne vérifient pas l'audience (cf. en-tête du module). Celles du
+    contrat de recherche, appelées depuis une autre origine, si :
+
+    - l'audience attendue (``MYCOLLECTIONS_RECHERCHE_AUDIENCE``) figure dans ``aud`` ;
+    - ou, à défaut, le jeton a été émis POUR le front lui-même (``azp`` = cette audience),
+      ce qui garde valides les jetons du front sans mapper d'audience.
+
+    Un client tiers listé dans ``MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE`` (``mysearch``)
+    doit porter l'audience dans ``aud`` : sans elle, son jeton n'est pas pour nous.
+    """
+    attendues = _csv(settings.recherche_audience)
+    if not attendues:
+        return False
+    brut = claims.get("aud")
+    aud = {brut} if isinstance(brut, str) else {a for a in (brut or []) if isinstance(a, str)}
+    if aud & attendues:
+        return True
+    azp = claims.get("azp")
+    if not isinstance(azp, str) or azp in _csv(settings.recherche_clients_audience):
+        return False
+    return azp in attendues
 
 
 # Liste de dépendances à passer aux routers protégés.

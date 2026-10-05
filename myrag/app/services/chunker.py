@@ -277,10 +277,16 @@ def chunk_document(
         strategy = detect_strategy(text)
 
     if strategy == "article":
-        return chunk_by_article(text, sensitivity=sensitivity)
+        morceaux = chunk_by_article(text, sensitivity=sensitivity)
     elif strategy == "section":
-        return chunk_by_section(text, sensitivity=sensitivity)
+        morceaux = chunk_by_section(text, sensitivity=sensitivity)
     elif strategy == "qr":
-        return chunk_by_qr(text, sensitivity=sensitivity)
+        morceaux = chunk_by_qr(text, sensitivity=sensitivity)
     else:
         return chunk_by_length(text, max_chars=max_chars, overlap=overlap, sensitivity=sensitivity)
+    # Un découpage structuré qui ne trouve pas ses marqueurs (aucun « Article … », aucune
+    # question) rendait zéro passage, et le dépôt échouait. Il se replie sur la longueur, qui
+    # garde tout le texte.
+    if not morceaux and text.strip():
+        return chunk_by_length(text, max_chars=max_chars, overlap=overlap, sensitivity=sensitivity)
+    return morceaux

@@ -165,7 +165,7 @@
     </div>
 
     <!-- Suppression : on dit ce qui arrive aux collections avant de le faire. -->
-    <dialog v-if="aSupprimer" open class="fr-modal fr-modal--opened" aria-labelledby="suppr-titre" style="display:block;">
+    <dialog v-if="aSupprimer" open class="fr-modal fr-modal--opened" @keydown="piegerLeFocus($event, $event.currentTarget as HTMLElement)" @keydown.esc="aSupprimer = null" aria-labelledby="suppr-titre" style="display:block;">
       <div class="fr-container fr-container--fluid fr-container-md">
         <div class="fr-grid-row fr-grid-row--center">
           <div class="fr-col-12 fr-col-md-8 fr-col-lg-6">

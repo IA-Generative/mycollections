@@ -6,6 +6,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from app.routers._droits import gerer_la_collection, lire_la_collection
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
@@ -154,6 +155,7 @@ async def add_source(req: AddSourceByIdRequest, user: CurrentUser = Depends(curr
     """
     from app.services.collection_store import get_collection, update_collection
 
+    await gerer_la_collection(req.collection, user)
     config = await get_collection(req.collection)
     if not config:
         raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
@@ -174,7 +176,7 @@ async def add_source(req: AddSourceByIdRequest, user: CurrentUser = Depends(curr
     }
 
 
-@router.get("/legifrance/status/{collection}")
+@router.get("/legifrance/status/{collection}", dependencies=[Depends(lire_la_collection)])
 async def source_status(collection: str):
     """Check the Legifrance source status for a collection."""
     from app.services.collection_store import get_collection
@@ -312,7 +314,7 @@ async def list_drive_folders(
     }
 
 
-@router.get("/drive/status/{collection}")
+@router.get("/drive/status/{collection}", dependencies=[Depends(lire_la_collection)])
 async def drive_status(collection: str):
     from app.services.collection_store import get_collection
 
@@ -370,6 +372,7 @@ async def add_drive_source(
 
     Refuses folders exceeding DRIVE_MAX_FILES or DRIVE_MAX_TOTAL_BYTES (413).
     """
+    await gerer_la_collection(req.collection, user)
     from app.services.collection_store import get_collection, update_collection
     from app.services.connectors.drive import DriveConnector
 
@@ -469,6 +472,7 @@ async def sync_drive_source(
 ):
     """Delta-sync: re-ingest files modified since the last sync. Uses the
     caller's user token for impersonation (same ACL as /drive/add)."""
+    await gerer_la_collection(collection, user)
     from app.services.collection_store import get_collection, update_collection
     from app.services.connectors.drive import DriveConnector
     from app.routers.ingest import _ingest_content

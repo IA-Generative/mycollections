@@ -126,11 +126,17 @@ class OpenRAGClient:
         return results
 
     async def search(
-        self, partition: str, query: str, top_k: int = 5
+        self, partition: str | list[str], query: str, top_k: int = 5
     ) -> dict:
+        """`/search` d'OpenRAG. `partition` : un nom, ou une liste (`partitions=a&partitions=b`).
+        Une liste vide est refusée : OpenRAG la lirait comme « toutes les partitions »."""
+        partitions = [partition] if isinstance(partition, str) else list(partition)
+        if not partitions:
+            raise ValueError("Aucune partition à interroger")
         return await self._get(
             "/search",
-            params={"text": query, "partitions": partition, "top_k": top_k},
+            params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0],
+                    "top_k": top_k},
         )
 
     async def chat(

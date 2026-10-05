@@ -8,6 +8,8 @@ POST /api/feedback/{col}/{fbid}/promote.
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi import Depends
+from app.routers._droits import gerer_la_collection, lire_la_collection
 from pydantic import BaseModel
 
 from app.services.qr_cache import QRCache
@@ -22,20 +24,20 @@ class AddRequest(BaseModel):
     source: str = "manual"  # manual | feedback | import
 
 
-@router.get("/{collection}")
+@router.get("/{collection}", dependencies=[Depends(lire_la_collection)])
 async def list_entries(collection: str):
     cache = QRCache()
     return {"entries": [e.to_dict() for e in cache.list(collection)]}
 
 
-@router.post("/{collection}")
+@router.post("/{collection}", dependencies=[Depends(gerer_la_collection)])
 async def add_entry(collection: str, req: AddRequest):
     cache = QRCache()
     entry = cache.add(collection, req.question, req.answer, req.tags, req.source)
     return {"status": "added", "entry": entry.to_dict()}
 
 
-@router.delete("/{collection}/{entry_id}")
+@router.delete("/{collection}/{entry_id}", dependencies=[Depends(gerer_la_collection)])
 async def delete_entry(collection: str, entry_id: str):
     cache = QRCache()
     cache.delete(collection, entry_id)

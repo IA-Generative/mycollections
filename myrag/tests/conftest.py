@@ -24,6 +24,7 @@ os.environ["MYRAG_PSEUDO_SEL"] = "sel-de-test"
 os.environ["CAPACITES_URL"] = ""
 os.environ["AUTH_ENABLED"] = "false"
 os.environ["MYRAG_GROUPE_EXIGE"] = ""
+os.environ["MYCOLLECTIONS_REPRISE_AU_DEMARRAGE"] = "false"
 os.environ["MYRAG_SUPERADMIN_GROUPES"] = "/g/administration-de-test"
 
 import pytest  # noqa: E402

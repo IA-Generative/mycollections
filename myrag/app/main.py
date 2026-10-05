@@ -10,16 +10,25 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import init_db
 from app.services import capacites
+from app.services.openrag_client import OpenRAGClient
+from app import version as version_module
 from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
 from app.routers import accueil as accueil_routeur
 from app.routers import amorces, bus, categories, collectif, corpus, demandes, fiches, guide
+from app.routers import recherche
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Import models so tables are registered
     import app.models.db  # noqa: F401
     await init_db()
+    # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
+    import asyncio
+    from app.routers.ingest import reprendre_les_travaux_interrompus
+    reprise = asyncio.create_task(reprendre_les_travaux_interrompus()) if settings.reprise_au_demarrage else None
     yield
+    if reprise and not reprise.done():
+        reprise.cancel()
 
 
 app = FastAPI(
@@ -44,12 +53,72 @@ app.add_middleware(
 )
 
 
+class _SansSondes:
+    """Les sondes (/health, /__version__) n'encombrent pas le journal d'accès : appelées toutes
+    les quelques secondes, elles en faisaient l'essentiel (24 000 lignes en 72 h).
+
+    La recherche de Mon portail (/api/v1/search) garde sa ligne, mais sans sa chaîne de requête :
+    `q` est ce que cherche une personne, il ne se journalise pas en clair (contrat de recherche)."""
+
+    _RECHERCHE = "/api/v1/search"
+
+    def filter(self, record) -> bool:  # noqa: A003 — interface de logging.Filter
+        args = record.args
+        # uvicorn : (client, méthode, chemin avec sa requête, version HTTP, statut)
+        forme_uvicorn = isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str)
+        if forme_uvicorn and self._RECHERCHE in args[2].split("?", 1)[0] and "?" in args[2]:
+            record.args = (*args[:2], args[2].split("?", 1)[0], *args[3:])
+        msg = record.getMessage()
+        if self._RECHERCHE + "?" in msg and not forme_uvicorn:
+            # Forme inattendue : la ligne est réécrite plutôt que de laisser passer la requête.
+            import re
+            record.msg, record.args = re.sub(r"(/api/v1/search[^?\s\"]*)\?[^\s\"]*", r"\1", msg), ()
+            msg = record.msg
+        return '"GET /health ' not in msg and '"GET /__version__ ' not in msg
+
+
+import logging as _logging  # noqa: E402
+_logging.getLogger("uvicorn.access").addFilter(_SansSondes())
+
+#: Le dernier bilan des dépendances, gardé 30 s : les sondes de Kubernetes appellent /health
+#: toutes les quelques secondes, il ne faut pas réveiller OpenRAG à chacune.
+_sante_cache: dict = {}
+_SANTE_DUREE_S = 30.0
+
+
+async def _etat_des_dependances() -> dict:
+    import time
+    if _sante_cache and time.monotonic() - _sante_cache["a"] < _SANTE_DUREE_S:
+        return _sante_cache["etat"]
+    etat = {}
+    try:
+        from sqlalchemy import text
+        from app.database import async_session
+        async with async_session() as session:
+            await session.execute(text("SELECT 1"))
+        etat["base"] = "ok"
+    except Exception:  # noqa: BLE001
+        etat["base"] = "ko"
+    try:
+        etat["openrag"] = "ok" if await OpenRAGClient(timeout=3.0).health_check() else "ko"
+    except Exception:  # noqa: BLE001
+        etat["openrag"] = "ko"
+    _sante_cache.update({"a": time.monotonic(), "etat": etat})
+    return etat
+
+
 @app.get("/health")
 async def health():
+    """Santé du service. Répond TOUJOURS 200 tant que le processus vit (c'est la sonde de
+    vivacité : une dépendance lente ne doit pas faire redémarrer le pod), et dit ce qui va :
+    `status` vaut « ok » ou « degraded », `dependances` détaille base et OpenRAG. La version est
+    celle de l'image (/app/version.json, comme /__version__), plus une constante."""
+    dependances = await _etat_des_dependances()
     return {
-        "status": "ok",
+        "status": "ok" if all(v == "ok" for v in dependances.values()) else "degraded",
         "app": settings.app_title,
-        "version": settings.app_version,
+        "version": version_module.lire().get("version") or settings.app_version,
+        "dependances": dependances,
     }
 
 
@@ -92,8 +161,13 @@ app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 app.include_router(categories.router, dependencies=AUTH_REQUIRED)
 app.include_router(accueil_routeur.router, dependencies=AUTH_REQUIRED)
 app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
+# La version que l'image porte (ADR-0004) : sans jeton, hors schéma, lue par le noteur de la plateforme.
+app.include_router(version_module.router)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.
 app.include_router(bus.router)
+# La recherche de Mon portail (contrat de recherche MirAI) : sa garde (audience, groupe) et son CORS.
+app.include_router(recherche.router)
+app.add_middleware(recherche.CorsRecherche)
 
 
 @app.get("/api/moi", dependencies=AUTH_REQUIRED)

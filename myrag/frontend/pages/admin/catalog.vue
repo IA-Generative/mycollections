@@ -194,7 +194,7 @@
     </div>
 
     <!-- Purge confirmation modal -->
-    <dialog v-if="purgeTarget" open class="fr-modal fr-modal--opened"
+    <dialog v-if="purgeTarget" open class="fr-modal fr-modal--opened" @keydown="piegerLeFocus($event, $event.currentTarget as HTMLElement)" @keydown.esc="purgeTarget = null"
             aria-labelledby="purge-title" style="display:block;">
       <div class="fr-container fr-container--fluid fr-container-md">
         <div class="fr-grid-row fr-grid-row--center">

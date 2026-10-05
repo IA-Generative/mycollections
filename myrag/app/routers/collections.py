@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
+from app.routers._droits import exiger_administration
 from pydantic import BaseModel
 
 from app.config import settings
@@ -117,7 +118,7 @@ async def get_prompt_template_detail(key: str):
     return {"key": key, **tpl}
 
 
-@router.post("/templates", tags=["Prompt Templates"])
+@router.post("/templates", tags=["Prompt Templates"], dependencies=[Depends(exiger_administration)])
 async def create_prompt_template(req: CreateTemplateRequest):
     existing = get_prompt_template(req.key)
     if existing and not existing.get("custom"):
@@ -126,7 +127,7 @@ async def create_prompt_template(req: CreateTemplateRequest):
     return {"status": "created", "key": req.key}
 
 
-@router.put("/templates/{key}", tags=["Prompt Templates"])
+@router.put("/templates/{key}", tags=["Prompt Templates"], dependencies=[Depends(exiger_administration)])
 async def update_prompt_template(key: str, req: CreateTemplateRequest):
     existing = get_prompt_template(key)
     if existing and not existing.get("custom"):
@@ -135,7 +136,7 @@ async def update_prompt_template(key: str, req: CreateTemplateRequest):
     return {"status": "updated", "key": key}
 
 
-@router.delete("/templates/{key}", tags=["Prompt Templates"])
+@router.delete("/templates/{key}", tags=["Prompt Templates"], dependencies=[Depends(exiger_administration)])
 async def delete_prompt_template_endpoint(key: str):
     if not delete_custom_template(key):
         raise HTTPException(status_code=403, detail=f"Cannot delete builtin template '{key}'")

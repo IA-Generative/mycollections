@@ -1,6 +1,8 @@
 <template>
-  <div class="myrag-bank-filter" role="tablist">
-    <button v-for="f in filters" :key="f.key"
+  <div class="myrag-bank-filter" role="tablist" aria-label="Filtrer les questions par origine">
+    <button v-for="f in filters" :key="f.key" type="button" role="tab"
+            :aria-selected="modelValue === f.key"
+            :aria-label="`${f.nom} (${f.count ?? 0})`" :title="f.nom"
             class="myrag-bank-filter__tab"
             :class="modelValue === f.key ? 'myrag-bank-filter__tab--active' : ''"
             :disabled="f.count === 0 && f.key !== 'all'"
@@ -24,11 +26,11 @@ defineEmits<{
 }>()
 
 const filters = computed(() => [
-  { key: 'all' as const,       label: 'Toutes',   count: props.stats.total },
-  { key: 'fb_neg' as const,    label: '👎',        count: props.stats.fb_neg },
-  { key: 'promoted' as const,  label: '👍',        count: props.stats.promoted },
-  { key: 'generated' as const, label: '🤖',        count: props.stats.generated },
-  { key: 'imported' as const,  label: '📄',        count: props.stats.imported },
+  { key: 'all' as const,       label: 'Toutes', nom: 'Toutes les questions',             count: props.stats.total },
+  { key: 'fb_neg' as const,    label: '👎',     nom: 'Signalées comme mauvaises',        count: props.stats.fb_neg },
+  { key: 'promoted' as const,  label: '👍',     nom: 'Réponses validées',                count: props.stats.promoted },
+  { key: 'generated' as const, label: '🤖',     nom: 'Proposées automatiquement',        count: props.stats.generated },
+  { key: 'imported' as const,  label: '📄',     nom: 'Importées',                        count: props.stats.imported },
 ])
 </script>
 

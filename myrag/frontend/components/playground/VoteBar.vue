@@ -18,10 +18,11 @@
       👎
     </button>
     <span v-if="!vote" class="myrag-vote__aide">
-      👍 la garde comme réponse validée · 👎 la signale au gestionnaire, qui la relira
+      <template v-if="gestionnaire">👍 la garde comme réponse validée · 👎 la signale au gestionnaire, qui la relira</template>
+      <template v-else>👍 et 👎 sont transmis au gestionnaire de la collection, qui les relira</template>
     </span>
     <span v-if="vote" class="myrag-vote__status">
-      {{ vote === 'up' ? 'Ajoutée aux réponses validées.' : 'Avis enregistré, à relire.' }}
+      {{ vote === 'up' && gestionnaire ? 'Ajoutée aux réponses validées.' : 'Avis transmis, merci.' }}
     </span>
   </div>
 </template>
@@ -29,6 +30,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   disabled?: boolean
+  gestionnaire?: boolean
   vote?: 'up' | 'down' | null
 }>()
 

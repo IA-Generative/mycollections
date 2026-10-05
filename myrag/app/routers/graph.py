@@ -214,44 +214,46 @@ async def build_graph(
 
     client = OpenRAGClient()
 
-    # Search all documents in the collection
+    # Les morceaux se LISTENT, ils ne se cherchent pas : une recherche sémantique « * » est
+    # vidée par le seuil de pertinence d'OpenRAG (d'où l'ancien 404 « No documents » après une
+    # indexation réussie). Chaque article est déposé comme un fichier « Article-<id>.md ».
     try:
-        results = await client.search(collection, query="*", top_k=5000)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to search OpenRAG: {e}")
+        fichiers = await client.list_files(collection)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"OpenRAG n'a pas répondu à la liste des documents : {e}")
 
-    documents = results.get("documents", [])
-    if not documents:
-        raise HTTPException(status_code=404, detail=f"No documents in collection '{collection}'")
+    articles = []
+    for f in fichiers:
+        nom = str(f.get("original_filename") or f.get("filename") or "")
+        if nom.startswith(("Article-", "Article_")) and f.get("file_id"):
+            articles.append((nom, str(f["file_id"]), f))
+    if not articles:
+        # Rien à construire : surtout ne pas écraser un graphe existant par un graphe vide.
+        raise HTTPException(status_code=422, detail=(
+            "Aucun article dans cette collection : le graphe relie des articles de code découpés "
+            "un par un (« Article L… »). Choisissez le découpage par article, ou importez un graphe."))
 
-    # Convert OpenRAG documents to chunk format
-    chunks = []
-    for doc in documents:
-        meta = doc.get("metadata", {})
-        filename = meta.get("filename", "")
-        # Extract article ID from filename (Article-L421-1.md → L421-1)
-        article = ""
-        if filename.startswith("Article-") or filename.startswith("Article_"):
-            article = filename.replace("Article-", "").replace("Article_", "").replace(".md", "")
+    import asyncio
+    from app.services.graph_builder import extract_references
+    limite = asyncio.Semaphore(8)
 
-        if article:
-            # Re-extract references from content
-            from app.services.graph_builder import extract_references
-            references = extract_references(doc.get("content", ""))
-            references = [r for r in references if r != article]
+    async def lire(nom: str, file_id: str, meta: dict) -> dict:
+        async with limite:
+            contenu = await client.get_file_content(collection, file_id)
+        article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
+        references = [r for r in extract_references(contenu or "") if r != article]
+        return {
+            "content": contenu or "",
+            "filename": nom,
+            "metadata": {
+                "article": article,
+                "livre": meta.get("livre", ""), "titre": meta.get("titre", ""),
+                "chapitre": meta.get("chapitre", ""), "references": references,
+                "parent_path": meta.get("parent_path", ""),
+            },
+        }
 
-            chunks.append({
-                "content": doc.get("content", ""),
-                "filename": filename,
-                "metadata": {
-                    "article": article,
-                    "livre": meta.get("livre", ""),
-                    "titre": meta.get("titre", ""),
-                    "chapitre": meta.get("chapitre", ""),
-                    "references": references,
-                    "parent_path": meta.get("parent_path", ""),
-                },
-            })
+    chunks = await asyncio.gather(*(lire(n, i, m) for n, i, m in articles))
 
     # Build and save graph
     graph = _builder.build(collection, chunks)
@@ -268,69 +270,50 @@ async def build_graph(
 @router.post("/{collection}/summarize")
 async def summarize_articles(
     collection: str,
-    threshold: int | None = Query(None, description="Override threshold (default: from collection config)"),
-    llm_url: str = Query("", description="LLM API URL (default: Scaleway)"),
-    llm_api_key: str = Query("", description="LLM API key"),
-    llm_model: str = Query("", description="LLM model name"),
+    threshold: int | None = Query(None, description="Seuil de longueur (défaut : réglage de la collection)"),
     user: CurrentUser = Depends(current_user),
 ):
-    """Generate AI summaries for long articles in the graph.
+    """Résume par l'IA les articles longs du graphe, avec le modèle d'OpenRAG de la collection.
 
-    Réservé aux gestionnaires : la route réécrit le graphe sur disque et fait appeler par le
-    serveur l'adresse ``llm_url`` fournie par l'appelant.
-
-    Uses the collection's ai_summary_enabled and ai_summary_threshold settings.
-    Override threshold via query param.
-    Articles shorter than the threshold keep their raw 500-char preview.
-    Articles longer get a 3-5 sentence AI summary with a 'Resume par l'IA' badge.
-    Requires LLM access (Scaleway or OpenAI-compatible endpoint).
+    Réservé aux gestionnaires : la route réécrit le graphe sur disque. Les articles plus courts
+    que le seuil gardent leur aperçu brut.
     """
     config = await _exiger_gestionnaire(collection, user)
     if config and not config.get("ai_summary_enabled") and threshold is None:
         return {
             "status": "disabled",
-            "detail": f"AI summaries are disabled for '{collection}'. Enable in collection config.",
+            "detail": f"Les résumés IA sont désactivés pour « {collection} » : activez-les dans ses réglages.",
         }
 
-    effective_threshold = threshold or (config.get("ai_summary_threshold", 1000) if config else 1000)
-    from app.services.chunker import chunk_by_article
+    effective_threshold = threshold or ((config or {}).get("ai_summary_threshold") or 1000)
 
     graph = _builder.get(collection)
     if not graph:
-        raise HTTPException(status_code=404, detail=f"No graph for '{collection}'. Build it first.")
+        raise HTTPException(status_code=404, detail=f"Pas encore de graphe pour « {collection} » : construisez-le d'abord.")
 
-    # Count articles that need summarizing
-    long_articles = [n for n, d in graph.nodes(data=True)
-                     if d.get("content_full_length", 0) > effective_threshold]
-
+    long_articles = [n for n, d in graph.nodes(data=True) if d.get("content_full_length", 0) > effective_threshold]
     if not long_articles:
         return {"status": "nothing_to_summarize", "threshold": effective_threshold}
 
-    # We need the full chunks to summarize — re-read from source if available
-    from pathlib import Path
-    source_files = list(Path(f"{_builder.data_dir}/{collection}").glob("*.md"))
-
-    # If no source files, use content_preview (truncated but better than nothing)
+    # Le texte complet des articles : relu dans OpenRAG, comme à la construction (avant : cherché
+    # sous data_dir/<collection>/*.md, où rien n'est jamais écrit).
+    from app.services.openrag_client import OpenRAGClient
+    client = OpenRAGClient()
     chunks = []
-    if source_files:
-        for f in source_files:
-            text = f.read_text()
-            chunks.extend(chunk_by_article(text))
+    for f in await client.list_files(collection):
+        nom = str(f.get("original_filename") or f.get("filename") or "")
+        article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
+        if article in long_articles and f.get("file_id"):
+            chunks.append({"content": await client.get_file_content(collection, str(f["file_id"])),
+                           "metadata": {"article": article}})
 
-    result = await _builder.summarize_long_articles(
-        collection=collection,
-        chunks=chunks,
-        threshold=effective_threshold,
-        llm_url=llm_url or None,
-        llm_api_key=llm_api_key or None,
-        llm_model=llm_model or None,
-    )
-
+    result = await _builder.summarize_long_articles(collection=collection, chunks=chunks, threshold=effective_threshold)
     return {
         "status": "done",
         "collection": collection,
         "threshold": effective_threshold,
-        "ai_summary_enabled": config.ai_summary_enabled if config else True,
+        "ai_summary_enabled": bool((config or {}).get("ai_summary_enabled", True)),
         "articles_needing_summary": len(long_articles),
         **result,
     }
+

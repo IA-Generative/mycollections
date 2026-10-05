@@ -49,6 +49,11 @@ async def _upload_chunks_background(job_id: str, collection: str, chunks: list[d
         success = True
         try:
             await client.upload_chunk(collection, chunk)
+        except httpx.HTTPStatusError as e:
+            # 409 : OpenRAG a déjà ce morceau, à l'identique (dépôt répété, reprise après arrêt).
+            if e.response is None or e.response.status_code != 409:
+                success = False
+                logger.warning(f"Job {job_id} chunk {i+1}/{len(chunks)} failed: {e}")
         except Exception as e:
             success = False
             logger.warning(f"Job {job_id} chunk {i+1}/{len(chunks)} failed: {e}")
@@ -61,6 +66,46 @@ async def _upload_chunks_background(job_id: str, collection: str, chunks: list[d
     await complete_job(job_id)
     job = await get_job(job_id)
     logger.info(f"Job {job_id} finished: {job}")
+
+
+ETATS_EN_COURS = ("chunking", "chunking_done", "pending", "uploading")
+
+
+async def reprendre_les_travaux_interrompus() -> list[str]:
+    """Au démarrage : les indexations qu'un arrêt du backend a coupées reprennent depuis le
+    fichier source conservé (redéposer le même morceau est sans effet : OpenRAG répond 409, compté
+    comme réussi). Sans fichier source, le travail est marqué « interrupted » et dit quoi faire.
+    Avant : la tâche de fond disparaissait avec le processus, le travail restait « uploading »."""
+    from app.database import async_session
+    from app.models.db import IngestJob, SourceFile
+
+    async with async_session() as session:
+        travaux = (await session.execute(select(IngestJob).where(IngestJob.status.in_(ETATS_EN_COURS)))).scalars().all()
+        travaux = [(t.job_id, t.collection_name, t.filename, t.strategy, t.sensitivity) for t in travaux]
+
+    repris = []
+    for job_id, collection, filename, strategy, sensitivity in travaux:
+        async with async_session() as session:
+            sf = (await session.execute(select(SourceFile).where(
+                SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
+            chemin = Path(sf.storage_path) if sf and sf.storage_path else None
+        if not chemin or not chemin.exists():
+            await update_job(job_id, status="interrupted",
+                             error="Indexation interrompue par un redémarrage du service, et le fichier n'est plus conservé : redéposez-le.")
+            continue
+        try:
+            texte = texte_ou_refus(chemin.read_bytes(), filename)
+            morceaux = chunk_document(texte, strategy=strategy or "auto", max_chars=512, overlap=50, sensitivity=sensitivity or "public")
+        except Exception as e:  # noqa: BLE001
+            await update_job(job_id, status="interrupted", error=f"Reprise impossible : {e}")
+            continue
+        await update_job(job_id, status="uploading", total_chunks=len(morceaux), uploaded_chunks=0, failed_chunks=0,
+                         error="Repris après un redémarrage du service.")
+        await _upload_chunks_background(job_id, collection, morceaux)
+        repris.append(job_id)
+    if travaux:
+        logger.info("Reprise au démarrage : %d travail(aux) interrompu(s), %d repris", len(travaux), len(repris))
+    return repris
 
 
 MESSAGE_FORMAT = ("Ce fichier n'est pas du texte : aujourd'hui, seuls les fichiers texte (.txt, .md, .csv) "
@@ -284,8 +329,10 @@ async def reindex_collection(collection: str, strategy: Strategy = "auto", sensi
 
 
 @router.get("/{collection}/sources")
-async def list_source_files(collection: str):
+async def list_source_files(collection: str, user: CurrentUser = Depends(current_user)):
     """List all stored source files for a collection."""
+    from app.routers._droits import lire_la_collection
+    await lire_la_collection(collection, user)
     from app.models.db import SourceFile
     from app.database import async_session as db_session
 
@@ -299,13 +346,22 @@ async def list_source_files(collection: str):
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, user: CurrentUser = Depends(current_user)):
+    from app.routers._droits import peut_lire_nom
     job = await get_job(job_id)
-    if not job:
+    if not job or not await peut_lire_nom(job.get("collection", ""), user):
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.get("/jobs")
-async def list_all_jobs(collection: str | None = Query(None)):
-    return {"jobs": await list_jobs(collection=collection)}
+async def list_all_jobs(collection: str | None = Query(None), user: CurrentUser = Depends(current_user)):
+    """Les travaux des seules collections que l'appelant peut lire (avant : tous)."""
+    from app.routers._droits import peut_lire_nom
+    travaux = await list_jobs(collection=collection)
+    lisibles: dict[str, bool] = {}
+    for t in travaux:
+        c = t.get("collection", "")
+        if c not in lisibles:
+            lisibles[c] = await peut_lire_nom(c, user)
+    return {"jobs": [t for t in travaux if lisibles[t.get("collection", "")]]}

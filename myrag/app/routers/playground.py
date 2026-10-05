@@ -4,6 +4,7 @@ import json
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from app.routers._droits import gerer_la_collection
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
@@ -143,7 +144,7 @@ async def _get_collection_sample(
         return []
 
 
-@router.post("/{collection}/generate-eval")
+@router.post("/{collection}/generate-eval", dependencies=[Depends(gerer_la_collection)])
 async def generate_eval_dataset(collection: str):
     """Auto-generate an evaluation dataset from the collection's content.
 

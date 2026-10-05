@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <dialog v-if="open" open class="fr-modal fr-modal--opened myrag-viewer"
+    <dialog v-if="open" open ref="fenetre" @keydown="piegerLeFocus($event, fenetre)" class="fr-modal fr-modal--opened myrag-viewer"
             aria-labelledby="myrag-viewer-title" style="display:block;"
             @click.self="fermer" @keydown.esc="fermer">
       <div class="fr-container fr-container--fluid fr-container-md">
@@ -117,6 +117,7 @@ const avertissement = ref('')
 const fichierUrl = ref('')
 const estPdf = ref(false)
 const btnFermer = ref<HTMLButtonElement | null>(null)
+const fenetre = ref<HTMLElement | null>(null)
 
 const zoneTexte = ref<HTMLElement | null>(null)
 
