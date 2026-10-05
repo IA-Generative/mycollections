@@ -505,7 +505,8 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
     lisibles = {f["name"]: f for f in await _collections_lisibles(user)}
     # Une collection inconnue ou sans droit est ignorée, pas refusée (contrat).
     noms = [n for n in demandees if n in lisibles] if demandees is not None else list(lisibles)
-    vide = {"source": SOURCE, "query": texte, "total": 0, "truncated": False, "results": []}
+    vide = {"source": SOURCE, "query": texte, "total": 0, "truncated": False,
+            "total_is_lower_bound": False, "results": []}
     if not noms:
         return vide
 
@@ -521,8 +522,12 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
     # Journal sans la question ni les contenus : des tailles et une durée.
     logger.info("Recherche : %d collection(s), %d morceau(x), %d résultat(s), %d ms",
                 len(noms), len(docs), len(resultats), int((time.monotonic() - debut) * 1000))
+    # Le moteur a rendu autant de passages que demandé : il en reste peut-être d'autres, `total`
+    # n'est alors qu'un minimum, et la liste est tronquée par définition.
+    borne_basse = len(docs) >= top_k
     return {"source": SOURCE, "query": texte, "total": len(resultats),
-            "truncated": len(resultats) > limite, "results": resultats[:limite]}
+            "truncated": borne_basse or len(resultats) > limite,
+            "total_is_lower_bound": borne_basse, "results": resultats[:limite]}
 
 
 # ─── CORS des seules routes du contrat ───────────────────────────────────────────────────────

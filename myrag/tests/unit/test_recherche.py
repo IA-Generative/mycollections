@@ -161,7 +161,8 @@ def test_recherche_perimetre_tout_illisible_ne_consulte_pas_le_moteur(client, en
     en_tant_que(ALICE)
     r = client.get("/api/v1/search", params={"q": "budget", "scope": f"{jeu['secrete']},inconnue"})
     assert r.status_code == 200
-    assert r.json() == {"source": "mycollections", "query": "budget", "total": 0, "truncated": False, "results": []}
+    assert r.json() == {"source": "mycollections", "query": "budget", "total": 0, "truncated": False,
+                        "total_is_lower_bound": False, "results": []}
     moteur.assert_not_called()
 
 
@@ -533,3 +534,31 @@ def test_journal_d_acces_autres_routes_inchangees(caplog):
             '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/health", "1.1", 200)
     assert [r.getMessage() for r in caplog.records] == [
         '10.0.0.1:5000 - "GET /api/collections?include_archived=true HTTP/1.1" 200']
+
+
+# ─── total_is_lower_bound ────────────────────────────────────────────────────────────────────
+
+def test_total_exact_quand_le_moteur_rend_moins_que_demande(client, en_tant_que, jeu, moteur):
+    en_tant_que(ALICE)
+    moteur.return_value = {"documents": [_doc(jeu["mienne"], f"f-{i}", i, "budget") for i in range(1, 30)]}
+    corps = client.get("/api/v1/search", params={"q": "budget", "limit": 10}).json()
+    assert moteur.call_args.kwargs["top_k"] == 30
+    assert corps["total"] == 29 and corps["total_is_lower_bound"] is False and corps["truncated"] is True
+
+
+def test_total_minimum_quand_le_moteur_rend_tout_ce_qui_est_demande(client, en_tant_que, jeu, moteur):
+    """30 passages demandés (3 × limit), 30 rendus, tous du même document : un seul résultat,
+    mais d'autres existent peut-être — `total` est un minimum et la liste est tronquée."""
+    en_tant_que(ALICE)
+    moteur.return_value = {"documents": [_doc(jeu["mienne"], "f-1", i, "budget") for i in range(1, 31)]}
+    corps = client.get("/api/v1/search", params={"q": "budget", "limit": 10}).json()
+    assert corps["total"] == 1 and len(corps["results"]) == 1
+    assert corps["total_is_lower_bound"] is True and corps["truncated"] is True
+
+
+def test_total_minimum_a_la_limite_maximale(client, en_tant_que, jeu, moteur):
+    en_tant_que(ALICE)
+    moteur.return_value = {"documents": [_doc(jeu["mienne"], f"f-{i}", i, "budget") for i in range(1, 151)]}
+    corps = client.get("/api/v1/search", params={"q": "budget", "limit": 50}).json()
+    assert moteur.call_args.kwargs["top_k"] == 150
+    assert corps["total_is_lower_bound"] is True and corps["truncated"] is True
