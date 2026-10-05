@@ -223,6 +223,13 @@ onMounted(async () => {
 </script>
 
 <style>
+/* Sur tablette et téléphone, la barre commune de la bêta (position fixe, en haut à droite)
+   tombait sur le bouton « Menu » du DSFR, qui occupe le même coin : le toucher ouvrait le
+   compte, jamais le menu. On lui laisse une bande au-dessus de l'en-tête. */
+@media (max-width: 991.98px) {
+  .fr-header { padding-top: 2.75rem; }
+  .fr-header__menu.fr-modal--opened { padding-top: 2.75rem; }
+}
 /* Le menu « Mes collections » : poussé à droite de la navigation, volet sous le bouton. */
 .myrag-menu-miennes { margin-left: auto; position: relative; }
 .myrag-menu-miennes__bouton { display: inline-flex; align-items: center; gap: .35rem; color: var(--text-action-high-blue-france); }

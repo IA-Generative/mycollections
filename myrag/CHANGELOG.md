@@ -2,6 +2,11 @@
 
 Ce journal est public : il dit ce qui change pour les personnes qui utilisent le service.
 
+## [0.3.25] (2026-10-05)
+
+- Sur téléphone et tablette, le bouton « Menu » s'ouvre de nouveau : la barre commune de la bêta ne le recouvre plus.
+- « Poser cette question » depuis l'accueil remplit la question tout de suite.
+
 ## [0.3.24] (2026-10-05)
 
 - Mon portail peut chercher dans les collections que vous pouvez lire.

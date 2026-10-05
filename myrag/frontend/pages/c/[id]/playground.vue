@@ -256,13 +256,14 @@ function trunc(s: string, n: number): string {
 }
 
 onMounted(async () => {
-  // Les droits d'abord : seul qui gère la collection garnit sa banque et ses réponses validées.
+  // « Poser cette question » depuis l'accueil : la question arrive saisie, il reste à l'envoyer.
+  // Avant tout appel : le champ ne doit pas rester vide le temps que l'API réponde.
+  const q = String(route.query.q || '').trim()
+  if (q && !draft.value) draft.value = q.slice(0, 500)
+  // Les droits ensuite : seul qui gère la collection garnit sa banque et ses réponses validées.
   try { peutGerer.value = !!(await get(`/api/collections/${id}`))?.mes_droits?.ecrire } catch { peutGerer.value = false }
   if (peutGerer.value) bank.autoSeedIfEmpty()
   else bank.load().catch(() => {})
-  // « Poser cette question » depuis l'accueil : la question arrive saisie, il reste à l'envoyer.
-  const q = String(route.query.q || '').trim()
-  if (q && !draft.value) draft.value = q.slice(0, 500)
 })
 </script>
 
