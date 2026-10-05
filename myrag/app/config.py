@@ -126,6 +126,29 @@ class Settings(BaseSettings):
     bus_url: str = Field(default="")
     bus_secret: str = Field(default="")
 
+    # ─── Recherche de Mon portail (contrat de recherche MirAI, /api/v1/search) ─────
+    # L'audience que doit porter un jeton pour ces routes (liste séparée par des virgules).
+    # Un jeton du front (azp = mycollections-front) passe par son `azp` ; un jeton d'un
+    # client listé dans `recherche_clients_audience` doit, lui, la porter dans `aud`.
+    recherche_audience: str = Field(default="mycollections-front", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_AUDIENCE", "recherche_audience"))
+    recherche_clients_audience: str = Field(default="mysearch", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE", "recherche_clients_audience"))
+    # Origines autorisées à appeler ces routes depuis un navigateur (CSV). Distinctes de
+    # CORS_ALLOW_ORIGINS : elles n'ouvrent que les routes du contrat, sans credentials.
+    recherche_origines: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_ORIGINES", "recherche_origines"))
+    # Origine publique devant les liens signés rendus (le contrat veut des URL absolues).
+    # Vide : on reprend MYCOLLECTIONS_PUBLIC_URL.
+    recherche_url_publique: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE", "recherche_url_publique"))
+    # Délai accordé au moteur (Mon portail attend 8 s par source), et recherches permises
+    # par personne et par minute (0 = sans limite).
+    recherche_delai_s: float = Field(default=6.0, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_DELAI_S", "recherche_delai_s"))
+    recherche_par_minute: int = Field(default=60, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_RECHERCHE_PAR_MINUTE", "recherche_par_minute"))
+
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore", "populate_by_name": True}
 
 

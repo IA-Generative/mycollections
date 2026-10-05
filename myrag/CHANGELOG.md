@@ -2,6 +2,10 @@
 
 Ce journal est public : il dit ce qui change pour les personnes qui utilisent le service.
 
+## [0.3.24] (2026-10-05)
+
+- Mon portail peut chercher dans les collections que vous pouvez lire.
+
 ## [0.3.23] (2026-10-05)
 
 - Les contrôles d'accès sont renforcés sur les dernières fonctions qui ne les appliquaient pas encore.

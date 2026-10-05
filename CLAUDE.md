@@ -127,6 +127,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
      ├── /api/openrag/static/{path}      → document complet (repli sur le morceau ; propage ?raw=1)
      ├── /api/sources/check-url          → verification URL distante
      ├── /api/sync                       → sync Keycloak ↔ OpenRAG
+     ├── /api/v1/search[/scopes]         → recherche de Mon portail (contrat de recherche MirAI, sans LLM)
      ├── /graph                          → viewer Cytoscape.js
      └── /articles/{collection}/{id}     → vue article HTML DSFR
 ```
@@ -211,6 +212,12 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYRAG_PREFIXES_BANNIS` | `demo-,amorce-,rag-,test-` | Prefixes refuses a la creation d'une collection |
 | `MYRAG_PUBLIC_URL` | `http://localhost:8200` | URL publique (liens iframe) |
 | `CORS_ALLOW_ORIGINS` | `` | Origines autorisees (CSV). Vide => `*` sans credentials |
+| `MYCOLLECTIONS_RECHERCHE_ORIGINES` | `` | Origines (CSV) autorisees a appeler `/api/v1/search*` depuis un navigateur (Mon portail) ; GET + `Authorization`, sans credentials. Vide => aucune |
+| `MYCOLLECTIONS_RECHERCHE_AUDIENCE` | `mycollections-front` | Audience(s) acceptee(s) sur `/api/v1/search*` : dans `aud`, ou egale a `azp` (jetons du front) |
+| `MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE` | `mysearch` | Clients (CSV) dont le jeton doit porter l'audience dans `aud` (sinon 403 `audience_mismatch`) |
+| `MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE` | `` | Origine publique devant les liens signes de la recherche ; vide => `MYCOLLECTIONS_PUBLIC_URL` |
+| `MYCOLLECTIONS_RECHERCHE_DELAI_S` | `6` | Delai accorde a OpenRAG pour une recherche (au-dela : 503 `search_unavailable`) |
+| `MYCOLLECTIONS_RECHERCHE_PAR_MINUTE` | `60` | Recherches par personne et par minute, par processus (au-dela : 429) ; 0 = sans limite |
 | `DATA_DIR` | `/app/data` | Repertoire de donnees (fichiers sources, sqlite) |
 | `MYRAG_PSEUDO_SEL` | `` | Sel HMAC des identités du collectif (le même que `obs-pseudo-salt` du bus) ; vide ⇒ routes du collectif en 503. En dev : `dev-sel` |
 | `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |

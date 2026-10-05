@@ -57,6 +57,7 @@ gestionnaire de secrets de votre plateforme.
 | `test_07_guide` | six pages ordonnées, un sommaire qui mène à chacune, un contenu cohérent avec l'interface |
 | `test_08_administration` | un simple testeur n'entre pas ; le superadmin entre ; aucune carte ne mène à une page absente |
 | `test_09_captures` | une image de chaque écran, à 1280 px et 390 px, avec son texte visible (`E2E_CAPTURES` seulement) |
+| `test_11_recherche_portail` | la recherche de Mon portail (`/api/v1/search`) : périmètres lisibles seulement, résultats limités aux collections lisibles, périmètre inconnu ignoré, requête invalide en 400, 401 sans jeton |
 
 Le témoin est une phrase qu'aucun modèle ne peut connaître (`QUETZAL-9031`, dans
 `fixtures/note-de-controle.md`) : la retrouver dans une réponse prouve que la chaîne
