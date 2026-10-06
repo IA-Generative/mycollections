@@ -38,6 +38,11 @@ export default defineNuxtConfig({
       keycloakRealm: process.env.KEYCLOAK_REALM || 'openwebui',
       keycloakClientId: process.env.KEYCLOAK_CLIENT_ID || 'myrag-front',
       authEnabled: process.env.AUTH_ENABLED !== 'false',
+      // Mes agents (contrat d'agents MirAI, docs/agents.md) : l'origine du service, cuite au
+      // build comme le reste. Vide ⇒ la fonction « Interroger avec un agent » n'existe pas, et
+      // la portée `mesagents-agents` n'est pas demandée au SSO (un Keycloak refuse une portée
+      // non affectée au client : `invalid_scope` dès la connexion).
+      mesagentsBaseUrl: process.env.NUXT_PUBLIC_MESAGENTS_BASE_URL || '',
     },
   },
 })
