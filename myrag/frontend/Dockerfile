@@ -16,13 +16,17 @@ ARG KEYCLOAK_CLIENT_ID=myrag-front
 ARG APP_TITLE="Mes collections (beta)"
 ARG AUTH_ENABLED=true
 ARG MYRAG_PUBLIC_URL=https://mycollections.fake-domain.name
+# Mes agents (contrat d'agents MirAI) : vide ⇒ « Interroger avec un agent » n'existe pas et la
+# portée `mesagents-agents` n'est pas demandée au SSO. Voir docs/agents.md.
+ARG NUXT_PUBLIC_MESAGENTS_BASE_URL=
 
 ENV MYRAG_API_URL=$MYRAG_API_URL \
     KEYCLOAK_URL=$KEYCLOAK_URL \
     KEYCLOAK_REALM=$KEYCLOAK_REALM \
     KEYCLOAK_CLIENT_ID=$KEYCLOAK_CLIENT_ID \
     APP_TITLE=$APP_TITLE \
-    AUTH_ENABLED=$AUTH_ENABLED
+    AUTH_ENABLED=$AUTH_ENABLED \
+    NUXT_PUBLIC_MESAGENTS_BASE_URL=$NUXT_PUBLIC_MESAGENTS_BASE_URL
 
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund --prefer-offline

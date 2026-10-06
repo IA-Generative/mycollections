@@ -2,6 +2,7 @@
  * Keycloak OIDC authentication composable.
  * Uses oidc-client-ts with PKCE flow.
  */
+import { portesOidc } from '~/utils/agents'
 
 // `basic` est un scope Keycloak qui ajoute `sub` (et `auth_time`) au jeton d'ACCÈS.
 // Sans lui, ce realm n'y met pas `sub` : les services qui identifient leur utilisateur
@@ -10,6 +11,10 @@
 //
 // Il doit être DEMANDÉ tant qu'il est assigné au client en scope « optionnel ». S'il
 // passe un jour en « par défaut », cette demande devient sans effet, pas nuisible.
+//
+// `mesagents-agents` (audience `mesagents` + groupes en chemins, contrat d'agents MirAI)
+// s'y ajoute SEULEMENT quand Mes agents est branché (`NUXT_PUBLIC_MESAGENTS_BASE_URL`) :
+// voir `portesOidc` dans utils/agents.ts.
 const OIDC_SCOPES = 'openid email profile basic'
 
 // UN SEUL UserManager pour toute la vie de la page, et c'est un correctif : trois
@@ -68,7 +73,7 @@ export function useAuth() {
       redirect_uri: redirectUri,
       post_logout_redirect_uri: origin,
       response_type: 'code',
-      scope: OIDC_SCOPES,
+      scope: portesOidc(OIDC_SCOPES, String(config.public.mesagentsBaseUrl || '')),
       userStore: new WebStorageStateStore({ store: window.sessionStorage }),
       automaticSilentRenew: true,
     })

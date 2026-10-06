@@ -56,6 +56,8 @@
                 (format OpenAI), ou <code>GET {{ collection.acces.api.search }}</code> pour la recherche seule —
                 sur clé d'API à demander à l'équipe de la bêta ;</li>
               <li><strong>dans vos outils bureautiques</strong> : greffon LibreOffice à venir.</li>
+              <li v-if="agentsDisponibles"><strong>avec un agent de Mes agents</strong>, sur les passages de la collection :
+                <button type="button" class="fr-link fr-text--sm" @click="tab = 'agent'">onglet « Interroger avec un agent »</button>.</li>
             </ul>
             <p class="fr-text--sm fr-mb-0"><NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Le guide : interroger depuis vos SI</NuxtLink></p>
           </div>
@@ -132,6 +134,12 @@
              entier ne se lit pas tant que personne ne la demande. -->
         <div v-show="tab === 'documents'" v-bind="panneau('documents')">
           <CorpusDocuments v-if="documentsVus" :collection="id" />
+        </div>
+
+        <!-- Interroger avec un agent : l'onglet n'existe que si Mes agents est branché et a
+             répondu sans refus (contrat d'agents MirAI, docs/agents.md). Monté à la première ouverture. -->
+        <div v-if="agentsDisponibles" v-show="tab === 'agent'" v-bind="panneau('agent')">
+          <AgentsInterrogerAvecAgent v-if="agentVu" :collection="collection.name" />
         </div>
 
         <!-- Signaler un défaut -->
@@ -214,6 +222,7 @@
 import { messageErreur } from '~/utils/collectif'
 import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleStatutAvis } from '~/utils/libelles'
 import { ongletDeLAdresse, libelleSansCompteur } from '~/utils/filAriane'
+import { useMesAgents } from '~/composables/useMesAgents'
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
@@ -221,6 +230,11 @@ const { get, patch } = useApi()
 const c = useCollectif()
 const { isAdmin } = useAdminAuth()
 const { capacites, charger: chargerCapacites } = useCapacites()
+const agents = useMesAgents()
+// L'onglet « Interroger avec un agent » existe (Mes agents branché, liste obtenue sans refus).
+// Figé pour la vie de la page : un refus survenu en cours de route ne le retire pas sous les
+// pieds de la personne (le composant le dit, le prochain chargement l'enlève).
+const agentsDisponibles = ref(false)
 
 // ─── Le circuit collaboratif ─────────────────────────────────────────────────
 const etat = ref<any>(null)
@@ -291,6 +305,8 @@ const ongletsTous = computed(() => {
   return [
     { cle: 'consulter', libelle: 'Consulter' },
     { cle: 'documents', libelle: 'Documents' },
+    // Interroger avec un agent : seulement quand Mes agents est branché et n'a pas refusé.
+    ...(agentsDisponibles.value ? [{ cle: 'agent', libelle: 'Interroger avec un agent' }] : []),
     { cle: 'signaler', libelle: `Signaler un défaut${ouverts(signalements.value, s => s.etat !== 'clos')}` },
     { cle: 'proposer', libelle: `Proposer une modification${ouverts(propositions.value, p => p.etat === 'proposee')}` },
     { cle: 'historique', libelle: 'Historique' },
@@ -365,6 +381,12 @@ const badges = computed(() => {
 
 const documentsVus = ref(false)
 watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
+
+// Le composant de l'agent est monté à la première ouverture de son onglet.
+const agentVu = ref(false)
+watch(tab, (t) => { if (t === 'agent') agentVu.value = true }, { immediate: true })
+// `?onglet=agent` reçu avant que la liste ne soit connue : l'onglet s'ouvre quand elle l'est.
+watch(agentsDisponibles, () => { tab.value = ongletDemande() })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
@@ -446,6 +468,8 @@ onMounted(async () => {
   }
   // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
   chargerCollectif()
+  // Les agents — un service injoignable ou un refus masque l'onglet, sans bloquer l'écran.
+  if (agents.configure) agents.lister().then(() => { agentsDisponibles.value = agents.disponible.value }).catch(() => {})
   // Feedback is optional — missing stats shouldn't blank the page.
   try {
     feedbackStats.value = await get(`/api/feedback/${id}/stats`)
