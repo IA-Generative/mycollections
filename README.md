@@ -214,7 +214,8 @@ n'ont pas de valeur par défaut ici : le **registre** d'images (`<REGISTRE>`), l
 cluster ; la base PostgreSQL `myrag` doit exister avant le premier démarrage.
 
 > **Les adresses du SSO sont cuites dans l'image du frontend** : Nuxt en mode statique lit
-> `KEYCLOAK_URL`, `KEYCLOAK_REALM` et `KEYCLOAK_CLIENT_ID` à la construction, pas au démarrage.
+> `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` — et `NUXT_PUBLIC_MESAGENTS_BASE_URL`
+> (Mes agents, voir [docs/agents.md](docs/agents.md)) — à la construction, pas au démarrage.
 > Les changer impose de reconstruire l'image — modifier un ConfigMap n'y fait rien.
 
 ```bash
@@ -279,6 +280,7 @@ Procédure détaillée (création de la base, compte de service Drive, dépannag
 ## Documentation
 
 - [docs/sources.md](docs/sources.md) — lire les sources d'une réponse : écrans, et règles à ne pas défaire.
+- [docs/agents.md](docs/agents.md) — interroger une collection avec un agent de Mes agents : la variable, la portée Keycloak `mesagents-agents`, et le fait que rien ne transite côté serveur.
 - [docs/collectif.md](docs/collectif.md) — le collectif : modèle, états, routes, fil d'avancement ; décision dans [ADR-0001](docs/adr/ADR-0001-collections-collaboratives-modele-et-etats.md).
 - [myrag/app/guide/](myrag/app/guide/) — le guide « Soyez acteurs vous-mêmes », en six étapes, servi par l'application.
 - [docs/drive-find-architecture.md](docs/drive-find-architecture.md) — comment Drive et son moteur de recherche s'articulent.
