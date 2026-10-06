@@ -225,6 +225,8 @@ cluster ; la base PostgreSQL `myrag` doit exister avant le premier démarrage.
 > depuis `frontend.config`) : la même image sert alors tous les environnements. Sans lui,
 > l'interface garde les valeurs de construction (build args, utiles en développement local
 > seulement).
+> Exception : `NUXT_PUBLIC_MESAGENTS_BASE_URL` (Mes agents, voir [docs/agents.md](docs/agents.md))
+> reste lue à la construction de l'image ; la changer impose de la reconstruire.
 
 ```bash
 # Construire et pousser (TOUJOURS linux/amd64 : un Mac ARM64 produit sinon « exec format error »)
@@ -287,6 +289,7 @@ Procédure détaillée (création de la base, compte de service Drive, dépannag
 ## Documentation
 
 - [docs/sources.md](docs/sources.md) — lire les sources d'une réponse : écrans, et règles à ne pas défaire.
+- [docs/agents.md](docs/agents.md) — interroger une collection avec un agent de Mes agents : la variable, la portée Keycloak `mesagents-agents`, et le fait que rien ne transite côté serveur.
 - [docs/collectif.md](docs/collectif.md) — le collectif : modèle, états, routes, fil d'avancement ; décision dans [ADR-0001](docs/adr/ADR-0001-collections-collaboratives-modele-et-etats.md).
 - [docs/qualite.md](docs/qualite.md) — piloter la qualité : jeu de questions de référence, mesure par un juge IA, avis, leviers ; migration des anciens jeux de test et réponses validées.
 - [docs/generation.md](docs/generation.md) — générer des paires question / réponse par persona (ragas) : déroulé d'un run, coût, réglages, limites ; décision dans [ADR-0002](docs/adr/ADR-0002-generation-de-questions-par-persona.md).

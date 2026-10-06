@@ -224,6 +224,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `LEGIFRANCE_CLIENT_ID` | `` | Client ID API PISTE Legifrance |
 | `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
 | `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
+| `NUXT_PUBLIC_MESAGENTS_BASE_URL` | `` | Frontend, cuite au build : origine de Mes agents (contrat d'agents MirAI, `docs/agents.md`). Vide ⇒ pas d'onglet « Interroger avec un agent », et la portée `mesagents-agents` n'est pas demandée au SSO. Ne la renseigner qu'une fois la portée affectée au client, sinon `invalid_scope` à la connexion |
 | `AUTH_ENABLED` | `false` (backend) ; `true` dans l'image du frontend | Garde JWT Keycloak sur les routes XHR du backend ; false en dev |
 | `MYCOLLECTIONS_REPRISE_AU_DEMARRAGE` | `true` | Reprendre au demarrage les indexations coupees par l'arret precedent |
 | `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
