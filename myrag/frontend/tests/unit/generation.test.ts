@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  bilanRelecture, dureeLisible, libelleEtatRun, libellePhase, libelleRelecture, libelleStyle, nombreCourt,
+  bilanRelecture, dureeLisible, libelleEtatRun, libelleModele, libellePhase, libelleRelecture, libelleStyle, nombreCourt,
   nomFichierExport, progressionRun, resumeCout, validerPersona, EXEMPLES_PERSONAS,
 } from '../../utils/generation'
 
@@ -13,6 +13,8 @@ describe('libellés', () => {
     expect(libelleRelecture('rejete')).toBe('Rejetée')
     expect(libelleStyle('MISSPELLED')).toBe('avec des fautes')
     expect(libelleEtatRun('inconnu')).toBe('inconnu')
+    expect(libelleModele('chat')).toBe('chat')
+    expect(libelleModele('')).toBe('celui du serveur')  // sans nom de modèle : le serveur en aval choisit
   })
 })
 

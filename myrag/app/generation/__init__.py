@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from dataclasses import dataclass
 
 # ragas envoie des statistiques d'usage à son éditeur sauf avis contraire : aucune donnée ne doit
 # sortir du ministère. Posé avant tout import de ragas, quel que soit le chemin qui y mène.
@@ -22,12 +23,39 @@ class GenerationIndisponible(RuntimeError):
     """La génération ne peut pas tourner ici : bibliothèque absente ou configuration incomplète."""
 
 
-#: Ce qu'il faut poser pour générer, dans l'ordre où on le dit.
+#: La passerelle dédiée, en deux variables. Posées ensemble, elles servent la génération ;
+#: vides ensemble, c'est le repli OpenRAG (`fournisseur`) ; jamais une seule des deux
+#: (`manques` la refuse). Le modèle de rédaction n'en fait pas partie : vide, la requête part
+#: sans nom de modèle (`"model": ""`) et le serveur en aval choisit le sien — le mode direct
+#: d'OpenRAG (aucun retriever) s'obtient exactement ainsi.
 _REQUIS = (
     ("generation_llm_url", "MYCOLLECTIONS_GENERATION_LLM_URL"),
     ("generation_llm_cle", "MYCOLLECTIONS_GENERATION_LLM_CLE"),
-    ("generation_llm_modele", "MYCOLLECTIONS_GENERATION_LLM_MODELE"),
 )
+
+
+@dataclass(frozen=True)
+class Fournisseur:
+    """Le serveur de rédaction : son adresse, sa clef, et s'il s'agit du repli OpenRAG."""
+
+    url: str
+    cle: str
+    repli: bool
+
+
+def fournisseur() -> Fournisseur:
+    """Où joindre le modèle de rédaction.
+
+    La passerelle dédiée (`MYCOLLECTIONS_GENERATION_LLM_URL` + `..._CLE`) quand elles sont
+    posées ; sinon le `/v1` OpenAI-compatible d'OpenRAG, avec le jeton du service — sans nom
+    de modèle, c'est son mode direct, sans retriever. Le repli emprunte le jeton d'OpenRAG :
+    son quota de passerelle est partagé avec l'assistant, c'est le repli des essais, pas de
+    la production (docs/generation.md, « Limites connues »).
+    """
+    url = str(settings.generation_llm_url or "").strip()
+    if url or str(settings.generation_llm_cle or "").strip():
+        return Fournisseur(url, str(settings.generation_llm_cle), repli=False)
+    return Fournisseur(settings.openrag_url.rstrip("/") + "/v1", settings.openrag_admin_token, repli=True)
 
 
 def disponible() -> bool:
@@ -36,8 +64,11 @@ def disponible() -> bool:
 
 
 def manques() -> list[str]:
-    """Les variables de configuration vides parmi celles qu'exige la génération."""
-    return [var for champ, var in _REQUIS if not str(getattr(settings, champ, "") or "").strip()]
+    """Les variables vides parmi celles qu'exige la génération : la passerelle dédiée exige
+    URL **et** clef, vides ensemble c'est le repli OpenRAG — jamais une seule des deux, sans
+    quoi le jeton d'OpenRAG partirait vers une autre adresse que la sienne."""
+    posees = {var for champ, var in _REQUIS if str(getattr(settings, champ, "") or "").strip()}
+    return [var for _, var in _REQUIS if var not in posees] if len(posees) == 1 else []
 
 
 def prete() -> bool:

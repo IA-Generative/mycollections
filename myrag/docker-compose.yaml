@@ -19,7 +19,9 @@ services:
       - GRAPHRAG_VIEWER_URL=${GRAPHRAG_VIEWER_URL:-}
       - MYRAG_PUBLIC_URL=${MYRAG_PUBLIC_URL:-http://localhost:8200}
       - DATA_DIR=/app/data
-      # Génération de questions par persona (docs/generation.md) : vides ⇒ 503 sur ces routes.
+      # Génération de questions (docs/generation.md) : URL et clef vides (les deux) ⇒ repli sur
+      # le /v1 d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒
+      # 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct, sans retriever).
       - MYCOLLECTIONS_GENERATION_LLM_URL=${MYCOLLECTIONS_GENERATION_LLM_URL:-}
       - MYCOLLECTIONS_GENERATION_LLM_CLE=${MYCOLLECTIONS_GENERATION_LLM_CLE:-}
       - MYCOLLECTIONS_GENERATION_LLM_MODELE=${MYCOLLECTIONS_GENERATION_LLM_MODELE:-}

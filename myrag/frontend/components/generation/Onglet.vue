@@ -8,7 +8,7 @@
       <p class="fr-text--sm">
         Faites rédiger des paires question / réponse à partir des documents de la collection, du point de vue des
         personnes qui l'interrogeront. Elles servent à vérifier que l'assistant répond juste.
-        <span style="color:var(--text-mention-grey)">Modèle : {{ etat.modele }}.</span>
+        <span style="color:var(--text-mention-grey)">Modèle : {{ libelleModele(etat.modele) }}{{ etat.via_openrag ? ' (via OpenRAG)' : '' }}.</span>
       </p>
       <div class="fr-grid-row fr-grid-row--gutters">
         <div class="fr-col-12 fr-col-lg-5">
@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import type { Run } from '~/utils/generation'
+import { libelleModele } from '~/utils/generation'
 import { messageErreur } from '~/utils/collectif'
 
 /** L'onglet « Questions générées » de la fiche : personas, lancement, suivi, relecture. */

@@ -13,13 +13,27 @@ from app.config import settings
 def test_manques_nomme_les_variables_vides(monkeypatch):
     for champ in ("generation_llm_url", "generation_llm_cle", "generation_llm_modele"):
         monkeypatch.setattr(settings, champ, "")
-    assert generation.manques() == ["MYCOLLECTIONS_GENERATION_LLM_URL", "MYCOLLECTIONS_GENERATION_LLM_CLE", "MYCOLLECTIONS_GENERATION_LLM_MODELE"]
+    # le modèle de rédaction n'est pas requis : vide, le serveur en aval choisit (mode
+    # direct d'OpenRAG) ; URL et clef vides ensemble = repli sur le /v1 d'OpenRAG, rien ne manque
+    assert generation.manques() == []
+    # une seule des deux posées : l'autre manque — le jeton d'OpenRAG ne part pas ailleurs
+    monkeypatch.setattr(settings, "generation_llm_url", "https://passerelle.fake-domain.name/v1")
+    assert generation.manques() == ["MYCOLLECTIONS_GENERATION_LLM_CLE"]
     with pytest.raises(generation.GenerationIndisponible, match="MYCOLLECTIONS_GENERATION_LLM_CLE"):
         generation.exiger_prete()
+    monkeypatch.setattr(settings, "generation_llm_cle", "cle")
+    assert generation.manques() == []
+
+
+def test_fournisseur_replie_sur_openrag_a_deux_vides(monkeypatch):
+    monkeypatch.setattr(settings, "generation_llm_url", "")
+    monkeypatch.setattr(settings, "generation_llm_cle", "")
+    monkeypatch.setattr(settings, "openrag_url", "https://openrag.fake-domain.name/")
+    monkeypatch.setattr(settings, "openrag_admin_token", "jeton-openrag")
+    assert generation.fournisseur() == generation.Fournisseur(url="https://openrag.fake-domain.name/v1", cle="jeton-openrag", repli=True)
     monkeypatch.setattr(settings, "generation_llm_url", "https://passerelle.fake-domain.name/v1")
     monkeypatch.setattr(settings, "generation_llm_cle", "cle")
-    monkeypatch.setattr(settings, "generation_llm_modele", "chat")
-    assert generation.manques() == []
+    assert generation.fournisseur() == generation.Fournisseur(url="https://passerelle.fake-domain.name/v1", cle="cle", repli=False)
 
 
 def test_sans_ragas_le_message_dit_l_extra(monkeypatch):
@@ -50,6 +64,17 @@ def test_fabrique_du_modele_de_langage(monkeypatch):
     assert chat.model_name == "chat" and chat.max_tokens == 2048
     assert chat.openai_api_key.get_secret_value() == "cle"
     assert chat.max_retries == 0  # les réessais sont ceux de ragas, comptés
+
+
+def test_fabrique_le_modele_par_repli_openrag(monkeypatch):
+    for champ in ("generation_llm_url", "generation_llm_cle", "generation_llm_modele"):
+        monkeypatch.setattr(settings, champ, "")
+    monkeypatch.setattr(settings, "openrag_url", "http://openrag.fake-domain.name:8180/")
+    monkeypatch.setattr(settings, "openrag_admin_token", "jeton-openrag")
+    chat = modele.fabriquer_llm(modele.Compteurs()).langchain_llm
+    assert chat.openai_api_base == "http://openrag.fake-domain.name:8180/v1"
+    assert chat.openai_api_key.get_secret_value() == "jeton-openrag"
+    assert chat.model_name == ""  # sans nom de modèle : le serveur en aval choisit (mode direct)
 
 
 def test_fabrique_des_embeddings_reprend_l_url_du_modele(monkeypatch):
@@ -120,3 +145,12 @@ def test_refus_de_debit_compte_et_dit():
     c.observer("x", None, 0.1, RateLimitError("Error code: 429 - rate limit exceeded"))
     assert c.instantane()["refus_debit"] == 1 and c.instantane()["erreurs_llm"] == 1
     assert "débit" in message_sur(RateLimitError("429"))
+
+
+def test_message_d_un_serveur_hors_format():
+    import json
+
+    from app.generation.resultats import message_sur
+
+    e = json.JSONDecodeError("Invalid control character at: line 1 column 426", "x", 425)
+    assert "JSON valide" in message_sur(e) and "mock" in message_sur(e)

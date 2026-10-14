@@ -3,6 +3,8 @@
     cd myrag && MYCOLLECTIONS_GENERATION_LLM_URL=… MYCOLLECTIONS_GENERATION_LLM_CLE=… \\
         MYCOLLECTIONS_GENERATION_LLM_MODELE=… uv run python -m app.generation.adapter_prompts
 
+Sans ces variables, le repli est le `/v1` d'OpenRAG, comme pour un run.
+
 Les fichiers écrits (`app/generation/prompts/{nom}_{prompt}_french.json`) sont RELUS À LA MAIN
 avant d'être commités : ils font partie du code livré. Le moteur les charge à chaque run ; il ne
 traduit jamais rien lui-même (pas d'appel au modèle pour cela pendant un run).

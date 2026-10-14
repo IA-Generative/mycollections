@@ -158,4 +158,6 @@ def message_sur(e: BaseException) -> str:
         return "Le modèle de langage refuse la clé configurée (MYCOLLECTIONS_GENERATION_LLM_CLE)."
     if "RateLimit" in nom or "429" in str(e)[:200]:
         return "Le modèle de langage limite le débit : réessayez plus tard ou baissez le parallélisme."
+    if nom == "JSONDecodeError":
+        return "Le serveur de modèles n'a pas répondu en JSON valide : un mock (réponses en boîte) ou une passerelle déréglée."
     return f"{nom} : {str(e)[:200]}"

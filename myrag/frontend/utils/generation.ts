@@ -68,6 +68,8 @@ export const libellePhase = (p: string) => PHASES[p] || p
 export const libelleRelecture = (r: string) => RELECTURES[r] || r
 export const libelleStyle = (s: string) => STYLES[s] || s
 export const libelleLongueur = (l: string) => LONGUEURS[l] || l
+/** Modèle de rédaction ; vide = la requête part sans nom, le serveur en aval choisit (mode direct d'OpenRAG). */
+export const libelleModele = (m: string) => (m || '').trim() ? m : 'celui du serveur'
 
 export const classeEtatRun = (e: string) => ({
   termine: 'fr-badge--success', erreur: 'fr-badge--error', en_cours: 'fr-badge--info', en_attente: 'fr-badge--new',

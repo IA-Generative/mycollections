@@ -22,6 +22,7 @@ from ragas.embeddings.base import LangchainEmbeddingsWrapper
 from ragas.llms.base import LangchainLLMWrapper
 
 from app.config import settings
+from app.generation import fournisseur
 from app.generation.resultats import MARQUE_REPARATION, Compteurs, Debit, _usage  # noqa: F401 — réexportés
 
 
@@ -79,6 +80,9 @@ class EmbeddingsComptes(LangchainEmbeddingsWrapper):
 
 
 def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None, modele: str | None = None, run_config=None, debit: Debit | None = None) -> LLMCompte:
+    if url is None and cle is None:  # fournisseur du service : passerelle dédiée ou repli OpenRAG
+        f = fournisseur()
+        url, cle = f.url, f.cle
     chat = ChatOpenAI(
         base_url=url or settings.generation_llm_url,
         api_key=cle or settings.generation_llm_cle,
@@ -94,9 +98,10 @@ def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | No
 def fabriquer_embeddings(
     compteurs: Compteurs, *, url: str | None = None, cle: str | None = None, modele: str | None = None, run_config=None, debit: Debit | None = None
 ) -> EmbeddingsComptes:
+    f = fournisseur()  # même fournisseur que le modèle de rédaction
     emb = OpenAIEmbeddings(
-        base_url=url or settings.generation_embeddings_url or settings.generation_llm_url,
-        api_key=cle or settings.generation_llm_cle,
+        base_url=url or settings.generation_embeddings_url or f.url,
+        api_key=cle or f.cle,
         model=modele or settings.generation_embeddings_modele or "non-configure",
         check_embedding_ctx_length=False,  # texte brut : pas de découpage tiktoken, pas de téléchargement
         timeout=settings.generation_delai_appel_s,

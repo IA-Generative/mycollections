@@ -98,6 +98,13 @@ def test_503_qui_dit_ce_qui_manque(client, collection, monkeypatch):
     assert client.get("/api/config").json()["generation"] is False
 
 
+def test_sans_passerelle_le_repli_openrag_est_annonce(client, collection, monkeypatch):
+    monkeypatch.setattr(settings, "generation_llm_url", "")
+    monkeypatch.setattr(settings, "generation_llm_cle", "")
+    corps = client.get(URL.format(collection)).json()
+    assert corps["prete"] is True and corps["via_openrag"] is True
+
+
 def test_reserve_a_qui_gere(client, en_tant_que, collection):
     en_tant_que(personne("lecteur"))
     assert client.get(URL.format(collection)).status_code == 403

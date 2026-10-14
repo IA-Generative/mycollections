@@ -36,6 +36,17 @@ mots-clés) et leur longueur : c'est voulu, pour éprouver l'assistant sur des q
 - **Aucune donnée ne sort.** Le modèle est celui de la passerelle MirAI, la même qu'emploie
   OpenRAG (avec un jeton à part : voir « Limites connues »). Les statistiques d'usage que ragas envoie à son éditeur sont coupées
   (`RAGAS_DO_NOT_TRACK=true`, posé par le code et par l'image).
+  Pour un essai local, laissez URL et clef vides : la génération suit le `/v1` d'OpenRAG
+  (jeton du service), et sans nom de modèle (`MYCOLLECTIONS_GENERATION_LLM_MODELE` vide)
+  son mode direct, sans retriever — son quota passerelle est alors partagé avec
+  l'assistant (voir « Limites connues »). Le mock de développement tient aussi ce rôle :
+  il répond en boîte aux quatre appels de la génération (extraction des entités et des
+  mots-clés, appariement thèmes/personas, rédaction question/réponse) — d'une seule
+  question et réponse, forgée sur le corpus de démonstration, et pour le seul persona
+  « Lecteur des documents » du corpus ; tout autre persona échoue à la préparation des
+  scénarios (« Aucun scénario n'a pu être préparé »). Les règles du mock sont sur
+  `messages.0.content` : tout prompt dont l'instruction ne les recoupe pas retombe sur
+  les réponses de chat d'origine.
 - **L'ingestion n'est pas touchée.** ragas est un extra (`uv sync --extra generation`) ; une image
   construite sans (`--build-arg AVEC_GENERATION=0`) répond 503 sur ces routes et fonctionne à
   l'identique pour le reste.
@@ -43,9 +54,11 @@ mots-clés) et leur longueur : c'est voulu, pour éprouver l'assistant sur des q
 ## Limites connues
 
 - **Le quota de la passerelle est compté par jeton.** Celui d'OpenRAG est limité à 60 appels par
-  minute : un run qui l'emprunterait prendrait le quota de l'assistant de tous les testeurs. Il
-  faut **un jeton propre à Mes collections**, et un débit (`MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE`)
-  sous son quota. Un refus de quota (429) est compté à part et dit dans l'écran.
+  minute : sans passerelle dédiée (URL et clef vides ensemble), le repli OpenRAG emprunte ce
+  quota, partagé avec l'assistant de tous les testeurs — des essais, pas de la production. En
+  production, il faut **un jeton propre à Mes collections**, et un débit
+  (`MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE`) sous son quota. Un refus de quota (429) est
+  compté à part et dit dans l'écran.
 
 - **Un run à la fois par processus**, un run actif par collection (409). Les autres attendent,
   affichés « en attente ».
@@ -64,9 +77,9 @@ mots-clés) et leur longueur : c'est voulu, pour éprouver l'assistant sur des q
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `MYCOLLECTIONS_GENERATION_LLM_URL` | vide | Adresse OpenAI-compatible de la passerelle MirAI (`…/v1`). Vide ⇒ 503 |
-| `MYCOLLECTIONS_GENERATION_LLM_CLE` | vide | Jeton de la passerelle (secret). Vide ⇒ 503 |
-| `MYCOLLECTIONS_GENERATION_LLM_MODELE` | vide | Modèle de rédaction (ex. `chat` : rapide, JSON fiable). Vide ⇒ 503 |
+| `MYCOLLECTIONS_GENERATION_LLM_URL` | vide | Adresse OpenAI-compatible de la passerelle MirAI (`…/v1`). Vide avec la clef ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé : essais, pas production) |
+| `MYCOLLECTIONS_GENERATION_LLM_CLE` | vide | Jeton de la passerelle (secret, propre à Mes collections). Une seule des deux posée ⇒ 503 : le jeton d'OpenRAG ne part pas vers une autre adresse |
+| `MYCOLLECTIONS_GENERATION_LLM_MODELE` | vide | Modèle de rédaction (ex. `chat` : rapide, JSON fiable). Vide ⇒ la requête part sans nom de modèle (`"model": ""`) et le serveur en aval choisit le sien |
 | `MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE` | vide | Modèle d'embeddings (ex. `bge-m3`) — pour les personas automatiques, à venir |
 | `MYCOLLECTIONS_GENERATION_EMBEDDINGS_URL` | vide | Vide ⇒ l'adresse du modèle de rédaction |
 | `MYCOLLECTIONS_GENERATION_MORCEAUX_MAX` | `200` | Plafond des passages lus par run (4 par paire sinon) |

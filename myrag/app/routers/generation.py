@@ -1,8 +1,9 @@
 """Générer des paires question/réponse par persona sur une collection (docs/generation.md).
 
 Toutes les routes sont réservées à qui GÈRE la collection (créateur, groupe `<nom>-admin`,
-administration) : 404 si on ne peut pas la lire, 403 si on la lit seulement. Service non installé
-ou non configuré : 503, avec ce qui manque.
+administration) : 404 si on ne peut pas la lire, 403 si on la lit seulement. Service non
+installé, ou passerelle posée à moitié (URL sans clef ou l'inverse) : 503, avec ce qui
+manque ; sans passerelle du tout, repli sur le `/v1` d'OpenRAG (dit `via_openrag`).
 """
 
 from __future__ import annotations
@@ -99,6 +100,7 @@ async def etat(collection: str, user: CurrentUser = Depends(gerer_la_collection)
         "collection": collection,
         "prete": True,
         "modele": settings.generation_llm_modele,
+        "via_openrag": generation.fournisseur().repli,
         "morceaux_max": settings.generation_morceaux_max,
         "taille_max": 100,
         "personas": await store.lister_personas(collection),

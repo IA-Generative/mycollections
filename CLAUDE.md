@@ -232,7 +232,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
-| `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. Vides ⇒ routes de génération en 503 |
+| `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |
 | `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
 
 ## Groupes et droits
