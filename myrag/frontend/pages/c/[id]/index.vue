@@ -198,6 +198,11 @@
           </div>
         </div>
 
+        <!-- Questions générées : paires question / réponse par persona (ragas). Montée à la première ouverture. -->
+        <div v-show="tab === 'generation'" v-bind="panneau('generation')">
+          <GenerationOnglet v-if="generationVue" :collection="id" />
+        </div>
+
         <!-- Q&R tab -->
         <div v-show="tab === 'qr'" v-bind="panneau('qr')">
           <p class="fr-text--sm">Réponses validées — des réponses relues et retenues pour les questions fréquentes.</p>
@@ -282,10 +287,14 @@ const tab = ref('consulter')
 
 /** Ce que l'appelant peut faire de la collection (dit par l'API) : on n'offre que ces gestes. */
 const peutGerer = computed(() => !!collection.value?.mes_droits?.ecrire)
-const RESERVES_A_QUI_GERE = new Set(['prompt', 'feedback', 'qr', `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
+const RESERVES_A_QUI_GERE = new Set(['prompt', 'feedback', 'qr', 'generation', `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
 
 /** Les rubriques de la fiche, dans l'ordre de la rangée d'onglets. */
-const onglets = computed(() => ongletsTous.value.filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle)))
+const onglets = computed(() => ongletsTous.value
+  .filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle))
+  .filter(o => o.cle !== 'generation' || generationDisponible.value))
+/** La génération de questions est-elle installée et configurée sur ce service ? (`/api/config`) */
+const generationDisponible = ref(false)
 const ongletsTous = computed(() => {
   const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
   return [
@@ -298,6 +307,7 @@ const ongletsTous = computed(() => {
     { cle: 'prompt', libelle: "Consignes données à l'assistant" },
     { cle: 'feedback', libelle: `Avis (${feedbackStats.value.total})` },
     { cle: 'qr', libelle: 'Réponses validées' },
+    { cle: 'generation', libelle: 'Questions générées' },
   ]
 })
 
@@ -365,6 +375,8 @@ const badges = computed(() => {
 
 const documentsVus = ref(false)
 watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
+const generationVue = ref(false)
+watch(tab, (t) => { if (t === 'generation') generationVue.value = true }, { immediate: true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
@@ -446,6 +458,12 @@ onMounted(async () => {
   }
   // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
   chargerCollectif()
+  // L'onglet « Questions générées » n'existe que si le service sait générer ; un lien
+  // `?onglet=generation` arrivé avant cette réponse rouvre l'onglet une fois qu'on le sait.
+  get('/api/config').then((c: any) => {
+    generationDisponible.value = c?.generation === true
+    if (route.query.onglet === 'generation') tab.value = ongletDemande()
+  }).catch(() => {})
   // Feedback is optional — missing stats shouldn't blank the page.
   try {
     feedbackStats.value = await get(`/api/feedback/${id}/stats`)
