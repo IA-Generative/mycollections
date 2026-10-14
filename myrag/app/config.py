@@ -29,6 +29,11 @@ class Settings(BaseSettings):
 
     # Keycloak
     keycloak_url: str = Field(default="http://keycloak:8080")
+    # Adresse par laquelle le SERVEUR joint Keycloak (clés de signature, /userinfo), quand elle
+    # diffère de l'adresse publique — ex. une preview dont le pod ne peut pas repasser par le
+    # répartiteur public. L'émetteur attendu des jetons reste keycloak_url. Vide : keycloak_url.
+    keycloak_internal_url: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_KEYCLOAK_INTERNAL_URL", "keycloak_internal_url"))
     keycloak_realm: str = Field(default="openwebui")
     keycloak_client_id: str = Field(default="myrag-admin")
     keycloak_client_secret: str = Field(default="")
@@ -90,6 +95,10 @@ class Settings(BaseSettings):
     # d'où vient la collection, pas ce qu'elle contient — et l'identifiant est ce que tapent
     # les applications (`openrag-<identifiant>`).
     myrag_prefixes_bannis: str = Field(default="demo-,amorce-,rag-,test-", validation_alias=AliasChoices("MYCOLLECTIONS_PREFIXES_BANNIS", "MYRAG_PREFIXES_BANNIS", "myrag_prefixes_bannis"))
+    # Préfixe IMPOSÉ à toute partition (environnement d'essai : une preview par PR partage
+    # l'OpenRAG de la bêta). Vide = aucun cloisonnement. Renseigné (ex. `pr-12-`) : on ne crée,
+    # ne lit et n'interroge que des partitions qui commencent par lui — voir openrag_client.
+    partition_prefixe: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_PARTITION_PREFIXE", "partition_prefixe"))
 
     # Public URL (for iframe links)
     myrag_public_url: str = Field(default="http://localhost:8200", validation_alias=AliasChoices("MYCOLLECTIONS_PUBLIC_URL", "MYRAG_PUBLIC_URL", "myrag_public_url"))

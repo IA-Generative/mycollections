@@ -1,0 +1,56 @@
+# Retire de ghcr les images des previews fermées (backend et frontend :pr-<n>), une fois par jour. Un balayage
+# plutôt qu'un déclencheur `closed` : la fermeture et la fin d'un build peuvent se croiser
+# (fabnum-cicd, docs/workflows/71-clean-images.md). Supprimer la version qui porte pr-<n>
+# emporte aussi l'étiquette au nom de branche que fabnum pose sur les builds de PR. Les
+# environnements eux-mêmes sont retirés par Argo CD dès la fermeture, sans attendre ceci.
+name: Clean preview images
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      LOOKBACK_DAYS:
+        description: Profondeur de réconciliation, en jours
+        required: false
+        type: number
+        default: 3
+
+permissions: {}
+
+jobs:
+  list-closed-prs:
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read
+    outputs:
+      prs: ${{ steps.list.outputs.prs }}
+    steps:
+      - id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # Le déclencheur `schedule` n'a pas de contexte `inputs`.
+          LOOKBACK_DAYS: ${{ inputs.LOOKBACK_DAYS || 3 }}
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -u -d "$LOOKBACK_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+          PRS=$(gh pr list -R "$REPO" --state closed --limit 100 --json number,closedAt \
+            | jq -c --arg c "$CUTOFF" '[.[] | select(.closedAt >= $c) | {number}]')
+          echo "prs=$PRS" >> "$GITHUB_OUTPUT"
+
+  sweep-images:
+    needs: [list-closed-prs]
+    # Un vecteur de matrice vide est une erreur de workflow, pas un run vide.
+    if: ${{ needs.list-closed-prs.outputs.prs != '[]' }}
+    uses: dnum-mi/fabnum-cicd/.github/workflows/clean-images.yml@v0.23.0
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        pr: ${{ fromJSON(needs.list-closed-prs.outputs.prs) }}
+        image: [backend, frontend]
+    with:
+      IMAGE: ghcr.io/ia-generative/mycollections/${{ matrix.image }}:pr-${{ matrix.pr.number }}
+      PROTECTED_TAGS: latest,main,develop,beta

@@ -1,0 +1,94 @@
+# Images de la branche `beta`, suivie par l'Argo CD d'internal-gw (ADR-0005 de
+# mirai-apps-beta-private) et servie sur https://mescollections.numerique-interieur.com.
+# Chaque push publie, pour chacune des deux images, `beta-<sha8>` (fixe : c'est elle que tire
+# le cluster, déduite du commit qu'il déploie) et `beta` (mobile, ajoutée d'office par fabnum).
+# Les versions publiées (X.Y.Z) restent l'affaire de cd.yml, sur main.
+name: Branches
+
+on:
+  push:
+    branches: [beta]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: branches-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  infos:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      sha8: ${{ steps.v.outputs.sha8 }}
+      code-date: ${{ steps.v.outputs.code_date }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - id: v
+        run: |
+          echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+          echo "code_date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+
+  build-backend:
+    needs: [infos]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/backend
+      IMAGE_TAG: ${{ github.ref_name }}-${{ needs.infos.outputs.sha8 }}
+      IMAGE_CONTEXT: ./myrag
+      IMAGE_DOCKERFILE: ./myrag/Dockerfile
+      PUSH: true
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+      BUILD_ARGS: |
+        VERSION=${{ github.ref_name }}-${{ needs.infos.outputs.sha8 }}
+        COMMIT=${{ github.sha }}
+        BUILD=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        CODE_DATE=${{ needs.infos.outputs.code-date }}
+        SOURCE=${{ github.server_url }}/${{ github.repository }}
+
+  build-frontend:
+    needs: [infos]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/frontend
+      IMAGE_TAG: ${{ github.ref_name }}-${{ needs.infos.outputs.sha8 }}
+      IMAGE_CONTEXT: ./myrag/frontend
+      IMAGE_DOCKERFILE: ./myrag/frontend/Dockerfile
+      PUSH: true
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+
+  verify:
+    needs: [infos, build-backend, build-frontend]
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: read
+    env:
+      DEPOT: ghcr.io/ia-generative/mycollections
+      BRANCHE: ${{ github.ref_name }}
+      SHA8: ${{ needs.infos.outputs.sha8 }}
+      ACTOR: ${{ github.actor }}
+      TOKEN: ${{ github.token }}
+    steps:
+      - name: Les deux étiquettes désignent la même image, et l'API dit le bon commit
+        run: |
+          set -euo pipefail
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin >/dev/null
+          for image in backend frontend; do
+            mobile=$(docker buildx imagetools inspect "$DEPOT/$image:$BRANCHE" --format '{{.Manifest.Digest}}')
+            fixe=$(docker buildx imagetools inspect "$DEPOT/$image:$BRANCHE-$SHA8" --format '{{.Manifest.Digest}}')
+            echo "$image : $BRANCHE → $mobile ; $BRANCHE-$SHA8 → $fixe"
+            [ "$mobile" = "$fixe" ] || { echo "::error::$image : $BRANCHE et $BRANCHE-$SHA8 divergent"; exit 1; }
+          done
+          docker run --rm --entrypoint cat "$DEPOT/backend:$BRANCHE-$SHA8" /app/version.json | tee version.json
+          jq -e --arg c "$GITHUB_SHA" '.commit == $c' version.json >/dev/null \
+            || { echo "::error::version.json n'annonce pas $GITHUB_SHA"; exit 1; }

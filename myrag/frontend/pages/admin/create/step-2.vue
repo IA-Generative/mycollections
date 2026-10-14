@@ -354,7 +354,7 @@ let minuterie: ReturnType<typeof setTimeout> | null = null
 
 function surTitre() {
   if (identifiantTouche.value) return
-  form.value.name = deriverIdentifiant(form.value.titre, regles.value.max)
+  form.value.name = deriverIdentifiant(form.value.titre, regles.value.max, regles.value.prefixe_impose || '')
   nameStatus.value = ''
   programmerVerification()
 }

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myrag-config
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+data:
+  {{- range $cle, $valeur := .Values.backend.config }}
+  {{ $cle }}: {{ $valeur | toString | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myrag-frontend-config
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{- .Values.frontend.config | toPrettyJson | nindent 4 }}

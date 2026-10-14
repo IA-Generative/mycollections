@@ -1,0 +1,19 @@
+# Les fichiers déposés : c'est ce qui rend une ré-indexation possible sans redemander les
+# documents. JAMAIS supprimé avec l'application (ni par Helm, ni par Argo CD).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myrag-sources
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
