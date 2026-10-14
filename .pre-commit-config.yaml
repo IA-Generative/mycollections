@@ -20,3 +20,12 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty (advisoire)
+        language: system
+        entry: uvx ty@0.0.87 check --project myrag --exit-zero --output-format concise
+        pass_filenames: false
+        types_or: [python, pyi]
+        verbose: true
