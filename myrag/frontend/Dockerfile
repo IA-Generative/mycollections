@@ -3,8 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Runtime config URLs are baked in at build time (ssr:false, no server).
-# Override by rebuilding the image with different ARGs per environment.
+# Ces ARG ne servent qu'au développement local (compose) : en déploiement, le SSO et l'API
+# viennent de /config.json, lu au démarrage (utils/configExecution.ts) et monté par le
+# déploiement — la même image sert la bêta et chaque preview. Ne rien passer ici en CI.
 # Empty means "same origin" — useApi.ts does `${baseUrl}${path}` and the
 # routes in the code already start with /api (e.g. /api/collections) or /health,
 # /graph, /articles. Setting MYRAG_API_URL=/api here would double the prefix
@@ -15,7 +16,6 @@ ARG KEYCLOAK_REALM=openwebui
 ARG KEYCLOAK_CLIENT_ID=myrag-front
 ARG APP_TITLE="Mes collections (beta)"
 ARG AUTH_ENABLED=true
-ARG MYRAG_PUBLIC_URL=https://mycollections.fake-domain.name
 
 ENV MYRAG_API_URL=$MYRAG_API_URL \
     KEYCLOAK_URL=$KEYCLOAK_URL \
