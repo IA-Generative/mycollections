@@ -94,8 +94,23 @@
         </div>
       </div>
 
-      <!-- Source selector (upload file / URL) — hidden when Drive picker is active -->
-      <div v-if="source !== 'drive'" class="fr-card fr-mb-4w">
+      <!-- Répertoire local : un dossier entier (ou plusieurs), chaque fichier suivi jusqu'à l'indexation -->
+      <div v-if="source === 'directory'" class="fr-card fr-mb-4w">
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <h3 class="fr-h5">📁 Choisir le dossier à indexer</h3>
+            <p class="fr-text--sm">
+              Les fichiers texte sont découpés automatiquement ; les PDF, Word et autres documents sont lus et découpés
+              par le moteur de recherche. Vous pourrez en ajouter d'autres plus tard, depuis la fiche de la collection.
+            </p>
+            <DepotZone ref="zone" :collection="collection" titre="Dossier à indexer" dossier-seul sans-bouton
+                       @selection="n => dossierPret = n > 0" @lance="dossierLance = true" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Source selector (upload file / URL) — hidden when Drive picker or a folder is active -->
+      <div v-if="source !== 'drive' && source !== 'directory'" class="fr-card fr-mb-4w">
         <div class="fr-card__body">
           <div class="fr-card__content">
             <div class="fr-segmented fr-segmented--sm fr-mt-2w fr-mb-2w">
@@ -246,7 +261,11 @@
         </NuxtLink>
 
         <!-- Main action button: changes role depending on state -->
-        <button v-if="uploaded" class="fr-btn" @click="next">
+        <template v-if="source === 'directory'">
+          <button v-if="dossierLance" class="fr-btn" @click="next">Suivant →</button>
+          <button v-else class="fr-btn" :disabled="!dossierPret" @click="zone?.deposer()">Indexer le dossier →</button>
+        </template>
+        <button v-else-if="uploaded" class="fr-btn" @click="next">
           Suivant →
         </button>
         <button v-else class="fr-btn" @click="handleMainAction"
@@ -255,7 +274,12 @@
         </button>
       </div>
 
-      <p v-if="!uploaded && !uploading" class="fr-hint-text fr-mt-1w">
+      <p v-if="source === 'directory'" class="fr-hint-text fr-mt-1w">
+        <span v-if="!dossierPret && !dossierLance">Choisissez un dossier pour continuer.</span>
+        <span v-else-if="!dossierLance">Cliquez sur « Indexer le dossier » : les fichiers partent un par un.</span>
+        <span v-else>L'indexation se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
+      </p>
+      <p v-else-if="!uploaded && !uploading" class="fr-hint-text fr-mt-1w">
         <span v-if="tab === 'file' && !file">Selectionnez un fichier pour continuer.</span>
         <span v-else-if="tab === 'url' && (!remoteCheck || remoteCheck.status !== 'ok')">Saisissez une adresse et vérifiez qu'elle est accessible.</span>
         <span v-else>Cliquez sur « Charger la donnée » pour lancer l'envoi et l'indexation.</span>
@@ -282,6 +306,10 @@ const job = ref<any>(null)
 const remoteUrl = ref('')
 const remoteCheck = ref<{ status: string; contentType?: string; size?: number; message?: string; githubConverted?: boolean } | null>(null)
 const uploadError = ref('')
+// --- Répertoire local ---
+const zone = ref<{ deposer: () => Promise<void> } | null>(null)
+const dossierPret = ref(false)
+const dossierLance = ref(false)
 
 // --- Drive picker state ---
 interface DriveItem { id: string; title: string; type: 'FOLDER' | 'FILE'; size?: number; updated_at?: string }
