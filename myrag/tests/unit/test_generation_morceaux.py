@@ -75,7 +75,11 @@ def test_documents_gardent_les_identifiants():
 
 
 def _client(fichiers, par_fichier=None, chunks_absent=False, en_panne=()):
-    c = MagicMock()
+    # Calqué sur le vrai client : une méthode qui n'y existe pas fait échouer le test (une fusion
+    # avait effacé `partition_chunks` sans qu'aucun test ne bronche — « 17 fichiers illisibles »).
+    from app.services.openrag_client import OpenRAGClient
+
+    c = MagicMock(spec_set=OpenRAGClient)
     c.list_files = AsyncMock(return_value=fichiers)
 
     async def partition_chunks(partition, file_id=None, limit=None):
@@ -114,3 +118,26 @@ def test_deuxieme_tour_quand_il_manque_des_passages():
 def test_un_fichier_en_panne_ne_bloque_pas():
     pris, _ = asyncio.run(m.lire_echantillon(_client(_fichiers(4), en_panne={"f1"}), "faq", 4, "g"))
     assert sorted(p.file_id for p in pris) == ["f0", "f2", "f3"]
+
+
+def test_partition_chunks_du_vrai_client():
+    import httpx
+
+    from app.services.openrag_client import OpenRAGClient
+
+    client = OpenRAGClient(base_url="http://openrag", admin_token="t")
+    lu = {}
+
+    async def faux_get(path, params=None):
+        lu.update(path=path, params=params)
+        return {"chunks": [_chunk("1", "f1")]}
+
+    client._get = faux_get
+    assert asyncio.run(client.partition_chunks("faq", file_id="f1"))[0]["metadata"]["_id"] == "1"
+    assert lu == {"path": "/partition/faq/chunks", "params": {"include_embedding": "false", "file_id": "f1"}}
+
+    async def absent(path, params=None):
+        raise httpx.HTTPStatusError("404", request=httpx.Request("GET", "http://o"), response=httpx.Response(404))
+
+    client._get = absent
+    assert asyncio.run(client.partition_chunks("faq")) is None

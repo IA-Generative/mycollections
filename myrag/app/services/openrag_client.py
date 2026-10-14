@@ -232,6 +232,24 @@ class OpenRAGClient:
             raise
         return data if isinstance(data, dict) else None
 
+    async def partition_chunks(self, partition: str, file_id: str | None = None, limit: int | None = None) -> list[dict] | None:
+        """Les morceaux d'une partition, texte compris, sans vecteurs (`GET /partition/<p>/chunks`),
+        filtrés sur un fichier si `file_id`. `None` si l'instance ne connaît pas la route (OpenRAG
+        ancien) : l'appelant se replie sur `file_detail` + `extract`."""
+        params: dict = {"include_embedding": "false"}
+        if file_id:
+            params["file_id"] = file_id
+        if limit is not None:
+            params["limit"] = limit
+        try:
+            data = await self._get(f"/partition/{partition}/chunks", params=params)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (404, 405):
+                return None
+            raise
+        chunks = data.get("chunks") if isinstance(data, dict) else None
+        return chunks if isinstance(chunks, list) else None
+
     async def extract(self, chunk_id: str) -> dict | None:
         """Un morceau relu (`GET /extract/<id>`), balises techniques comprises. `None` s'il manque."""
         try:

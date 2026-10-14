@@ -80,7 +80,12 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
             morceaux, nb_fichiers = await lire_echantillon(OpenRAGClient(timeout=60.0), name, n, graine=run_id)
             await store.maj_run(run_id, fichiers_collection=nb_fichiers, morceaux_envoyes=len(morceaux), phase="extraction")
             if not morceaux:
-                resultat.erreur = "Aucun passage lisible dans cette collection."
+                resultat.erreur = (
+                    "Cette collection n'a encore aucun document indexé."
+                    if not nb_fichiers
+                    else f"Aucun passage n'a pu être lu dans les {nb_fichiers} document(s) de la collection : leur "
+                    "indexation est peut-être encore en cours (PDF, Word…). Réessayez dans quelques minutes."
+                )
             else:
                 compteurs.poser_phase("extraction")
                 suivi = asyncio.create_task(_suivre(run_id, compteurs))

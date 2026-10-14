@@ -18,7 +18,7 @@
       <div class="fr-card fr-mb-4w">
         <div class="fr-card__body">
           <div class="fr-card__content">
-            <h3 class="fr-card__title">Tester le RAG</h3>
+            <h3 class="fr-h5 fr-mb-2w">Tester le RAG</h3>
             <div class="fr-input-group">
               <textarea class="fr-input" v-model="question" rows="2"
                         placeholder="Posez une question de test..."
@@ -47,7 +47,7 @@
       <div class="fr-card fr-mb-4w">
         <div class="fr-card__body">
           <div class="fr-card__content">
-            <h3 class="fr-card__title">Jeu de test (optionnel)</h3>
+            <h3 class="fr-h5 fr-mb-2w">Jeu de test (optionnel)</h3>
             <p class="fr-text--sm">
               Importez un fichier JSON de questions-reponses pour evaluer la qualite du RAG.
               <a href="/exemple-evaluation.json" download class="fr-link fr-link--sm">
@@ -74,8 +74,52 @@
 }</pre>
             </details>
 
+            <!-- Génération par persona (ragas) : ce qu'elle fait, pour qui, combien -->
+            <fieldset class="fr-fieldset gen-assistant fr-mt-2w" aria-labelledby="gen-legende">
+              <legend id="gen-legende" class="fr-fieldset__legend">Ou les faire rédiger à partir de vos documents
+                <span class="fr-hint-text">
+                  Le moteur lit des passages de la collection et rédige, pour chacun, une question que poserait la personne
+                  décrite ci-dessous, et sa réponse de référence tirée du seul passage. Comptez 2 à 5 minutes ; les documents
+                  doivent avoir fini d'être indexés. Vous pourrez relire chaque paire (valider, rejeter) dans l'onglet
+                  « Questions générées » de la collection.
+                </span>
+              </legend>
+              <div v-if="genIndispo" class="fr-fieldset__element">
+                <p class="fr-message fr-message--info">{{ genIndispo }}</p>
+              </div>
+              <template v-else>
+                <div class="fr-fieldset__element">
+                  <div class="fr-select-group">
+                    <label class="fr-label" for="gen-persona">Qui pose les questions ?</label>
+                    <select id="gen-persona" v-model="choixPersona" class="fr-select" :disabled="generating">
+                      <optgroup v-if="personasExistants.length" label="Personas de la collection">
+                        <option v-for="p in personasExistants" :key="p.id" :value="`id:${p.id}`">{{ p.nom }}</option>
+                      </optgroup>
+                      <optgroup label="Exemples">
+                        <option v-for="(e, i) in propositions" :key="e.nom" :value="`ex:${i}`">{{ e.nom }}</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
+                <div class="fr-fieldset__element">
+                  <div class="fr-input-group">
+                    <label class="fr-label" for="gen-role">Sa situation
+                      <span class="fr-hint-text">Son métier, à qui il répond, ce qu'il cherche. Modifiable.</span>
+                    </label>
+                    <textarea id="gen-role" v-model="rolePersona" class="fr-input" rows="2" :disabled="generating || choixPersona.startsWith('id:')"></textarea>
+                  </div>
+                </div>
+                <div class="fr-fieldset__element">
+                  <div class="fr-input-group gen-assistant__taille">
+                    <label class="fr-label" for="gen-taille">Nombre de questions <span class="fr-hint-text">De 4 à 30.</span></label>
+                    <input id="gen-taille" v-model.number="tailleGen" class="fr-input" type="number" min="4" max="30" :disabled="generating">
+                  </div>
+                </div>
+              </template>
+            </fieldset>
+
             <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
-              <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="generateDataset" :disabled="generating">
+              <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="generateDataset" :disabled="generating || !!genIndispo">
                 {{ generating ? 'Generation en cours...' : 'Generer automatiquement' }}
               </button>
               <label class="fr-btn fr-btn--sm fr-btn--tertiary" style="cursor:pointer;">
@@ -98,6 +142,11 @@
             <div v-if="generateError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w">
               <p>{{ generateError }}</p>
             </div>
+            <p v-if="dernierRun" class="fr-text--sm fr-mt-1w">
+              <NuxtLink :to="`/c/${collection}?onglet=generation`" class="fr-link fr-link--sm" target="_blank">
+                Relire les paires générées, avec leurs passages, dans l'onglet « Questions générées »
+              </NuxtLink>
+            </p>
 
             <p v-if="datasetCount > 0" class="fr-text--sm fr-mt-1w" style="color:#18753c;">
               {{ datasetCount }} questions chargees
@@ -227,7 +276,7 @@ const collection = route.query.collection as string
 const { get, post, patch } = useApi()
 
 import { renderMarkdownSafe } from '~/utils/sanitize'
-import { PERSONNA_DEFAUT, libellePhase, pairesVersJeu, progressionRun, type Run } from '~/utils/generation'
+import { EXEMPLES_PERSONAS, PERSONNA_DEFAUT, libellePhase, pairesVersJeu, progressionRun, type Run } from '~/utils/generation'
 
 const g = useGeneration()
 const question = ref('')
@@ -239,6 +288,27 @@ const generating = ref(false)
 const generateError = ref('')
 const generatedDataset = ref<any>(null)
 const runSuivi = ref<Run | null>(null)
+// --- Génération : persona, taille, disponibilité ---
+const propositions = [PERSONNA_DEFAUT, ...EXEMPLES_PERSONAS]
+const personasExistants = ref<any[]>([])
+const choixPersona = ref('ex:0')
+const rolePersona = ref(PERSONNA_DEFAUT.description_role)
+const tailleGen = ref(8)
+const genIndispo = ref('')
+const dernierRun = ref('')
+watch(choixPersona, (c) => {
+  if (c.startsWith('id:')) rolePersona.value = personasExistants.value.find(p => `id:${p.id}` === c)?.description_role || ''
+  else rolePersona.value = propositions[Number(c.slice(3))]?.description_role || ''
+})
+onMounted(async () => {
+  try {
+    const etat = await g.etat(collection)
+    personasExistants.value = etat.personas || []
+    if (personasExistants.value.length) choixPersona.value = `id:${personasExistants.value[0].id}`
+  } catch (e) {
+    genIndispo.value = String(e).includes('503') ? messageErreur(e) : ''
+  }
+})
 const running = ref(false)
 const promptPatched = ref(false)
 const runProgress = ref(0)
@@ -270,23 +340,31 @@ async function generateDataset() {
   try {
     // Le service de generation doit etre installe et configure (sinon 503, dit ce qui manque).
     const etat = await g.etat(collection)
-    // Personas : les deux premiers de la collection, ou un persona cree d'office.
-    let personas = (etat.personas || []).slice(0, 2)
-    if (!personas.length) {
-      const r = await g.creerPersona(collection, PERSONNA_DEFAUT)
-      personas = [r.persona]
+    // Le persona choisi : celui de la collection, ou l'exemple (avec sa situation modifiée), créé
+    // au besoin — ou repris s'il existe déjà sous ce nom.
+    let personas: any[]
+    if (choixPersona.value.startsWith('id:')) {
+      personas = (etat.personas || []).filter((p: any) => `id:${p.id}` === choixPersona.value)
+    } else {
+      const ex = propositions[Number(choixPersona.value.slice(3))]
+      const existant = (etat.personas || []).find((p: any) => p.nom === ex.nom)
+      if (existant && existant.description_role === rolePersona.value.trim()) personas = [existant]
+      else if (existant) personas = [(await g.modifierPersona(collection, existant.id, { description_role: rolePersona.value.trim() })).persona]
+      else personas = [(await g.creerPersona(collection, { nom: ex.nom, description_role: rolePersona.value.trim() })).persona]
     }
+    if (!personas.length) throw new Error('Choisissez un persona.')
     // Un run tourne deja ? On le suit au lieu d'en lancer un autre (sinon 409).
     let run: Run = etat.run_actif
     if (!run) {
       const r = await g.lancer(collection, {
         personas: personas.map((p: any) => p.id),
-        taille: 8,
+        taille: Math.min(30, Math.max(4, Number(tailleGen.value) || 8)),
         distribution: { entites: 1 },
       })
       run = r.run
     }
     runSuivi.value = run
+    dernierRun.value = run.id
     // Suivi du run : phase et progression, jusqu'a ce qu'il finisse.
     while (run.actif) {
       await new Promise<void>(res => setTimeout(res, 3000))
@@ -434,6 +512,7 @@ async function importDataset(e: Event) {
 </script>
 
 <style scoped>
+.gen-assistant__taille { max-width: 12rem; }
 .myrag-md-preview {
   background: #f6f6f6;
   border-radius: 4px;

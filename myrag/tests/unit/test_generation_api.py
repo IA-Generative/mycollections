@@ -188,7 +188,7 @@ def test_run_en_erreur_motive_sans_texte(client, collection):
     run = _lancer(client, collection, [pid], resultat=ResultatGeneration(etat="erreur", erreur="Le modèle de langage ne répond pas."))
     assert run["etat"] == "erreur" and "ne répond pas" in run["erreur"]
     run = _lancer(client, collection, [pid], morceaux=[])
-    assert run["etat"] == "erreur" and "Aucun passage" in run["erreur"]
+    assert run["etat"] == "erreur" and "indexation est peut-être encore en cours" in run["erreur"]
 
 
 def test_second_run_refuse_pendant_le_premier(client, collection):
