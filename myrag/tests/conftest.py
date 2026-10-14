@@ -39,6 +39,7 @@ TABLES_PAR_COLLECTION = (
     "source_files", "eval_runs", "eval_datasets", "feedback", "ingest_jobs",
     "publication_history", "publications",
     "proposition", "signalement", "grille_controle", "evenement", "usage_question",
+    "persona", "generation", "paire_qa",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])

@@ -16,6 +16,8 @@ from app.routers import ingest, collections, sync, graph, articles, sources, fee
 from app.routers import accueil as accueil_routeur
 from app.routers import amorces, bus, categories, collectif, corpus, demandes, fiches, guide
 from app.routers import recherche
+from app.routers import generation as generation_routeur
+import app.generation as generation_paquet
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,6 +28,11 @@ async def lifespan(app: FastAPI):
     import asyncio
     from app.routers.ingest import reprendre_les_travaux_interrompus
     reprise = asyncio.create_task(reprendre_les_travaux_interrompus()) if settings.reprise_au_demarrage else None
+    if settings.reprise_au_demarrage:
+        # Une génération ne se reprend pas (ragas ne sait pas repartir d'une phase) : elle est
+        # marquée interrompue, avec ce qu'il faut faire.
+        from app.services.generation_store import marquer_interrompus
+        await marquer_interrompus()
     yield
     if reprise and not reprise.done():
         reprise.cancel()
@@ -161,6 +168,8 @@ app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 app.include_router(categories.router, dependencies=AUTH_REQUIRED)
 app.include_router(accueil_routeur.router, dependencies=AUTH_REQUIRED)
 app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
+# Génération de paires question/réponse par persona (ragas, docs/generation.md) : 503 si absente.
+app.include_router(generation_routeur.router, dependencies=AUTH_REQUIRED)
 # La version que l'image porte (ADR-0004) : sans jeton, hors schéma, lue par le noteur de la plateforme.
 app.include_router(version_module.router)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.
@@ -186,6 +195,8 @@ async def get_config():
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
         "drive_url": settings.drive_url,
+        # La génération de questions est-elle installée et configurée ? (l'onglet ne s'affiche que si oui)
+        "generation": generation_paquet.prete(),
         # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,
         # jamais bloquant). L'écran lit aussi /_beta/capacites.json en même origine ;
         # ceci est son repli, et la valeur que le SERVEUR applique.

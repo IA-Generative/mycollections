@@ -19,7 +19,6 @@ import logging
 import math
 import time
 import unicodedata
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -33,6 +32,7 @@ from ragas.testset.transforms import apply_transforms
 from ragas.testset.transforms.extractors.llm_based import KeyphrasesExtractor, NERExtractor
 
 from app.generation.morceaux import Morceau, en_documents
+from app.generation.resultats import PaireGeneree, PersonaDemande, ResultatGeneration, message_sur  # noqa: F401
 
 logger = logging.getLogger("myrag.generation")
 
@@ -48,38 +48,6 @@ SYNTHESES = {
     "entites": ("entities", NERExtractor, "paire_simple_entites"),
     "mots_cles": ("keyphrases", KeyphrasesExtractor, "paire_simple_mots_cles"),
 }
-
-
-@dataclass(frozen=True)
-class PersonaDemande:
-    nom: str
-    description_role: str
-
-
-@dataclass
-class PaireGeneree:
-    question: str
-    reponse: str
-    contextes: list[dict]
-    persona_nom: str
-    synthetiseur: str
-    style: str
-    longueur: str
-
-    @property
-    def chunk_ids(self) -> list[str]:
-        return [c["chunk_id"] for c in self.contextes if c.get("chunk_id")]
-
-
-@dataclass
-class ResultatGeneration:
-    etat: str
-    paires: list[PaireGeneree] = field(default_factory=list)
-    paires_echouees: int = 0
-    morceaux_envoyes: int = 0
-    noeuds_avec_proprietes: int = 0
-    duree_s: float = 0.0
-    erreur: str | None = None
 
 
 def _plier(s: str) -> str:
@@ -154,18 +122,6 @@ def charger_prompts(objets: list, dossier: Path = PROMPTS_DIR, langue: str = LAN
         except Exception as e:  # noqa: BLE001 — un fichier absent n'empêche pas de générer
             logger.warning("prompts %s de %s non chargés (%s) : anglais", langue, getattr(objet, "name", objet), type(e).__name__)
     return francises
-
-
-def message_sur(e: BaseException) -> str:
-    """Ce qu'on dit d'une erreur : son genre, borné, sans le texte d'un passage."""
-    nom = type(e).__name__
-    if nom in ("APIConnectionError", "ConnectError", "ConnectTimeout", "APITimeoutError", "ReadTimeout"):
-        return "Le modèle de langage ne répond pas (passerelle MirAI injoignable ou trop lente)."
-    if nom in ("AuthenticationError", "PermissionDeniedError"):
-        return "Le modèle de langage refuse la clé configurée (MYCOLLECTIONS_GENERATION_LLM_CLE)."
-    if nom == "RateLimitError":
-        return "Le modèle de langage limite le débit : réessayez plus tard ou baissez le parallélisme."
-    return f"{nom} : {str(e)[:200]}"
 
 
 def paires_depuis_resultats(resultats: list, morceaux: list[Morceau], produits: dict[int, str]) -> tuple[list[PaireGeneree], int]:

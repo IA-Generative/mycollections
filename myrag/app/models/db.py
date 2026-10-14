@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -636,3 +636,127 @@ class Amorce(Base):
             "detail": json.loads(self.detail_json or "{}"),
             "erreur": self.erreur,
         }
+
+
+# ─── Génération de paires question/réponse par persona (docs/generation.md) ──────────────
+ETATS_GENERATION = ("en_attente", "en_cours", "termine", "erreur")
+PHASES_GENERATION = ("attente", "lecture", "extraction", "generation", "enregistrement", "fini")
+RELECTURES_PAIRE = ("brut", "valide", "rejete")
+
+
+class Persona(Base):
+    """Qui interroge la collection, et dans quel contexte : « Agent de préfecture au guichet
+    étrangers, répond à un usager qui demande où en est son dossier »."""
+    __tablename__ = "persona"
+    __table_args__ = (UniqueConstraint("collection_name", "nom", name="persona_nom_unique"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    collection_name: Mapped[str] = mapped_column(String(255), index=True)
+    nom: Mapped[str] = mapped_column(String(120))
+    description_role: Mapped[str] = mapped_column(Text, default="")
+    cree_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    maj_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "collection": self.collection_name, "nom": self.nom,
+                "description_role": self.description_role,
+                "cree_le": self.cree_le.isoformat() if self.cree_le else "",
+                "maj_le": self.maj_le.isoformat() if self.maj_le else ""}
+
+
+class Generation(Base):
+    """Un run de génération : ce qui a été demandé, où il en est, ce qu'il a coûté."""
+    __tablename__ = "generation"
+    __table_args__ = (
+        CheckConstraint(_domaine("etat", ETATS_GENERATION), name="generation_etat_valide"),
+        CheckConstraint(_domaine("phase", PHASES_GENERATION), name="generation_phase_valide"),
+        CheckConstraint("taille BETWEEN 1 AND 100", name="generation_taille_bornee"),
+        CheckConstraint("etat <> 'erreur' OR erreur IS NOT NULL", name="generation_erreur_motivee"),
+        Index("generation_collection_date", "collection_name", "cree_le"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    collection_name: Mapped[str] = mapped_column(String(255), index=True)
+    personas_json: Mapped[str] = mapped_column(Text, default="[]")
+    personas_auto: Mapped[bool] = mapped_column(Boolean, default=False)
+    taille: Mapped[int] = mapped_column(Integer)
+    distribution_json: Mapped[str] = mapped_column(Text, default="{}")
+    modele: Mapped[str] = mapped_column(String(120), default="")
+    etat: Mapped[str] = mapped_column(String(20), default="en_attente")
+    phase: Mapped[str] = mapped_column(String(20), default="attente")
+    fichiers_collection: Mapped[int] = mapped_column(Integer, default=0)
+    morceaux_envoyes: Mapped[int] = mapped_column(Integer, default=0)
+    noeuds_avec_proprietes: Mapped[int] = mapped_column(Integer, default=0)
+    paires_obtenues: Mapped[int] = mapped_column(Integer, default=0)
+    paires_echouees: Mapped[int] = mapped_column(Integer, default=0)
+    appels_llm: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_entree: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_sortie: Mapped[int] = mapped_column(Integer, default=0)
+    reparations_json: Mapped[int] = mapped_column(Integer, default=0)
+    inachevees: Mapped[int] = mapped_column(Integer, default=0)
+    erreurs_llm: Mapped[int] = mapped_column(Integer, default=0)
+    appels_embeddings: Mapped[int] = mapped_column(Integer, default=0)
+    duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    erreur: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lance_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    demarre_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    termine_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    COMPTEURS = ("appels_llm", "tokens_entree", "tokens_sortie", "reparations_json", "inachevees",
+                 "erreurs_llm", "appels_embeddings")
+
+    def to_dict(self) -> dict:
+        d = lambda v: v.isoformat() if v else None  # noqa: E731
+        return {
+            "id": self.id, "collection": self.collection_name,
+            "personas": json.loads(self.personas_json or "[]"), "personas_auto": self.personas_auto,
+            "taille": self.taille, "distribution": json.loads(self.distribution_json or "{}"),
+            "modele": self.modele, "etat": self.etat, "phase": self.phase,
+            "actif": self.etat in ("en_attente", "en_cours"),
+            "fichiers_collection": self.fichiers_collection, "morceaux_envoyes": self.morceaux_envoyes,
+            "noeuds_avec_proprietes": self.noeuds_avec_proprietes,
+            "paires_obtenues": self.paires_obtenues, "paires_echouees": self.paires_echouees,
+            "compteurs": {k: getattr(self, k) for k in self.COMPTEURS},
+            "duree_s": self.duree_s, "erreur": self.erreur,
+            "cree_le": d(self.cree_le), "demarre_le": d(self.demarre_le), "termine_le": d(self.termine_le),
+        }
+
+
+class PaireQA(Base):
+    """Une paire générée : la question d'un persona, la réponse de référence, et les passages
+    d'où elle vient. Le texte des passages est GARDÉ : leur identifiant OpenRAG change à la
+    réindexation, la paire doit rester lisible."""
+    __tablename__ = "paire_qa"
+    __table_args__ = (
+        CheckConstraint(_domaine("relecture", RELECTURES_PAIRE), name="paire_qa_relecture_valide"),
+        CheckConstraint("relecture = 'brut' OR relu_le IS NOT NULL", name="paire_qa_relecture_datee"),
+        Index("paire_qa_run_persona", "run_id", "persona_nom"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    run_id: Mapped[str] = mapped_column(String(36), index=True)
+    collection_name: Mapped[str] = mapped_column(String(255), index=True)
+    rang: Mapped[int] = mapped_column(Integer, default=0)
+    question: Mapped[str] = mapped_column(Text)
+    reponse: Mapped[str] = mapped_column(Text)
+    contextes_json: Mapped[str] = mapped_column(Text, default="[]")
+    persona_nom: Mapped[str] = mapped_column(String(120), default="")
+    synthetiseur: Mapped[str] = mapped_column(String(60), default="")
+    style: Mapped[str] = mapped_column(String(60), default="")
+    longueur: Mapped[str] = mapped_column(String(20), default="")
+    relecture: Mapped[str] = mapped_column(String(20), default="brut")
+    commentaire: Mapped[str] = mapped_column(Text, default="")
+    relu_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    relu_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "run_id": self.run_id, "collection": self.collection_name, "rang": self.rang,
+                "question": self.question, "reponse": self.reponse,
+                "contextes": json.loads(self.contextes_json or "[]"), "persona": self.persona_nom,
+                "synthetiseur": self.synthetiseur, "style": self.style, "longueur": self.longueur,
+                "relecture": self.relecture, "commentaire": self.commentaire,
+                "relu_le": self.relu_le.isoformat() if self.relu_le else None,
+                "cree_le": self.cree_le.isoformat() if self.cree_le else ""}
