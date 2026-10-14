@@ -191,3 +191,23 @@ def test_suppression_d_un_run(client, collection):
     run = _lancer(client, collection, [_persona(client, collection)])
     assert client.delete(URL.format(collection) + f"/runs/{run['id']}").status_code == 200
     assert client.get(URL.format(collection) + f"/runs/{run['id']}").status_code == 404
+
+
+def test_une_ligne_de_bilan_par_run_sans_contenu(client, collection):
+    import logging
+    lignes: list[str] = []
+
+    class Recueil(logging.Handler):
+        def emit(self, record):
+            lignes.append(record.getMessage())
+    journal = logging.getLogger("myrag.generation")
+    assert journal.handlers and journal.level == logging.INFO, "la ligne de bilan doit sortir quelque part"
+    recueil = Recueil()
+    journal.addHandler(recueil)
+    try:
+        run = _lancer(client, collection, [_persona(client, collection)])
+    finally:
+        journal.removeHandler(recueil)
+    ligne = next(m for m in lignes if "generation run=" + run["id"] in m)
+    assert f"collection={collection}" in ligne and "paires=3" in ligne and "appels_llm=1" in ligne
+    assert not any("Passage numéro" in m or "Question" in m for m in lignes)

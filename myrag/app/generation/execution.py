@@ -21,6 +21,14 @@ from app.services import generation_store as store
 from app.services.openrag_client import OpenRAGClient
 
 logger = logging.getLogger("myrag.generation")
+# Le service ne configure pas de journal applicatif (seul uvicorn écrit) : sans ce gestionnaire,
+# la ligne de bilan d'un run — exigée — n'apparaîtrait dans aucun journal du pod.
+if not logger.handlers:
+    _sortie = logging.StreamHandler()
+    _sortie.setFormatter(logging.Formatter("%(levelname)s:     %(name)s %(message)s"))
+    logger.addHandler(_sortie)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 INTERVALLE_SUIVI_S = 3.0
 _taches: dict[str, asyncio.Task] = {}

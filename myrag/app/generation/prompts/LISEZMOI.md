@@ -10,7 +10,9 @@ Corrections faites à la main après la traduction automatique :
 
 - **appariement thèmes / personas** : l'exemple traduit gardait des clés anglaises (« HR Manager »)
   pour des personas devenus « Responsable RH » — il aurait appris au modèle à rendre des noms qui
-  ne correspondent à aucun persona. Clés alignées, et consigne de reprendre les noms à l'identique.
+  ne correspondent à aucun persona. Clés alignées, et consigne de reprendre les noms à l'identique. Après le premier essai réel
+  (des questions techniques prêtées à un persona qui ne les poserait pas), consigne resserrée : un
+  thème ne va à un persona que s'il poserait la question ; l'exemple montre un thème laissé sans persona.
 - **génération de paires** : « requête à un seul saut » (calque de *single-hop*) remplacé ; le sens
   des styles que ragas envoie en anglais (`Perfect grammar`, `Misspelled queries`…) est expliqué ;
   exemple remplacé par un cas du ministère, avec les valeurs de style et de longueur réellement
