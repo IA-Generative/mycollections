@@ -1,9 +1,8 @@
 """Tests for Q&R cache system (TDD)."""
 
-import json
 import pytest
 
-from app.services.qr_cache import QRCache, QREntry
+from app.services.qr_cache import QRCache
 
 
 @pytest.fixture
@@ -31,7 +30,7 @@ class TestQRCache:
 
     def test_search_fuzzy(self, cache):
         cache.add("test-col", "Quel est le delai pour renouveler un titre de sejour ?", "2 mois avant")
-        result = cache.search("test-col", "delai renouvellement titre sejour")
+        cache.search("test-col", "delai renouvellement titre sejour")
         # Fuzzy match depends on implementation — may or may not match
         # At minimum, exact match should work
         result2 = cache.search("test-col", "Quel est le delai pour renouveler un titre de sejour ?")

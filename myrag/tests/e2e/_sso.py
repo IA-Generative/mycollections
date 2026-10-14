@@ -8,6 +8,7 @@ Porté du parcours de la bêta, avec ses pièges déjà payés :
 - `connexion` rend un verdict donné par l'API, pas par l'allure de la page : c'est le backend
   qui applique la restriction de groupe.
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -51,8 +52,7 @@ def _apercu(page) -> str:
     return re.sub(r"\s+", " ", page.locator("body").inner_text()[:180])
 
 
-def connexion(navigateur, base: str, sso_host: str, identifiant: str, motdepasse: str,
-              chemin: str = "/"):
+def connexion(navigateur, base: str, sso_host: str, identifiant: str, motdepasse: str, chemin: str = "/"):
     """Ouvre un contexte neuf, va sur `chemin`, passe le SSO, et rend (issue, détail, contexte).
 
     `issue` vaut `entre` (détail = le jeton), `refuse`, `poste-sous-vpn`, `sso-bloque` ou
@@ -75,9 +75,7 @@ def connexion(navigateur, base: str, sso_host: str, identifiant: str, motdepasse
             except Exception:
                 prive, adresse = sso_en_adresse_privee(sso_host)
                 if prive:
-                    return ("poste-sous-vpn",
-                            f"le SSO résout vers l'adresse privée {adresse} depuis ce poste ; "
-                            "rejouer hors VPN", contexte)
+                    return ("poste-sous-vpn", f"le SSO résout vers l'adresse privée {adresse} depuis ce poste ; rejouer hors VPN", contexte)
                 return "anomalie", f"pas de départ vers le SSO ({page.url}) : {_apercu(page)}", contexte
 
         # Thème DSFR de Keycloak : l'identifiant du champ change à chaque rendu, l'attribut
@@ -97,8 +95,7 @@ def connexion(navigateur, base: str, sso_host: str, identifiant: str, motdepasse
         if not jeton:
             return "refuse", "aucun jeton en session après le retour du SSO", contexte
 
-        reponse = page.request.get(f"{base}/api/collections",
-                                   headers={"Authorization": f"Bearer {jeton}"})
+        reponse = page.request.get(f"{base}/api/collections", headers={"Authorization": f"Bearer {jeton}"})
         if reponse.status == 403:
             return "refuse", "403 de l'API : groupe requis absent du jeton", contexte
         if reponse.status != 200:

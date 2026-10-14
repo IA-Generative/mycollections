@@ -37,6 +37,7 @@ class TestLaLectureChezLeMenu:
     @pytest.fixture(autouse=True)
     def _url(self, monkeypatch):
         from app.config import settings
+
         monkeypatch.setattr(settings, "capacites_url", "http://menu.test/_beta/capacites.json")
         capacites.oublier()
         yield
@@ -44,6 +45,7 @@ class TestLaLectureChezLeMenu:
 
     def test_sans_url_les_defauts_n_activent_rien(self, monkeypatch):
         from app.config import settings
+
         monkeypatch.setattr(settings, "capacites_url", "")
         assert capacites._lire_depuis_le_menu() == {"demandes": False, "signalements": False, "seuil_chantier": 5}
 
@@ -59,8 +61,10 @@ class TestLaLectureChezLeMenu:
     def test_menu_muet_garde_la_derniere_valeur_puis_les_defauts(self, monkeypatch):
         monkeypatch.setattr(httpx, "get", lambda *a, **k: _reponse({"demandes": True, "seuil_chantier": 4}))
         assert capacites._lire_depuis_le_menu()["seuil_chantier"] == 4
+
         def _panne(*a, **k):
             raise httpx.ConnectError("refusé")
+
         monkeypatch.setattr(httpx, "get", _panne)
         capacites._cache["expire"] = 0.0  # le cache a expiré, le menu ne répond plus
         assert capacites._lire_depuis_le_menu()["seuil_chantier"] == 4, "dernière valeur connue"

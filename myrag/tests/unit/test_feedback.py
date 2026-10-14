@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.feedback_service import FeedbackService, Feedback
+from app.services.feedback_service import FeedbackService
 
 
 @pytest.fixture

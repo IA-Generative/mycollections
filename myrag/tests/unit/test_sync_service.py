@@ -1,7 +1,8 @@
 """Tests for sync service Keycloak ↔ OpenRAG (TDD)."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.sync_service import SyncService
 
@@ -30,10 +31,12 @@ class TestSyncService:
 
     @pytest.mark.asyncio
     async def test_sync_collection(self, sync):
-        sync.kc.list_group_members = AsyncMock(return_value=[
-            {"id": "kc-user-1", "username": "eric"},
-            {"id": "kc-user-2", "username": "claire"},
-        ])
+        sync.kc.list_group_members = AsyncMock(
+            return_value=[
+                {"id": "kc-user-1", "username": "eric"},
+                {"id": "kc-user-2", "username": "claire"},
+            ]
+        )
         sync.openrag.create_partition = AsyncMock()
         sync.openrag._post = AsyncMock(return_value={"status": "ok"})
         sync.openrag._get = AsyncMock(return_value={"users": []})
@@ -51,9 +54,11 @@ class TestSyncService:
 
     @pytest.mark.asyncio
     async def test_sync_all(self, sync):
-        sync.kc.list_collection_groups = AsyncMock(return_value=[
-            {"collection": "ceseda-v3", "user_group_id": "ug-1", "admin_group_id": "ag-1"},
-        ])
+        sync.kc.list_collection_groups = AsyncMock(
+            return_value=[
+                {"collection": "ceseda-v3", "user_group_id": "ug-1", "admin_group_id": "ag-1"},
+            ]
+        )
         sync.sync_collection = AsyncMock(return_value={"collection": "ceseda-v3", "synced": 2})
 
         results = await sync.sync_all()

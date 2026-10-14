@@ -57,18 +57,13 @@ class SyncService:
         except Exception as e:
             # Échec dur : sans partition, rien ne peut être synchronisé.
             _fail(f"create_partition a échoué: {e}")
-            return {"collection": collection, "synced": 0, "errors": errors,
-                    "error_details": error_details}
+            return {"collection": collection, "synced": 0, "errors": errors, "error_details": error_details}
 
         # Get existing OpenRAG users
         try:
             or_users = await self.openrag._get("/users/")
             or_users_list = or_users.get("users", []) if isinstance(or_users, dict) else or_users
-            or_by_ext_id = {
-                u.get("external_user_id"): u
-                for u in or_users_list
-                if u.get("external_user_id")
-            }
+            or_by_ext_id = {u.get("external_user_id"): u for u in or_users_list if u.get("external_user_id")}
         except Exception as e:
             # Échec probable d'auth OpenRAG (token admin) — rendu visible.
             _fail(f"liste des utilisateurs OpenRAG impossible (token admin ?): {e}")
@@ -82,10 +77,7 @@ class SyncService:
                 return or_user
             username = member.get("username", "")
             try:
-                display = (
-                    f"{member.get('firstName', '')} {member.get('lastName', '')}".strip()
-                    or username
-                )
+                display = f"{member.get('firstName', '')} {member.get('lastName', '')}".strip() or username
                 or_user = await self.openrag._post(
                     "/users/",
                     json={"display_name": display, "external_user_id": kc_id, "is_admin": False},
@@ -156,8 +148,7 @@ class SyncService:
             # les droits realm-management. On remonte une erreur explicite plutôt
             # qu'un 500 nu / un sync vide silencieux.
             logger.error("sync_all: lecture des groupes Keycloak impossible: %s", e)
-            return [{"collection": "*", "synced": 0, "errors": 1,
-                     "error": f"Keycloak admin inaccessible (droits du service account ?): {e}"}]
+            return [{"collection": "*", "synced": 0, "errors": 1, "error": f"Keycloak admin inaccessible (droits du service account ?): {e}"}]
         results = []
 
         for col in collections:
@@ -171,11 +162,13 @@ class SyncService:
                 logger.info(f"Synced {col['collection']}: {result['synced']} members")
             except Exception as e:
                 logger.error(f"Failed to sync {col['collection']}: {e}")
-                results.append({
-                    "collection": col["collection"],
-                    "synced": 0,
-                    "errors": 1,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "collection": col["collection"],
+                        "synced": 0,
+                        "errors": 1,
+                        "error": str(e),
+                    }
+                )
 
         return results

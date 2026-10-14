@@ -10,9 +10,7 @@ from app.services.owui_client import grants_de_partage
 
 
 def test_tout_le_monde_signifie_tout_compte_connecte():
-    assert grants_de_partage("all", []) == [
-        {"principal_type": "user", "principal_id": "*", "permission": "read"}
-    ]
+    assert grants_de_partage("all", []) == [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
 
 
 def test_jamais_d_acces_sans_authentification():

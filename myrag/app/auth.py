@@ -242,6 +242,7 @@ async def current_user(
     """
     if not settings.auth_enabled:
         from app.services.access import GROUPE_DEV
+
         return CurrentUser(sub="dev", username="dev", groups=[GROUPE_DEV])
 
     groups = claims.get("groups") or []

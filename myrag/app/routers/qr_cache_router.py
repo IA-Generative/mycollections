@@ -7,11 +7,10 @@ POST /api/feedback/{col}/{fbid}/promote.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from fastapi import Depends
-from app.routers._droits import gerer_la_collection, lire_la_collection
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.routers._droits import gerer_la_collection, lire_la_collection
 from app.services.qr_cache import QRCache
 
 router = APIRouter(prefix="/api/qr-cache", tags=["QRCache"])

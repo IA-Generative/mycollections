@@ -7,9 +7,8 @@ Usage:
 """
 
 import argparse
-import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -63,7 +62,7 @@ def main():
 
         # Top 10 most connected
         top = sorted(graph.nodes, key=lambda n: graph.degree(n), reverse=True)[:10]
-        print(f"\n  Top 10 most connected articles:")
+        print("\n  Top 10 most connected articles:")
         for n in top:
             refs_out = list(graph.successors(n))
             refs_in = graph.nodes[n].get("referenced_by", [])

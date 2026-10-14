@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -289,6 +289,7 @@ class EvalRun(Base):
 
 class SourceFile(Base):
     """R7 — Stored source files for re-indexation."""
+
     __tablename__ = "source_files"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -447,9 +448,7 @@ class Abonnement(Base):
     sub_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
-    __table_args__ = (
-        CheckConstraint(_domaine("objet_type", OBJETS_ABONNEMENT), name="abonnement_objet_valide"),
-    )
+    __table_args__ = (CheckConstraint(_domaine("objet_type", OBJETS_ABONNEMENT), name="abonnement_objet_valide"),)
 
 
 class Proposition(Base):
@@ -623,9 +622,7 @@ class Amorce(Base):
     detail_json: Mapped[str] = mapped_column(Text, default="{}")
     erreur: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
-    __table_args__ = (
-        CheckConstraint(_domaine("etat_import", ETATS_IMPORT_AMORCE), name="amorce_etat_import_valide"),
-    )
+    __table_args__ = (CheckConstraint(_domaine("etat_import", ETATS_IMPORT_AMORCE), name="amorce_etat_import_valide"),)
 
     def to_dict(self) -> dict:
         return {
@@ -647,6 +644,7 @@ RELECTURES_PAIRE = ("brut", "valide", "rejete")
 class Persona(Base):
     """Qui interroge la collection, et dans quel contexte : « Agent de préfecture au guichet
     étrangers, répond à un usager qui demande où en est son dossier »."""
+
     __tablename__ = "persona"
     __table_args__ = (UniqueConstraint("collection_name", "nom", name="persona_nom_unique"),)
 
@@ -659,14 +657,19 @@ class Persona(Base):
     maj_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "collection": self.collection_name, "nom": self.nom,
-                "description_role": self.description_role,
-                "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-                "maj_le": self.maj_le.isoformat() if self.maj_le else ""}
+        return {
+            "id": self.id,
+            "collection": self.collection_name,
+            "nom": self.nom,
+            "description_role": self.description_role,
+            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
+            "maj_le": self.maj_le.isoformat() if self.maj_le else "",
+        }
 
 
 class Generation(Base):
     """Un run de génération : ce qui a été demandé, où il en est, ce qu'il a coûté."""
+
     __tablename__ = "generation"
     __table_args__ = (
         CheckConstraint(_domaine("etat", ETATS_GENERATION), name="generation_etat_valide"),
@@ -705,23 +708,32 @@ class Generation(Base):
     demarre_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     termine_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    COMPTEURS = ("appels_llm", "tokens_entree", "tokens_sortie", "reparations_json", "inachevees",
-                 "erreurs_llm", "refus_debit", "appels_embeddings")
+    COMPTEURS = ("appels_llm", "tokens_entree", "tokens_sortie", "reparations_json", "inachevees", "erreurs_llm", "refus_debit", "appels_embeddings")
 
     def to_dict(self) -> dict:
         d = lambda v: v.isoformat() if v else None  # noqa: E731
         return {
-            "id": self.id, "collection": self.collection_name,
-            "personas": json.loads(self.personas_json or "[]"), "personas_auto": self.personas_auto,
-            "taille": self.taille, "distribution": json.loads(self.distribution_json or "{}"),
-            "modele": self.modele, "etat": self.etat, "phase": self.phase,
+            "id": self.id,
+            "collection": self.collection_name,
+            "personas": json.loads(self.personas_json or "[]"),
+            "personas_auto": self.personas_auto,
+            "taille": self.taille,
+            "distribution": json.loads(self.distribution_json or "{}"),
+            "modele": self.modele,
+            "etat": self.etat,
+            "phase": self.phase,
             "actif": self.etat in ("en_attente", "en_cours"),
-            "fichiers_collection": self.fichiers_collection, "morceaux_envoyes": self.morceaux_envoyes,
+            "fichiers_collection": self.fichiers_collection,
+            "morceaux_envoyes": self.morceaux_envoyes,
             "noeuds_avec_proprietes": self.noeuds_avec_proprietes,
-            "paires_obtenues": self.paires_obtenues, "paires_echouees": self.paires_echouees,
+            "paires_obtenues": self.paires_obtenues,
+            "paires_echouees": self.paires_echouees,
             "compteurs": {k: getattr(self, k) for k in self.COMPTEURS},
-            "duree_s": self.duree_s, "erreur": self.erreur,
-            "cree_le": d(self.cree_le), "demarre_le": d(self.demarre_le), "termine_le": d(self.termine_le),
+            "duree_s": self.duree_s,
+            "erreur": self.erreur,
+            "cree_le": d(self.cree_le),
+            "demarre_le": d(self.demarre_le),
+            "termine_le": d(self.termine_le),
         }
 
 
@@ -729,6 +741,7 @@ class PaireQA(Base):
     """Une paire générée : la question d'un persona, la réponse de référence, et les passages
     d'où elle vient. Le texte des passages est GARDÉ : leur identifiant OpenRAG change à la
     réindexation, la paire doit rester lisible."""
+
     __tablename__ = "paire_qa"
     __table_args__ = (
         CheckConstraint(_domaine("relecture", RELECTURES_PAIRE), name="paire_qa_relecture_valide"),
@@ -754,10 +767,20 @@ class PaireQA(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "run_id": self.run_id, "collection": self.collection_name, "rang": self.rang,
-                "question": self.question, "reponse": self.reponse,
-                "contextes": json.loads(self.contextes_json or "[]"), "persona": self.persona_nom,
-                "synthetiseur": self.synthetiseur, "style": self.style, "longueur": self.longueur,
-                "relecture": self.relecture, "commentaire": self.commentaire,
-                "relu_le": self.relu_le.isoformat() if self.relu_le else None,
-                "cree_le": self.cree_le.isoformat() if self.cree_le else ""}
+        return {
+            "id": self.id,
+            "run_id": self.run_id,
+            "collection": self.collection_name,
+            "rang": self.rang,
+            "question": self.question,
+            "reponse": self.reponse,
+            "contextes": json.loads(self.contextes_json or "[]"),
+            "persona": self.persona_nom,
+            "synthetiseur": self.synthetiseur,
+            "style": self.style,
+            "longueur": self.longueur,
+            "relecture": self.relecture,
+            "commentaire": self.commentaire,
+            "relu_le": self.relu_le.isoformat() if self.relu_le else None,
+            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
+        }

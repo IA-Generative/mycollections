@@ -47,9 +47,7 @@ class OpenRAGClient:
                 return {"status": "ok"}
             return resp.json()
 
-    async def _upload_file(
-        self, path: str, file_content: bytes, filename: str, metadata: dict | None = None
-    ) -> dict:
+    async def _upload_file(self, path: str, file_content: bytes, filename: str, metadata: dict | None = None) -> dict:
         headers = {"Authorization": f"Bearer {self.admin_token}"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             files = {"file": (filename, io.BytesIO(file_content), "text/markdown")}
@@ -125,9 +123,7 @@ class OpenRAGClient:
             results.append(result)
         return results
 
-    async def search(
-        self, partition: str | list[str], query: str, top_k: int = 5
-    ) -> dict:
+    async def search(self, partition: str | list[str], query: str, top_k: int = 5) -> dict:
         """`/search` d'OpenRAG. `partition` : un nom, ou une liste (`partitions=a&partitions=b`).
         Une liste vide est refusée : OpenRAG la lirait comme « toutes les partitions »."""
         partitions = [partition] if isinstance(partition, str) else list(partition)
@@ -135,8 +131,7 @@ class OpenRAGClient:
             raise ValueError("Aucune partition à interroger")
         return await self._get(
             "/search",
-            params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0],
-                    "top_k": top_k},
+            params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0], "top_k": top_k},
         )
 
     async def chat(
@@ -175,8 +170,7 @@ class OpenRAGClient:
             raise
         return data if isinstance(data, dict) else None
 
-    async def partition_chunks(self, partition: str, file_id: str | None = None,
-                               limit: int | None = None) -> list[dict] | None:
+    async def partition_chunks(self, partition: str, file_id: str | None = None, limit: int | None = None) -> list[dict] | None:
         """Les morceaux d'une partition, texte compris, sans vecteurs (`GET /partition/<p>/chunks`),
         filtrés sur un fichier si `file_id`. `None` si l'instance ne connaît pas la route (OpenRAG
         ancien) : l'appelant se replie sur `file_detail` + `extract`."""
@@ -214,10 +208,7 @@ class OpenRAGClient:
             return ""
         if isinstance(data, dict):
             chunks = data.get("chunks") or data.get("documents") or []
-            return "\n\n".join(
-                c.get("content", "") if isinstance(c, dict) else str(c)
-                for c in chunks
-            )
+            return "\n\n".join(c.get("content", "") if isinstance(c, dict) else str(c) for c in chunks)
         return ""
 
     async def list_models(self) -> dict:

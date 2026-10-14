@@ -22,6 +22,26 @@ jobs:
       SCAN_PATH: .github/workflows
       CONFIG_FILE: .yamllint
 
+  lint-backend:
+    name: Lint backend (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: myrag
+    steps:
+      - uses: actions/checkout@v4
+      # Les dépendances sont tenues par uv (pyproject.toml + uv.lock), comme dans l'image.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: myrag/uv.lock
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
   scan-gitleaks:
     name: Scan git history for leaked secrets
     uses: dnum-mi/fabnum-cicd/.github/workflows/scan-gitleaks.yml@v0

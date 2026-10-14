@@ -12,8 +12,7 @@ router = APIRouter(prefix="/api/publications", tags=["Publication"])
 
 
 @router.post("/resynchroniser")
-async def resynchroniser(a_sec: bool = Query(False, description="Dire ce qui partirait, sans rien écrire"),
-                         moi: Identite = Depends(exiger_superadmin)):
+async def resynchroniser(a_sec: bool = Query(False, description="Dire ce qui partirait, sans rien écrire"), moi: Identite = Depends(exiger_superadmin)):
     """Toutes les collections publiées dans l'assistant : nom = titre, étiquette = catégorie.
     Ne touche ni au prompt ni aux outils des fiches (owui_client.fusionner_fiche)."""
     try:

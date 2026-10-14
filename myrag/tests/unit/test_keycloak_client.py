@@ -1,7 +1,8 @@
 """Tests for Keycloak admin client (TDD)."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.keycloak_client import KeycloakClient
 

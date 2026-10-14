@@ -3,8 +3,7 @@
 from app.routers.guide import pages
 from tests.conftest import personne
 
-ATTENDUES = ["dire-ce-qui-manque", "rassembler-cinq-collegues-et-un-garant", "amorcer-depuis-ce-qui-existe",
-             "verifier-avant-de-publier", "entretenir", "interroger-depuis-vos-si"]
+ATTENDUES = ["dire-ce-qui-manque", "rassembler-cinq-collegues-et-un-garant", "amorcer-depuis-ce-qui-existe", "verifier-avant-de-publier", "entretenir", "interroger-depuis-vos-si"]
 
 
 def test_six_pages_dans_l_ordre():

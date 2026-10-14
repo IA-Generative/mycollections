@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException
-from fastapi import Depends
-from app.routers._droits import gerer_la_collection, lire_la_collection
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.database import async_session
 from app.models.db import EvalDataset
+from app.routers._droits import gerer_la_collection, lire_la_collection
 
 router = APIRouter(prefix="/api/eval", tags=["Eval"])
 
@@ -30,11 +29,7 @@ class DatasetRequest(BaseModel):
 @router.get("/{collection}/datasets", dependencies=[Depends(lire_la_collection)])
 async def list_datasets(collection: str):
     async with async_session() as session:
-        result = await session.execute(
-            select(EvalDataset)
-            .where(EvalDataset.collection_name == collection)
-            .order_by(EvalDataset.created_at.desc())
-        )
+        result = await session.execute(select(EvalDataset).where(EvalDataset.collection_name == collection).order_by(EvalDataset.created_at.desc()))
         return {"datasets": [d.to_dict() for d in result.scalars().all()]}
 
 

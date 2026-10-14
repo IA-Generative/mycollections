@@ -1,4 +1,5 @@
 """Convention ADR-0004 MirAI next, format Dockerflow : /app/version.json servi sur /__version__."""
+
 from __future__ import annotations
 
 import json

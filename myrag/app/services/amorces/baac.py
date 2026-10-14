@@ -17,8 +17,9 @@ def documents_depuis(annee: str, caract: list[dict], usagers: list[dict], commun
     grav_par_acc: dict[str, Counter] = defaultdict(Counter)
     for u in usagers:
         grav_par_acc[colonne(u, "Num_Acc")][GRAVITE.get(colonne(u, "grav").strip(), "autres")] += 1
-    par_dep: dict[str, dict] = defaultdict(lambda: {"accidents": 0, "agglo": 0, "hors": 0, "tues": 0,
-                                                    "blesses_hospitalises": 0, "blesses_legers": 0, "communes": Counter(), "mois": Counter()})
+    par_dep: dict[str, dict] = defaultdict(
+        lambda: {"accidents": 0, "agglo": 0, "hors": 0, "tues": 0, "blesses_hospitalises": 0, "blesses_legers": 0, "communes": Counter(), "mois": Counter()}
+    )
     for c in caract:
         dep = colonne(c, "dep").strip()
         if not dep:
@@ -34,11 +35,17 @@ def documents_depuis(annee: str, caract: list[dict], usagers: list[dict], commun
     docs = []
     for dep in sorted(par_dep):
         d = par_dep[dep]
-        md = [f"# Accidents corporels de la circulation — département {dep}, année {annee}", "",
-              "Source : ONISR, bases BAAC (data.gouv.fr). Un accident corporel = au moins une victime. Aucune donnée individuelle.", "",
-              f"- Accidents corporels : {fmt(d['accidents'])} (en agglomération : {fmt(d['agglo'])}, hors agglomération : {fmt(d['hors'])})",
-              f"- Tués : {fmt(d['tues'])} · blessés hospitalisés : {fmt(d['blesses_hospitalises'])} · blessés légers : {fmt(d['blesses_legers'])}",
-              "", f"## Communes les plus touchées en {annee} (code INSEE, nombre d'accidents)", ""]
+        md = [
+            f"# Accidents corporels de la circulation — département {dep}, année {annee}",
+            "",
+            "Source : ONISR, bases BAAC (data.gouv.fr). Un accident corporel = au moins une victime. Aucune donnée individuelle.",
+            "",
+            f"- Accidents corporels : {fmt(d['accidents'])} (en agglomération : {fmt(d['agglo'])}, hors agglomération : {fmt(d['hors'])})",
+            f"- Tués : {fmt(d['tues'])} · blessés hospitalisés : {fmt(d['blesses_hospitalises'])} · blessés légers : {fmt(d['blesses_legers'])}",
+            "",
+            f"## Communes les plus touchées en {annee} (code INSEE, nombre d'accidents)",
+            "",
+        ]
         for com, n in d["communes"].most_common(communes_max):
             md.append(f"- {com} : {n}")
         md += ["", f"## Répartition par mois en {annee}", ""]
@@ -50,6 +57,7 @@ def documents_depuis(annee: str, caract: list[dict], usagers: list[dict], commun
 
 async def importer(collection: str, entree: dict) -> dict:
     from app.services.amorces.ingestion import ingerer
+
     p = entree.get("parametres", {})
     docs, couverture = [], {"annees": [], "accidents": 0, "departements": 0}
     for f in p["millesimes"]:

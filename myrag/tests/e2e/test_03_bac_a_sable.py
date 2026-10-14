@@ -1,4 +1,5 @@
 """Le bac à sable : poser une question à une collection publiée, lire d'où vient la réponse."""
+
 from __future__ import annotations
 
 import re
@@ -63,8 +64,7 @@ def test_l_avis_dit_ce_qu_il_fait(reponse_obtenue):
     """Deux boutons 👍 👎 : la personne doit lire, sans infobulle, ce que son avis déclenche."""
     texte = reponse_obtenue.locator(".myrag-msg--assistant").first.inner_text()
     assert "Cette reponse est-elle utile" in texte or "Cette réponse est-elle utile" in texte
-    assert re.search(r"gestionnaire", texte) and re.search(r"réponse validée|transmis", texte), \
-        "la page doit dire ce que 👍 et 👎 déclenchent, sans infobulle"
+    assert re.search(r"gestionnaire", texte) and re.search(r"réponse validée|transmis", texte), "la page doit dire ce que 👍 et 👎 déclenchent, sans infobulle"
 
 
 def test_le_bac_a_sable_vouvoie(session_testeur, collection_publiee):

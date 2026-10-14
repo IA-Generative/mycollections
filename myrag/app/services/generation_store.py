@@ -25,6 +25,7 @@ def condense(sub: str | None) -> str | None:
 
 # ─── Personas ─────────────────────────────────────────────────────────────────────
 
+
 async def lister_personas(name: str) -> list[dict]:
     async with async_session() as s:
         r = await s.execute(select(Persona).where(Persona.collection_name == name).order_by(Persona.cree_le))
@@ -81,6 +82,7 @@ async def supprimer_persona(name: str, ident: str) -> None:
 
 # ─── Runs ─────────────────────────────────────────────────────────────────────────
 
+
 async def run_actif(name: str) -> dict | None:
     async with async_session() as s:
         r = await s.execute(select(Generation).where(Generation.collection_name == name, Generation.etat.in_(ACTIFS)))
@@ -92,9 +94,14 @@ async def creer_run(name: str, personas: list[dict], taille: int, distribution: 
     if await run_actif(name):
         raise Conflit("Une génération est déjà en cours pour cette collection")
     async with async_session() as s:
-        g = Generation(collection_name=name, taille=taille, modele=modele, lance_par_hash=condense(sub),
-                       personas_json=json.dumps([{"id": p["id"], "nom": p["nom"]} for p in personas], ensure_ascii=False),
-                       distribution_json=json.dumps(distribution))
+        g = Generation(
+            collection_name=name,
+            taille=taille,
+            modele=modele,
+            lance_par_hash=condense(sub),
+            personas_json=json.dumps([{"id": p["id"], "nom": p["nom"]} for p in personas], ensure_ascii=False),
+            distribution_json=json.dumps(distribution),
+        )
         s.add(g)
         await s.commit()
         await s.refresh(g)
@@ -103,8 +110,7 @@ async def creer_run(name: str, personas: list[dict], taille: int, distribution: 
 
 async def lister_runs(name: str, limite: int = 50) -> list[dict]:
     async with async_session() as s:
-        r = await s.execute(select(Generation).where(Generation.collection_name == name)
-                            .order_by(Generation.cree_le.desc()).limit(limite))
+        r = await s.execute(select(Generation).where(Generation.collection_name == name).order_by(Generation.cree_le.desc()).limit(limite))
         return [g.to_dict() for g in r.scalars().all()]
 
 
@@ -170,12 +176,24 @@ async def marquer_interrompus() -> int:
 
 # ─── Paires ───────────────────────────────────────────────────────────────────────
 
+
 async def enregistrer_paires(ident: str, name: str, paires: list) -> int:
     async with async_session() as s:
         for rang, p in enumerate(paires):
-            s.add(PaireQA(run_id=ident, collection_name=name, rang=rang, question=p.question, reponse=p.reponse,
-                          contextes_json=json.dumps(p.contextes, ensure_ascii=False), persona_nom=p.persona_nom,
-                          synthetiseur=p.synthetiseur, style=p.style, longueur=p.longueur))
+            s.add(
+                PaireQA(
+                    run_id=ident,
+                    collection_name=name,
+                    rang=rang,
+                    question=p.question,
+                    reponse=p.reponse,
+                    contextes_json=json.dumps(p.contextes, ensure_ascii=False),
+                    persona_nom=p.persona_nom,
+                    synthetiseur=p.synthetiseur,
+                    style=p.style,
+                    longueur=p.longueur,
+                )
+            )
         await s.commit()
     return len(paires)
 
@@ -189,18 +207,15 @@ def _filtres(name: str, run_id: str, persona: str | None, relecture: str | None)
     return f
 
 
-async def lister_paires(name: str, run_id: str, *, persona: str | None = None, relecture: str | None = None,
-                        page: int = 1, par_page: int = 50) -> dict:
+async def lister_paires(name: str, run_id: str, *, persona: str | None = None, relecture: str | None = None, page: int = 1, par_page: int = 50) -> dict:
     par_page = max(1, min(int(par_page), 200))
     filtres = _filtres(name, run_id, persona, relecture)
     async with async_session() as s:
         total = (await s.execute(select(func.count()).select_from(PaireQA).where(*filtres))).scalar_one()
         pages = max(1, ceil(total / par_page))
         page = max(1, min(int(page), pages))
-        r = await s.execute(select(PaireQA).where(*filtres).order_by(PaireQA.rang)
-                            .offset((page - 1) * par_page).limit(par_page))
-        return {"total": total, "page": page, "pages": pages, "par_page": par_page,
-                "paires": [p.to_dict() for p in r.scalars().all()]}
+        r = await s.execute(select(PaireQA).where(*filtres).order_by(PaireQA.rang).offset((page - 1) * par_page).limit(par_page))
+        return {"total": total, "page": page, "pages": pages, "par_page": par_page, "paires": [p.to_dict() for p in r.scalars().all()]}
 
 
 async def paires_pour_export(name: str, run_id: str) -> list[dict]:

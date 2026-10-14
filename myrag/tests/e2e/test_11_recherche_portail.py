@@ -5,6 +5,7 @@ jeton est celui de la session du testeur (le front de Mes collections, accepté 
 le parcours prouve les droits, le périmètre et les erreurs, pas la configuration du client
 `mysearch` du SSO. Aucun appel à un modèle de langage derrière ces routes.
 """
+
 from __future__ import annotations
 
 import re
@@ -61,8 +62,7 @@ def test_un_perimetre_inconnu_est_ignore(session_testeur, collection_publiee):
     assert r.status == 200, r.text()
     assert r.json()["total"] == 0 and r.json()["results"] == []
 
-    r = _chercher(session_testeur, q=collection_publiee.get("question") or "contrôle",
-                  scope=f"{inconnu},{collection_publiee['name']}")
+    r = _chercher(session_testeur, q=collection_publiee.get("question") or "contrôle", scope=f"{inconnu},{collection_publiee['name']}")
     assert r.status == 200, r.text()
     assert {x["context"]["collection"]["id"] for x in r.json()["results"]} <= {collection_publiee["name"]}
 

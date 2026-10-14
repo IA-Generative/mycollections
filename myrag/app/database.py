@@ -5,7 +5,6 @@ Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL:
   - postgresql+asyncpg://user:pass@host:5432/myrag
 """
 
-import os
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -35,6 +34,7 @@ class Base(DeclarativeBase):
 async def init_db():
     """Create all tables + lightweight in-place migrations. Called on startup."""
     import app.models.db  # noqa: F401 — sans cet import, create_all ne connaît aucune table
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_add_archived_at(conn)
@@ -44,16 +44,13 @@ async def init_db():
         # les lignes existantes recevraient NULL, le défaut du modèle étant côté Python.
         await _migrate_add_column(conn, "etat_collab", "VARCHAR(30)", "VARCHAR(30)")
         await _migrate_add_column(conn, "garant_hash", "VARCHAR(64)", "VARCHAR(64)")
-        await _migrate_add_column(
-            conn, "garant_pressenti", "VARCHAR(255) DEFAULT ''", "VARCHAR(255) DEFAULT ''"
-        )
+        await _migrate_add_column(conn, "garant_pressenti", "VARCHAR(255) DEFAULT ''", "VARCHAR(255) DEFAULT ''")
         await _migrate_add_column(conn, "demande_id", "VARCHAR(36)", "VARCHAR(36)")
         await _retro_remplir_etat_collab(conn)
         # Titre affiché et catégorie (l'identifiant technique ne se lit plus à l'écran).
         await _migrate_add_column(conn, "titre", "VARCHAR(255) DEFAULT ''", "VARCHAR(255) DEFAULT ''")
         await _migrate_add_column(conn, "categorie", "VARCHAR(64)", "VARCHAR(64)")
-        await _migrate_add_column(conn, "alias_description", "TEXT DEFAULT ''", "TEXT DEFAULT ''",
-                                  table="publications")
+        await _migrate_add_column(conn, "alias_description", "TEXT DEFAULT ''", "TEXT DEFAULT ''", table="publications")
         await _retro_remplir_titres(conn)
         await _semer_categories(conn)
         # Boucle de satisfaction des demandes (2026-09-21).
@@ -81,8 +78,7 @@ async def _elargir_etats_demande(conn):
         # Et la satisfaction, colonne ajoutée plus haut : même domaine que le modèle.
         satisfactions = ", ".join(f"'{v}'" for v in SATISFACTIONS)
         sync_conn.execute(text("ALTER TABLE demande DROP CONSTRAINT IF EXISTS demande_satisfaction_valide"))
-        sync_conn.execute(text("ALTER TABLE demande ADD CONSTRAINT demande_satisfaction_valide "
-                               f"CHECK (satisfaction IS NULL OR satisfaction IN ({satisfactions}))"))
+        sync_conn.execute(text(f"ALTER TABLE demande ADD CONSTRAINT demande_satisfaction_valide CHECK (satisfaction IS NULL OR satisfaction IN ({satisfactions}))"))
 
     await conn.run_sync(_sync)
 
@@ -100,20 +96,14 @@ async def _retro_remplir_titres(conn):
     from app.amorces import charger_catalogue
     from app.services.nommage import titre_depuis_alias, titre_depuis_nom
 
-    sans_titre = [r[0] for r in (await conn.execute(text(
-        "SELECT name FROM collections WHERE titre IS NULL OR titre = ''"
-    ))).fetchall()]
+    sans_titre = [r[0] for r in (await conn.execute(text("SELECT name FROM collections WHERE titre IS NULL OR titre = ''"))).fetchall()]
     if not sans_titre:
         return
     du_catalogue = {e["collection"]: e.get("titre", "") for e in charger_catalogue()}
-    alias = {r[0]: r[1] for r in (await conn.execute(text(
-        "SELECT collection_name, alias_name FROM publications"
-    ))).fetchall()}
+    alias = {r[0]: r[1] for r in (await conn.execute(text("SELECT collection_name, alias_name FROM publications"))).fetchall()}
     for name in sans_titre:
-        titre = (du_catalogue.get(name) or titre_depuis_alias(alias.get(name), name)
-                 or titre_depuis_nom(name))
-        await conn.execute(text("UPDATE collections SET titre = :t WHERE name = :n"),
-                           {"t": titre[:255], "n": name})
+        titre = du_catalogue.get(name) or titre_depuis_alias(alias.get(name), name) or titre_depuis_nom(name)
+        await conn.execute(text("UPDATE collections SET titre = :t WHERE name = :n"), {"t": titre[:255], "n": name})
 
 
 async def _semer_categories(conn):
@@ -129,8 +119,7 @@ async def _semer_categories(conn):
         return
     for ordre, (cle, libelle, description) in enumerate(CATEGORIES_DE_DEPART, start=1):
         await conn.execute(
-            text("INSERT INTO categories (cle, libelle, description, ordre, cree_le) "
-                 "VALUES (:c, :l, :d, :o, CURRENT_TIMESTAMP)"),
+            text("INSERT INTO categories (cle, libelle, description, ordre, cree_le) VALUES (:c, :l, :d, :o, CURRENT_TIMESTAMP)"),
             {"c": cle, "l": libelle, "d": description, "o": ordre * 10},
         )
     cles = {c[0] for c in CATEGORIES_DE_DEPART}
@@ -153,15 +142,15 @@ async def _retro_remplir_etat_collab(conn):
     """
     from sqlalchemy import text
 
-    await conn.execute(text(
-        "UPDATE collections SET etat_collab = 'publiee_tous' "
-        "WHERE etat_collab IS NULL AND name IN ("
-        "  SELECT collection_name FROM publications "
-        "  WHERE state = 'published' AND visibility = 'all')"
-    ))
-    await conn.execute(text(
-        "UPDATE collections SET etat_collab = 'publiee_groupe' WHERE etat_collab IS NULL"
-    ))
+    await conn.execute(
+        text(
+            "UPDATE collections SET etat_collab = 'publiee_tous' "
+            "WHERE etat_collab IS NULL AND name IN ("
+            "  SELECT collection_name FROM publications "
+            "  WHERE state = 'published' AND visibility = 'all')"
+        )
+    )
+    await conn.execute(text("UPDATE collections SET etat_collab = 'publiee_groupe' WHERE etat_collab IS NULL"))
 
 
 async def _migrate_add_archived_at(conn):
@@ -176,16 +165,12 @@ async def _migrate_add_archived_at(conn):
             if "archived_at" not in cols:
                 sync_conn.exec_driver_sql("ALTER TABLE collections ADD COLUMN archived_at DATETIME")
         else:
-            sync_conn.execute(text(
-                "ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"
-            ))
+            sync_conn.execute(text("ALTER TABLE collections ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP"))
 
     await conn.run_sync(_sync)
 
 
-async def _migrate_add_column(
-    conn, column: str, sqlite_type: str, pg_type: str, table: str = "collections"
-):
+async def _migrate_add_column(conn, column: str, sqlite_type: str, pg_type: str, table: str = "collections"):
     """Add a <table>.<column> if missing (SQLite + PostgreSQL compatible).
 
     `table` et `column` ne viennent que d'appels littéraux de ce module — jamais
@@ -199,13 +184,9 @@ async def _migrate_add_column(
             rows = sync_conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
             cols = {r[1] for r in rows}
             if column not in cols:
-                sync_conn.exec_driver_sql(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_type}"
-                )
+                sync_conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_type}")
         else:
-            sync_conn.execute(text(
-                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {pg_type}"
-            ))
+            sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {pg_type}"))
 
     await conn.run_sync(_sync)
 

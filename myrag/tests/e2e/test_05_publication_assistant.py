@@ -5,6 +5,7 @@ page de publication). La preuve, elle, est lue avec le compte du testeur dans l'
 le modèle est dans SA liste et il répond avec le témoin. Jamais avec une clé d'administration,
 qui voit des modèles cachés aux autres.
 """
+
 from __future__ import annotations
 
 import re
@@ -47,8 +48,7 @@ def test_la_collection_avance_jusqu_a_publiee_a_tous(session_testeur, collection
         bouton.click()
         if attendu == "publiee_tous":  # geste qui engage : il se confirme
             page.get_by_role("button", name="Confirmer").click()
-        attendre(lambda: session_testeur.get(f"/api/collections/{collection_essai}/etat").json().get("etat") == attendu,
-                 delai=30, pas=1, motif=f"l'état « {attendu} »")
+        attendre(lambda: session_testeur.get(f"/api/collections/{collection_essai}/etat").json().get("etat") == attendu, delai=30, pas=1, motif=f"l'état « {attendu} »")
         page.wait_for_timeout(800)
     captures.prendre(page, "06-etat-publiee-a-tous", mobile=False)
 
@@ -61,8 +61,7 @@ def test_publier_a_tous_par_la_page_de_publication(session_testeur, collection_e
     page.locator("label[for=vis-all]").click()
     captures.prendre(page, "06-publication-a-tous", mobile=False)
     page.get_by_role("button", name=re.compile(r"^(Publier|Partager dans Mon assistant|Mettre à jour)$")).click()
-    attendre(lambda: page.locator(".fr-alert--success, .fr-alert--warning, .fr-alert--error").count() > 0,
-             delai=90, pas=1, motif="le retour de la publication")
+    attendre(lambda: page.locator(".fr-alert--success, .fr-alert--warning, .fr-alert--error").count() > 0, delai=90, pas=1, motif="le retour de la publication")
     captures.prendre(page, "06-publication-resultat", mobile=False)
     publication = session_testeur.get(f"/api/collections/{collection_essai}/publication").json()
     assert publication.get("visibility") == "all" and publication.get("state") == "published", publication
@@ -83,9 +82,9 @@ def test_le_testeur_voit_la_collection_dans_l_assistant_et_elle_repond(session_t
         assert f"openrag-{collection_essai}" in vus, f"absente de la liste du testeur : {vus}"
         essai = page.request.post(
             cible["assistant"] + "/api/chat/completions",
-            data={"model": f"openrag-{collection_essai}", "stream": False,
-                  "messages": [{"role": "user", "content": QUESTION_TEMOIN}]},
-            timeout=180_000)
+            data={"model": f"openrag-{collection_essai}", "stream": False, "messages": [{"role": "user", "content": QUESTION_TEMOIN}]},
+            timeout=180_000,
+        )
         assert essai.status == 200, f"{essai.status} : {essai.text()[:200]}"
         contenu = (essai.json().get("choices") or [{}])[0].get("message", {}).get("content", "")
         assert TEMOIN in contenu, f"répond sans le témoin : {contenu[:300]}"

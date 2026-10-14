@@ -46,6 +46,7 @@ def test_le_journal_ne_nomme_personne(client, en_tant_que):
 def test_le_sommeil_se_lit_sur_la_demande(client, en_tant_que):
     import os
     import sqlite3
+
     en_tant_que(personne("a"))
     ident = client.post("/api/demandes", json=DEMANDE).json()["demande"]["id"]
     for n in range(5):
@@ -57,7 +58,8 @@ def test_le_sommeil_se_lit_sur_la_demande(client, en_tant_que):
     # On vieillit tous ses événements de 31 jours, directement en base.
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     con.execute("UPDATE evenement SET cree_le = datetime('now', '-31 days') WHERE objet_id = ?", (ident,))
-    con.commit(); con.close()
+    con.commit()
+    con.close()
     assert client.get(f"/api/demandes/{ident}").json()["demande"]["sommeil"] is True
     liste = {d["id"]: d for d in client.get("/api/demandes").json()["demandes"]}
     assert liste[ident]["sommeil"] is True
@@ -88,6 +90,7 @@ def test_l_abonnement_suit_la_creation_et_le_soutien(client, en_tant_que):
 
 def test_un_evenement_a_un_auteur_ou_un_robot(client):
     from app.services.journal import ecrire
+
     with pytest.raises(ValueError):
         ecrire(None, "demande", "x", "demande.creee")
     with pytest.raises(ValueError):

@@ -25,9 +25,11 @@ async def envoyer(destinataires: list[str], corps: str, app: str = "mescollectio
         return False
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.post(f"{settings.bus_url.rstrip('/')}/_beta/messages",
-                                  json={"destinataires": destinataires, "corps": corps.strip()[:CORPS_MAX], "app": app},
-                                  headers={"X-Bus-Secret": settings.bus_secret})
+            r = await client.post(
+                f"{settings.bus_url.rstrip('/')}/_beta/messages",
+                json={"destinataires": destinataires, "corps": corps.strip()[:CORPS_MAX], "app": app},
+                headers={"X-Bus-Secret": settings.bus_secret},
+            )
         if r.status_code >= 300:
             logger.warning("relais vers la cloche refusé : %s %s", r.status_code, r.text[:160])
             return False

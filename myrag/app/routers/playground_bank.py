@@ -20,13 +20,12 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter
-from fastapi import Depends
-from app.routers._droits import lire_la_collection
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app.database import async_session
 from app.models.db import EvalDataset, Feedback
+from app.routers._droits import lire_la_collection
 from app.services.qr_cache import QRCache
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
@@ -43,9 +42,7 @@ async def get_bank(collection: str):
 
     async with async_session() as session:
         # EvalDatasets — each stored dataset can contain N questions. We flatten.
-        ds_result = await session.execute(
-            select(EvalDataset).where(EvalDataset.collection_name == collection)
-        )
+        ds_result = await session.execute(select(EvalDataset).where(EvalDataset.collection_name == collection))
         for ds in ds_result.scalars().all():
             questions = json.loads(ds.questions_json or "[]")
             # Convention: if the dataset name ends with "-generated" (or the
@@ -53,52 +50,47 @@ async def get_bank(collection: str):
             # otherwise imported. The wizard step-4 import path uses custom
             # names; auto-generate uses "<collection>-evaluation" +
             # description "Jeu de test genere automatiquement".
-            is_generated = (
-                "genere" in (ds.description or "").lower()
-                or "auto" in (ds.name or "").lower()
-                or ds.name.endswith("-evaluation")
-            )
+            is_generated = "genere" in (ds.description or "").lower() or "auto" in (ds.name or "").lower() or ds.name.endswith("-evaluation")
             source = "generated" if is_generated else "imported"
             for q in questions:
-                items.append({
-                    "id": f"eval_{ds.id}_{q.get('id', '')}",
-                    "question": q.get("question", ""),
-                    "expected_answer": q.get("expected_answer", ""),
-                    "source": source,
-                    "metadata": {
-                        "dataset_id": ds.id,
-                        "dataset_name": ds.name,
-                        "must_cite": q.get("must_cite", []),
-                        "tags": q.get("tags", []),
-                        "out_of_scope": q.get("out_of_scope", False),
-                        "created_at": ds.created_at.isoformat() if ds.created_at else "",
-                    },
-                })
+                items.append(
+                    {
+                        "id": f"eval_{ds.id}_{q.get('id', '')}",
+                        "question": q.get("question", ""),
+                        "expected_answer": q.get("expected_answer", ""),
+                        "source": source,
+                        "metadata": {
+                            "dataset_id": ds.id,
+                            "dataset_name": ds.name,
+                            "must_cite": q.get("must_cite", []),
+                            "tags": q.get("tags", []),
+                            "out_of_scope": q.get("out_of_scope", False),
+                            "created_at": ds.created_at.isoformat() if ds.created_at else "",
+                        },
+                    }
+                )
                 stats[source] += 1
 
         # Feedback with negative rating — the real complaints to surface.
-        fb_result = await session.execute(
-            select(Feedback)
-            .where(Feedback.collection_name == collection)
-            .where(Feedback.rating < 0)
-            .order_by(Feedback.created_at.desc())
-        )
+        fb_result = await session.execute(select(Feedback).where(Feedback.collection_name == collection).where(Feedback.rating < 0).order_by(Feedback.created_at.desc()))
         for fb in fb_result.scalars().all():
-            items.append({
-                "id": f"fb_{fb.id}",
-                "question": fb.question,
-                "expected_answer": "",
-                "source": "fb_neg",
-                "metadata": {
-                    "feedback_id": fb.id,
-                    "rating": fb.rating,
-                    "reason": fb.reason,
-                    "response": fb.response,
-                    "status": fb.status,
-                    "owui_chat_id": fb.owui_chat_id,
-                    "created_at": fb.created_at.isoformat() if fb.created_at else "",
-                },
-            })
+            items.append(
+                {
+                    "id": f"fb_{fb.id}",
+                    "question": fb.question,
+                    "expected_answer": "",
+                    "source": "fb_neg",
+                    "metadata": {
+                        "feedback_id": fb.id,
+                        "rating": fb.rating,
+                        "reason": fb.reason,
+                        "response": fb.response,
+                        "status": fb.status,
+                        "owui_chat_id": fb.owui_chat_id,
+                        "created_at": fb.created_at.isoformat() if fb.created_at else "",
+                    },
+                }
+            )
             stats["fb_neg"] += 1
 
     # Promoted Q&R from QRCache (file-backed, not DB).
@@ -106,17 +98,19 @@ async def get_bank(collection: str):
         cache = QRCache()
         for entry in cache.list(collection):
             if entry.source == "feedback":
-                items.append({
-                    "id": f"qr_{entry.id}",
-                    "question": entry.question,
-                    "expected_answer": entry.answer,
-                    "source": "promoted",
-                    "metadata": {
-                        "qr_id": entry.id,
-                        "tags": entry.tags,
-                        "created_at": entry.created_at,
-                    },
-                })
+                items.append(
+                    {
+                        "id": f"qr_{entry.id}",
+                        "question": entry.question,
+                        "expected_answer": entry.answer,
+                        "source": "promoted",
+                        "metadata": {
+                            "qr_id": entry.id,
+                            "tags": entry.tags,
+                            "created_at": entry.created_at,
+                        },
+                    }
+                )
                 stats["promoted"] += 1
     except Exception:
         # QRCache is best-effort; missing data_dir shouldn't break the bank.

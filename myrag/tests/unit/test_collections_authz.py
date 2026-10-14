@@ -4,12 +4,12 @@ Reproduit et verrouille le bug signalé : auditeur1 ne doit pas voir/atteindre
 les collections d'un autre groupe (user1).
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import CurrentUser, current_user
-
 
 # Identités de test (groupes Keycloak)
 SUPERADMIN = CurrentUser(sub="op", username="op", groups=["/myrag/superadmin"])
@@ -44,8 +44,10 @@ def _reset_collections_table():
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     import app.config
+
     monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
     from app.main import app
+
     # Pas d'override d'identité hérité d'un autre test.
     app.dependency_overrides.clear()
     # Le context manager déclenche le lifespan (init_db crée les tables).
@@ -110,8 +112,7 @@ def test_acces_direct_a_une_collection_d_autrui_refuse(mock_cls, app_client):
     assert client.patch("/api/collections/authzt-u1", json={"description": "x"}).status_code == 403
     # system-prompt en lecture : 404 ; en écriture : 403
     assert client.get("/api/collections/authzt-u1/system-prompt").status_code == 404
-    assert client.patch("/api/collections/authzt-u1/system-prompt",
-                        json={"system_prompt": "x"}).status_code == 403
+    assert client.patch("/api/collections/authzt-u1/system-prompt", json={"system_prompt": "x"}).status_code == 403
 
     app.dependency_overrides.clear()
 

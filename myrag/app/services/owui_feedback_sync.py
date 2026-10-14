@@ -37,7 +37,7 @@ import logging
 import os
 from dataclasses import dataclass
 
-from sqlalchemy import JSON, String, BigInteger, select
+from sqlalchemy import JSON, BigInteger, String, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -50,6 +50,7 @@ log = logging.getLogger(__name__)
 # We only declare the columns we read. The real OWUI schema has many more
 # columns (timestamps, user fk, meta) but nothing else is load-bearing for
 # the pull.
+
 
 class _OWUIBase(DeclarativeBase):
     pass
@@ -87,8 +88,7 @@ class SyncResult:
     errors: int = 0
 
     def as_dict(self) -> dict:
-        return {"imported": self.imported, "updated": self.updated,
-                "skipped": self.skipped, "errors": self.errors}
+        return {"imported": self.imported, "updated": self.updated, "skipped": self.skipped, "errors": self.errors}
 
 
 def _extract_qa(chat_blob: dict | None, message_id: str) -> tuple[str, str]:
@@ -125,7 +125,7 @@ def _collection_from_model(model_id: str) -> str | None:
         return None
     if not model_id.startswith("openrag-"):
         return None
-    return model_id[len("openrag-"):]
+    return model_id[len("openrag-") :]
 
 
 async def sync_batch(owui_db_url: str, limit: int | None = None) -> SyncResult:
@@ -149,8 +149,7 @@ async def sync_batch(owui_db_url: str, limit: int | None = None) -> SyncResult:
                 # error — just nothing to sync yet. Log and exit clean.
                 msg = str(e).lower()
                 if "does not exist" in msg or "undefined" in msg or "undefinedtable" in msg:
-                    log.info("owui_feedback_sync: feedback table not found — "
-                             "OWUI likely has no votes yet, nothing to sync")
+                    log.info("owui_feedback_sync: feedback table not found — OWUI likely has no votes yet, nothing to sync")
                     return result
                 raise
 
@@ -216,12 +215,9 @@ async def sync_batch(owui_db_url: str, limit: int | None = None) -> SyncResult:
 
 async def _cli_main():
     parser = argparse.ArgumentParser(description="Sync OWUI feedback into MyRAG")
-    parser.add_argument("--owui-db-url", default=os.environ.get("OWUI_DB_URL", ""),
-                        help="async SQLAlchemy URL for the OWUI postgres database")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="max rows to pull this run (default: all)")
-    parser.add_argument("--cron", action="store_true",
-                        help="Print JSON result to stdout (for CronJob logs)")
+    parser.add_argument("--owui-db-url", default=os.environ.get("OWUI_DB_URL", ""), help="async SQLAlchemy URL for the OWUI postgres database")
+    parser.add_argument("--limit", type=int, default=None, help="max rows to pull this run (default: all)")
+    parser.add_argument("--cron", action="store_true", help="Print JSON result to stdout (for CronJob logs)")
     args = parser.parse_args()
     if not args.owui_db_url:
         raise SystemExit("OWUI_DB_URL env var or --owui-db-url flag required")

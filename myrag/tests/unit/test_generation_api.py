@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -43,10 +42,18 @@ def _morceaux(n=3):
 
 
 def _paires(n=3):
-    return [PaireGeneree(question=f"=Question {i} ?", reponse=f"Réponse {i}", persona_nom="Agent" if i % 2 else "Technicien",
-                         synthetiseur="paire_simple_entites", style="Perfect grammar", longueur="short",
-                         contextes=[{"chunk_id": f"c{i}", "file_id": f"f{i}", "partition": "x", "fichier": f"doc-{i}.md",
-                                     "page": None, "texte": f"Passage numéro {i}"}]) for i in range(n)]
+    return [
+        PaireGeneree(
+            question=f"=Question {i} ?",
+            reponse=f"Réponse {i}",
+            persona_nom="Agent" if i % 2 else "Technicien",
+            synthetiseur="paire_simple_entites",
+            style="Perfect grammar",
+            longueur="short",
+            contextes=[{"chunk_id": f"c{i}", "file_id": f"f{i}", "partition": "x", "fichier": f"doc-{i}.md", "page": None, "texte": f"Passage numéro {i}"}],
+        )
+        for i in range(n)
+    ]
 
 
 def _faux_moteur(resultat):
@@ -54,14 +61,17 @@ def _faux_moteur(resultat):
         compteurs.poser_phase("generation")
         compteurs.observer("x", None, 0.1)
         return resultat
+
     return generer
 
 
 def _lancer(client, nom, personas, resultat=None, morceaux=None, **corps):
     resultat = resultat or ResultatGeneration(etat="termine", paires=_paires(), morceaux_envoyes=3, noeuds_avec_proprietes=3)
-    with patch("app.routers.generation.corpus.fichiers_de", new=AsyncMock(return_value=[{"file_id": "f0"}])), \
-         patch("app.generation.execution.lire_echantillon", new=AsyncMock(return_value=(morceaux if morceaux is not None else _morceaux(), 3))), \
-         patch("app.generation.execution.generer_dans_le_fil", new=_faux_moteur(resultat)):
+    with (
+        patch("app.routers.generation.corpus.fichiers_de", new=AsyncMock(return_value=[{"file_id": "f0"}])),
+        patch("app.generation.execution.lire_echantillon", new=AsyncMock(return_value=(morceaux if morceaux is not None else _morceaux(), 3))),
+        patch("app.generation.execution.generer_dans_le_fil", new=_faux_moteur(resultat)),
+    ):
         r = client.post(URL.format(nom) + "/runs", json={"personas": personas, "taille": 3, **corps})
         assert r.status_code == 202, r.text
         run_id = r.json()["run"]["id"]
@@ -175,8 +185,10 @@ def test_run_en_erreur_motive_sans_texte(client, collection):
 
 
 def test_second_run_refuse_pendant_le_premier(client, collection):
-    from app.services import generation_store as store
     import asyncio
+
+    from app.services import generation_store as store
+
     pid = _persona(client, collection)
     personas = asyncio.run(store.personas_par_ids(collection, [pid]))
     asyncio.run(store.creer_run(collection, personas, 3, {"entites": 1.0}, "chat", "x"))
@@ -195,11 +207,13 @@ def test_suppression_d_un_run(client, collection):
 
 def test_une_ligne_de_bilan_par_run_sans_contenu(client, collection):
     import logging
+
     lignes: list[str] = []
 
     class Recueil(logging.Handler):
         def emit(self, record):
             lignes.append(record.getMessage())
+
     journal = logging.getLogger("myrag.generation")
     assert journal.handlers and journal.level == logging.INFO, "la ligne de bilan doit sortir quelque part"
     recueil = Recueil()

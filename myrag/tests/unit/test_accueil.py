@@ -6,8 +6,6 @@ import os
 import sqlite3
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from tests.conftest import SUPERADMIN, personne
 
 
@@ -42,12 +40,12 @@ def test_la_mesure_ne_garde_jamais_le_texte_de_la_question(client, en_tant_que, 
 def test_mes_essais_ne_comptent_pas_ceux_des_collegues_oui(client, en_tant_que, creer_collection, nom):
     moi = personne("createur")
     creer_collection(nom, moi, titre="Codes de test")
-    _demander(client, en_tant_que, moi, nom)                      # mon propre essai
-    for n in (2, 2, 3, 4):                                        # 4 questions de 3 collègues
+    _demander(client, en_tant_que, moi, nom)  # mon propre essai
+    for n in (2, 2, 3, 4):  # 4 questions de 3 collègues
         _demander(client, en_tant_que, personne(n), nom)
     en_tant_que(moi)
     r = client.get("/api/accueil/mes-collections").json()
-    ligne = next(l for l in r["collections"] if l["name"] == nom)
+    ligne = next(c for c in r["collections"] if c["name"] == nom)
     assert ligne["titre"] == "Codes de test" and ligne["questions"] == 4
     assert r["questions"] >= 4 and r["personnes"] is not None and r["personnes"] >= 3
     assert r["fenetre_jours"] == 30
@@ -60,7 +58,7 @@ def test_mes_essais_sont_dits_a_part_pour_qu_un_zero_ne_passe_pas_pour_une_panne
         _demander(client, en_tant_que, moi, nom)
     en_tant_que(moi)
     bilan = client.get("/api/accueil/mes-collections").json()
-    assert (bilan["questions"], bilan["mes_essais"]) == (0, 6)   # le « 0 » est juste — et il s'explique
+    assert (bilan["questions"], bilan["mes_essais"]) == (0, 6)  # le « 0 » est juste — et il s'explique
     _demander(client, en_tant_que, personne("collegue-essais"), nom)
     en_tant_que(moi)
     bilan = client.get("/api/accueil/mes-collections").json()
@@ -103,33 +101,38 @@ def test_les_signalements_ouverts_me_sont_rappeles(client, en_tant_que, creer_co
 
 
 def _jeu(nom, questions):
+    import json
+
     from app.database import async_session
     from app.models.db import EvalDataset
-    import json
 
     async def _f():
         async with async_session() as s:
             s.add(EvalDataset(collection_name=nom, name=f"{nom}-evaluation", description="", questions_json=json.dumps(questions)))
             await s.commit()
+
     asyncio.run(_f())
 
 
 def test_l_exemple_vient_du_jeu_d_evaluation_d_une_collection_publiee_a_tous(client, en_tant_que, creer_collection, nom):
     creer_collection(nom, titre="Codes de test")
-    _jeu(nom, [{"id": "q1", "question": "Quel texte réprime le vol ?"},
-               {"id": "q2", "question": "Hors sujet ?", "out_of_scope": True}])
+    _jeu(nom, [{"id": "q1", "question": "Quel texte réprime le vol ?"}, {"id": "q2", "question": "Hors sujet ?", "out_of_scope": True}])
     en_tant_que(personne(5))
-    assert all((e or {}).get("name") != nom for e in [client.get("/api/accueil/exemple").json()["exemple"]]), \
-        "une collection en cours de vérification ne s'offre pas en exemple"
+    assert all((e or {}).get("name") != nom for e in [client.get("/api/accueil/exemple").json()["exemple"]]), "une collection en cours de vérification ne s'offre pas en exemple"
     _sql("UPDATE collections SET etat_collab = 'publiee_tous', scope = 'public', categorie = 'securite-delinquance' WHERE name = ?", (nom,))
     vus = {client.get("/api/accueil/exemple").json()["exemple"]["name"] for _ in range(40)}
     assert nom in vus
     for _ in range(40):
         e = client.get("/api/accueil/exemple").json()["exemple"]
         if e["name"] == nom:
-            assert e == {"name": nom, "titre": "Codes de test", "categorie": "securite-delinquance",
-                         "categorie_libelle": "Sécurité et délinquance", "question": "Quel texte réprime le vol ?",
-                         "autres": e["autres"]}
+            assert e == {
+                "name": nom,
+                "titre": "Codes de test",
+                "categorie": "securite-delinquance",
+                "categorie_libelle": "Sécurité et délinquance",
+                "question": "Quel texte réprime le vol ?",
+                "autres": e["autres"],
+            }
             break
 
 
@@ -146,10 +149,11 @@ def test_une_question_d_utilisateur_ne_s_affiche_jamais_a_l_accueil(client, en_t
 
 
 def test_une_collection_que_je_ne_peux_pas_lire_ne_m_est_pas_offerte(client, en_tant_que, creer_collection, nom):
-    creer_collection(nom)                                  # portée : le groupe des testeurs
+    creer_collection(nom)  # portée : le groupe des testeurs
     _jeu(nom, [{"id": "q1", "question": "Réservée ?"}])
     _sql("UPDATE collections SET etat_collab = 'publiee_tous' WHERE name = ?", (nom,))
     from app.auth import CurrentUser
+
     en_tant_que(CurrentUser(sub="hors-groupe", username="x", groups=["/g/ailleurs"]))
     for _ in range(30):
         e = client.get("/api/accueil/exemple").json()["exemple"]

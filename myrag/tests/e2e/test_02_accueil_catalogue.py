@@ -1,5 +1,6 @@
 """Ce qu'un nouveau venu voit en premier : l'accueil dit quoi faire, le catalogue liste ce qui
 existe, une fiche de collection se lit, et une adresse inconnue est dite en français."""
+
 from __future__ import annotations
 
 import re
@@ -38,8 +39,7 @@ def test_le_catalogue_liste_les_collections(session_testeur, collection_publiee,
     assert lignes.count() >= 1
     liens = page.locator("tbody tr a.fr-link[href^='/c/']")
     assert liens.count() >= 1, "aucune collection cliquable dans le catalogue"
-    assert page.locator(f"a[href='/c/{collection_publiee['name']}']").count() >= 1, \
-        "la collection publiée de l'accueil n'est pas dans le catalogue"
+    assert page.locator(f"a[href='/c/{collection_publiee['name']}']").count() >= 1, "la collection publiée de l'accueil n'est pas dans le catalogue"
     captures.prendre(page, "02-catalogue")
 
 
@@ -77,8 +77,8 @@ def test_la_fiche_d_une_collection_se_lit(session_testeur, collection_publiee, c
     onglets = page.get_by_role("tab")
     assert onglets.count() >= 3, "la fiche n'a pas d'onglets"
     libelles = [onglets.nth(i).inner_text().strip() for i in range(onglets.count())]
-    assert any("Consulter" in l for l in libelles), libelles
-    assert any("Documents" in l for l in libelles), libelles
+    assert any("Consulter" in libelle for libelle in libelles), libelles
+    assert any("Documents" in libelle for libelle in libelles), libelles
     captures.prendre(page, "03-fiche-collection")
 
     page.get_by_role("tab", name=re.compile("Documents")).click()

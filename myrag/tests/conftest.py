@@ -27,19 +27,31 @@ os.environ["MYRAG_GROUPE_EXIGE"] = ""
 os.environ["MYCOLLECTIONS_REPRISE_AU_DEMARRAGE"] = "false"
 os.environ["MYRAG_SUPERADMIN_GROUPES"] = "/g/administration-de-test"
 
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from unittest.mock import AsyncMock, patch  # noqa: E402
 
 from app.auth import CurrentUser, current_user  # noqa: E402
 
 #: Toutes les tables liées à une collection par `collection_name` — les 7 historiques
 #: et celles du collectif. Une table oubliée ici laisse des orphelins entre modules.
 TABLES_PAR_COLLECTION = (
-    "source_files", "eval_runs", "eval_datasets", "feedback", "ingest_jobs",
-    "publication_history", "publications",
-    "proposition", "signalement", "grille_controle", "evenement", "usage_question",
-    "persona", "generation", "paire_qa",
+    "source_files",
+    "eval_runs",
+    "eval_datasets",
+    "feedback",
+    "ingest_jobs",
+    "publication_history",
+    "publications",
+    "proposition",
+    "signalement",
+    "grille_controle",
+    "evenement",
+    "usage_question",
+    "persona",
+    "generation",
+    "paire_qa",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])
@@ -54,6 +66,7 @@ def personne(n: int | str, *groupes: str) -> CurrentUser:
 @pytest.fixture(scope="session", autouse=True)
 def _base_initialisee():
     from app.main import app
+
     with TestClient(app):
         pass
 
@@ -61,6 +74,7 @@ def _base_initialisee():
 @pytest.fixture
 def client():
     from app.main import app
+
     app.dependency_overrides.clear()
     with TestClient(app) as c:
         yield c
@@ -74,6 +88,7 @@ def en_tant_que(client):
     def _f(user: CurrentUser):
         app.dependency_overrides[current_user] = lambda: user
         return user
+
     return _f
 
 
@@ -86,6 +101,7 @@ def capacites(monkeypatch):
         valeur = {"demandes": True, "signalements": True, "seuil_chantier": 5, **drapeaux}
         monkeypatch.setattr(module, "lire", lambda: dict(valeur))
         return valeur
+
     _poser()
     return _poser
 
@@ -103,21 +119,30 @@ def purger():
             con.commit()
         finally:
             con.close()
+
     return _f
 
 
 @pytest.fixture
 def creer_collection(client, en_tant_que):
     """Crée une collection lisible du groupe des testeurs, en tant que `createur`."""
+
     def _f(name: str, createur: CurrentUser | None = None, **champs):
         en_tant_que(createur or personne("createur"))
         with patch("app.routers.collections.OpenRAGClient") as cls:
             cls.return_value.create_partition = AsyncMock(return_value={})
-            r = client.post("/api/collections", json={
-                "name": name, "scope": "group", "scope_groups": [GROUPE_TESTEURS], **champs,
-            })
+            r = client.post(
+                "/api/collections",
+                json={
+                    "name": name,
+                    "scope": "group",
+                    "scope_groups": [GROUPE_TESTEURS],
+                    **champs,
+                },
+            )
         assert r.status_code == 200, r.text
         return r.json()["collection"]
+
     return _f
 
 
@@ -128,6 +153,7 @@ def nom(request, purger):
     # pour se repérer, une empreinte pour ne pas se marcher dessus entre tests voisins.
     import hashlib
     import re
+
     brut = re.sub(r"[^a-z0-9]+", "-", request.node.name.lower()).strip("-")
     n = f"t-{brut[:30].strip('-')}-{hashlib.sha1(request.node.name.encode()).hexdigest()[:6]}"
     purger(n)

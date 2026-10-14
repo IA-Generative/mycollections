@@ -35,8 +35,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--dossier", type=Path, default=moteur.PROMPTS_DIR)
     p.add_argument("--langue", default=moteur.LANGUE)
-    p.add_argument("--garder-instructions", action="store_true",
-                   help="ne traduire que les exemples (les instructions restent en anglais)")
+    p.add_argument("--garder-instructions", action="store_true", help="ne traduire que les exemples (les instructions restent en anglais)")
     a = p.parse_args()
     exiger_prete()
     a.dossier.mkdir(parents=True, exist_ok=True)

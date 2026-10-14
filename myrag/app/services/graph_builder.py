@@ -1,7 +1,6 @@
 """Graph builder — construct article reference graphs from chunks."""
 
 import json
-import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -109,9 +108,7 @@ def graph_from_import(data: dict) -> nx.DiGraph:
     if not isinstance(edges, list):
         raise GraphImportError("« edges » doit être une liste")
     if len(nodes) > MAX_IMPORT_NODES or len(edges) > MAX_IMPORT_EDGES:
-        raise GraphImportError(
-            f"graphe trop grand : {MAX_IMPORT_NODES} nœuds et {MAX_IMPORT_EDGES} arêtes au plus"
-        )
+        raise GraphImportError(f"graphe trop grand : {MAX_IMPORT_NODES} nœuds et {MAX_IMPORT_EDGES} arêtes au plus")
 
     graph = nx.DiGraph()
     for node in nodes:
@@ -171,7 +168,7 @@ def parties_du_corpus(groupes) -> list[dict]:
     `.label` sur chacune, et affichait un menu d'options VIDES."""
     ids = sorted({g for g in groupes if g}, key=_rang)
     if len(ids) < 2:
-        return [{"id": "", "label": "Tout le corpus"}]   # une seule partie : rien à choisir
+        return [{"id": "", "label": "Tout le corpus"}]  # une seule partie : rien à choisir
     libelle = lambda g: "Hors livres" if g == AUTRES else g.replace("-", " ", 1)  # noqa: E731
     return [{"id": "", "label": "Tout le corpus"}] + [{"id": g, "label": libelle(g)} for g in ids]
 
@@ -181,6 +178,7 @@ class GraphBuilder:
 
     def __init__(self, data_dir: str | None = None):
         from app.config import settings
+
         self.data_dir = data_dir or settings.data_dir
         self._graphs: dict[str, nx.DiGraph] = {}
 
@@ -252,11 +250,13 @@ class GraphBuilder:
         par exemple) et que ``build`` ne saurait pas reconstruire depuis les morceaux.
         """
         graph = graph_from_import(data)
-        graph.graph.update({
-            "origin": "import",
-            "imported_by": imported_by,
-            "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        })
+        graph.graph.update(
+            {
+                "origin": "import",
+                "imported_by": imported_by,
+                "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+        )
         self._graphs[collection] = graph
         self.save(collection)
         return graph
@@ -265,9 +265,7 @@ class GraphBuilder:
         graph = self.get(collection)
         return bool(graph is not None and graph.graph.get("origin") == "import")
 
-    def get_subgraph(
-        self, collection: str, article_ids: list[str], depth: int = 1
-    ) -> nx.DiGraph | None:
+    def get_subgraph(self, collection: str, article_ids: list[str], depth: int = 1) -> nx.DiGraph | None:
         """Get a subgraph centered on given articles, expanding N hops."""
         graph = self.get(collection)
         if not graph:
@@ -305,16 +303,21 @@ class GraphBuilder:
 
         if resumer is None:
             from app.services.openrag_client import OpenRAGClient
+
             client = OpenRAGClient(timeout=60.0)
 
             async def resumer(texte: str) -> str:
                 r = await client.chat(
                     model=f"openrag-{collection}",
                     messages=[
-                        {"role": "system", "content": "Tu es un assistant juridique. Résume l'article suivant en 3 à 5 phrases. Conserve les numéros d'articles cités. Commence par « Cet article… »."},
+                        {
+                            "role": "system",
+                            "content": "Tu es un assistant juridique. Résume l'article suivant en 3 à 5 phrases. Conserve les numéros d'articles cités. Commence par « Cet article… ».",
+                        },
                         {"role": "user", "content": texte[:8000]},
                     ],
-                    temperature=0.1, max_tokens=300,
+                    temperature=0.1,
+                    max_tokens=300,
                 )
                 return r["choices"][0]["message"]["content"]
 
@@ -386,10 +389,9 @@ class GraphBuilder:
         if query:
             # Find nodes matching query
             matching = [
-                n for n, d in graph.nodes(data=True)
-                if query.lower() in n.lower()
-                or query.lower() in d.get("content_preview", "").lower()
-                or query.lower() in d.get("label", "").lower()
+                n
+                for n, d in graph.nodes(data=True)
+                if query.lower() in n.lower() or query.lower() in d.get("content_preview", "").lower() or query.lower() in d.get("label", "").lower()
             ]
             filtre_trouve = bool(matching)
             if matching:
@@ -400,16 +402,13 @@ class GraphBuilder:
         # Limit nodes
         if graph.number_of_nodes() > max_nodes:
             # Keep nodes with highest degree
-            sorted_nodes = sorted(
-                graph.nodes, key=lambda n: graph.degree(n), reverse=True
-            )[:max_nodes]
+            sorted_nodes = sorted(graph.nodes, key=lambda n: graph.degree(n), reverse=True)[:max_nodes]
             graph = graph.subgraph(sorted_nodes).copy()
 
         nodes = []
         for node_id, attrs in graph.nodes(data=True):
             degree = graph.degree(node_id)
             size = max(8, min(32, degree * 4 + 8))
-            livre = attrs.get("livre", "")
 
             # Use AI summary if available, otherwise raw preview
             ai_summary = attrs.get("ai_summary", "")
@@ -425,37 +424,45 @@ class GraphBuilder:
                 if full_length > 500:
                     fragment_text += f"\n\n[... tronque — {full_length} caracteres au total]"
 
-            nodes.append({
-                "id": node_id,
-                "label": attrs.get("label", node_id),
-                "entity_type": attrs.get("entity_type", "article"),
-                "description": description,
-                "degree": degree,
-                "frequency": 1,
-                "size": size,
-                "source_group": _groupe(attrs),
-                "document_paths": [attrs.get("filename", "")],
-                "fragments": [{
-                    "id": f"{node_id}:preview",
-                    "text": fragment_text,
-                    "token_count": 0,
+            nodes.append(
+                {
+                    "id": node_id,
+                    "label": attrs.get("label", node_id),
+                    "entity_type": attrs.get("entity_type", "article"),
+                    "description": description,
+                    "degree": degree,
+                    "frequency": 1,
+                    "size": size,
+                    "source_group": _groupe(attrs),
                     "document_paths": [attrs.get("filename", "")],
-                }] if preview or ai_summary else [],
-            })
+                    "fragments": [
+                        {
+                            "id": f"{node_id}:preview",
+                            "text": fragment_text,
+                            "token_count": 0,
+                            "document_paths": [attrs.get("filename", "")],
+                        }
+                    ]
+                    if preview or ai_summary
+                    else [],
+                }
+            )
 
         edges = []
         for source, target, attrs in graph.edges(data=True):
             weight = attrs.get("weight", 1.0)
             if weight < min_weight:
                 continue
-            edges.append({
-                "source": source,
-                "target": target,
-                "description": attrs.get("description", "cite"),
-                "weight": weight,
-                "document_paths": [],
-                "fragments": [],
-            })
+            edges.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "description": attrs.get("description", "cite"),
+                    "weight": weight,
+                    "document_paths": [],
+                    "fragments": [],
+                }
+            )
 
         return {
             "graph_ready": True,

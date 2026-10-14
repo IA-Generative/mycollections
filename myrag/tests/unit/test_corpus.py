@@ -13,13 +13,24 @@ from app.services import corpus
 from tests.conftest import SUPERADMIN, personne
 
 FICHIERS = [
-    {"file_id": "LEGIARTI1-p10", "title": "CESEDA, art. Annexe 10 (partie 10/12)", "mimetype": "text/markdown",
-     "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI1", "partition": "p"},
+    {
+        "file_id": "LEGIARTI1-p10",
+        "title": "CESEDA, art. Annexe 10 (partie 10/12)",
+        "mimetype": "text/markdown",
+        "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI1",
+        "partition": "p",
+    },
     {"file_id": "LEGIARTI1-p2", "title": "CESEDA, art. Annexe 10 (partie 2/12)", "mimetype": "text/markdown", "partition": "p"},
-    {"file_id": "uuid-1", "filename": "1_dire_ce_qui_manque_001.md", "original_filename": "1-dire-ce-qui-manque--001.md",
-     "file_size": "308.00 B", "source": "/app/data/1789_secret.md", "content_sha256": "c3f2", "partition": "p"},
-    {"file_id": "uuid-2", "original_filename": "Séjour des étudiants.pdf", "mimetype": "application/pdf",
-     "url": "javascript:alert(1)", "partition": "p"},
+    {
+        "file_id": "uuid-1",
+        "filename": "1_dire_ce_qui_manque_001.md",
+        "original_filename": "1-dire-ce-qui-manque--001.md",
+        "file_size": "308.00 B",
+        "source": "/app/data/1789_secret.md",
+        "content_sha256": "c3f2",
+        "partition": "p",
+    },
+    {"file_id": "uuid-2", "original_filename": "Séjour des étudiants.pdf", "mimetype": "application/pdf", "url": "javascript:alert(1)", "partition": "p"},
     {"title": "sans identifiant"},
     "pas un dictionnaire",
 ]
@@ -34,10 +45,10 @@ def _cache_vide():
 
 # ─── La logique pure ────────────────────────────────────────────────────────────
 
+
 def test_un_fichier_ne_montre_rien_d_interne():
     d = corpus.resumer_fichier(FICHIERS[2])
-    assert d == {"file_id": "uuid-1", "titre": "1-dire-ce-qui-manque--001.md", "fichier": "1-dire-ce-qui-manque--001.md",
-                 "type": "", "taille": "308.00 B", "url_source": ""}
+    assert d == {"file_id": "uuid-1", "titre": "1-dire-ce-qui-manque--001.md", "fichier": "1-dire-ce-qui-manque--001.md", "type": "", "taille": "308.00 B", "url_source": ""}
     assert "source" not in d and "content_sha256" not in d
 
 
@@ -67,14 +78,13 @@ def test_la_pagination_borne_la_page_et_la_taille():
     assert p1["documents"][1]["titre"] == "Doc 2"  # tri naturel : 2 avant 10
     p3 = corpus.chercher_et_paginer(beaucoup, page=3, par_page=50)
     assert len(p3["documents"]) == 20
-    assert corpus.chercher_et_paginer(beaucoup, page=99, par_page=50)["page"] == 3       # au-delà : la dernière
+    assert corpus.chercher_et_paginer(beaucoup, page=99, par_page=50)["page"] == 3  # au-delà : la dernière
     assert corpus.chercher_et_paginer(beaucoup, par_page=10_000)["par_page"] == corpus.PAR_PAGE_MAX
     assert corpus.chercher_et_paginer([], page=5) == {"total": 0, "page": 1, "pages": 1, "par_page": 50, "documents": []}
 
 
 def test_les_morceaux_se_lisent_dans_les_liens_dans_l_ordre_sans_doublon():
-    detail = {"documents": [{"link": "https://x/extract/30"}, {"link": "https://x/extract/10?a=1"},
-                            {"link": "https://x/extract/30"}, {"link": "ailleurs"}, "n'importe quoi"]}
+    detail = {"documents": [{"link": "https://x/extract/30"}, {"link": "https://x/extract/10?a=1"}, {"link": "https://x/extract/30"}, {"link": "ailleurs"}, "n'importe quoi"]}
     assert corpus.identifiants_des_morceaux(detail) == ["30", "10"]
     assert corpus.identifiants_des_morceaux({}) == [] and corpus.identifiants_des_morceaux(None) == []
 
@@ -112,6 +122,7 @@ def test_la_liste_est_servie_a_qui_peut_lire_la_collection(client, en_tant_que, 
 def test_qui_ne_peut_pas_lire_la_collection_ne_voit_ni_la_liste_ni_un_document(client, en_tant_que, creer_collection, nom):
     creer_collection(nom, scope="group", scope_groups=["/g/un-autre-groupe"])
     from app.auth import CurrentUser
+
     en_tant_que(CurrentUser(sub="etranger", username="e", groups=["/g/rien-a-voir"]))
     p, c = _openrag(detail={"metadata": {"partition": nom}, "documents": []})
     try:
@@ -135,9 +146,10 @@ def test_une_collection_inconnue_rend_404(client, en_tant_que):
 def test_un_document_rend_son_texte_sans_balises_ni_vecteur(client, en_tant_que, creer_collection, nom):
     creer_collection(nom)
     en_tant_que(personne("lecteur"))
-    detail = {"metadata": {"partition": nom, "file_id": "uuid-1", "original_filename": "guide.md", "vector": [0.1, 0.2],
-                           "source": "/app/data/interne.md"},
-              "documents": [{"link": "https://o/extract/1"}, {"link": "https://o/extract/2"}, {"link": "https://o/extract/3"}]}
+    detail = {
+        "metadata": {"partition": nom, "file_id": "uuid-1", "original_filename": "guide.md", "vector": [0.1, 0.2], "source": "/app/data/interne.md"},
+        "documents": [{"link": "https://o/extract/1"}, {"link": "https://o/extract/2"}, {"link": "https://o/extract/3"}],
+    }
     morceaux = {"1": {"page_content": RELU.format(n=1), "metadata": {"page": 1}}, "2": {"page_content": RELU.format(n=2)}, "3": None}
     p, _ = _openrag(detail=detail, morceaux=morceaux)
     try:

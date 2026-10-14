@@ -26,7 +26,7 @@ from ragas.dataset_schema import SingleTurnSample
 from ragas.run_config import RunConfig
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
-from ragas.testset.persona import Persona, PersonaList
+from ragas.testset.persona import Persona
 from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
 from ragas.testset.transforms import apply_transforms
 from ragas.testset.transforms.extractors.llm_based import KeyphrasesExtractor, NERExtractor
@@ -40,8 +40,10 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 LANGUE = "french"
 
 #: Consigne ajoutée à chaque génération de paire, quels que soient les prompts chargés.
-CONSIGNE = ("Rédigez la question et la réponse en français. La question est celle que poserait la "
-            "personne décrite, dans sa situation ; la réponse s'appuie uniquement sur le passage fourni.")
+CONSIGNE = (
+    "Rédigez la question et la réponse en français. La question est celle que poserait la "
+    "personne décrite, dans sa situation ; la réponse s'appuie uniquement sur le passage fourni."
+)
 
 #: Ce qu'on sait demander : la clé de la distribution → (propriété des nœuds, extracteur, nom du synthétiseur).
 SYNTHESES = {
@@ -87,10 +89,9 @@ class SynthetiseurSimple(SingleHopSpecificQuerySynthesizer):
 
 def construire_graphe(documents) -> KnowledgeGraph:
     """Le même graphe que `generate_with_chunks` : un nœud CHUNK par passage, métadonnées comprises."""
-    return KnowledgeGraph(nodes=[
-        Node(type=NodeType.CHUNK, properties={"page_content": d.page_content, "document_metadata": d.metadata})
-        for d in documents if (d.page_content or "").strip()
-    ])
+    return KnowledgeGraph(
+        nodes=[Node(type=NodeType.CHUNK, properties={"page_content": d.page_content, "document_metadata": d.metadata}) for d in documents if (d.page_content or "").strip()]
+    )
 
 
 def normaliser_distribution(distribution: dict[str, float] | None) -> dict[str, float]:
@@ -137,17 +138,32 @@ def paires_depuis_resultats(resultats: list, morceaux: list[Morceau], produits: 
         if not trouves:
             trouves = [par_texte[t] for t in (r.reference_contexts or []) if t in par_texte]
         contextes = [{**m.identifiants(), "texte": m.texte} for m in trouves]
-        paires.append(PaireGeneree(
-            question=r.user_input.strip(), reponse=r.reference.strip(), contextes=contextes,
-            persona_nom=r.persona_name or "", synthetiseur=produits.get(id(r), ""),
-            style=r.query_style or "", longueur=r.query_length or "",
-        ))
+        paires.append(
+            PaireGeneree(
+                question=r.user_input.strip(),
+                reponse=r.reference.strip(),
+                contextes=contextes,
+                persona_nom=r.persona_name or "",
+                synthetiseur=produits.get(id(r), ""),
+                style=r.query_style or "",
+                longueur=r.query_length or "",
+            )
+        )
     return paires, echecs
 
 
-def generer(morceaux: list[Morceau], personas: list[PersonaDemande], taille: int, llm, embeddings, *,
-            distribution: dict[str, float] | None = None, run_config: RunConfig | None = None,
-            progression: Callable[[str], None] | None = None, dossier_prompts: Path = PROMPTS_DIR) -> ResultatGeneration:
+def generer(
+    morceaux: list[Morceau],
+    personas: list[PersonaDemande],
+    taille: int,
+    llm,
+    embeddings,
+    *,
+    distribution: dict[str, float] | None = None,
+    run_config: RunConfig | None = None,
+    progression: Callable[[str], None] | None = None,
+    dossier_prompts: Path = PROMPTS_DIR,
+) -> ResultatGeneration:
     debut = time.monotonic()
     phase = progression or (lambda _p: None)
     resultat = ResultatGeneration(etat="erreur")
@@ -179,12 +195,18 @@ def generer(morceaux: list[Morceau], personas: list[PersonaDemande], taille: int
 
         phase("generation")
         generateur = TestsetGenerator(
-            llm=llm, embedding_model=embeddings, knowledge_graph=kg,
+            llm=llm,
+            embedding_model=embeddings,
+            knowledge_graph=kg,
             persona_list=[Persona(name=p.nom, role_description=p.description_role) for p in personas],
         )
         executeur = generateur.generate(
-            testset_size=taille, query_distribution=dist, num_personas=len(personas),
-            run_config=run_config, raise_exceptions=False, return_executor=True,
+            testset_size=taille,
+            query_distribution=dist,
+            num_personas=len(personas),
+            run_config=run_config,
+            raise_exceptions=False,
+            return_executor=True,
         )
         bruts = executeur.results()
         produits = {k: v for s, _ in dist for k, v in s.produits.items()}
@@ -196,14 +218,16 @@ def generer(morceaux: list[Morceau], personas: list[PersonaDemande], taille: int
         if "float" in str(e) and "iterable" in str(e):
             c = getattr(getattr(llm, "compteurs", None), "instantane", dict)()
             if c.get("refus_debit"):
-                resultat.erreur = ("La passerelle MirAI a refusé des appels faute de quota (429) pendant la préparation "
-                                   "des questions. Réessayez plus tard, ou baissez MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE.")
+                resultat.erreur = (
+                    "La passerelle MirAI a refusé des appels faute de quota (429) pendant la préparation "
+                    "des questions. Réessayez plus tard, ou baissez MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE."
+                )
             elif c.get("erreurs_llm"):
-                resultat.erreur = (f"Le modèle de langage a échoué {c['erreurs_llm']} fois pendant la préparation des "
-                                   "questions : aucun scénario n'a pu être préparé. Réessayez dans un instant.")
+                resultat.erreur = (
+                    f"Le modèle de langage a échoué {c['erreurs_llm']} fois pendant la préparation des questions : aucun scénario n'a pu être préparé. Réessayez dans un instant."
+                )
             else:
-                resultat.erreur = ("Aucun scénario n'a pu être préparé : le modèle n'a pas su associer les personas "
-                                   "aux thèmes des passages. Vérifiez les descriptions des personas.")
+                resultat.erreur = "Aucun scénario n'a pu être préparé : le modèle n'a pas su associer les personas aux thèmes des passages. Vérifiez les descriptions des personas."
         else:
             resultat.erreur = message_sur(e)
         logger.warning("génération en échec : %s", type(e).__name__)

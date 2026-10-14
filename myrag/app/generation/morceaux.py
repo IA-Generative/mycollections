@@ -49,8 +49,7 @@ def echantillonner_fichiers(fichiers: list[dict], n: int, graine: str) -> list[d
     """`n` fichiers répartis sur toute la collection, dans l'ordre naturel des titres, à pas
     régulier depuis un départ tiré de la graine (même graine ⇒ même échantillon). Tous si moins."""
     valides = [f for f in fichiers if isinstance(f, dict) and f.get("file_id")]
-    valides.sort(key=lambda f: (corpus._cle_naturelle(str(f.get("title") or f.get("original_filename")
-                                                          or f.get("filename") or "")), str(f["file_id"])))
+    valides.sort(key=lambda f: (corpus._cle_naturelle(str(f.get("title") or f.get("original_filename") or f.get("filename") or "")), str(f["file_id"])))
     if len(valides) <= n:
         return valides
     pas = len(valides) / n
@@ -60,8 +59,7 @@ def echantillonner_fichiers(fichiers: list[dict], n: int, graine: str) -> list[d
 
 def _texte_brut(brut: dict) -> str:
     meta = brut.get("metadata") if isinstance(brut.get("metadata"), dict) else {}
-    return str(brut.get("content") or brut.get("page_content") or brut.get("text")
-               or meta.get("content") or "")
+    return str(brut.get("content") or brut.get("page_content") or brut.get("text") or meta.get("content") or "")
 
 
 def _page(brut: dict, meta: dict) -> str | None:
@@ -107,7 +105,7 @@ async def _morceaux_du_fichier(client, partition: str, file_id: str) -> list[Mor
         return [m for m in (morceau_depuis_chunk(c, partition) for c in brut) if m]
     detail = await client.file_detail(partition, file_id)
     morceaux = []
-    for cid in corpus.identifiants_des_morceaux(detail or {})[:corpus.MORCEAUX_MAX]:
+    for cid in corpus.identifiants_des_morceaux(detail or {})[: corpus.MORCEAUX_MAX]:
         m = morceau_depuis_extrait(cid, file_id, partition, await client.extract(cid) or {})
         if m:
             morceaux.append(m)

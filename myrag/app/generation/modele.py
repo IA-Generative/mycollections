@@ -24,11 +24,13 @@ from ragas.llms.base import LangchainLLMWrapper
 from app.config import settings
 from app.generation.resultats import MARQUE_REPARATION, Compteurs, Debit, _usage  # noqa: F401 — réexportés
 
+
 class LLMCompte(LangchainLLMWrapper):
     """L'enveloppe ragas d'un modèle LangChain, qui compte chaque appel et appelle en synchrone."""
 
     def __init__(self, langchain_llm, compteurs: Compteurs, debit: Debit | None = None, **kw):
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             super().__init__(langchain_llm, **kw)
@@ -76,8 +78,7 @@ class EmbeddingsComptes(LangchainEmbeddingsWrapper):
         return await asyncio.to_thread(self.embed_documents, texts)
 
 
-def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None,
-                  modele: str | None = None, run_config=None, debit: Debit | None = None) -> LLMCompte:
+def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None, modele: str | None = None, run_config=None, debit: Debit | None = None) -> LLMCompte:
     chat = ChatOpenAI(
         base_url=url or settings.generation_llm_url,
         api_key=cle or settings.generation_llm_cle,
@@ -90,8 +91,9 @@ def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | No
     return LLMCompte(chat, compteurs, debit=debit, run_config=run_config)
 
 
-def fabriquer_embeddings(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None,
-                         modele: str | None = None, run_config=None, debit: Debit | None = None) -> EmbeddingsComptes:
+def fabriquer_embeddings(
+    compteurs: Compteurs, *, url: str | None = None, cle: str | None = None, modele: str | None = None, run_config=None, debit: Debit | None = None
+) -> EmbeddingsComptes:
     emb = OpenAIEmbeddings(
         base_url=url or settings.generation_embeddings_url or settings.generation_llm_url,
         api_key=cle or settings.generation_llm_cle,

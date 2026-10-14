@@ -21,8 +21,7 @@ def test_avec_hote_public_les_deux_entetes_sont_poses():
 
 
 def test_le_client_les_transmet():
-    c = DriveClient("http://drive-backend.drive.svc.cluster.local", "j3t0n",
-                    public_host="mesfichiers.numerique-interieur.com")
+    c = DriveClient("http://drive-backend.drive.svc.cluster.local", "j3t0n", public_host="mesfichiers.numerique-interieur.com")
     entetes = c._client.headers
     assert entetes["host"] == "mesfichiers.numerique-interieur.com"
     assert entetes["x-forwarded-proto"] == "https"

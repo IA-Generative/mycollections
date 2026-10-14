@@ -7,14 +7,23 @@ from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
 from app.routers.publication import _fiche_pour
-
+from app.services.feedback_store import (
+    feedback_stats as db_stats,
+)
+from app.services.feedback_store import (
+    get_feedback as db_get,
+)
 from app.services.feedback_store import (
     ingest_feedback as db_ingest,
+)
+from app.services.feedback_store import (
     list_feedback as db_list,
-    get_feedback as db_get,
-    review_feedback as db_review,
+)
+from app.services.feedback_store import (
     promote_feedback as db_promote,
-    feedback_stats as db_stats,
+)
+from app.services.feedback_store import (
+    review_feedback as db_review,
 )
 
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
@@ -76,8 +85,7 @@ async def feedback_stats_endpoint(collection: str, user: CurrentUser = Depends(c
 
 
 @router.patch("/{collection}/{feedback_id}/review")
-async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest,
-                                   user: CurrentUser = Depends(current_user)):
+async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest, user: CurrentUser = Depends(current_user)):
     await _fiche_pour(collection, user, ecrire=True)
     fb = await db_get(feedback_id)
     if not fb or fb.get("collection") != collection:
@@ -89,8 +97,7 @@ async def review_feedback_endpoint(collection: str, feedback_id: int, req: Revie
 
 
 @router.post("/{collection}/{feedback_id}/promote")
-async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest,
-                                    user: CurrentUser = Depends(current_user)):
+async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest, user: CurrentUser = Depends(current_user)):
     await _fiche_pour(collection, user, ecrire=True)
     fb = await db_get(feedback_id)
     if not fb or fb.get("collection") != collection:
@@ -100,6 +107,7 @@ async def promote_feedback_endpoint(collection: str, feedback_id: int, req: Prom
 
     if req.promote_to == "qr" and req.corrected_answer:
         from app.services.qr_cache import QRCache
+
         cache = QRCache()
         cache.add(collection, fb["question"], req.corrected_answer, source="feedback")
 

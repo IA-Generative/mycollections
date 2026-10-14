@@ -6,7 +6,7 @@ import json
 import re
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -62,11 +62,13 @@ class EvalService:
 
     def __init__(self, data_dir: str | None = None):
         from app.config import settings
+
         self.data_dir = data_dir or settings.data_dir
 
     def _collection_dir(self, collection: str) -> Path:
         # `collection` provient d'un paramètre de route : on confine sous data_dir.
         from app.security_utils import ensure_within
+
         base = Path(self.data_dir)
         return ensure_within(base, base / collection)
 
@@ -78,10 +80,9 @@ class EvalService:
 
     # --- Dataset management ---
 
-    def add_question(self, collection: str, question: str, expected_answer: str,
-                     must_cite: list[str] | None = None,
-                     must_not_cite: list[str] | None = None,
-                     tags: list[str] | None = None) -> EvalQuestion:
+    def add_question(
+        self, collection: str, question: str, expected_answer: str, must_cite: list[str] | None = None, must_not_cite: list[str] | None = None, tags: list[str] | None = None
+    ) -> EvalQuestion:
         questions = self.list_questions(collection)
         q = EvalQuestion(
             id=str(uuid.uuid4())[:8],
@@ -108,14 +109,16 @@ class EvalService:
     def import_dataset(self, collection: str, data: list[dict]):
         questions = self.list_questions(collection)
         for item in data:
-            questions.append(EvalQuestion(
-                id=str(uuid.uuid4())[:8],
-                question=item["question"],
-                expected_answer=item.get("expected_answer", ""),
-                must_cite=item.get("must_cite", []),
-                must_not_cite=item.get("must_not_cite", []),
-                tags=item.get("tags", []),
-            ))
+            questions.append(
+                EvalQuestion(
+                    id=str(uuid.uuid4())[:8],
+                    question=item["question"],
+                    expected_answer=item.get("expected_answer", ""),
+                    must_cite=item.get("must_cite", []),
+                    must_not_cite=item.get("must_not_cite", []),
+                    tags=item.get("tags", []),
+                )
+            )
         self._save_questions(collection, questions)
 
     def export_dataset(self, collection: str) -> list[dict]:

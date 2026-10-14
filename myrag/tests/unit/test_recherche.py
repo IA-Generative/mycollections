@@ -43,6 +43,7 @@ def noms(purger):
         n = f"t-rech-{uuid.uuid4().hex[:8]}-{suffixe}"
         crees.append(n)
         return n
+
     yield _f
     for n in crees:
         purger(n)
@@ -57,8 +58,10 @@ def jeu(creer_collection, noms):
     """Alice possède `mienne` (privée) ; Bob possède `partagee` (groupe des testeurs),
     `ouverte` (publique) et `secrete` (privée)."""
     c = {
-        "mienne": noms("mienne"), "partagee": noms("partagee"),
-        "ouverte": noms("ouverte"), "secrete": noms("secrete"),
+        "mienne": noms("mienne"),
+        "partagee": noms("partagee"),
+        "ouverte": noms("ouverte"),
+        "secrete": noms("secrete"),
     }
     creer_collection(c["mienne"], ALICE, scope="private", scope_groups=[], titre="Mes notes")
     creer_collection(c["partagee"], BOB, titre="Méthodes de l'équipe")
@@ -71,8 +74,7 @@ def _doc(partition: str, file_id: str, chunk_id: int, contenu: str, **meta) -> d
     return {
         "link": f"http://openrag:8080/extract/{chunk_id}",
         "content": contenu,
-        "metadata": {"partition": partition, "file_id": file_id, "_id": chunk_id,
-                     "filename": f"{file_id}.md", "page": None, **meta},
+        "metadata": {"partition": partition, "file_id": file_id, "_id": chunk_id, "filename": f"{file_id}.md", "page": None, **meta},
     }
 
 
@@ -89,6 +91,7 @@ def _ids(r) -> set[str]:
 
 
 # ─── /scopes ─────────────────────────────────────────────────────────────────────────────────
+
 
 def test_perimetres_droits_et_groupes(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
@@ -128,6 +131,7 @@ def test_perimetres_superadmin_lit_tout_avec_le_droit_de_la_regle(client, en_tan
 def test_perimetres_sans_collection_archivee(client, en_tant_que, jeu):
     import os
     import sqlite3
+
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     con.execute("UPDATE collections SET archived_at = CURRENT_TIMESTAMP WHERE name = ?", (jeu["partagee"],))
     con.commit()
@@ -137,6 +141,7 @@ def test_perimetres_sans_collection_archivee(client, en_tant_que, jeu):
 
 
 # ─── /search : périmètre et droits ───────────────────────────────────────────────────────────
+
 
 def test_recherche_sans_scope_interroge_toutes_les_lisibles_en_un_appel(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
@@ -150,8 +155,7 @@ def test_recherche_sans_scope_interroge_toutes_les_lisibles_en_un_appel(client, 
 
 def test_recherche_ignore_le_perimetre_illisible_ou_inconnu(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    r = client.get("/api/v1/search", params={
-        "q": "budget", "scope": f"{jeu['secrete']},inconnue-xyz,{jeu['partagee']},{jeu['mienne']}"})
+    r = client.get("/api/v1/search", params={"q": "budget", "scope": f"{jeu['secrete']},inconnue-xyz,{jeu['partagee']},{jeu['mienne']}"})
     assert r.status_code == 200
     assert moteur.call_args.args[0] == [jeu["partagee"], jeu["mienne"]]
 
@@ -161,17 +165,18 @@ def test_recherche_perimetre_tout_illisible_ne_consulte_pas_le_moteur(client, en
     en_tant_que(ALICE)
     r = client.get("/api/v1/search", params={"q": "budget", "scope": f"{jeu['secrete']},inconnue"})
     assert r.status_code == 200
-    assert r.json() == {"source": "mycollections", "query": "budget", "total": 0, "truncated": False,
-                        "total_is_lower_bound": False, "results": []}
+    assert r.json() == {"source": "mycollections", "query": "budget", "total": 0, "truncated": False, "total_is_lower_bound": False, "results": []}
     moteur.assert_not_called()
 
 
 def test_recherche_ecarte_un_morceau_d_une_partition_non_demandee(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": [
-        _doc(jeu["secrete"], "f-secret", 9, "le budget secret"),
-        _doc(jeu["mienne"], "f-1", 1, "le budget de l'année"),
-    ]}
+    moteur.return_value = {
+        "documents": [
+            _doc(jeu["secrete"], "f-secret", 9, "le budget secret"),
+            _doc(jeu["mienne"], "f-1", 1, "le budget de l'année"),
+        ]
+    }
     res = client.get("/api/v1/search", params={"q": "budget", "scope": jeu["mienne"]}).json()["results"]
     assert [x["context"]["collection"]["id"] for x in res] == [jeu["mienne"]]
     assert "secret" not in str(res)
@@ -179,13 +184,15 @@ def test_recherche_ecarte_un_morceau_d_une_partition_non_demandee(client, en_tan
 
 # ─── /search : forme des résultats ───────────────────────────────────────────────────────────
 
+
 def test_resultats_groupes_par_document_trois_passages_au_plus(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": [
-        *[_doc(jeu["mienne"], "f-1", 10 + i, f"passage {i} sur le budget", relevance_score=0.9 - i / 10)
-          for i in range(5)],
-        _doc(jeu["partagee"], "f-2", 20, "un autre budget", page=4),
-    ]}
+    moteur.return_value = {
+        "documents": [
+            *[_doc(jeu["mienne"], "f-1", 10 + i, f"passage {i} sur le budget", relevance_score=0.9 - i / 10) for i in range(5)],
+            _doc(jeu["partagee"], "f-2", 20, "un autre budget", page=4),
+        ]
+    }
     corps = client.get("/api/v1/search", params={"q": "budget"}).json()
     assert corps["source"] == "mycollections" and corps["query"] == "budget"
     assert corps["total"] == 2 and corps["truncated"] is False
@@ -202,6 +209,7 @@ def test_resultats_groupes_par_document_trois_passages_au_plus(client, en_tant_q
 
 def test_liens_signes_absolus(client, en_tant_que, jeu, moteur):
     from app.services import liens
+
     en_tant_que(ALICE)
     moteur.return_value = {"documents": [_doc(jeu["mienne"], "f-1", 42, "le budget")]}
     res = client.get("/api/v1/search", params={"q": "budget"}).json()["results"][0]
@@ -213,8 +221,7 @@ def test_liens_signes_absolus(client, en_tant_que, jeu, moteur):
 
 def test_extrait_en_texte_brut(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    contenu = ("[CONTEXT] résumé * filename: x.md [CHUNK_START] <script>alert(1)</script>"
-               "<b>Le budget</b> &lt;img src=x onerror=alert(1)&gt; est **voté**. [CHUNK_END]")
+    contenu = "[CONTEXT] résumé * filename: x.md [CHUNK_START] <script>alert(1)</script><b>Le budget</b> &lt;img src=x onerror=alert(1)&gt; est **voté**. [CHUNK_END]"
     moteur.return_value = {"documents": [_doc(jeu["mienne"], "f-1", 1, contenu)]}
     hit = client.get("/api/v1/search", params={"q": "budget"}).json()["results"][0]["hits"][0]
     assert "<" not in hit["snippet"] and ">" not in hit["snippet"]
@@ -242,7 +249,8 @@ def test_surlignages_en_unites_utf16(client, en_tant_que, jeu, moteur):
     utf16 = snippet.encode("utf-16-le")
 
     def tranche(a, b):
-        return utf16[2 * a:2 * b].decode("utf-16-le")
+        return utf16[2 * a : 2 * b].decode("utf-16-le")
+
     assert [tranche(a, b) for a, b in hit["highlights"]] == ["Budget", "révisé", "budget"]
     assert hit["highlights"][0] == [6, 12]
 
@@ -256,12 +264,14 @@ def test_limite_et_tronque(client, en_tant_que, jeu, moteur):
 
 def test_bornes_de_date_incluses(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": [
-        _doc(jeu["mienne"], "f-avant", 1, "budget", created_at="2026-08-31T23:00:00+00:00"),
-        _doc(jeu["mienne"], "f-debut", 2, "budget", created_at="2026-09-01T08:00:00+02:00"),
-        _doc(jeu["mienne"], "f-fin", 3, "budget", created_at="2026-09-30T22:00:00+02:00"),
-        _doc(jeu["mienne"], "f-sans", 4, "budget"),
-    ]}
+    moteur.return_value = {
+        "documents": [
+            _doc(jeu["mienne"], "f-avant", 1, "budget", created_at="2026-08-31T23:00:00+00:00"),
+            _doc(jeu["mienne"], "f-debut", 2, "budget", created_at="2026-09-01T08:00:00+02:00"),
+            _doc(jeu["mienne"], "f-fin", 3, "budget", created_at="2026-09-30T22:00:00+02:00"),
+            _doc(jeu["mienne"], "f-sans", 4, "budget"),
+        ]
+    }
     res = client.get("/api/v1/search", params={"q": "budget", "from": "2026-09-01", "to": "2026-09-30"}).json()
     assert [x["title"] for x in res["results"]] == ["f-debut", "f-fin"]
     assert res["results"][0]["date"] == "2026-09-01T08:00:00+02:00"
@@ -278,11 +288,21 @@ def test_aucun_appel_au_modele_de_langage(client, en_tant_que, jeu, moteur):
 
 # ─── Erreurs ─────────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("params", [
-    {}, {"q": ""}, {"q": "   "}, {"q": "x" * 1001},
-    {"q": "budget", "limit": "0"}, {"q": "budget", "limit": "51"}, {"q": "budget", "limit": "abc"},
-    {"q": "budget", "from": "hier"}, {"q": "budget", "to": "2026-13-45"},
-])
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        {"q": ""},
+        {"q": "   "},
+        {"q": "x" * 1001},
+        {"q": "budget", "limit": "0"},
+        {"q": "budget", "limit": "51"},
+        {"q": "budget", "limit": "abc"},
+        {"q": "budget", "from": "hier"},
+        {"q": "budget", "to": "2026-13-45"},
+    ],
+)
 def test_requete_invalide(client, en_tant_que, jeu, moteur, params):
     en_tant_que(ALICE)
     r = client.get("/api/v1/search", params=params)
@@ -317,6 +337,7 @@ def test_refus_du_moteur_repli_partition_par_partition(client, en_tant_que, jeu,
         if len(partitions) > 1 or partitions == [jeu["partagee"]]:
             raise refus
         return {"documents": [_doc(partitions[0], "f-1", 1, "budget")]}
+
     moteur.side_effect = faux
     r = client.get("/api/v1/search", params={"q": "budget", "scope": f"{jeu['mienne']},{jeu['partagee']}"})
     assert r.status_code == 200
@@ -344,6 +365,7 @@ def jetons(client, jeu, monkeypatch):
     """Authentification active (après la création du jeu, qui se fait sans) ; les jetons sont
     signés par une clé de test."""
     from app.main import app as application
+
     application.dependency_overrides.clear()
     monkeypatch.setattr(app.config.settings, "auth_enabled", True)
     monkeypatch.setattr(app.config.settings, "myrag_groupe_exige", GROUPE_TESTEURS)
@@ -354,13 +376,14 @@ def jetons(client, jeu, monkeypatch):
     class _Jwks:
         def get_signing_key_from_jwt(self, _jeton):
             return _Cle()
+
     monkeypatch.setattr(app.auth, "_get_jwks_client", lambda: _Jwks())
 
     def _jeton(cle=_CLE, **claims):
         maintenant = int(time.time())
-        corps = {"iss": app.auth._issuer(), "iat": maintenant, "exp": maintenant + 300,
-                 "sub": ALICE.sub, "groups": [GROUPE_TESTEURS], **claims}
+        corps = {"iss": app.auth._issuer(), "iat": maintenant, "exp": maintenant + 300, "sub": ALICE.sub, "groups": [GROUPE_TESTEURS], **claims}
         return {"Authorization": "Bearer " + jwt.encode(corps, cle, algorithm="RS256")}
+
     return _jeton
 
 
@@ -417,18 +440,16 @@ def test_jeton_du_front_toujours_accepte(client, jetons, jeu):
 
 
 def test_groupe_exige_403_forbidden(client, jetons, jeu):
-    r = client.get("/api/v1/search/scopes",
-                   headers=jetons(azp="mysearch", aud="mycollections-front", groups=["/g/autre"]))
+    r = client.get("/api/v1/search/scopes", headers=jetons(azp="mysearch", aud="mycollections-front", groups=["/g/autre"]))
     assert r.status_code == 403
     assert r.json()["error"]["code"] == "forbidden"
 
 
 # ─── CORS et no-store ────────────────────────────────────────────────────────────────────────
 
+
 def test_preflight_de_mon_portail(client):
-    r = client.options("/api/v1/search", headers={
-        "Origin": PORTAIL, "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "authorization"})
+    r = client.options("/api/v1/search", headers={"Origin": PORTAIL, "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"})
     assert r.status_code == 204
     assert r.headers["access-control-allow-origin"] == PORTAIL
     assert r.headers["access-control-allow-headers"] == "Authorization"
@@ -437,8 +458,7 @@ def test_preflight_de_mon_portail(client):
 
 
 def test_preflight_origine_inconnue_refuse(client):
-    r = client.options("/api/v1/search/scopes", headers={
-        "Origin": "https://ailleurs.fake-domain.name", "Access-Control-Request-Method": "GET"})
+    r = client.options("/api/v1/search/scopes", headers={"Origin": "https://ailleurs.fake-domain.name", "Access-Control-Request-Method": "GET"})
     assert r.status_code == 403
     assert "access-control-allow-origin" not in r.headers
 
@@ -460,9 +480,11 @@ def test_cors_global_inchange_hors_du_contrat(client, en_tant_que):
 
 # ─── Client OpenRAG : plusieurs partitions ───────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_client_openrag_plusieurs_partitions():
     from app.services.openrag_client import OpenRAGClient
+
     c = OpenRAGClient(base_url="http://openrag", admin_token="x")
     with patch.object(c, "_get", new_callable=AsyncMock) as get:
         get.return_value = {"documents": []}
@@ -477,6 +499,7 @@ async def test_client_openrag_plusieurs_partitions():
 
 # ─── Identité obligatoire ────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("chemin", ["/api/v1/search/scopes", "/api/v1/search?q=budget"])
 def test_sans_sub_401(client, en_tant_que, jeu, moteur, chemin):
     """Sans `sub`, pas de personne : ni droit « owner », ni compteur partagé entre jetons."""
@@ -489,6 +512,7 @@ def test_sans_sub_401(client, en_tant_que, jeu, moteur, chemin):
 def test_jeton_sans_sub_ni_userinfo_401(client, jetons, monkeypatch):
     async def sans_identite(_jeton):
         return None
+
     monkeypatch.setattr(app.auth, "_sub_depuis_userinfo", sans_identite)
     r = client.get("/api/v1/search/scopes", headers=jetons(azp="mysearch", aud="mycollections-front", sub=""))
     assert r.status_code == 401 and r.json()["error"]["code"] == "invalid_token"
@@ -496,19 +520,24 @@ def test_jeton_sans_sub_ni_userinfo_401(client, jetons, monkeypatch):
 
 # ─── Journal d'accès : jamais la question ────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("chemin", [
-    "/api/v1/search?q=budget%20confidentiel&limit=5",
-    "/api/v1/search/scopes?q=budget",
-    "/mycollections/api/v1/search?scope=a&q=budget",
-])
+
+@pytest.mark.parametrize(
+    "chemin",
+    [
+        "/api/v1/search?q=budget%20confidentiel&limit=5",
+        "/api/v1/search/scopes?q=budget",
+        "/mycollections/api/v1/search?scope=a&q=budget",
+    ],
+)
 def test_journal_d_acces_sans_la_question(caplog, chemin):
     """uvicorn journalise la ligne de requête entière : le filtre de `uvicorn.access` la garde,
     sans sa chaîne de requête."""
     import logging
+
     import app.main  # noqa: F401 — installe le filtre
+
     with caplog.at_level(logging.INFO, logger="uvicorn.access"):
-        logging.getLogger("uvicorn.access").info(
-            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", chemin, "1.1", 200)
+        logging.getLogger("uvicorn.access").info('%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", chemin, "1.1", 200)
     assert len(caplog.records) == 1
     record = caplog.records[0]
     assert "q=" not in caplog.text and "budget" not in caplog.text
@@ -518,25 +547,27 @@ def test_journal_d_acces_sans_la_question(caplog, chemin):
 
 def test_journal_d_acces_forme_inattendue_reecrite(caplog):
     import logging
+
     import app.main  # noqa: F401
+
     with caplog.at_level(logging.INFO, logger="uvicorn.access"):
-        logging.getLogger("uvicorn.access").info('GET %s', "/api/v1/search?q=budget")
+        logging.getLogger("uvicorn.access").info("GET %s", "/api/v1/search?q=budget")
     assert "q=" not in caplog.text and "/api/v1/search" in caplog.text
 
 
 def test_journal_d_acces_autres_routes_inchangees(caplog):
     import logging
+
     import app.main  # noqa: F401
+
     with caplog.at_level(logging.INFO, logger="uvicorn.access"):
-        logging.getLogger("uvicorn.access").info(
-            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/api/collections?include_archived=true", "1.1", 200)
-        logging.getLogger("uvicorn.access").info(
-            '%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/health", "1.1", 200)
-    assert [r.getMessage() for r in caplog.records] == [
-        '10.0.0.1:5000 - "GET /api/collections?include_archived=true HTTP/1.1" 200']
+        logging.getLogger("uvicorn.access").info('%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/api/collections?include_archived=true", "1.1", 200)
+        logging.getLogger("uvicorn.access").info('%s - "%s %s HTTP/%s" %d', "10.0.0.1:5000", "GET", "/health", "1.1", 200)
+    assert [r.getMessage() for r in caplog.records] == ['10.0.0.1:5000 - "GET /api/collections?include_archived=true HTTP/1.1" 200']
 
 
 # ─── total_is_lower_bound ────────────────────────────────────────────────────────────────────
+
 
 def test_total_exact_quand_le_moteur_rend_moins_que_demande(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)

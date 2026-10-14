@@ -21,9 +21,17 @@ def test_hors_image_la_version_est_dev(client):
 
 def test_dans_l_image_le_journal_est_servi_tel_quel(client, tmp_path, monkeypatch):
     from app import version
+
     fichier = tmp_path / "version.json"
-    journal = {"source": "https://github.com/IA-Generative/mycollections", "version": "0.3.23", "commit": "abc",
-               "build": "", "code_date": "2026-10-04T20:00:00Z", "changes": ["Une phrase."], "history": []}
+    journal = {
+        "source": "https://github.com/IA-Generative/mycollections",
+        "version": "0.3.23",
+        "commit": "abc",
+        "build": "",
+        "code_date": "2026-10-04T20:00:00Z",
+        "changes": ["Une phrase."],
+        "history": [],
+    }
     fichier.write_text(json.dumps(journal), encoding="utf-8")
     monkeypatch.setattr(version, "VERSION_JSON", fichier)
     assert client.get("/__version__").json() == journal
@@ -33,6 +41,7 @@ def test_dans_l_image_le_journal_est_servi_tel_quel(client, tmp_path, monkeypatc
 
 def test_la_route_de_version_ne_demande_pas_de_jeton_et_n_est_pas_dans_le_schema(client):
     from app.main import app
+
     assert "/__version__" not in {r.path for r in app.routes if getattr(r, "include_in_schema", False)}
 
 
@@ -47,5 +56,6 @@ def test_la_sante_dit_l_etat_des_dependances_sans_tomber(client):
     with patch("app.main.OpenRAGClient") as cls:
         cls.return_value.health_check = AsyncMock(return_value=True)
         from app import main
+
         main._sante_cache.clear()
         assert client.get("/health").json()["status"] == "ok"

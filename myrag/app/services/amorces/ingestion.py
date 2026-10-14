@@ -40,13 +40,14 @@ VERSION_DECOUPAGE = 2
 
 @dataclass
 class Document:
-    nom: str            # nom de fichier stable (clé d'idempotence)
+    nom: str  # nom de fichier stable (clé d'idempotence)
     texte: str
     metadonnees: dict = field(default_factory=dict)
 
 
 def _sauver(collection: str, nom: str, contenu: bytes) -> str:
     from app.routers.ingest import _save_source_file
+
     return _save_source_file(collection, nom, contenu)
 
 
@@ -87,6 +88,7 @@ async def purger(collection: str) -> dict:
     """Vider la partition OpenRAG et oublier les documents connus : le prochain
     import réindexe tout, proprement. Les fichiers sources sur disque restent."""
     from sqlalchemy import delete
+
     client = OpenRAGClient(timeout=120.0)
     await client.delete_partition(collection)
     await client.create_partition(collection)
@@ -98,8 +100,7 @@ async def purger(collection: str) -> dict:
     return {"documents_oublies": oublies}
 
 
-async def ingerer(collection: str, documents: list[Document], *, strategie: str = "section",
-                  max_documents: int | None = None) -> dict:
+async def ingerer(collection: str, documents: list[Document], *, strategie: str = "section", max_documents: int | None = None) -> dict:
     """Rend un bilan chiffré : documents envoyés, ignorés (déjà là), morceaux, échecs."""
     bilan = {"documents": 0, "ignores": 0, "morceaux": 0, "echecs": 0, "versions": 0}
     client = OpenRAGClient(timeout=120.0)
@@ -109,9 +110,7 @@ async def ingerer(collection: str, documents: list[Document], *, strategie: str 
         pass
 
     async with async_session() as session:
-        lignes = (await session.execute(
-            select(SourceFile).where(SourceFile.collection_name == collection)
-        )).scalars().all()
+        lignes = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()
         connus = {sf.filename: sf for sf in lignes}
 
         for doc in documents:
@@ -140,12 +139,20 @@ async def ingerer(collection: str, documents: list[Document], *, strategie: str 
                 existant.strategy_used, existant.last_indexed_at = _etiquette(strategie), utcnow()
                 bilan["versions"] += 1
             else:
-                session.add(SourceFile(
-                    collection_name=collection, filename=doc.nom, original_url=doc.metadonnees.get("url", ""),
-                    storage_path=chemin, file_size=len(contenu), content_type="text/markdown",
-                    checksum=empreinte, strategy_used=_etiquette(strategie), chunks_produced=len(morceaux),
-                    last_indexed_at=utcnow(),
-                ))
+                session.add(
+                    SourceFile(
+                        collection_name=collection,
+                        filename=doc.nom,
+                        original_url=doc.metadonnees.get("url", ""),
+                        storage_path=chemin,
+                        file_size=len(contenu),
+                        content_type="text/markdown",
+                        checksum=empreinte,
+                        strategy_used=_etiquette(strategie),
+                        chunks_produced=len(morceaux),
+                        last_indexed_at=utcnow(),
+                    )
+                )
                 connus[doc.nom] = None  # type: ignore[assignment]
             bilan["documents"] += 1
             bilan["morceaux"] += len(morceaux)

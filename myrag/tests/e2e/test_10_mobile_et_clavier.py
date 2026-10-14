@@ -1,6 +1,7 @@
 """Diagnostic d'octobre 2026, P2 : sur téléphone, aucun menu ; les fenêtres modales laissaient
 le focus s'échapper ; les filtres de la banque de questions n'étaient que des emoji.
 Écrits avant le correctif (ils échouent sur la 0.3.22)."""
+
 from __future__ import annotations
 
 import re

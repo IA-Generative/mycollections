@@ -32,13 +32,19 @@ EXISTANTE = {
 
 def _voulue(description="", suggestions=None):
     return {
-        "id": "openrag-ceseda-legifrance", "name": "CESEDA",
-        "meta": {"description": description or "Collection MyRAG openrag-ceseda-legifrance",
-                 "profile_image_url": "/static/favicon.png",
-                 "suggestion_prompts": [{"content": p} for p in (suggestions or [])],
-                 "tags": [{"name": "Mes collections"}],
-                 "capabilities": {"vision": False, "usage": False, "citations": True}},
-        "params": {}, "base_model_id": None, "access_grants": [], "is_active": True,
+        "id": "openrag-ceseda-legifrance",
+        "name": "CESEDA",
+        "meta": {
+            "description": description or "Collection MyRAG openrag-ceseda-legifrance",
+            "profile_image_url": "/static/favicon.png",
+            "suggestion_prompts": [{"content": p} for p in (suggestions or [])],
+            "tags": [{"name": "Mes collections"}],
+            "capabilities": {"vision": False, "usage": False, "citations": True},
+        },
+        "params": {},
+        "base_model_id": None,
+        "access_grants": [],
+        "is_active": True,
     }
 
 
@@ -93,6 +99,7 @@ def test_la_fiche_existante_n_est_pas_modifiee_en_place():
 
 # ─── De bout en bout, contre un faux socle ───────────────────────────────────────────
 
+
 def _socle(monkeypatch, lecture: httpx.Response | Exception):
     """Un OpenWebUI de théâtre : répond `lecture` au GET de la fiche, accepte la mise à jour."""
     envois = []
@@ -106,8 +113,7 @@ def _socle(monkeypatch, lecture: httpx.Response | Exception):
         return httpx.Response(200, json={"id": "ok"})
 
     vrai = httpx.AsyncClient
-    monkeypatch.setattr(module.httpx, "AsyncClient",
-                        lambda **k: vrai(transport=httpx.MockTransport(repondre), **k))
+    monkeypatch.setattr(module.httpx, "AsyncClient", lambda **k: vrai(transport=httpx.MockTransport(repondre), **k))
     return envois
 
 
@@ -155,6 +161,7 @@ def test_resynchroniser_une_fiche_restreinte_ne_l_ouvre_pas(monkeypatch):
 
 def test_resynchroniser_ne_cree_jamais_une_fiche(monkeypatch):
     from app.services.owui_client import FicheAbsente
+
     envois = _socle(monkeypatch, httpx.Response(404, json={"detail": "absent"}))
     with pytest.raises(FicheAbsente):
         _republier(garder_les_droits=True)

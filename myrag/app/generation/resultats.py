@@ -11,7 +11,6 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-
 #: L'instruction de `FixOutputFormat` : ragas renvoie au modèle une sortie qu'il n'a pas su lire.
 #: La voir dans un prompt, c'est compter un JSON raté (exigence : ne pas masquer ces échecs).
 MARQUE_REPARATION = "The output string did not satisfy the constraints given in the prompt"
@@ -59,10 +58,17 @@ class Compteurs:
 
     def instantane(self) -> dict:
         with self._verrou:
-            return {"appels_llm": self.appels_llm, "tokens_entree": self.tokens_entree,
-                    "tokens_sortie": self.tokens_sortie, "reparations_json": self.reparations_json,
-                    "inachevees": self.inachevees, "erreurs_llm": self.erreurs_llm, "refus_debit": self.refus_debit,
-                    "appels_embeddings": self.appels_embeddings, "duree_llm_s": round(self.duree_llm_s, 1)}
+            return {
+                "appels_llm": self.appels_llm,
+                "tokens_entree": self.tokens_entree,
+                "tokens_sortie": self.tokens_sortie,
+                "reparations_json": self.reparations_json,
+                "inachevees": self.inachevees,
+                "erreurs_llm": self.erreurs_llm,
+                "refus_debit": self.refus_debit,
+                "appels_embeddings": self.appels_embeddings,
+                "duree_llm_s": round(self.duree_llm_s, 1),
+            }
 
 
 class Debit:
@@ -95,7 +101,7 @@ class Debit:
 
 def _usage(resultat) -> tuple[int, int, bool]:
     """(jetons d'entrée, jetons de sortie, coupée par la limite) d'un `LLMResult` LangChain."""
-    usage = ((getattr(resultat, "llm_output", None) or {}).get("token_usage") or {})
+    usage = (getattr(resultat, "llm_output", None) or {}).get("token_usage") or {}
     entree = int(usage.get("prompt_tokens") or 0)
     sortie = int(usage.get("completion_tokens") or 0)
     inachevee = False
@@ -109,7 +115,6 @@ def _usage(resultat) -> tuple[int, int, bool]:
                 entree += int(message.usage_metadata.get("input_tokens") or 0)
                 sortie += int(message.usage_metadata.get("output_tokens") or 0)
     return entree, sortie, inachevee
-
 
 
 @dataclass(frozen=True)
@@ -142,7 +147,6 @@ class ResultatGeneration:
     noeuds_avec_proprietes: int = 0
     duree_s: float = 0.0
     erreur: str | None = None
-
 
 
 def message_sur(e: BaseException) -> str:

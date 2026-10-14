@@ -88,8 +88,9 @@ class Pipeline:
             return body
 
         # Format context
-        context_parts = [f"[Source {i+1}] {doc.get('metadata', {}).get('filename', 'unknown')}:\n{doc.get('content', '')[:500]}"
-                         for i, doc in enumerate(documents[:self.valves.top_k])]
+        context_parts = [
+            f"[Source {i + 1}] {doc.get('metadata', {}).get('filename', 'unknown')}:\n{doc.get('content', '')[:500]}" for i, doc in enumerate(documents[: self.valves.top_k])
+        ]
         context = "\n\n---\n\n".join(context_parts)
 
         # Get collection system prompt

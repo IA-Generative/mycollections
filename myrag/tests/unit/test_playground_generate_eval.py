@@ -31,8 +31,7 @@ def test_fallback_chat_quand_contenu_illisible(mock_cls):
         "name": "victor2-evaluation",
         "description": "d",
         "questions": [
-            {"id": "q1", "question": "De quoi parle la collection ?",
-             "expected_answer": "A", "must_cite": [], "tags": ["theme"]},
+            {"id": "q1", "question": "De quoi parle la collection ?", "expected_answer": "A", "must_cite": [], "tags": ["theme"]},
         ],
     }
     m = _mock_client(
@@ -66,10 +65,7 @@ def test_fallback_lignes_quand_json_vide(mock_cls):
     m.list_files = AsyncMock(return_value=[{"file_id": "f1"}])
     m.get_file_content = AsyncMock(return_value="")
     empty = {"choices": [{"message": {"content": ""}}]}
-    lines = {"choices": [{"message": {"content":
-        "Quelle est la procedure de demande ?\n"
-        "Quels documents faut-il fournir ?\n"
-        "Quel est le delai applicable ?"}}]}
+    lines = {"choices": [{"message": {"content": "Quelle est la procedure de demande ?\nQuels documents faut-il fournir ?\nQuel est le delai applicable ?"}}]}
     m.chat = AsyncMock(side_effect=[empty, lines])
 
     with TestClient(app) as client:

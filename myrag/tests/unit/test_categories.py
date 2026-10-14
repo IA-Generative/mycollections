@@ -39,13 +39,16 @@ def test_les_rubriques_de_depart_sont_semees_et_lisibles_de_tous(client, en_tant
     assert all("nb_collections" in c and c["libelle"] for c in cats)
 
 
-@pytest.mark.parametrize("methode,chemin,corps", [
-    ("post", "/api/categories", {"cle": "pirate", "libelle": "Pirate"}),
-    ("patch", "/api/categories/droit-etrangers", {"libelle": "Pirate"}),
-    ("delete", "/api/categories/droit-etrangers", None),
-    ("put", "/api/categories/ordre", {"cles": []}),
-    ("put", "/api/categories/affectations", {"affectations": {}}),
-])
+@pytest.mark.parametrize(
+    "methode,chemin,corps",
+    [
+        ("post", "/api/categories", {"cle": "pirate", "libelle": "Pirate"}),
+        ("patch", "/api/categories/droit-etrangers", {"libelle": "Pirate"}),
+        ("delete", "/api/categories/droit-etrangers", None),
+        ("put", "/api/categories/ordre", {"cles": []}),
+        ("put", "/api/categories/affectations", {"affectations": {}}),
+    ],
+)
 def test_regler_les_rubriques_est_reserve_a_l_administration(client, en_tant_que, methode, chemin, corps):
     en_tant_que(personne(1))
     r = client.request(methode.upper(), chemin, json=corps)
@@ -133,6 +136,7 @@ def test_l_ordre_se_regle_et_les_absentes_passent_apres(client, en_tant_que):
 # d'un jeton comme en production (auth activée, MYRAG_GROUPE_EXIGE renseigné) — seule la
 # vérification de signature est simulée.
 
+
 @pytest.fixture
 def jeton_de_la_beta(client, monkeypatch):
     import app.auth
@@ -153,31 +157,33 @@ def jeton_de_la_beta(client, monkeypatch):
     monkeypatch.setattr(app.auth, "_get_jwks_client", lambda: _Jwks())
 
     def _jeton(groupes):
-        monkeypatch.setattr(app.auth.jwt, "decode", lambda *a, **k: {
-            "sub": "op-beta", "preferred_username": "op", "groups": groupes})
+        monkeypatch.setattr(app.auth.jwt, "decode", lambda *a, **k: {"sub": "op-beta", "preferred_username": "op", "groups": groupes})
         return {"Authorization": "Bearer jeton-de-test"}
+
     return _jeton
 
 
-@pytest.mark.parametrize("groupes,attendu", [
-    # Mapper basculé en chemins complets, groupe `/myrag/superadmin` attribué : ça passe.
-    (["/g/mirai-beta-testeurs", "/g/administration-de-test"], 200),
-    # Même mapper, sans le groupe : refus.
-    (["/g/mirai-beta-testeurs"], 403),
-    # Homonymes que keycloak-comu laisse créer à n'importe qui (tout vit sous /g) : refus.
-    (["/g/mirai-beta-testeurs", "/g/superadmin", "/g/myrag/superadmin"], 403),
-    # Mapper encore en noms courts (état du 2026-09-21) : aucun nom ne vaut superadmin,
-    # pas même un groupe NOMMÉ « /myrag/superadmin ».
-    (["mirai-beta-testeurs", "superadmin"], 403),
-    (["mirai-beta-testeurs", "/g/administration-de-test"], 403),
-])
+@pytest.mark.parametrize(
+    "groupes,attendu",
+    [
+        # Mapper basculé en chemins complets, groupe `/myrag/superadmin` attribué : ça passe.
+        (["/g/mirai-beta-testeurs", "/g/administration-de-test"], 200),
+        # Même mapper, sans le groupe : refus.
+        (["/g/mirai-beta-testeurs"], 403),
+        # Homonymes que keycloak-comu laisse créer à n'importe qui (tout vit sous /g) : refus.
+        (["/g/mirai-beta-testeurs", "/g/superadmin", "/g/myrag/superadmin"], 403),
+        # Mapper encore en noms courts (état du 2026-09-21) : aucun nom ne vaut superadmin,
+        # pas même un groupe NOMMÉ « /myrag/superadmin ».
+        (["mirai-beta-testeurs", "superadmin"], 403),
+        (["mirai-beta-testeurs", "/g/administration-de-test"], 403),
+    ],
+)
 def test_classer_avec_un_jeton_de_la_beta(client, jeton_de_la_beta, groupes, attendu):
     r = client.put("/api/categories/affectations", json={"affectations": {}}, headers=jeton_de_la_beta(groupes))
     assert r.status_code == attendu, r.text
 
 
 def test_hors_du_groupe_des_testeurs_le_jeton_est_refuse_avant_tout(client, jeton_de_la_beta):
-    r = client.put("/api/categories/affectations", json={"affectations": {}},
-                   headers=jeton_de_la_beta(["/g/autre", "/g/administration-de-test"]))
+    r = client.put("/api/categories/affectations", json={"affectations": {}}, headers=jeton_de_la_beta(["/g/autre", "/g/administration-de-test"]))
     assert r.status_code == 403
     assert "groupe autorisé" in r.json()["detail"]

@@ -18,9 +18,11 @@ def _fichiers(n: int) -> list[dict]:
 
 
 def _chunk(cid: str, fid: str, texte: str = TEXTE, partition: str = "faq") -> dict:
-    return {"link": f"https://openrag/extract/{cid}",
-            "content": f"[CONTEXT] résumé\n* filename: {fid}.md\n[CHUNK_START] {texte} [CHUNK_END]",
-            "metadata": {"_id": cid, "file_id": fid, "partition": partition, "page": 1, "filename": f"{fid}.md"}}
+    return {
+        "link": f"https://openrag/extract/{cid}",
+        "content": f"[CONTEXT] résumé\n* filename: {fid}.md\n[CHUNK_START] {texte} [CHUNK_END]",
+        "metadata": {"_id": cid, "file_id": fid, "partition": partition, "page": 1, "filename": f"{fid}.md"},
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -54,8 +56,7 @@ def test_echantillon_prend_tout_si_moins_de_fichiers():
 def test_morceau_sans_habillage_avec_ses_identifiants():
     morceau = m.morceau_depuis_chunk(_chunk("42", "f1"), "faq")
     assert morceau.texte == TEXTE
-    assert morceau.identifiants() == {"chunk_id": "42", "file_id": "f1", "partition": "faq",
-                                      "fichier": "f1.md", "page": "1"}
+    assert morceau.identifiants() == {"chunk_id": "42", "file_id": "f1", "partition": "faq", "fichier": "f1.md", "page": "1"}
 
 
 def test_morceau_ignore_vide_court_et_partition_etrangere():
@@ -83,6 +84,7 @@ def _client(fichiers, par_fichier=None, chunks_absent=False, en_panne=()):
         if chunks_absent:
             return None
         return (par_fichier or {}).get(file_id, [_chunk(f"c-{file_id}", file_id)])
+
     c.partition_chunks = AsyncMock(side_effect=partition_chunks)
     c.file_detail = AsyncMock(side_effect=lambda p, fid: {"documents": [{"link": f"http://o/extract/x-{fid}"}]})
     c.extract = AsyncMock(side_effect=lambda cid: {"page_content": TEXTE, "metadata": {"partition": "faq", "filename": "a.md"}})

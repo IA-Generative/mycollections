@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.auth import CurrentUser
-from tests.conftest import SUPERADMIN, personne
+from tests.conftest import personne
 
 ETRANGER = CurrentUser(sub="etranger", username="e", groups=["/g/rien-a-voir"])
 LECTEUR = personne("simple-lecteur")
@@ -88,9 +88,9 @@ def test_les_travaux_d_indexation_ne_se_lisent_que_pour_ses_collections(client, 
     assert client.get(f"/api/ingest/jobs/{job}").status_code == 200
 
 
-@pytest.mark.parametrize("methode,chemin", [("post", "/api/collections/templates"),
-                                            ("put", "/api/collections/templates/essai-p2"),
-                                            ("delete", "/api/collections/templates/essai-p2")])
+@pytest.mark.parametrize(
+    "methode,chemin", [("post", "/api/collections/templates"), ("put", "/api/collections/templates/essai-p2"), ("delete", "/api/collections/templates/essai-p2")]
+)
 def test_les_modeles_de_consignes_se_reglent_par_l_administration(client, en_tant_que, methode, chemin):
     en_tant_que(personne("quelqu-un"))
     corps = {"key": "essai-p2", "name": "Essai", "prompt": "Tu es…", "description": ""}

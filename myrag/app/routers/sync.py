@@ -26,11 +26,8 @@ async def list_keycloak_groups():
     try:
         root_id = await kc._ensure_root_group()
         children = await kc._list_children(root_id)
-        return [
-            {"id": g["id"], "name": g["name"], "path": f"/myrag/{g['name']}"}
-            for g in children
-        ]
-    except Exception as e:
+        return [{"id": g["id"], "name": g["name"], "path": f"/myrag/{g['name']}"} for g in children]
+    except Exception:
         return []
 
 
@@ -67,10 +64,7 @@ async def sync_all():
     total_errors = sum(r.get("errors", 0) for r in results)
     # Remonte les messages d'erreur pour que l'échec soit visible côté UI
     # (avant : un sync vide ou en échec restait silencieux, total=0).
-    error_messages = [
-        m for r in results
-        for m in ([r["error"]] if r.get("error") else r.get("error_details", []))
-    ]
+    error_messages = [m for r in results for m in ([r["error"]] if r.get("error") else r.get("error_details", []))]
     status = "error" if (total_errors and total_synced == 0) else ("partial" if total_errors else "done")
     return {
         "status": status,

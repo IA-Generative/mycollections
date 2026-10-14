@@ -13,8 +13,7 @@ from app.config import settings
 def test_manques_nomme_les_variables_vides(monkeypatch):
     for champ in ("generation_llm_url", "generation_llm_cle", "generation_llm_modele"):
         monkeypatch.setattr(settings, champ, "")
-    assert generation.manques() == ["MYCOLLECTIONS_GENERATION_LLM_URL", "MYCOLLECTIONS_GENERATION_LLM_CLE",
-                                    "MYCOLLECTIONS_GENERATION_LLM_MODELE"]
+    assert generation.manques() == ["MYCOLLECTIONS_GENERATION_LLM_URL", "MYCOLLECTIONS_GENERATION_LLM_CLE", "MYCOLLECTIONS_GENERATION_LLM_MODELE"]
     with pytest.raises(generation.GenerationIndisponible, match="MYCOLLECTIONS_GENERATION_LLM_CLE"):
         generation.exiger_prete()
     monkeypatch.setattr(settings, "generation_llm_url", "https://passerelle.fake-domain.name/v1")
@@ -32,6 +31,7 @@ def test_sans_ragas_le_message_dit_l_extra(monkeypatch):
 
 def test_telemetrie_de_ragas_coupee():
     import os
+
     assert os.environ.get("RAGAS_DO_NOT_TRACK") == "true"
 
 
@@ -83,6 +83,7 @@ def test_compteur_sous_verrou():
     def frapper():
         for _ in range(1000):
             c.observer("x", _resultat(1, 1), 0.0)
+
     fils = [threading.Thread(target=frapper) for _ in range(4)]
     [f.start() for f in fils]
     [f.join() for f in fils]
@@ -97,6 +98,7 @@ def test_jetons_lus_dans_usage_metadata_a_defaut():
 
 def test_debit_bloque_au_dela_du_quota_par_minute():
     from app.generation.resultats import Debit
+
     t = [0.0]
     dormi = []
     d = Debit(3, horloge=lambda: t[0], dormir=lambda s: (dormi.append(s), t.__setitem__(0, t[0] + s)))
@@ -113,6 +115,7 @@ def test_refus_de_debit_compte_et_dit():
 
     class RateLimitError(Exception):
         pass
+
     c = modele.Compteurs()
     c.observer("x", None, 0.1, RateLimitError("Error code: 429 - rate limit exceeded"))
     assert c.instantane()["refus_debit"] == 1 and c.instantane()["erreurs_llm"] == 1

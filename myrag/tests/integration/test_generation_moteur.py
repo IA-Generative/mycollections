@@ -21,7 +21,6 @@ from langchain_core.embeddings import FakeEmbeddings  # noqa: E402
 from langchain_core.language_models.chat_models import BaseChatModel  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
-
 from ragas.run_config import RunConfig  # noqa: E402
 
 from app.generation import modele, moteur  # noqa: E402
@@ -57,7 +56,7 @@ def _entree(texte: str) -> dict:
 
 
 class ChatSimule(BaseChatModel):
-    pannes_ner: int = 1          # la première extraction répond hors JSON : exerce la réparation
+    pannes_ner: int = 1  # la première extraction répond hors JSON : exerce la réparation
     question_impossible: str = ""  # un terme pour lequel la paire ne sort jamais en JSON
     appels: int = 0
 
@@ -102,8 +101,7 @@ class ChatSimule(BaseChatModel):
         if '"mapping"' in texte:
             e = _entree(texte)
             # Le modèle réécrit un nom (casse) : le moteur doit le rapprocher, pas échouer.
-            return json.dumps({"mapping": {p["name"].upper() if i else p["name"]: e["themes"][:3]
-                                           for i, p in enumerate(e["personas"])}})
+            return json.dumps({"mapping": {p["name"].upper() if i else p["name"]: e["themes"][:3] for i, p in enumerate(e["personas"])}})
         if '"keyphrases"' in texte:
             mots = re.findall(r"\b[a-zéè]{6,}", _entree(texte)["text"])
             return json.dumps({"keyphrases": sorted(set(mots))[:4]})
@@ -111,8 +109,7 @@ class ChatSimule(BaseChatModel):
             e = _entree(texte)
             if self.question_impossible and e["term"] == self.question_impossible:
                 return "je ne sais pas répondre"
-            return json.dumps({"query": f"Que faut-il savoir sur {e['term']} ?",
-                               "answer": f"D'après le passage : {e['context'][:60]}"})
+            return json.dumps({"query": f"Que faut-il savoir sur {e['term']} ?", "answer": f"D'après le passage : {e['context'][:60]}"})
         raise AssertionError("prompt inattendu : " + texte[:200])
 
 
@@ -122,9 +119,20 @@ def _generer(chat: ChatSimule, taille=4, distribution=None, personas=PERSONAS, m
     emb = modele.EmbeddingsComptes(FakeEmbeddings(size=8), compteurs)
     phases: list[str] = []
     kw = {"dossier_prompts": tmp_path} if tmp_path else {}
-    r = asyncio.run(asyncio.to_thread(
-        moteur.generer, morceaux if morceaux is not None else _morceaux(), personas, taille, llm, emb,
-        distribution=distribution, run_config=RunConfig(max_workers=2, timeout=10, max_retries=1, max_wait=1), progression=phases.append, **kw))
+    r = asyncio.run(
+        asyncio.to_thread(
+            moteur.generer,
+            morceaux if morceaux is not None else _morceaux(),
+            personas,
+            taille,
+            llm,
+            emb,
+            distribution=distribution,
+            run_config=RunConfig(max_workers=2, timeout=10, max_retries=1, max_wait=1),
+            progression=phases.append,
+            **kw,
+        )
+    )
     return r, compteurs, phases
 
 
@@ -181,9 +189,11 @@ def test_modele_injoignable_message_sans_texte_de_passage():
     class Panne(ChatSimule):
         def _generate(self, messages, stop=None, run_manager=None, **kw):
             import httpx
+
             raise httpx.ConnectError("refusé")
 
     import time
+
     debut = time.monotonic()
     r, c, _ = _generer(Panne())
     assert time.monotonic() - debut < 30, "une panne doit échouer vite, pas après dix réessais"
@@ -194,6 +204,7 @@ def test_modele_injoignable_message_sans_texte_de_passage():
 
 def test_repli_par_le_texte_quand_l_identifiant_manque():
     from ragas.dataset_schema import SingleTurnSample
+
     ms = _morceaux()
     s = SingleTurnSample(user_input="Q ?", reference="R", reference_contexts=[ms[2].texte], persona_name="A")
     paires, echecs = moteur.paires_depuis_resultats([s, float("nan")], ms, {})

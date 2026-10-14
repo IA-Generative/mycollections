@@ -6,16 +6,16 @@ import logging
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.auth import CurrentUser, current_user
 from app.config import settings
-from app.services.chunker import chunk_document, Strategy, Sensitivity
-from app.services.job_store import create_job, get_job, update_job, increment_job_progress, complete_job, list_jobs
+from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
+from app.services.chunker import Sensitivity, Strategy, chunk_document
+from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
 from app.services.openrag_client import OpenRAGClient
-from app.security_utils import safe_filename, ensure_within, assert_public_http_url, ssrf_request_guard
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -53,15 +53,15 @@ async def _upload_chunks_background(job_id: str, collection: str, chunks: list[d
             # 409 : OpenRAG a déjà ce morceau, à l'identique (dépôt répété, reprise après arrêt).
             if e.response is None or e.response.status_code != 409:
                 success = False
-                logger.warning(f"Job {job_id} chunk {i+1}/{len(chunks)} failed: {e}")
+                logger.warning(f"Job {job_id} chunk {i + 1}/{len(chunks)} failed: {e}")
         except Exception as e:
             success = False
-            logger.warning(f"Job {job_id} chunk {i+1}/{len(chunks)} failed: {e}")
+            logger.warning(f"Job {job_id} chunk {i + 1}/{len(chunks)} failed: {e}")
 
         await increment_job_progress(job_id, success=success)
 
         if (i + 1) % 100 == 0:
-            logger.info(f"Job {job_id}: {i+1}/{len(chunks)} uploaded")
+            logger.info(f"Job {job_id}: {i + 1}/{len(chunks)} uploaded")
 
     await complete_job(job_id)
     job = await get_job(job_id)
@@ -86,12 +86,10 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
     repris = []
     for job_id, collection, filename, strategy, sensitivity in travaux:
         async with async_session() as session:
-            sf = (await session.execute(select(SourceFile).where(
-                SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
+            sf = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
             chemin = Path(sf.storage_path) if sf and sf.storage_path else None
         if not chemin or not chemin.exists():
-            await update_job(job_id, status="interrupted",
-                             error="Indexation interrompue par un redémarrage du service, et le fichier n'est plus conservé : redéposez-le.")
+            await update_job(job_id, status="interrupted", error="Indexation interrompue par un redémarrage du service, et le fichier n'est plus conservé : redéposez-le.")
             continue
         try:
             texte = texte_ou_refus(chemin.read_bytes(), filename)
@@ -99,8 +97,7 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
         except Exception as e:  # noqa: BLE001
             await update_job(job_id, status="interrupted", error=f"Reprise impossible : {e}")
             continue
-        await update_job(job_id, status="uploading", total_chunks=len(morceaux), uploaded_chunks=0, failed_chunks=0,
-                         error="Repris après un redémarrage du service.")
+        await update_job(job_id, status="uploading", total_chunks=len(morceaux), uploaded_chunks=0, failed_chunks=0, error="Repris après un redémarrage du service.")
         await _upload_chunks_background(job_id, collection, morceaux)
         repris.append(job_id)
     if travaux:
@@ -108,9 +105,11 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
     return repris
 
 
-MESSAGE_FORMAT = ("Ce fichier n'est pas du texte : aujourd'hui, seuls les fichiers texte (.txt, .md, .csv) "
-                  "sont découpés et indexés. Un PDF ou un document Word serait indexé illisible : "
-                  "enregistrez-le d'abord au format texte ou Markdown.")
+MESSAGE_FORMAT = (
+    "Ce fichier n'est pas du texte : aujourd'hui, seuls les fichiers texte (.txt, .md, .csv) "
+    "sont découpés et indexés. Un PDF ou un document Word serait indexé illisible : "
+    "enregistrez-le d'abord au format texte ou Markdown."
+)
 
 
 def texte_ou_refus(content: bytes, filename: str) -> str:
@@ -118,8 +117,7 @@ def texte_ou_refus(content: bytes, filename: str) -> str:
     image passaient en UTF-8 « avec remplacement » et partaient indexés en caractères illisibles
     (diagnostic d'octobre 2026)."""
     tete = content[:4096]
-    binaire = (tete.startswith((b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0", b"\x89PNG", b"\xff\xd8\xff", b"GIF8"))
-               or b"\x00" in tete)
+    binaire = tete.startswith((b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0", b"\x89PNG", b"\xff\xd8\xff", b"GIF8")) or b"\x00" in tete
     if not binaire:
         try:
             return content.decode("utf-8")
@@ -135,12 +133,17 @@ async def _exiger_gestion(collection: str, user: CurrentUser) -> None:
     """Déposer des documents, c'est écrire dans la collection : créateur, groupe <nom>-admin ou
     superadmin. Avant : un jeton suffisait pour alimenter la collection d'un autre."""
     from app.routers.publication import _fiche_pour
+
     await _fiche_pour(collection, user, ecrire=True)
 
 
 async def _ingest_content(
-    collection: str, filename: str, content: bytes,
-    strategy: str, sensitivity: str, source_path: str = "",
+    collection: str,
+    filename: str,
+    content: bytes,
+    strategy: str,
+    sensitivity: str,
+    source_path: str = "",
 ) -> dict:
     """Common ingest logic for file upload and URL fetch."""
     text = texte_ou_refus(content, filename)
@@ -164,12 +167,12 @@ async def _ingest_content(
     # Record source file in DB
     from app.database import async_session
     from app.models.db import SourceFile
+
     checksum = hashlib.sha256(content).hexdigest()
     async with async_session() as session:
         # Une ligne par (collection, fichier) : redéposer ou réindexer met la ligne à jour au lieu
         # d'en ajouter une (avant : N lignes, puis 2N, puis 4N à chaque réindexation).
-        sf = (await session.execute(select(SourceFile).where(
-            SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
+        sf = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
         if sf is None:
             sf = SourceFile(collection_name=collection, filename=filename)
             session.add(sf)
@@ -241,7 +244,8 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
     assert_public_http_url(req.url)
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True, timeout=60.0,
+            follow_redirects=True,
+            timeout=60.0,
             event_hooks={"request": [ssrf_request_guard]},
         ) as client:
             resp = await client.get(req.url)
@@ -266,21 +270,18 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
 
 
 @router.post("/{collection}/reindex")
-async def reindex_collection(collection: str, strategy: Strategy = "auto", sensitivity: Sensitivity = "public",
-                             user: CurrentUser = Depends(current_user)):
+async def reindex_collection(collection: str, strategy: Strategy = "auto", sensitivity: Sensitivity = "public", user: CurrentUser = Depends(current_user)):
     """Re-index all source files of a collection with a new strategy.
 
     Uses source files saved by R7 to re-chunk and re-index without re-upload.
     """
     await _exiger_gestion(collection, user)
-    from app.models.db import SourceFile
     from app.database import async_session as db_session
+    from app.models.db import SourceFile
 
     # Get all source files for this collection
     async with db_session() as session:
-        result = await session.execute(
-            select(SourceFile).where(SourceFile.collection_name == collection)
-        )
+        result = await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))
         source_files = result.scalars().all()
 
     if not source_files:
@@ -332,15 +333,13 @@ async def reindex_collection(collection: str, strategy: Strategy = "auto", sensi
 async def list_source_files(collection: str, user: CurrentUser = Depends(current_user)):
     """List all stored source files for a collection."""
     from app.routers._droits import lire_la_collection
+
     await lire_la_collection(collection, user)
-    from app.models.db import SourceFile
     from app.database import async_session as db_session
+    from app.models.db import SourceFile
 
     async with db_session() as session:
-        result = await session.execute(
-            select(SourceFile).where(SourceFile.collection_name == collection)
-            .order_by(SourceFile.created_at.desc())
-        )
+        result = await session.execute(select(SourceFile).where(SourceFile.collection_name == collection).order_by(SourceFile.created_at.desc()))
         files = result.scalars().all()
         return {"sources": [f.to_dict() for f in files]}
 
@@ -348,6 +347,7 @@ async def list_source_files(collection: str, user: CurrentUser = Depends(current
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: str, user: CurrentUser = Depends(current_user)):
     from app.routers._droits import peut_lire_nom
+
     job = await get_job(job_id)
     if not job or not await peut_lire_nom(job.get("collection", ""), user):
         raise HTTPException(status_code=404, detail="Job not found")
@@ -358,6 +358,7 @@ async def get_job_status(job_id: str, user: CurrentUser = Depends(current_user))
 async def list_all_jobs(collection: str | None = Query(None), user: CurrentUser = Depends(current_user)):
     """Les travaux des seules collections que l'appelant peut lire (avant : tous)."""
     from app.routers._droits import peut_lire_nom
+
     travaux = await list_jobs(collection=collection)
     lisibles: dict[str, bool] = {}
     for t in travaux:

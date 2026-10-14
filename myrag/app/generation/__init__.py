@@ -46,9 +46,7 @@ def prete() -> bool:
 
 def exiger_prete() -> None:
     if not disponible():
-        raise GenerationIndisponible(
-            "La génération de questions n'est pas installée sur ce service (extra « generation »).")
+        raise GenerationIndisponible("La génération de questions n'est pas installée sur ce service (extra « generation »).")
     vides = manques()
     if vides:
-        raise GenerationIndisponible(
-            "La génération de questions n'est pas configurée : " + ", ".join(vides) + " manquante(s).")
+        raise GenerationIndisponible("La génération de questions n'est pas configurée : " + ", ".join(vides) + " manquante(s).")

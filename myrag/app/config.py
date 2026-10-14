@@ -1,7 +1,5 @@
 """MyRAG (beta) configuration."""
 
-import os
-
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
@@ -13,6 +11,7 @@ class Settings(BaseSettings):
     aussi sous le nom MYCOLLECTIONS_* (ex. MYCOLLECTIONS_SUPERADMIN_GROUPES), qui est la forme à
     privilégier ; l'ancien nom reste accepté le temps que les déploiements basculent. Si les
     deux sont posés, MYCOLLECTIONS_* l'emporte."""
+
     app_title: str = Field(default="Mes collections (bêta)")
     app_version: str = Field(default="0.1.0")
     debug: bool = Field(default=False)
@@ -50,8 +49,7 @@ class Settings(BaseSettings):
     # développement sans authentification). Remplace le groupe codé en dur `/myrag/superadmin`.
     # Reprendre au démarrage les indexations coupées par l'arrêt précédent (désactivé en test :
     # la tâche de fond survivrait au client de test).
-    reprise_au_demarrage: bool = Field(default=True, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_REPRISE_AU_DEMARRAGE", "reprise_au_demarrage"))
+    reprise_au_demarrage: bool = Field(default=True, validation_alias=AliasChoices("MYCOLLECTIONS_REPRISE_AU_DEMARRAGE", "reprise_au_demarrage"))
 
     myrag_superadmin_groupes: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_SUPERADMIN_GROUPES", "MYRAG_SUPERADMIN_GROUPES", "myrag_superadmin_groupes"))
 
@@ -89,7 +87,9 @@ class Settings(BaseSettings):
     # Préfixes refusés à la création d'une collection (séparés par des virgules) : ils disent
     # d'où vient la collection, pas ce qu'elle contient — et l'identifiant est ce que tapent
     # les applications (`openrag-<identifiant>`).
-    myrag_prefixes_bannis: str = Field(default="demo-,amorce-,rag-,test-", validation_alias=AliasChoices("MYCOLLECTIONS_PREFIXES_BANNIS", "MYRAG_PREFIXES_BANNIS", "myrag_prefixes_bannis"))
+    myrag_prefixes_bannis: str = Field(
+        default="demo-,amorce-,rag-,test-", validation_alias=AliasChoices("MYCOLLECTIONS_PREFIXES_BANNIS", "MYRAG_PREFIXES_BANNIS", "myrag_prefixes_bannis")
+    )
 
     # Public URL (for iframe links)
     myrag_public_url: str = Field(default="http://localhost:8200", validation_alias=AliasChoices("MYCOLLECTIONS_PUBLIC_URL", "MYRAG_PUBLIC_URL", "myrag_public_url"))
@@ -130,57 +130,40 @@ class Settings(BaseSettings):
     # L'audience que doit porter un jeton pour ces routes (liste séparée par des virgules).
     # Un jeton du front (azp = mycollections-front) passe par son `azp` ; un jeton d'un
     # client listé dans `recherche_clients_audience` doit, lui, la porter dans `aud`.
-    recherche_audience: str = Field(default="mycollections-front", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_AUDIENCE", "recherche_audience"))
-    recherche_clients_audience: str = Field(default="mysearch", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE", "recherche_clients_audience"))
+    recherche_audience: str = Field(default="mycollections-front", validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_AUDIENCE", "recherche_audience"))
+    recherche_clients_audience: str = Field(default="mysearch", validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE", "recherche_clients_audience"))
     # Origines autorisées à appeler ces routes depuis un navigateur (CSV). Distinctes de
     # CORS_ALLOW_ORIGINS : elles n'ouvrent que les routes du contrat, sans credentials.
-    recherche_origines: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_ORIGINES", "recherche_origines"))
+    recherche_origines: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_ORIGINES", "recherche_origines"))
     # Origine publique devant les liens signés rendus (le contrat veut des URL absolues).
     # Vide : on reprend MYCOLLECTIONS_PUBLIC_URL.
-    recherche_url_publique: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE", "recherche_url_publique"))
+    recherche_url_publique: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE", "recherche_url_publique"))
     # Délai accordé au moteur (Mon portail attend 8 s par source), et recherches permises
     # par personne et par minute (0 = sans limite).
-    recherche_delai_s: float = Field(default=6.0, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_DELAI_S", "recherche_delai_s"))
-    recherche_par_minute: int = Field(default=60, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_RECHERCHE_PAR_MINUTE", "recherche_par_minute"))
+    recherche_delai_s: float = Field(default=6.0, validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_DELAI_S", "recherche_delai_s"))
+    recherche_par_minute: int = Field(default=60, validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_PAR_MINUTE", "recherche_par_minute"))
 
     # ─── Génération de paires question/réponse par persona (ragas, docs/generation.md) ──────
     # Le modèle de langage et les embeddings de la passerelle MirAI (OpenAI-compatible), les mêmes
     # qu'emploie OpenRAG. URL, clé ou modèle vide ⇒ les routes de génération répondent 503 (le
     # patron du sel) ; le reste du service n'en dépend pas. La clé est un secret.
-    generation_llm_url: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_LLM_URL", "generation_llm_url"))
-    generation_llm_cle: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_LLM_CLE", "generation_llm_cle"))
-    generation_llm_modele: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_LLM_MODELE", "generation_llm_modele"))
+    generation_llm_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_LLM_URL", "generation_llm_url"))
+    generation_llm_cle: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_LLM_CLE", "generation_llm_cle"))
+    generation_llm_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_LLM_MODELE", "generation_llm_modele"))
     # Facultatifs tant que les personas sont saisis à la main. URL vide ⇒ celle du modèle de langage.
-    generation_embeddings_url: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_EMBEDDINGS_URL", "generation_embeddings_url"))
-    generation_embeddings_modele: str = Field(default="", validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE", "generation_embeddings_modele"))
+    generation_embeddings_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_EMBEDDINGS_URL", "generation_embeddings_url"))
+    generation_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE", "generation_embeddings_modele"))
     # Passages envoyés à ragas : 4 × le nombre de paires demandées, plafonné ici (la reconnaissance
     # des entités coûte un appel au modèle par passage).
-    generation_morceaux_max: int = Field(default=200, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_MORCEAUX_MAX", "generation_morceaux_max"))
+    generation_morceaux_max: int = Field(default=200, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_MORCEAUX_MAX", "generation_morceaux_max"))
     # Débit maximal vers la passerelle, tous fils confondus. La passerelle compte les appels PAR
     # JETON (60 par minute pour celui d'OpenRAG, 10 pour d'autres) : un run trop rapide prend le
     # quota d'un autre service qui partagerait le jeton. 0 = sans limite.
-    generation_appels_par_minute: int = Field(default=20, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE", "generation_appels_par_minute"))
-    generation_parallelisme: int = Field(default=4, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_PARALLELISME", "generation_parallelisme"))
-    generation_max_tokens: int = Field(default=4096, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_MAX_TOKENS", "generation_max_tokens"))
-    generation_delai_appel_s: int = Field(default=180, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_DELAI_APPEL_S", "generation_delai_appel_s"))
-    generation_duree_max_s: int = Field(default=1800, validation_alias=AliasChoices(
-        "MYCOLLECTIONS_GENERATION_DUREE_MAX_S", "generation_duree_max_s"))
+    generation_appels_par_minute: int = Field(default=20, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE", "generation_appels_par_minute"))
+    generation_parallelisme: int = Field(default=4, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_PARALLELISME", "generation_parallelisme"))
+    generation_max_tokens: int = Field(default=4096, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_MAX_TOKENS", "generation_max_tokens"))
+    generation_delai_appel_s: int = Field(default=180, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_DELAI_APPEL_S", "generation_delai_appel_s"))
+    generation_duree_max_s: int = Field(default=1800, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_DUREE_MAX_S", "generation_duree_max_s"))
 
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore", "populate_by_name": True}
 

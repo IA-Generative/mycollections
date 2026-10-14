@@ -51,8 +51,7 @@ def generer_dans_le_fil(morceaux, personas, taille, distribution, compteurs: Com
     debit = modele.Debit(settings.generation_appels_par_minute)
     llm = modele.fabriquer_llm(compteurs, run_config=rc, debit=debit)
     emb = modele.fabriquer_embeddings(compteurs, run_config=rc, debit=debit)
-    return moteur.generer(morceaux, personas, taille, llm, emb, distribution=distribution,
-                          run_config=rc, progression=compteurs.poser_phase)
+    return moteur.generer(morceaux, personas, taille, llm, emb, distribution=distribution, run_config=rc, progression=compteurs.poser_phase)
 
 
 def _compteurs_en_base(c: Compteurs) -> dict:
@@ -86,11 +85,10 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
                 compteurs.poser_phase("extraction")
                 suivi = asyncio.create_task(_suivre(run_id, compteurs))
                 resultat = await asyncio.wait_for(
-                    asyncio.to_thread(generer_dans_le_fil, morceaux, demandes, taille, distribution, compteurs),
-                    timeout=settings.generation_duree_max_s)
+                    asyncio.to_thread(generer_dans_le_fil, morceaux, demandes, taille, distribution, compteurs), timeout=settings.generation_duree_max_s
+                )
     except asyncio.TimeoutError:
-        resultat = ResultatGeneration(etat="erreur", erreur=(
-            f"Délai dépassé ({settings.generation_duree_max_s} s) : demandez moins de paires, ou réessayez."))
+        resultat = ResultatGeneration(etat="erreur", erreur=(f"Délai dépassé ({settings.generation_duree_max_s} s) : demandez moins de paires, ou réessayez."))
     except Exception as e:  # noqa: BLE001 — un run se termine toujours, motivé
         resultat = ResultatGeneration(etat="erreur", erreur=message_sur(e))
     finally:
@@ -98,14 +96,12 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
             suivi.cancel()
 
     duree = round(time.monotonic() - debut, 1)
-    champs = {**_compteurs_en_base(compteurs), "duree_s": duree,
-              "noeuds_avec_proprietes": resultat.noeuds_avec_proprietes or None}
+    champs = {**_compteurs_en_base(compteurs), "duree_s": duree, "noeuds_avec_proprietes": resultat.noeuds_avec_proprietes or None}
     try:
         if resultat.etat == "termine":
             await store.maj_run(run_id, phase="enregistrement")
             n_paires = await store.enregistrer_paires(run_id, name, resultat.paires)
-            await store.terminer_run(run_id, "termine", paires_obtenues=n_paires,
-                                     paires_echouees=resultat.paires_echouees, **champs)
+            await store.terminer_run(run_id, "termine", paires_obtenues=n_paires, paires_echouees=resultat.paires_echouees, **champs)
         else:
             await store.terminer_run(run_id, "erreur", erreur=resultat.erreur, paires_echouees=resultat.paires_echouees, **champs)
     except Exception as e:  # noqa: BLE001
@@ -114,18 +110,41 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
 
     c = compteurs.instantane()
     # Une ligne par run, sans contenu : collection, taille, volumes, coût, durée.
-    logger.info("generation run=%s collection=%s etat=%s taille=%d passages=%s paires=%d echecs=%d appels_llm=%d "
-                "tokens_entree=%d tokens_sortie=%d reparations_json=%d duree_s=%.1f",
-                run_id, name, resultat.etat, taille, resultat.morceaux_envoyes, len(resultat.paires),
-                resultat.paires_echouees, c["appels_llm"], c["tokens_entree"], c["tokens_sortie"],
-                c["reparations_json"], duree)
+    logger.info(
+        "generation run=%s collection=%s etat=%s taille=%d passages=%s paires=%d echecs=%d appels_llm=%d tokens_entree=%d tokens_sortie=%d reparations_json=%d duree_s=%.1f",
+        run_id,
+        name,
+        resultat.etat,
+        taille,
+        resultat.morceaux_envoyes,
+        len(resultat.paires),
+        resultat.paires_echouees,
+        c["appels_llm"],
+        c["tokens_entree"],
+        c["tokens_sortie"],
+        c["reparations_json"],
+        duree,
+    )
     try:
         from app.services.collectif_store import consigner
+
         type_ = "generation.terminee" if resultat.etat == "termine" else "generation.echouee"
-        await consigner("collection", name, type_, robot="generation", collection_name=name, detail={
-            "run": run_id, "paires": len(resultat.paires), "appels_llm": c["appels_llm"],
-            "tokens_entree": c["tokens_entree"], "tokens_sortie": c["tokens_sortie"], "duree_s": duree,
-            **({"erreur": (resultat.erreur or "")[:300]} if resultat.etat != "termine" else {})})
+        await consigner(
+            "collection",
+            name,
+            type_,
+            robot="generation",
+            collection_name=name,
+            detail={
+                "run": run_id,
+                "paires": len(resultat.paires),
+                "appels_llm": c["appels_llm"],
+                "tokens_entree": c["tokens_entree"],
+                "tokens_sortie": c["tokens_sortie"],
+                "duree_s": duree,
+                **({"erreur": (resultat.erreur or "")[:300]} if resultat.etat != "termine" else {}),
+            },
+        )
     except Exception as e:  # noqa: BLE001 — le journal ne fait jamais échouer un run
         logger.warning("journal du run %s : %s", run_id, type(e).__name__)
 

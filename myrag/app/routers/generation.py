@@ -35,8 +35,7 @@ async def exiger_generation() -> None:
         raise HTTPException(status_code=503, detail=str(e))
 
 
-router = APIRouter(prefix="/api/collections/{collection}/generation", tags=["Generation"],
-                   dependencies=[Depends(exiger_generation)])
+router = APIRouter(prefix="/api/collections/{collection}/generation", tags=["Generation"], dependencies=[Depends(exiger_generation)])
 
 
 def _traduire(e: Exception):
@@ -96,13 +95,19 @@ class RelectureEntree(BaseModel):
 
 @router.get("")
 async def etat(collection: str, user: CurrentUser = Depends(gerer_la_collection)):
-    return {"collection": collection, "prete": True, "modele": settings.generation_llm_modele,
-            "morceaux_max": settings.generation_morceaux_max, "taille_max": 100,
-            "personas": await store.lister_personas(collection),
-            "run_actif": await store.run_actif(collection)}
+    return {
+        "collection": collection,
+        "prete": True,
+        "modele": settings.generation_llm_modele,
+        "morceaux_max": settings.generation_morceaux_max,
+        "taille_max": 100,
+        "personas": await store.lister_personas(collection),
+        "run_actif": await store.run_actif(collection),
+    }
 
 
 # ─── Personas ─────────────────────────────────────────────────────────────────────
+
 
 @router.get("/personas")
 async def lister_personas(collection: str, user: CurrentUser = Depends(gerer_la_collection)):
@@ -118,8 +123,7 @@ async def creer_persona(collection: str, corps: PersonaEntree, user: CurrentUser
 
 
 @router.patch("/personas/{ident}")
-async def modifier_persona(collection: str, ident: str, corps: PersonaModification,
-                           user: CurrentUser = Depends(gerer_la_collection)):
+async def modifier_persona(collection: str, ident: str, corps: PersonaModification, user: CurrentUser = Depends(gerer_la_collection)):
     champs = corps.model_dump(exclude_none=True)
     if not champs:
         raise HTTPException(status_code=422, detail="Rien à mettre à jour")
@@ -140,9 +144,11 @@ async def supprimer_persona(collection: str, ident: str, user: CurrentUser = Dep
 
 # ─── Runs ─────────────────────────────────────────────────────────────────────────
 
+
 @router.post("/runs", status_code=202)
 async def lancer(collection: str, corps: RunEntree, user: CurrentUser = Depends(gerer_la_collection)):
     from app.generation import execution
+
     try:
         personas = await store.personas_par_ids(collection, corps.personas)
     except Introuvable as e:
@@ -154,12 +160,17 @@ async def lancer(collection: str, corps: RunEntree, user: CurrentUser = Depends(
     if not fichiers:
         raise HTTPException(status_code=409, detail="Cette collection n'a encore aucun document.")
     try:
-        run = await store.creer_run(collection, personas, corps.taille, corps.distribution,
-                                    settings.generation_llm_modele, user.sub)
+        run = await store.creer_run(collection, personas, corps.taille, corps.distribution, settings.generation_llm_modele, user.sub)
     except Conflit as e:
         _traduire(e)
-    await consigner("collection", collection, "generation.lancee", user.sub, collection_name=collection,
-                    detail={"run": run["id"], "taille": corps.taille, "personas": [p["nom"] for p in personas]})
+    await consigner(
+        "collection",
+        collection,
+        "generation.lancee",
+        user.sub,
+        collection_name=collection,
+        detail={"run": run["id"], "taille": corps.taille, "personas": [p["nom"] for p in personas]},
+    )
     execution.lancer(run, collection, personas)
     return {"run": run}
 
@@ -188,11 +199,17 @@ async def supprimer_run(collection: str, ident: str, user: CurrentUser = Depends
 
 # ─── Paires ───────────────────────────────────────────────────────────────────────
 
+
 @router.get("/runs/{ident}/paires")
-async def lister_paires(collection: str, ident: str, persona: str | None = Query(None, max_length=120),
-                        relecture: str | None = Query(None, pattern="^(brut|valide|rejete)$"),
-                        page: int = Query(1, ge=1), par_page: int = Query(50, ge=1, le=200),
-                        user: CurrentUser = Depends(gerer_la_collection)):
+async def lister_paires(
+    collection: str,
+    ident: str,
+    persona: str | None = Query(None, max_length=120),
+    relecture: str | None = Query(None, pattern="^(brut|valide|rejete)$"),
+    page: int = Query(1, ge=1),
+    par_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(gerer_la_collection),
+):
     try:
         await store.lire_run(collection, ident)
     except Introuvable as e:
@@ -215,8 +232,7 @@ def _cellule(v) -> str:
 
 
 @router.get("/runs/{ident}/export")
-async def exporter(collection: str, ident: str, format: str = Query("json", pattern="^(json|csv)$"),
-                   user: CurrentUser = Depends(gerer_la_collection)):
+async def exporter(collection: str, ident: str, format: str = Query("json", pattern="^(json|csv)$"), user: CurrentUser = Depends(gerer_la_collection)):
     try:
         run = await store.lire_run(collection, ident)
     except Introuvable as e:
@@ -227,25 +243,48 @@ async def exporter(collection: str, ident: str, format: str = Query("json", patt
     if format == "json":
         # Le format de l'outillage d'évaluation (eval-rag, DatasetItem) : question, answer, context,
         # persona_name, query_style — plus de quoi retrouver les passages et la relecture.
-        corps = {"metadata": {"collection": collection, "run": ident, "modele": run["modele"],
-                              "cree_le": run["cree_le"], "total_samples": len(paires)},
-                 "samples": [{"question": p["question"], "answer": p["reponse"],
-                              "context": [c.get("texte", "") for c in p["contextes"]],
-                              "persona_name": p["persona"], "query_style": p["style"],
-                              "metadata": {"query_length": p["longueur"], "synthetiseur": p["synthetiseur"],
-                                           "chunk_ids": [c.get("chunk_id") for c in p["contextes"]],
-                                           "file_ids": [c.get("file_id") for c in p["contextes"]],
-                                           "relecture": p["relecture"], "commentaire": p["commentaire"]}}
-                             for p in paires]}
+        corps = {
+            "metadata": {"collection": collection, "run": ident, "modele": run["modele"], "cree_le": run["cree_le"], "total_samples": len(paires)},
+            "samples": [
+                {
+                    "question": p["question"],
+                    "answer": p["reponse"],
+                    "context": [c.get("texte", "") for c in p["contextes"]],
+                    "persona_name": p["persona"],
+                    "query_style": p["style"],
+                    "metadata": {
+                        "query_length": p["longueur"],
+                        "synthetiseur": p["synthetiseur"],
+                        "chunk_ids": [c.get("chunk_id") for c in p["contextes"]],
+                        "file_ids": [c.get("file_id") for c in p["contextes"]],
+                        "relecture": p["relecture"],
+                        "commentaire": p["commentaire"],
+                    },
+                }
+                for p in paires
+            ],
+        }
         return Response(json.dumps(corps, ensure_ascii=False, indent=2), media_type="application/json", headers=entete)
     tampon = io.StringIO()
     w = csv.writer(tampon, delimiter=";")
-    w.writerow(["id", "persona", "question", "reponse", "style", "longueur", "relecture", "commentaire",
-                "chunk_ids", "file_ids", "fichiers"])
+    w.writerow(["id", "persona", "question", "reponse", "style", "longueur", "relecture", "commentaire", "chunk_ids", "file_ids", "fichiers"])
     for p in paires:
-        w.writerow([_cellule(x) for x in (
-            p["id"], p["persona"], p["question"], p["reponse"], p["style"], p["longueur"], p["relecture"],
-            p["commentaire"], " ".join(str(c.get("chunk_id") or "") for c in p["contextes"]),
-            " ".join(str(c.get("file_id") or "") for c in p["contextes"]),
-            " | ".join(str(c.get("fichier") or "") for c in p["contextes"]))])
+        w.writerow(
+            [
+                _cellule(x)
+                for x in (
+                    p["id"],
+                    p["persona"],
+                    p["question"],
+                    p["reponse"],
+                    p["style"],
+                    p["longueur"],
+                    p["relecture"],
+                    p["commentaire"],
+                    " ".join(str(c.get("chunk_id") or "") for c in p["contextes"]),
+                    " ".join(str(c.get("file_id") or "") for c in p["contextes"]),
+                    " | ".join(str(c.get("fichier") or "") for c in p["contextes"]),
+                )
+            ]
+        )
     return Response("﻿" + tampon.getvalue(), media_type="text/csv; charset=utf-8", headers=entete)

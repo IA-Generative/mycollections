@@ -15,12 +15,14 @@ from app.services import access
 
 async def lire_la_collection(collection: str, user: CurrentUser = Depends(current_user)) -> CurrentUser:
     from app.routers.publication import _fiche_pour
+
     await _fiche_pour(collection, user, ecrire=False)
     return user
 
 
 async def gerer_la_collection(collection: str, user: CurrentUser = Depends(current_user)) -> CurrentUser:
     from app.routers.publication import _fiche_pour
+
     await _fiche_pour(collection, user, ecrire=True)
     return user
 
@@ -33,6 +35,7 @@ async def exiger_administration(user: CurrentUser = Depends(current_user)) -> Cu
 
 async def peut_lire_nom(collection: str, user: CurrentUser) -> bool:
     from app.routers.publication import _fiche_pour
+
     try:
         await _fiche_pour(collection, user, ecrire=False)
         return True

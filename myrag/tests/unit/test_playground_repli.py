@@ -9,9 +9,6 @@ recherche, injecte les morceaux comme contexte, et rend de VRAIES sources.
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
-
-import pytest
 
 from app.routers.playground import _morceaux_par_recherche
 
@@ -29,9 +26,20 @@ class FauxClient:
 
 
 def test_les_morceaux_gardent_leur_identite_de_source():
-    c = FauxClient([{"content": "# NATINF 7742-8552\n## NATINF 7987 — ACHAT…",
-                     "metadata": {"filename": "natinf_07742_08552_106.md", "chunk_url": "https://x/extract/12",
-                                  "file_url": "https://x/static/12", "page": 1, "content": "doublon ignoré"}}])
+    c = FauxClient(
+        [
+            {
+                "content": "# NATINF 7742-8552\n## NATINF 7987 — ACHAT…",
+                "metadata": {
+                    "filename": "natinf_07742_08552_106.md",
+                    "chunk_url": "https://x/extract/12",
+                    "file_url": "https://x/static/12",
+                    "page": 1,
+                    "content": "doublon ignoré",
+                },
+            }
+        ]
+    )
     morceaux = asyncio.run(_morceaux_par_recherche(c, "amorce-natinf", "NATINF 7987 ?"))
     assert len(morceaux) == 1
     m = morceaux[0]

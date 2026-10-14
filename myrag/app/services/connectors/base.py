@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
 
 @dataclass
 class DocumentInfo:
     """Metadata about a document from a source."""
+
     id: str
     title: str
     source_type: str  # legifrance | file | drive | nextcloud | resana

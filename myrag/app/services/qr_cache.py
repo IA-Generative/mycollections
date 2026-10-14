@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -28,12 +28,14 @@ class QRCache:
 
     def __init__(self, data_dir: str | None = None):
         from app.config import settings
+
         self.data_dir = data_dir or settings.data_dir
         self._stats: dict[str, dict] = {}  # collection → {hits, misses}
 
     def _path(self, collection: str) -> Path:
         # `collection` provient d'un paramètre de route : on confine sous data_dir.
         from app.security_utils import ensure_within
+
         base = Path(self.data_dir)
         return ensure_within(base, base / collection) / "qr_cache.json"
 
@@ -49,8 +51,7 @@ class QRCache:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps([e.to_dict() for e in entries], indent=2, ensure_ascii=False))
 
-    def add(self, collection: str, question: str, answer: str,
-            tags: list[str] | None = None, source: str = "manual") -> QREntry:
+    def add(self, collection: str, question: str, answer: str, tags: list[str] | None = None, source: str = "manual") -> QREntry:
         entries = self._load(collection)
         entry = QREntry(
             id=str(uuid.uuid4())[:8],
@@ -71,9 +72,7 @@ class QRCache:
         entries = [e for e in entries if e.id != entry_id]
         self._save(collection, entries)
 
-    def update(self, collection: str, entry_id: str,
-               question: str | None = None, answer: str | None = None,
-               tags: list[str] | None = None):
+    def update(self, collection: str, entry_id: str, question: str | None = None, answer: str | None = None, tags: list[str] | None = None):
         entries = self._load(collection)
         for e in entries:
             if e.id == entry_id:
@@ -124,19 +123,20 @@ class QRCache:
         """Import Q&R entries from a JSON list."""
         entries = self._load(collection)
         for item in data:
-            entries.append(QREntry(
-                id=str(uuid.uuid4())[:8],
-                question=item["question"],
-                answer=item["answer"],
-                tags=item.get("tags", []),
-                source="import",
-            ))
+            entries.append(
+                QREntry(
+                    id=str(uuid.uuid4())[:8],
+                    question=item["question"],
+                    answer=item["answer"],
+                    tags=item.get("tags", []),
+                    source="import",
+                )
+            )
         self._save(collection, entries)
 
     def export_json(self, collection: str) -> list[dict]:
         """Export Q&R entries as JSON."""
-        return [{"question": e.question, "answer": e.answer, "tags": e.tags}
-                for e in self._load(collection)]
+        return [{"question": e.question, "answer": e.answer, "tags": e.tags} for e in self._load(collection)]
 
     def record_hit(self, collection: str):
         stats = self._stats.setdefault(collection, {"hits": 0, "misses": 0})

@@ -24,6 +24,7 @@ def test_l_import_est_reserve_aux_administrateurs(client, en_tant_que):
 
 def test_un_connecteur_manquant_est_nomme(client, en_tant_que, purger, monkeypatch):
     from app.routers import amorces as routeur
+
     monkeypatch.delitem(routeur.CONNECTEURS, "natinfo")
     purger("amorce-natinf")
     en_tant_que(SUPERADMIN)
@@ -44,6 +45,7 @@ def test_vingt_questions_en_banque_et_couverture_dans_la_grille(client, en_tant_
 
     async def faux(collection, entree, **k):
         return {"documents": 3, "lignes_importees": 42, "couverture": {"departements": 3, "annees": ["2019", "2024"]}}
+
     monkeypatch.setitem(routeur.CONNECTEURS, "sdis-interventions", faux)
     purger("amorce-sdis-interventions")
     en_tant_que(SUPERADMIN)
@@ -67,6 +69,7 @@ def test_un_import_qui_echoue_le_dit(client, en_tant_que, purger, monkeypatch):
 
     async def casse(collection, entree, **k):
         raise RuntimeError("la source ne répond pas")
+
     monkeypatch.setitem(routeur.CONNECTEURS, "baac", casse)
     purger("amorce-baac")
     en_tant_que(SUPERADMIN)
@@ -82,6 +85,7 @@ def test_le_critere_d_ouverture_compte_les_amorces_en_controle(client, en_tant_q
 
     async def rien(collection, entree, **k):
         return {"documents": 0}
+
     en_tant_que(SUPERADMIN)
     ids = ["natinf", "ssmsi-delinquance", "rne-elus"]
     for i in ids:
@@ -105,21 +109,20 @@ def test_le_critere_d_ouverture_compte_les_amorces_en_controle(client, en_tant_q
 async def test_la_banque_se_met_a_jour_quand_le_catalogue_change(creer_collection, nom):
     """Une réponse attendue fausse se corrigeait dans le dépôt sans jamais
     atteindre la collection en service : le jeu ne se créait qu'une fois."""
-    from app.services.amorces.banque import NOM_JEU, poser_questions
     import json as _json
+
     from sqlalchemy import select
+
     from app.database import async_session
     from app.models.db import EvalDataset
+    from app.services.amorces.banque import NOM_JEU, poser_questions
 
     creer_collection(nom)
     assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "faux"}]) == 1
-    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "juste"},
-                                       {"question": "Q2 ?", "expected_answer": "b"}]) == 2
+    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "juste"}, {"question": "Q2 ?", "expected_answer": "b"}]) == 2
 
     async with async_session() as session:
-        jeux = (await session.execute(
-            select(EvalDataset).where(EvalDataset.collection_name == nom)
-        )).scalars().all()
+        jeux = (await session.execute(select(EvalDataset).where(EvalDataset.collection_name == nom))).scalars().all()
     assert len(jeux) == 1, "un seul jeu, mis à jour — jamais un doublon"
     questions = _json.loads(jeux[0].questions_json)
     assert [q["expected_answer"] for q in questions] == ["juste", "b"]
@@ -130,6 +133,7 @@ def test_les_reponses_attendues_de_natinf_collent_a_la_source():
     """Le libellé de NATINF 7987 disait « conduite sans permis » ; la nomenclature
     dit « achat en connaissance de cause de produits de la pêche maritime »."""
     from app.amorces import entree
+
     questions = {q["question"]: q["expected_answer"] for q in entree("natinf")["questions"]}
     assert "PECHE MARITIME" in questions["Quel est le libellé de l'infraction NATINF 7987 ?"]
     assert "conduite sans permis" not in " ".join(questions.values())

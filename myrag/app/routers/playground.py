@@ -4,13 +4,13 @@ import json
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from app.routers._droits import gerer_la_collection
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
+from app.routers._droits import gerer_la_collection
+from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 from app.services import accueil, liens
 from app.services.openrag_client import OpenRAGClient
-from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
 
@@ -25,12 +25,24 @@ _CHAT_MAX_TOKENS = 4096
 # Questions hors-sujet ajoutées à tout jeu généré : vérifient que le RAG refuse
 # de fabriquer une réponse quand le sujet n'est pas couvert.
 _OUT_OF_SCOPE = [
-    {"id": "hors-sujet-1", "question": "Quel est l'age du capitaine ?",
-     "expected_answer": "", "must_cite": [], "tags": ["hors-sujet"], "out_of_scope": True,
-     "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse."},
-    {"id": "hors-sujet-2", "question": "Quelle est la capitale de la Mongolie ?",
-     "expected_answer": "", "must_cite": [], "tags": ["hors-sujet"], "out_of_scope": True,
-     "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse."},
+    {
+        "id": "hors-sujet-1",
+        "question": "Quel est l'age du capitaine ?",
+        "expected_answer": "",
+        "must_cite": [],
+        "tags": ["hors-sujet"],
+        "out_of_scope": True,
+        "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.",
+    },
+    {
+        "id": "hors-sujet-2",
+        "question": "Quelle est la capitale de la Mongolie ?",
+        "expected_answer": "",
+        "must_cite": [],
+        "tags": ["hors-sujet"],
+        "out_of_scope": True,
+        "note": "Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.",
+    },
 ]
 
 
@@ -46,10 +58,15 @@ def _parse_question_lines(text: str, limit: int = 8) -> list[dict]:
         q = re.sub(r"^[\s\-\*\d.\)•>]+", "", line)
         q = re.sub(r"[\s—-]+$", "", q).strip()
         if len(q) > 5 and "?" in q:
-            questions.append({
-                "id": f"q{len(questions) + 1}", "question": q,
-                "expected_answer": "", "must_cite": [], "tags": [],
-            })
+            questions.append(
+                {
+                    "id": f"q{len(questions) + 1}",
+                    "question": q,
+                    "expected_answer": "",
+                    "must_cite": [],
+                    "tags": [],
+                }
+            )
             if len(questions) >= limit:
                 break
     return questions
@@ -66,8 +83,10 @@ async def _generate_questions_via_lines(client: OpenRAGClient, model: str) -> li
     )
     try:
         result = await client.chat(
-            model=model, messages=[{"role": "user", "content": prompt}],
-            temperature=0.4, max_tokens=_CHAT_MAX_TOKENS,
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=_CHAT_MAX_TOKENS,
         )
     except Exception:
         return []
@@ -89,9 +108,7 @@ class PlaygroundChatRequest(BaseModel):
 _EXTRAIT_MAX_CARS = 2000
 
 
-async def _morceaux_par_recherche(
-    client: OpenRAGClient, collection: str, question: str, top_k: int = 5
-) -> list[dict]:
+async def _morceaux_par_recherche(client: OpenRAGClient, collection: str, question: str, top_k: int = 5) -> list[dict]:
     """Les morceaux les plus proches de la question, au format « source » du chat.
 
     Le RAG du chat rend parfois zéro source là où la recherche trouve le bon
@@ -112,9 +129,7 @@ async def _morceaux_par_recherche(
     return morceaux
 
 
-async def _get_collection_sample(
-    client: OpenRAGClient, collection: str, max_files: int = 5
-) -> list[dict]:
+async def _get_collection_sample(client: OpenRAGClient, collection: str, max_files: int = 5) -> list[dict]:
     """Get a sample of files from the collection to provide context.
 
     Used as fallback when semantic search returns no results
@@ -366,8 +381,7 @@ def signer_les_liens_de_la_source(s: dict) -> dict:
 
 
 @router.post("/{collection}/chat")
-async def playground_chat(collection: str, req: PlaygroundChatRequest,
-                          user: CurrentUser = Depends(current_user)):
+async def playground_chat(collection: str, req: PlaygroundChatRequest, user: CurrentUser = Depends(current_user)):
     """Quick RAG chat test against a collection.
 
     If OpenRAG RAG returns no sources, falls back to manual context injection.
@@ -375,6 +389,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
     # Poser une question à une collection demande de pouvoir la lire : la réponse cite ses
     # sources et en remet des liens signés (diagnostic d'octobre 2026, P0).
     from app.routers.publication import _fiche_pour
+
     await _fiche_pour(collection, user, ecrire=False)
     # La mesure d'usage : une ligne par question (sans son texte). Ne bloque jamais.
     await accueil.noter_question(collection, user.sub)
@@ -391,6 +406,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
     if not system_prompt:
         try:
             from app.services.collection_store import get_system_prompt
+
             prompt = await get_system_prompt(collection)
             if prompt:
                 system_prompt = prompt
@@ -445,23 +461,23 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
             fallback_used = repli_recherche = True
             sources = morceaux
             extraits = wrap_untrusted(
-                "\n\n---\n\n".join(
-                    neutralize_for_prompt(m.get("content") or "", max_len=_EXTRAIT_MAX_CARS)
-                    for m in morceaux
-                ),
+                "\n\n---\n\n".join(neutralize_for_prompt(m.get("content") or "", max_len=_EXTRAIT_MAX_CARS) for m in morceaux),
                 label="DOCUMENTS",
             )
             messages_repli = [
-                {"role": "system", "content": (system_prompt + "\n\n" if system_prompt else "") + (
-                    "Réponds à la question en te fondant UNIQUEMENT sur les documents fournis ci-dessous. "
-                    "Si la réponse ne s'y trouve pas, dis-le simplement."
-                )},
+                {
+                    "role": "system",
+                    "content": (system_prompt + "\n\n" if system_prompt else "")
+                    + ("Réponds à la question en te fondant UNIQUEMENT sur les documents fournis ci-dessous. Si la réponse ne s'y trouve pas, dis-le simplement."),
+                },
                 {"role": "user", "content": f"{extraits}\n\n{req.question}"},
             ]
             try:
                 resultat_repli = await client.chat(
-                    model=model, messages=messages_repli,
-                    temperature=req.temperature, max_tokens=_CHAT_MAX_TOKENS,
+                    model=model,
+                    messages=messages_repli,
+                    temperature=req.temperature,
+                    max_tokens=_CHAT_MAX_TOKENS,
                 )
                 if resultat_repli.get("choices"):
                     content = resultat_repli["choices"][0].get("message", {}).get("content", "") or content
@@ -487,9 +503,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
             total_files_count = len(await client.list_files(collection))
             files_block = wrap_untrusted("\n".join(file_list), label="NOMS DE FICHIERS")
 
-            fallback_system = (
-                system_prompt + "\n\n" if system_prompt else ""
-            ) + (
+            fallback_system = (system_prompt + "\n\n" if system_prompt else "") + (
                 f"Cette collection '{collection}' contient {total_files_count} documents indexes. "
                 "Reponds a la question en te basant sur les noms de fichiers (fournis comme donnee) "
                 "pour decrire le contenu de la collection."
@@ -533,6 +547,7 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest,
     try:
         from app.services.collectif_store import fiche
         from app.services.etats import mention_verification
+
         mention = mention_verification((await fiche(collection))["etat_collab"])
     except Exception:  # noqa: BLE001 — fiche absente : pas de mention, pas de panne
         mention = None
