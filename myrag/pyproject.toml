@@ -19,6 +19,15 @@ dependencies = [
     "alembic>=1.14.0",
 ]
 
+[project.optional-dependencies]
+# Génération de paires question/réponse par persona (app/generation, docs/generation.md).
+# Optionnelle : l'image standard ne l'embarque pas ; sans elle, les routes répondent 503.
+generation = [
+    "ragas==0.4.3",
+    # ragas 0.4.3 importe langchain_community.chat_models.vertexai, retiré en 0.4.2.
+    "langchain-community<0.4.2",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
