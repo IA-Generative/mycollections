@@ -90,7 +90,14 @@ MOTIFS = {
     "reserve": "Ce mot est réservé par l'application.",
     "db": "Cet identifiant est déjà pris.",
     "partition": "Cet identifiant est déjà pris (une partition porte ce nom).",
+    "preview": "Sur cet environnement d'essai, l'identifiant commence par le préfixe imposé.",
 }
+
+
+def prefixe_impose() -> str:
+    """Le préfixe de partition de l'environnement d'essai ('' hors preview)."""
+    from app.config import settings
+    return (settings.partition_prefixe or "").strip().lower()
 
 
 def prefixes_bannis() -> tuple[str, ...]:
@@ -111,6 +118,9 @@ def motif_de_refus(identifiant: str) -> str | None:
         return "reserve"
     if any(n.startswith(p) for p in prefixes_bannis()):
         return "prefixe"
+    impose = prefixe_impose()
+    if impose and not (n.startswith(impose) and len(n) > len(impose)):
+        return "preview"
     return None
 
 
@@ -134,4 +144,4 @@ def deriver_identifiant(titre: str) -> str:
 def regles() -> dict:
     """Ce que le formulaire de création doit savoir — servi tel quel au front."""
     return {"min": IDENT_MIN, "max": IDENT_MAX, "prefixes_bannis": list(prefixes_bannis()),
-            "reserves": sorted(RESERVES), "motifs": MOTIFS}
+            "reserves": sorted(RESERVES), "motifs": MOTIFS, "prefixe_impose": prefixe_impose()}

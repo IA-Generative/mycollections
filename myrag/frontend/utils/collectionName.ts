@@ -28,6 +28,8 @@ export interface ReglesNommage {
   prefixes_bannis: string[]
   reserves: string[]
   motifs: Record<string, string>
+  /** Environnement d'essai (preview) : tout identifiant commence par ce préfixe. '' sinon. */
+  prefixe_impose?: string
 }
 
 export const REGLES_PAR_DEFAUT: ReglesNommage = {
@@ -45,7 +47,8 @@ export const REGLES_PAR_DEFAUT: ReglesNommage = {
 }
 
 /** « Droit des étrangers » → `droit-etrangers`. Même règle que app/services/nommage.deriver_identifiant. */
-export function deriverIdentifiant(titre: string, max = 40): string {
+export function deriverIdentifiant(titre: string, max = 40, prefixe = ''): string {
+  if (prefixe) return prefixe + deriverIdentifiant(titre, max - prefixe.length)
   const mots = sansAccents(titre).split(/[^a-z0-9]+/).filter(Boolean)
   const utiles = mots.filter(m => !MOTS_VIDES.has(m))
   let ident = (utiles.length ? utiles : mots).join('-').replace(/^[0-9-]+/, '')
@@ -63,6 +66,8 @@ export function motifRefus(ident: string, regles: ReglesNommage = REGLES_PAR_DEF
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(ident)) return 'format'
   if (regles.reserves.includes(ident)) return 'reserve'
   if (regles.prefixes_bannis.some(p => ident.startsWith(p))) return 'prefixe'
+  const impose = regles.prefixe_impose || ''
+  if (impose && !(ident.startsWith(impose) && ident.length > impose.length)) return 'preview'
   return null
 }
 

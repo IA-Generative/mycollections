@@ -293,7 +293,8 @@ async def create_collection_endpoint(
     demande = req.name
     req.name = req.name.strip().lower()
     motif = nommage.motif_de_refus(req.name)
-    if motif and not await _partition_existe(demande):
+    # En preview, jamais d'adoption hors préfixe : ce serait rattacher une partition de la bêta.
+    if motif and (motif == "preview" or not await _partition_existe(demande)):
         raise HTTPException(status_code=422, detail={"reason": motif, "message": nommage.MOTIFS[motif]})
     if motif:
         req.name = demande  # adoption : le nom de la partition, tel quel
