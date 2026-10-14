@@ -26,7 +26,28 @@
     </ul>
     <p v-else class="fr-text--sm" style="color:var(--text-mention-grey)">Aucun persona pour l'instant.</p>
 
-    <details class="fr-mt-2w" :open="!personas.length">
+    <div class="fr-mt-2w">
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-sparkling-2-line fr-btn--icon-left"
+              :disabled="occupe || enProposition" @click="proposer">
+        {{ enProposition ? 'Lecture des documents…' : 'Proposer des personas d\'après les documents' }}
+      </button>
+      <p v-if="propositions.length" class="fr-text--xs fr-mt-1w fr-mb-1w">
+        Proposés d'après les documents — rien n'est enregistré tant que vous ne les ajoutez pas.
+      </p>
+      <ul v-if="propositions.length" class="gen-personas">
+        <li v-for="(pr, i) in propositions" :key="pr.nom" class="gen-personas__item gen-personas__item--propose">
+          <p class="fr-text--bold fr-mb-0">{{ pr.nom }}</p>
+          <p class="fr-text--sm fr-mb-1w">{{ pr.description_role }}</p>
+          <div class="gen-actions">
+            <button class="fr-btn fr-btn--sm" :disabled="occupe" @click="adopter(i)">Ajouter</button>
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary" @click="Object.assign(nouveau, pr); propositions.splice(i, 1); ouvert = true">Modifier avant d'ajouter</button>
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline" @click="propositions.splice(i, 1)">Écarter</button>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <details class="fr-mt-2w" :open="ouvert || !personas.length" @toggle="ouvert = ($event.target as HTMLDetailsElement).open">
       <summary class="fr-text--bold">Ajouter un persona</summary>
       <div class="fr-mt-1w">
         <p class="fr-text--sm fr-mb-1w">Partir d'un exemple :
@@ -56,6 +77,27 @@ const nouveau = reactive({ nom: '', description_role: '' })
 const erreursNouveau = ref<ErreursPersona>({})
 const edition = ref<{ id: string, nom: string, description_role: string } | null>(null)
 const erreurs = ref<ErreursPersona>({})
+const propositions = ref<{ nom: string, description_role: string }[]>([])
+const enProposition = ref(false)
+const ouvert = ref(false)
+
+async function proposer() {
+  enProposition.value = true
+  erreur.value = ''
+  try {
+    const r = await g.proposerPersonas(props.collection, 4)
+    const deja = new Set([...props.personas, ...propositions.value].map((p: any) => p.nom.toLowerCase()))
+    propositions.value = [...propositions.value, ...(r.propositions || []).filter((p: any) => !deja.has(p.nom.toLowerCase()))]
+    if (!propositions.value.length) erreur.value = 'Aucun nouveau persona proposé : réessayez, ou ajoutez-en un vous-même.'
+  } catch (e) { erreur.value = messageErreur(e) } finally { enProposition.value = false }
+}
+function adopter(i: number) {
+  const pr = propositions.value[i]
+  agir(async () => {
+    await g.creerPersona(props.collection, pr)
+    propositions.value.splice(i, 1)
+  })
+}
 
 /** Les deux champs d'un persona, avec leurs messages d'erreur DSFR. */
 const FormulairePersona = defineComponent({
@@ -121,5 +163,6 @@ function supprimer(p: any) {
 <style scoped>
 .gen-personas { list-style: none; padding: 0; margin: 0; }
 .gen-personas__item { border-left: 3px solid var(--border-default-blue-france); padding: .25rem 0 .25rem 1rem; margin-bottom: 1rem; }
+.gen-personas__item--propose { border-left-color: var(--border-default-yellow-tournesol, #c8aa39); }
 .gen-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 </style>

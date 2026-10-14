@@ -88,26 +88,8 @@
                 <p class="fr-message fr-message--info">{{ genIndispo }}</p>
               </div>
               <template v-else>
-                <div class="fr-fieldset__element">
-                  <div class="fr-select-group">
-                    <label class="fr-label" for="gen-persona">Qui pose les questions ?</label>
-                    <select id="gen-persona" v-model="choixPersona" class="fr-select" :disabled="generating">
-                      <optgroup v-if="personasExistants.length" label="Personas de la collection">
-                        <option v-for="p in personasExistants" :key="p.id" :value="`id:${p.id}`">{{ p.nom }}</option>
-                      </optgroup>
-                      <optgroup label="Exemples">
-                        <option v-for="(e, i) in propositions" :key="e.nom" :value="`ex:${i}`">{{ e.nom }}</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                </div>
-                <div class="fr-fieldset__element">
-                  <div class="fr-input-group">
-                    <label class="fr-label" for="gen-role">Sa situation
-                      <span class="fr-hint-text">Son métier, à qui il répond, ce qu'il cherche. Modifiable.</span>
-                    </label>
-                    <textarea id="gen-role" v-model="rolePersona" class="fr-input" rows="2" :disabled="generating || choixPersona.startsWith('id:')"></textarea>
-                  </div>
+                <div class="fr-fieldset__element gen-assistant__personas">
+                  <GenerationChoixPersonas v-model="candidats" :collection="collection" :desactive="generating" />
                 </div>
                 <div class="fr-fieldset__element">
                   <div class="fr-input-group gen-assistant__taille">
@@ -276,7 +258,7 @@ const collection = route.query.collection as string
 const { get, post, patch } = useApi()
 
 import { renderMarkdownSafe } from '~/utils/sanitize'
-import { EXEMPLES_PERSONAS, PERSONNA_DEFAUT, libellePhase, pairesVersJeu, progressionRun, type Run } from '~/utils/generation'
+import { EXEMPLES_PERSONAS, PERSONNA_DEFAUT, candidatsInitiaux, libellePhase, pairesVersJeu, preparerLancement, progressionRun, type CandidatPersona, type Run } from '~/utils/generation'
 
 const g = useGeneration()
 const question = ref('')
@@ -291,20 +273,15 @@ const runSuivi = ref<Run | null>(null)
 // --- Génération : persona, taille, disponibilité ---
 const propositions = [PERSONNA_DEFAUT, ...EXEMPLES_PERSONAS]
 const personasExistants = ref<any[]>([])
-const choixPersona = ref('ex:0')
-const rolePersona = ref(PERSONNA_DEFAUT.description_role)
+const candidats = ref<CandidatPersona[]>([])
 const tailleGen = ref(8)
 const genIndispo = ref('')
 const dernierRun = ref('')
-watch(choixPersona, (c) => {
-  if (c.startsWith('id:')) rolePersona.value = personasExistants.value.find(p => `id:${p.id}` === c)?.description_role || ''
-  else rolePersona.value = propositions[Number(c.slice(3))]?.description_role || ''
-})
 onMounted(async () => {
   try {
     const etat = await g.etat(collection)
     personasExistants.value = etat.personas || []
-    if (personasExistants.value.length) choixPersona.value = `id:${personasExistants.value[0].id}`
+    candidats.value = candidatsInitiaux(personasExistants.value, propositions)
   } catch (e) {
     genIndispo.value = String(e).includes('503') ? messageErreur(e) : ''
   }
@@ -340,19 +317,13 @@ async function generateDataset() {
   try {
     // Le service de generation doit etre installe et configure (sinon 503, dit ce qui manque).
     const etat = await g.etat(collection)
-    // Le persona choisi : celui de la collection, ou l'exemple (avec sa situation modifiée), créé
-    // au besoin — ou repris s'il existe déjà sous ce nom.
-    let personas: any[]
-    if (choixPersona.value.startsWith('id:')) {
-      personas = (etat.personas || []).filter((p: any) => `id:${p.id}` === choixPersona.value)
-    } else {
-      const ex = propositions[Number(choixPersona.value.slice(3))]
-      const existant = (etat.personas || []).find((p: any) => p.nom === ex.nom)
-      if (existant && existant.description_role === rolePersona.value.trim()) personas = [existant]
-      else if (existant) personas = [(await g.modifierPersona(collection, existant.id, { description_role: rolePersona.value.trim() })).persona]
-      else personas = [(await g.creerPersona(collection, { nom: ex.nom, description_role: rolePersona.value.trim() })).persona]
-    }
-    if (!personas.length) throw new Error('Choisissez un persona.')
+    // Les personas cochés : ceux de la collection repris tels quels, les autres (exemples, libres,
+    // propositions tirées des documents) créés d'abord.
+    const plan = preparerLancement(candidats.value)
+    if (plan.erreur) throw new Error(plan.erreur)
+    const ids = [...plan.ids]
+    for (const p of plan.aCreer) ids.push((await g.creerPersona(collection, p)).persona.id)
+    const personas = ids.map(id => ({ id }))
     // Un run tourne deja ? On le suit au lieu d'en lancer un autre (sinon 409).
     let run: Run = etat.run_actif
     if (!run) {
@@ -513,6 +484,7 @@ async function importDataset(e: Event) {
 
 <style scoped>
 .gen-assistant__taille { max-width: 12rem; }
+.gen-assistant__personas { flex: 1 1 100%; width: 100%; }
 .myrag-md-preview {
   background: #f6f6f6;
   border-radius: 4px;

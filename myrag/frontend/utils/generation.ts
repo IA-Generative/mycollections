@@ -228,3 +228,75 @@ export function pairesVersJeu(
     questions: [...questions, ...HORS_SUJET],
   }
 }
+
+/** Un persona que l'on peut cocher pour une génération : déjà dans la collection (`id`), ou à créer. */
+export interface CandidatPersona {
+  cle: string
+  id?: string
+  nom: string
+  description_role: string
+  origine: 'collection' | 'exemple' | 'proposition' | 'libre'
+  coche: boolean
+}
+
+export const PERSONAS_MAX = 5
+
+const plier = (s: string) => (s || '').trim().toLowerCase()
+
+/**
+ * Les candidats, sans doublon de nom (à la casse près) : ceux de la collection d'abord, puis
+ * les propositions tirées des documents, puis les exemples. Les deux premiers de la collection
+ * sont cochés d'office ; sans persona dans la collection, le premier exemple l'est.
+ */
+export function candidatsInitiaux(existants: { id: string, nom: string, description_role: string }[],
+  exemples: { nom: string, description_role: string }[]): CandidatPersona[] {
+  const vus = new Set<string>()
+  const liste: CandidatPersona[] = []
+  for (const p of existants) {
+    if (vus.has(plier(p.nom))) continue
+    vus.add(plier(p.nom))
+    liste.push({ cle: `id:${p.id}`, id: p.id, nom: p.nom, description_role: p.description_role, origine: 'collection', coche: liste.length < 2 })
+  }
+  for (const e of exemples) {
+    if (vus.has(plier(e.nom))) continue
+    vus.add(plier(e.nom))
+    liste.push({ cle: `ex:${plier(e.nom)}`, nom: e.nom, description_role: e.description_role, origine: 'exemple', coche: !existants.length && liste.length === 0 })
+  }
+  return liste
+}
+
+/** Ajoute des candidats (propositions, persona libre) en tête de la liste ; un nom déjà présent est ignoré.
+ *  Rend le nombre de candidats réellement ajoutés. Ils arrivent cochés tant qu'il reste de la place. */
+export function ajouterCandidats(liste: CandidatPersona[], nouveaux: { nom: string, description_role: string }[],
+  origine: 'proposition' | 'libre'): number {
+  const vus = new Set(liste.map(c => plier(c.nom)))
+  let n = 0
+  const ajout: CandidatPersona[] = []
+  for (const p of nouveaux) {
+    if (!plier(p.nom) || vus.has(plier(p.nom))) continue
+    vus.add(plier(p.nom))
+    ajout.push({ cle: `${origine}:${plier(p.nom)}`, nom: p.nom.trim(), description_role: p.description_role.trim(), origine, coche: false })
+    n++
+  }
+  liste.unshift(...ajout)
+  let place = PERSONAS_MAX - liste.filter(c => c.coche).length
+  for (const c of ajout) if (place > 0) { c.coche = true; place-- }
+  return n
+}
+
+/** Ce qu'il faut faire avant de lancer : les ids à reprendre, les personas à créer (validés). */
+export function preparerLancement(liste: CandidatPersona[]): { ids: string[], aCreer: { nom: string, description_role: string }[], erreur: string } {
+  const coches = liste.filter(c => c.coche)
+  if (!coches.length) return { ids: [], aCreer: [], erreur: 'Cochez au moins un persona.' }
+  if (coches.length > PERSONAS_MAX) return { ids: [], aCreer: [], erreur: `${PERSONAS_MAX} personas au plus par génération.` }
+  const noms = liste.filter(c => c.origine === 'collection').map(c => c.nom)
+  for (const c of coches.filter(x => !x.id)) {
+    const e = validerPersona(c, noms)
+    if (e.nom || e.description_role) return { ids: [], aCreer: [], erreur: `« ${c.nom || 'Persona sans nom'} » : ${e.nom || e.description_role}` }
+  }
+  return {
+    ids: coches.filter(c => c.id).map(c => c.id!),
+    aCreer: coches.filter(c => !c.id).map(c => ({ nom: c.nom.trim(), description_role: c.description_role.trim() })),
+    erreur: '',
+  }
+}

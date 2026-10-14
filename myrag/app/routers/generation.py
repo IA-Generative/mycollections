@@ -124,6 +124,28 @@ async def creer_persona(collection: str, corps: PersonaEntree, user: CurrentUser
         _traduire(e)
 
 
+class PropositionEntree(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: int = Field(default=4, ge=1, le=6)
+
+
+@router.post("/personas/propositions")
+async def proposer_personas(collection: str, corps: PropositionEntree, user: CurrentUser = Depends(gerer_la_collection)):
+    """Des personas proposés d'après les documents (un appel au modèle). Rien n'est enregistré."""
+    from app.generation import suggestion
+    from app.generation.resultats import message_sur
+
+    existants = [p["nom"] for p in await store.lister_personas(collection)]
+    try:
+        return await suggestion.proposer(collection, corps.nombre, existants)
+    except LookupError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:  # noqa: BLE001 — modèle injoignable, quota… : dit, jamais muet
+        raise HTTPException(status_code=502, detail=message_sur(e))
+
+
 @router.patch("/personas/{ident}")
 async def modifier_persona(collection: str, ident: str, corps: PersonaModification, user: CurrentUser = Depends(gerer_la_collection)):
     champs = corps.model_dump(exclude_none=True)

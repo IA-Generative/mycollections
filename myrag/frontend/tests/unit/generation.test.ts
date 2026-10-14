@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PERSONAS_MAX, ajouterCandidats, candidatsInitiaux, preparerLancement } from '../../utils/generation'
 import {
   bilanRelecture, dureeLisible, libelleEtatRun, libelleModele, libellePhase, libelleRelecture, libelleStyle, nombreCourt,
   nomFichierExport, pairesVersJeu, progressionRun, resumeCout, validerPersona, EXEMPLES_PERSONAS, HORS_SUJET,
@@ -109,5 +110,50 @@ describe('divers', () => {
   })
   it('fait le bilan des relectures', () => {
     expect(bilanRelecture([{ relecture: 'brut' }, { relecture: 'valide' }, { relecture: 'valide' }])).toEqual({ brut: 1, valide: 2, rejete: 0 })
+  })
+})
+
+
+describe('choix des personas', () => {
+  const existants = [
+    { id: 'p1', nom: 'Agent au guichet étrangers', description_role: 'Agent de préfecture qui répond aux usagers.' },
+    { id: 'p2', nom: 'Juriste', description_role: 'Juriste du bureau du contentieux qui vérifie une règle.' },
+    { id: 'p3', nom: 'Chef de bureau', description_role: 'Encadrant qui arbitre les cas difficiles du service.' },
+  ]
+  it('reprend la collection, puis les exemples, sans doublon ; coche les deux premiers', () => {
+    const l = candidatsInitiaux(existants, EXEMPLES_PERSONAS)
+    expect(l.map(c => c.origine).slice(0, 3)).toEqual(['collection', 'collection', 'collection'])
+    expect(l.filter(c => c.nom === 'Agent au guichet étrangers').length).toBe(1)
+    expect(l.filter(c => c.coche).map(c => c.id)).toEqual(['p1', 'p2'])
+  })
+  it('coche le premier exemple quand la collection n\'a aucun persona', () => {
+    expect(candidatsInitiaux([], EXEMPLES_PERSONAS).filter(c => c.coche).length).toBe(1)
+  })
+  it('ajoute les propositions en tête, cochées tant qu\'il reste de la place', () => {
+    const l = candidatsInitiaux(existants, [])
+    const n = ajouterCandidats(l, [
+      { nom: 'Usager', description_role: 'Étranger qui prépare son rendez-vous en préfecture.' },
+      { nom: 'juriste', description_role: 'Doublon à la casse près.' },
+      { nom: 'Nouvel arrivant', description_role: 'Agent qui découvre le service et ses procédures.' },
+      { nom: 'Formateur', description_role: 'Formateur qui prépare une session sur la procédure.' },
+      { nom: 'Contrôleur', description_role: 'Contrôleur interne qui vérifie le respect des délais.' },
+    ], 'proposition')
+    expect(n).toBe(4)
+    expect(l[0].nom).toBe('Usager')
+    expect(l.filter(c => c.coche).length).toBe(PERSONAS_MAX)
+  })
+  it('prépare le lancement : ids repris, personas à créer validés', () => {
+    const l = candidatsInitiaux(existants, [])
+    ajouterCandidats(l, [{ nom: 'Usager', description_role: 'Étranger qui prépare son rendez-vous en préfecture.' }], 'libre')
+    const p = preparerLancement(l)
+    expect(p.erreur).toBe('')
+    expect(p.ids).toEqual(['p1', 'p2'])
+    expect(p.aCreer).toEqual([{ nom: 'Usager', description_role: 'Étranger qui prépare son rendez-vous en préfecture.' }])
+  })
+  it('refuse un persona libre sans situation, ou rien de coché', () => {
+    const l = candidatsInitiaux([], [])
+    expect(preparerLancement(l).erreur).toBe('Cochez au moins un persona.')
+    ajouterCandidats(l, [{ nom: 'Quelqu\'un', description_role: 'court' }], 'libre')
+    expect(preparerLancement(l).erreur).toMatch(/Décrivez qui pose la question/)
   })
 })

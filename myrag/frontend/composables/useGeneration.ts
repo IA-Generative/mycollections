@@ -24,6 +24,7 @@ export function useGeneration() {
   return {
     etat: (n: string) => get(racine(n)),
     personas: (n: string) => get(`${racine(n)}/personas`),
+    proposerPersonas: (n: string, nombre = 4) => post(`${racine(n)}/personas/propositions`, { nombre }),
     creerPersona: (n: string, corps: { nom: string, description_role: string }) => post(`${racine(n)}/personas`, corps),
     modifierPersona: (n: string, id: string, corps: Partial<{ nom: string, description_role: string }>) => patch(`${racine(n)}/personas/${id}`, corps),
     supprimerPersona: (n: string, id: string) => del(`${racine(n)}/personas/${id}`),
