@@ -12,6 +12,8 @@ jobs:
     uses: dnum-mi/fabnum-cicd/.github/workflows/lint-commits.yml@v0
     permissions:
       contents: read
+    with:
+      MAX_SUBJECT_LENGTH: 120
 
   lint-yaml:
     name: Lint YAML
