@@ -149,6 +149,34 @@ class Settings(BaseSettings):
     recherche_par_minute: int = Field(default=60, validation_alias=AliasChoices(
         "MYCOLLECTIONS_RECHERCHE_PAR_MINUTE", "recherche_par_minute"))
 
+    # ─── Génération de paires question/réponse par persona (ragas, docs/generation.md) ──────
+    # Le modèle de langage et les embeddings de la passerelle MirAI (OpenAI-compatible), les mêmes
+    # qu'emploie OpenRAG. URL, clé ou modèle vide ⇒ les routes de génération répondent 503 (le
+    # patron du sel) ; le reste du service n'en dépend pas. La clé est un secret.
+    generation_llm_url: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_LLM_URL", "generation_llm_url"))
+    generation_llm_cle: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_LLM_CLE", "generation_llm_cle"))
+    generation_llm_modele: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_LLM_MODELE", "generation_llm_modele"))
+    # Facultatifs tant que les personas sont saisis à la main. URL vide ⇒ celle du modèle de langage.
+    generation_embeddings_url: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_EMBEDDINGS_URL", "generation_embeddings_url"))
+    generation_embeddings_modele: str = Field(default="", validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE", "generation_embeddings_modele"))
+    # Passages envoyés à ragas : 4 × le nombre de paires demandées, plafonné ici (la reconnaissance
+    # des entités coûte un appel au modèle par passage).
+    generation_morceaux_max: int = Field(default=200, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_MORCEAUX_MAX", "generation_morceaux_max"))
+    generation_parallelisme: int = Field(default=4, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_PARALLELISME", "generation_parallelisme"))
+    generation_max_tokens: int = Field(default=4096, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_MAX_TOKENS", "generation_max_tokens"))
+    generation_delai_appel_s: int = Field(default=180, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_DELAI_APPEL_S", "generation_delai_appel_s"))
+    generation_duree_max_s: int = Field(default=1800, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_DUREE_MAX_S", "generation_duree_max_s"))
+
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore", "populate_by_name": True}
 
 
