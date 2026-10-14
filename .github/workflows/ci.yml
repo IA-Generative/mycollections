@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-commits:
+    name: Lint commits
+    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-commits.yml@v0
+    permissions:
+      contents: read
+
+  lint-yaml:
+    name: Lint YAML
+    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-yaml.yml@v0
+    permissions:
+      contents: read
+    with:
+      SCAN_PATH: .github/workflows
+      CONFIG_FILE: .yamllint
+
+  scan-gitleaks:
+    name: Scan git history for leaked secrets
+    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-gitleaks.yml@v0
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    with:
+      GITHUB_SECURITY_TAB: true
+      PR_NUMBER: ${{ github.event.pull_request.number }}
