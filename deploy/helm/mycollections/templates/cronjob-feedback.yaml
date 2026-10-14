@@ -1,0 +1,47 @@
+{{- if .Values.feedbackCronJob.enabled }}
+# Remontée des avis 👍/👎 du socle vers la banque de questions. Lit DIRECTEMENT la base du
+# socle : suspendue tant que ce droit de lecture n'est pas accordé.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: myrag-sync-feedback
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+spec:
+  suspend: {{ .Values.feedbackCronJob.suspend }}
+  schedule: {{ .Values.feedbackCronJob.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            app: myrag-backend      # hérite de la politique de sortie du backend
+        spec:
+          restartPolicy: OnFailure
+          enableServiceLinks: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+          containers:
+            - name: sync
+              image: {{ include "mycollections.image" (dict "image" .Values.images.backend "nom" "backend") }}
+              imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+              securityContext:
+                {{- include "mycollections.securiteConteneur" . | nindent 16 }}
+              command: [/app/.venv/bin/python, -m, app.services.owui_feedback_sync, --cron]
+              envFrom:
+                {{- include "mycollections.envFrom" . | nindent 16 }}
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: 500m, memory: 512Mi}
+{{- end }}
