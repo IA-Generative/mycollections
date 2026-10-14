@@ -141,6 +141,38 @@ class OpenRAGClient:
             filename=filename,
         )
 
+    async def upload_document(self, partition: str, filename: str, content: bytes, mimetype: str, metadata: dict | None = None) -> dict:
+        """Un document entier (PDF, Word…) confié à OpenRAG, qui le lit et le découpe lui-même.
+        Rend `{"file_id", "task_id"}` : l'indexation est asynchrone, `task_state` la suit."""
+        import json as _json
+
+        file_id = str(uuid.uuid4())
+        path = f"/indexer/partition/{partition}/file/{file_id}"
+        _verifier_chemin(path)
+        donnees = {"metadata": _json.dumps({"mimetype": mimetype, **(metadata or {})}, ensure_ascii=False)}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                f"{self.base_url}{path}",
+                headers={"Authorization": f"Bearer {self.admin_token}"},
+                files={"file": (filename, io.BytesIO(content), mimetype)},
+                data=donnees,
+            )
+            resp.raise_for_status()
+            corps = resp.json() if resp.content else {}
+        url = str(corps.get("task_status_url") or "")
+        return {"file_id": file_id, "task_id": url.rstrip("/").rsplit("/", 1)[-1] if url else ""}
+
+    async def task_state(self, task_id: str) -> dict:
+        """L'état d'une indexation (`QUEUED`, `RUNNING`, `COMPLETED`/`SUCCESS`, `FAILED`)."""
+        return await self._get(f"/indexer/task/{task_id}")
+
+    async def task_error(self, task_id: str) -> str:
+        try:
+            d = await self._get(f"/indexer/task/{task_id}/error")
+        except httpx.HTTPError:
+            return ""
+        return str(d.get("detail") or d.get("error") or d)[:500] if isinstance(d, dict) else str(d)[:500]
+
     async def upload_chunks(self, partition: str, chunks: list[dict]) -> list[dict]:
         results = []
         for chunk in chunks:
