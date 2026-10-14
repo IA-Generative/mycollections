@@ -1,0 +1,7 @@
+apiVersion: v2
+name: mycollections
+description: Mes collections (MirAI) — API (myrag-backend) et interface (myrag-frontend)
+type: application
+# La version du chart suit celle de l'application (release-please la tient à jour).
+version: 0.3.25 # x-release-please-version
+appVersion: "0.3.25" # x-release-please-version

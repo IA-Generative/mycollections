@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrag-backend
+  labels:
+    app: myrag-backend
+    {{- include "mycollections.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  # Volume à accès unique : une mise à jour progressive resterait bloquée en « Multi-Attach ».
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mycollections.selecteur" (dict "app" "myrag-backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mycollections.selecteur" (dict "app" "myrag-backend") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: backend
+          image: {{ include "mycollections.image" (dict "image" .Values.images.backend "nom" "backend") }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          # `uv run` voudrait écrire son cache sous $HOME (racine en lecture seule).
+          command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8200"]
+          securityContext:
+            {{- include "mycollections.securiteConteneur" . | nindent 12 }}
+          envFrom:
+            {{- include "mycollections.envFrom" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8200
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          volumeMounts:
+            - name: sources
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: sources
+          persistentVolumeClaim:
+            claimName: myrag-sources
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myrag-backend
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "mycollections.selecteur" (dict "app" "myrag-backend") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8200
+      targetPort: http

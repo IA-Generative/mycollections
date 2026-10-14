@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { slugifyCollectionName, isConflictError, deriverIdentifiant, motifRefus } from '../../utils/collectionName'
+import { slugifyCollectionName, isConflictError, deriverIdentifiant, motifRefus, REGLES_PAR_DEFAUT } from '../../utils/collectionName'
 
 describe('slugifyCollectionName', () => {
   it('passe en minuscules et remplace les espaces par des tirets', () => {
@@ -65,5 +65,19 @@ describe('motifRefus', () => {
     const regles = { min: 3, max: 40, prefixes_bannis: ['tmp-'], reserves: [], motifs: {} }
     expect(motifRefus('demo-x', regles)).toBeNull()
     expect(motifRefus('tmp-x', regles)).toBe('prefixe')
+  })
+})
+
+describe('préfixe imposé (preview)', () => {
+  const regles = { ...REGLES_PAR_DEFAUT, prefixe_impose: 'pr-12-' }
+  it("l'identifiant dérivé porte le préfixe et tient dans la longueur", () => {
+    expect(deriverIdentifiant('Codes NATINF', 40, 'pr-12-')).toBe('pr-12-codes-natinf')
+    expect(deriverIdentifiant('un titre vraiment très long qui déborde largement', 20, 'pr-12-').length).toBeLessThanOrEqual(20)
+  })
+  it('un identifiant sans le préfixe est refusé', () => {
+    expect(motifRefus('codes-natinf', regles)).toBe('preview')
+    expect(motifRefus('pr-12-', regles)).not.toBeNull()
+    expect(motifRefus('pr-12-codes-natinf', regles)).toBeNull()
+    expect(motifRefus('codes-natinf')).toBeNull()
   })
 })

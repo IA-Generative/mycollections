@@ -1,11 +1,31 @@
 """OpenRAG API client for MyRAG."""
 
 import io
+import re
 import uuid
 
 import httpx
 
 from app.config import settings
+
+_PARTITION_DANS_CHEMIN = re.compile(r"^/(?:indexer/|search/)?partition/([^/?]+)")
+
+
+class PartitionHorsPerimetre(PermissionError):
+    """Une partition hors du préfixe imposé (preview) : refusée AVANT tout appel à OpenRAG."""
+
+
+def verifier_partition(nom: str) -> None:
+    """Rien hors preview ; en preview, `nom` doit commencer par le préfixe imposé."""
+    prefixe = (settings.partition_prefixe or "").strip().lower()
+    if prefixe and not (str(nom).lower().startswith(prefixe) and len(str(nom)) > len(prefixe)):
+        raise PartitionHorsPerimetre(f"partition hors du périmètre de cet environnement : {nom!r}")
+
+
+def _verifier_chemin(path: str) -> None:
+    m = _PARTITION_DANS_CHEMIN.match(path)
+    if m:
+        verifier_partition(m.group(1))
 
 
 class OpenRAGClient:
@@ -26,6 +46,7 @@ class OpenRAGClient:
         }
 
     async def _get(self, path: str, params: dict | None = None) -> dict:
+        _verifier_chemin(path)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(
                 f"{self.base_url}{path}",
@@ -36,6 +57,7 @@ class OpenRAGClient:
             return resp.json()
 
     async def _post(self, path: str, json: dict | None = None) -> dict:
+        _verifier_chemin(path)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
                 f"{self.base_url}{path}",
@@ -48,6 +70,7 @@ class OpenRAGClient:
             return resp.json()
 
     async def _upload_file(self, path: str, file_content: bytes, filename: str, metadata: dict | None = None) -> dict:
+        _verifier_chemin(path)
         headers = {"Authorization": f"Bearer {self.admin_token}"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             files = {"file": (filename, io.BytesIO(file_content), "text/markdown")}
@@ -62,6 +85,7 @@ class OpenRAGClient:
             return resp.json()
 
     async def _delete(self, path: str) -> dict:
+        _verifier_chemin(path)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.delete(
                 f"{self.base_url}{path}",
@@ -74,6 +98,7 @@ class OpenRAGClient:
 
     async def _upload_form(self, path: str, data: dict) -> dict:
         """POST form data (for endpoints that expect form fields, not JSON)."""
+        _verifier_chemin(path)
         headers = {"Authorization": f"Bearer {self.admin_token}"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
@@ -129,6 +154,8 @@ class OpenRAGClient:
         partitions = [partition] if isinstance(partition, str) else list(partition)
         if not partitions:
             raise ValueError("Aucune partition à interroger")
+        for p in partitions:
+            verifier_partition(p)
         return await self._get(
             "/search",
             params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0], "top_k": top_k},
@@ -144,6 +171,9 @@ class OpenRAGClient:
         """OpenAI-compatible chat completion via OpenRAG (auto-RAGs from the
         partition encoded in the model name, e.g. ``openrag-<partition>``).
         """
+        if (settings.partition_prefixe or "").strip():
+            # `openrag-all` interrogerait toutes les partitions, celles de la bêta comprises.
+            verifier_partition(model[len("openrag-") :] if model.startswith("openrag-") else model)
         body = {"model": model, "messages": messages, "temperature": temperature, **extra}
         return await self._post("/v1/chat/completions", json=body)
 
@@ -170,24 +200,6 @@ class OpenRAGClient:
             raise
         return data if isinstance(data, dict) else None
 
-    async def partition_chunks(self, partition: str, file_id: str | None = None, limit: int | None = None) -> list[dict] | None:
-        """Les morceaux d'une partition, texte compris, sans vecteurs (`GET /partition/<p>/chunks`),
-        filtrés sur un fichier si `file_id`. `None` si l'instance ne connaît pas la route (OpenRAG
-        ancien) : l'appelant se replie sur `file_detail` + `extract`."""
-        params: dict = {"include_embedding": "false"}
-        if file_id:
-            params["file_id"] = file_id
-        if limit is not None:
-            params["limit"] = limit
-        try:
-            data = await self._get(f"/partition/{partition}/chunks", params=params)
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code in (404, 405):
-                return None
-            raise
-        chunks = data.get("chunks") if isinstance(data, dict) else None
-        return chunks if isinstance(chunks, list) else None
-
     async def extract(self, chunk_id: str) -> dict | None:
         """Un morceau relu (`GET /extract/<id>`), balises techniques comprises. `None` s'il manque."""
         try:
@@ -200,8 +212,8 @@ class OpenRAGClient:
 
     async def get_file_content(self, partition: str, file_id: str) -> str:
         """Best-effort plain-text retrieval of an indexed file's content.
-        Used by the article graph and résumés to read back indexed files.
-        Returns an empty string if the endpoint is unavailable."""
+        Used by generate-eval to build a sample. Returns an empty string if
+        the endpoint is unavailable."""
         try:
             data = await self._get(f"/search/partition/{partition}/file/{file_id}")
         except httpx.HTTPStatusError:

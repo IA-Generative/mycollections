@@ -1,32 +1,29 @@
+# CI de pull request — appelle dnum-mi/fabnum-cicd au tag exact (skill repo-cicd-cpin, profil
+# MirAI next). Rien n'est publié : les deux images sont construites et scannées, pas poussées
+# (les images de preview, elles, sont l'affaire de preview.yml).
 name: CI
 
 on:
   pull_request:
+    branches: [main, beta]
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   lint-commits:
-    name: Lint commits
-    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-commits.yml@v0
+    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-commits.yml@v0.23.0
     permissions:
       contents: read
     with:
       MAX_SUBJECT_LENGTH: 120
 
-  lint-yaml:
-    name: Lint YAML
-    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-yaml.yml@v0
-    permissions:
-      contents: read
-    with:
-      SCAN_PATH: .github/workflows
-      CONFIG_FILE: .yamllint
-
+  # ruff : le backend est formaté et vérifié (pre-commit en local, ici pour ce qu'il ne voit pas).
   lint-backend:
-    name: Lint backend (ruff)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -34,8 +31,7 @@ jobs:
       run:
         working-directory: myrag
     steps:
-      - uses: actions/checkout@v4
-      # Les dépendances sont tenues par uv (pyproject.toml + uv.lock), comme dans l'image.
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -44,13 +40,150 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
+  # Le binaire gitleaks (MIT), pas l'action officielle (licence d'organisation). Le dépôt l'a
+  # déjà en pre-commit ; la CI le rejoue sur ce qu'un hook local ne voit pas.
   scan-gitleaks:
-    name: Scan git history for leaked secrets
-    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-gitleaks.yml@v0
+    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-gitleaks.yml@v0.23.0
     permissions:
       contents: read
       security-events: write
       pull-requests: write
     with:
-      GITHUB_SECURITY_TAB: true
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NUMBER: >-
+        ${{ github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.number || '' }}
+
+  # Configuration (Dockerfile, manifestes) : RAPPORT seulement — bloquer ici ferait échouer la
+  # première PR d'un contributeur sur une dette qui n'est pas la sienne.
+  scan-config:
+    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-trivy.yml@v0.23.0
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+      pull-requests: write
+    with:
+      PATH: ./
+      CATEGORY: config
+      SEVERITY: CRITICAL,HIGH
+      FAIL_ON_ERROR: false
+      PR_NUMBER: >-
+        ${{ github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.number || '' }}
+
+  lint-yaml:
+    uses: dnum-mi/fabnum-cicd/.github/workflows/lint-yaml.yml@v0.23.0
+    permissions:
+      contents: read
+    with:
+      CONFIG_FILE: .yamllint
+      SCAN_PATH: .github
+
+  tests:
+    uses: ./.github/workflows/tests.yml
+    permissions:
+      contents: read
+
+  # Deux images, deux jobs : la sortie d'un job en matrice ne garde qu'une valeur, et chaque
+  # scan a besoin de l'archive de SON image.
+  build-backend:
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/backend
+      IMAGE_TAG: pr-${{ github.event.pull_request.number }}
+      IMAGE_CONTEXT: ./myrag
+      IMAGE_DOCKERFILE: ./myrag/Dockerfile
+      PUSH: false
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+
+  build-frontend:
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/frontend
+      IMAGE_TAG: pr-${{ github.event.pull_request.number }}
+      IMAGE_CONTEXT: ./myrag/frontend
+      IMAGE_DOCKERFILE: ./myrag/frontend/Dockerfile
+      PUSH: false
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+
+  scan-backend:
+    needs: [build-backend]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-trivy.yml@v0.23.0
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+      pull-requests: write
+    with:
+      IMAGE_ARTIFACT: ${{ needs.build-backend.outputs.artifact-prefix }}-amd64
+      CATEGORY: backend-amd64
+      SEVERITY: CRITICAL
+      FAIL_ON_ERROR: true
+      PR_NUMBER: >-
+        ${{ github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.number || '' }}
+
+  scan-frontend:
+    needs: [build-frontend]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/scan-trivy.yml@v0.23.0
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+      pull-requests: write
+    with:
+      IMAGE_ARTIFACT: ${{ needs.build-frontend.outputs.artifact-prefix }}-amd64
+      CATEGORY: frontend-amd64
+      SEVERITY: CRITICAL
+      FAIL_ON_ERROR: true
+      PR_NUMBER: >-
+        ${{ github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.number || '' }}
+
+  # Le chart doit se rendre, pour la bêta comme pour une preview (valeurs d'exemple).
+  helm:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Rendu du chart
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/mycollections --set images.backend.tag=x --set images.frontend.tag=x
+          helm template t deploy/helm/mycollections --set images.backend.tag=x \
+            --set images.frontend.tag=x >/dev/null
+          helm template t deploy/helm/mycollections --set images.backend.tag=x \
+            --set images.frontend.tag=x --set previewNettoyage.enabled=true \
+            --set backend.config.MYCOLLECTIONS_PARTITION_PREFIXE=pr-1- >/dev/null
+
+  all-jobs-passed:
+    name: All jobs passed
+    if: ${{ always() }}
+    needs:
+      - lint-commits
+      - scan-gitleaks
+      - scan-config
+      - lint-yaml
+      - tests
+      - build-backend
+      - build-frontend
+      - scan-backend
+      - scan-frontend
+      - helm
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Vérifier le résultat des jobs
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
