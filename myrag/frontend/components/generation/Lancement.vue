@@ -59,7 +59,7 @@
             </td>
             <td class="fr-text--xs">{{ r.actif ? '…' : resumeCout(r) }}</td>
             <td>
-              <div class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+              <div class="gen-actions">
                 <button v-if="r.etat === 'termine'" class="fr-btn fr-btn--sm fr-btn--secondary" :aria-pressed="r.id === choisi"
                         @click="emit('choisir', r.id)">Voir les paires</button>
                 <button v-if="!r.actif" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-delete-line fr-btn--icon-only"
@@ -119,4 +119,5 @@ async function supprimer(r: Run) {
 .gen-barre { height: .5rem; background: var(--background-contrast-grey); border-radius: .25rem; overflow: hidden; }
 .gen-barre__plein { height: 100%; background: var(--background-action-high-blue-france); transition: width .5s; }
 .gen-run--choisi td { background: var(--background-alt-blue-france); }
+.gen-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 </style>

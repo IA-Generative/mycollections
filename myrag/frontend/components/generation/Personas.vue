@@ -8,7 +8,7 @@
         <template v-if="edition?.id === p.id">
           <FormulairePersona v-model:nom="edition.nom" v-model:description="edition.description_role" :erreurs="erreurs"
                              :id-base="`persona-${p.id}`" />
-          <div class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+          <div class="gen-actions">
             <button class="fr-btn fr-btn--sm" :disabled="occupe" @click="enregistrer">Enregistrer</button>
             <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="edition = null">Annuler</button>
           </div>
@@ -16,7 +16,7 @@
         <template v-else>
           <p class="fr-text--bold fr-mb-0">{{ p.nom }}</p>
           <p class="fr-text--sm fr-mb-1w">{{ p.description_role }}</p>
-          <div class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+          <div class="gen-actions">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-edit-line fr-btn--icon-left" @click="modifier(p)">Modifier</button>
             <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-delete-line fr-btn--icon-left" :disabled="occupe"
                     @click="supprimer(p)">Supprimer</button>
@@ -121,4 +121,5 @@ function supprimer(p: any) {
 <style scoped>
 .gen-personas { list-style: none; padding: 0; margin: 0; }
 .gen-personas__item { border-left: 3px solid var(--border-default-blue-france); padding: .25rem 0 .25rem 1rem; margin-bottom: 1rem; }
+.gen-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 </style>

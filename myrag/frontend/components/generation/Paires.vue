@@ -2,7 +2,7 @@
   <section>
     <div class="gen-paires__tete">
       <h3 class="fr-h6 fr-mb-0">Paires générées</h3>
-      <div class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+      <div class="gen-actions">
         <button class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-download-line fr-btn--icon-left" @click="exporter('csv')">Exporter en CSV</button>
         <button class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-download-line fr-btn--icon-left" @click="exporter('json')">Exporter en JSON</button>
       </div>
@@ -54,7 +54,7 @@
             <td>
               <span class="fr-badge fr-badge--sm fr-mb-1v" :class="classeRelecture(p.relecture)">{{ libelleRelecture(p.relecture) }}</span>
               <p v-if="p.commentaire" class="fr-text--xs fr-mb-1v">« {{ p.commentaire }} »</p>
-              <div class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+              <div class="gen-actions">
                 <button v-if="p.relecture !== 'valide'" class="fr-btn fr-btn--sm fr-btn--secondary" @click="relire(p, 'valide')">Valider</button>
                 <button v-if="p.relecture !== 'rejete'" class="fr-btn fr-btn--sm fr-btn--tertiary" @click="rejeter(p)">Rejeter</button>
                 <button v-if="p.relecture !== 'brut'" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline" @click="relire(p, 'brut')">Annuler</button>
@@ -124,4 +124,5 @@ async function exporter(format: 'csv' | 'json') {
 .gen-paires__q { min-width: 14rem; }
 .gen-paires__r { min-width: 18rem; font-size: .875rem; }
 .gen-paires__pages { display: flex; gap: 1rem; align-items: center; justify-content: center; }
+.gen-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 </style>
