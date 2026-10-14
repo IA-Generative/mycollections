@@ -7,6 +7,8 @@ installé ; `modele` et `moteur`, eux, importent ragas.
 from __future__ import annotations
 
 import threading
+import time
+from collections import deque
 from dataclasses import dataclass, field
 
 
@@ -25,6 +27,7 @@ class Compteurs:
     reparations_json: int = 0
     inachevees: int = 0
     erreurs_llm: int = 0
+    refus_debit: int = 0
     appels_embeddings: int = 0
     duree_llm_s: float = 0.0
     phase: str = "lecture"
@@ -43,6 +46,8 @@ class Compteurs:
                 self.inachevees += 1
             if erreur is not None:
                 self.erreurs_llm += 1
+                if "RateLimit" in type(erreur).__name__ or "429" in str(erreur)[:200]:
+                    self.refus_debit += 1
 
     def compter_embeddings(self, n: int = 1) -> None:
         with self._verrou:
@@ -56,8 +61,36 @@ class Compteurs:
         with self._verrou:
             return {"appels_llm": self.appels_llm, "tokens_entree": self.tokens_entree,
                     "tokens_sortie": self.tokens_sortie, "reparations_json": self.reparations_json,
-                    "inachevees": self.inachevees, "erreurs_llm": self.erreurs_llm,
+                    "inachevees": self.inachevees, "erreurs_llm": self.erreurs_llm, "refus_debit": self.refus_debit,
                     "appels_embeddings": self.appels_embeddings, "duree_llm_s": round(self.duree_llm_s, 1)}
+
+
+class Debit:
+    """Au plus `par_minute` appels sur toute fenêtre glissante de 60 s, tous fils confondus.
+    `prendre()` bloque le fil appelant jusqu'à ce qu'une place se libère (les fils de ragas
+    attendent ; la boucle du service, elle, n'est jamais bloquée). 0 = sans limite."""
+
+    def __init__(self, par_minute: int, horloge=time.monotonic, dormir=time.sleep):
+        self.par_minute = max(0, int(par_minute))
+        self._horloge, self._dormir = horloge, dormir
+        self._appels: deque[float] = deque()
+        self._verrou = threading.Lock()
+        self.attente_s = 0.0
+
+    def prendre(self) -> None:
+        if not self.par_minute:
+            return
+        while True:
+            with self._verrou:
+                maintenant = self._horloge()
+                while self._appels and maintenant - self._appels[0] >= 60.0:
+                    self._appels.popleft()
+                if len(self._appels) < self.par_minute:
+                    self._appels.append(maintenant)
+                    return
+                attente = 60.0 - (maintenant - self._appels[0]) + 0.05
+                self.attente_s += attente
+            self._dormir(attente)
 
 
 def _usage(resultat) -> tuple[int, int, bool]:
@@ -119,6 +152,6 @@ def message_sur(e: BaseException) -> str:
         return "Le modèle de langage ne répond pas (passerelle MirAI injoignable ou trop lente)."
     if nom in ("AuthenticationError", "PermissionDeniedError"):
         return "Le modèle de langage refuse la clé configurée (MYCOLLECTIONS_GENERATION_LLM_CLE)."
-    if nom == "RateLimitError":
+    if "RateLimit" in nom or "429" in str(e)[:200]:
         return "Le modèle de langage limite le débit : réessayez plus tard ou baissez le parallélisme."
     return f"{nom} : {str(e)[:200]}"

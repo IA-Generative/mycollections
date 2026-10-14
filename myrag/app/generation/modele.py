@@ -22,19 +22,21 @@ from ragas.embeddings.base import LangchainEmbeddingsWrapper
 from ragas.llms.base import LangchainLLMWrapper
 
 from app.config import settings
-from app.generation.resultats import MARQUE_REPARATION, Compteurs, _usage  # noqa: F401 — réexportés
+from app.generation.resultats import MARQUE_REPARATION, Compteurs, Debit, _usage  # noqa: F401 — réexportés
 
 class LLMCompte(LangchainLLMWrapper):
     """L'enveloppe ragas d'un modèle LangChain, qui compte chaque appel et appelle en synchrone."""
 
-    def __init__(self, langchain_llm, compteurs: Compteurs, **kw):
+    def __init__(self, langchain_llm, compteurs: Compteurs, debit: Debit | None = None, **kw):
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             super().__init__(langchain_llm, **kw)
         self.compteurs = compteurs
+        self.debit = debit or Debit(0)
 
     def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+        self.debit.prendre()
         debut = time.monotonic()
         texte = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
         try:
@@ -52,15 +54,18 @@ class LLMCompte(LangchainLLMWrapper):
 class EmbeddingsComptes(LangchainEmbeddingsWrapper):
     """Même principe pour les embeddings (utilisés seulement par les personas automatiques)."""
 
-    def __init__(self, embeddings, compteurs: Compteurs, **kw):
+    def __init__(self, embeddings, compteurs: Compteurs, debit: Debit | None = None, **kw):
         super().__init__(embeddings, **kw)
         self.compteurs = compteurs
+        self.debit = debit or Debit(0)
 
     def embed_query(self, text):
+        self.debit.prendre()
         self.compteurs.compter_embeddings()
         return super().embed_query(text)
 
     def embed_documents(self, texts):
+        self.debit.prendre()
         self.compteurs.compter_embeddings()
         return super().embed_documents(texts)
 
@@ -72,7 +77,7 @@ class EmbeddingsComptes(LangchainEmbeddingsWrapper):
 
 
 def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None,
-                  modele: str | None = None, run_config=None) -> LLMCompte:
+                  modele: str | None = None, run_config=None, debit: Debit | None = None) -> LLMCompte:
     chat = ChatOpenAI(
         base_url=url or settings.generation_llm_url,
         api_key=cle or settings.generation_llm_cle,
@@ -82,11 +87,11 @@ def fabriquer_llm(compteurs: Compteurs, *, url: str | None = None, cle: str | No
         timeout=settings.generation_delai_appel_s,
         max_retries=0,  # ragas fait ses propres réessais (RunConfig.max_retries), visibles au compteur
     )
-    return LLMCompte(chat, compteurs, run_config=run_config)
+    return LLMCompte(chat, compteurs, debit=debit, run_config=run_config)
 
 
 def fabriquer_embeddings(compteurs: Compteurs, *, url: str | None = None, cle: str | None = None,
-                         modele: str | None = None, run_config=None) -> EmbeddingsComptes:
+                         modele: str | None = None, run_config=None, debit: Debit | None = None) -> EmbeddingsComptes:
     emb = OpenAIEmbeddings(
         base_url=url or settings.generation_embeddings_url or settings.generation_llm_url,
         api_key=cle or settings.generation_llm_cle,
@@ -95,4 +100,4 @@ def fabriquer_embeddings(compteurs: Compteurs, *, url: str | None = None, cle: s
         timeout=settings.generation_delai_appel_s,
         max_retries=0,
     )
-    return EmbeddingsComptes(emb, compteurs, run_config=run_config)
+    return EmbeddingsComptes(emb, compteurs, debit=debit, run_config=run_config)

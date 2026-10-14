@@ -40,8 +40,9 @@ def generer_dans_le_fil(morceaux, personas, taille, distribution, compteurs: Com
     from app.generation import modele, moteur
 
     rc = moteur.run_config_par_defaut(settings.generation_parallelisme, settings.generation_delai_appel_s)
-    llm = modele.fabriquer_llm(compteurs, run_config=rc)
-    emb = modele.fabriquer_embeddings(compteurs, run_config=rc)
+    debit = modele.Debit(settings.generation_appels_par_minute)
+    llm = modele.fabriquer_llm(compteurs, run_config=rc, debit=debit)
+    emb = modele.fabriquer_embeddings(compteurs, run_config=rc, debit=debit)
     return moteur.generer(morceaux, personas, taille, llm, emb, distribution=distribution,
                           run_config=rc, progression=compteurs.poser_phase)
 

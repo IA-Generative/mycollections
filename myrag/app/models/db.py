@@ -696,6 +696,7 @@ class Generation(Base):
     reparations_json: Mapped[int] = mapped_column(Integer, default=0)
     inachevees: Mapped[int] = mapped_column(Integer, default=0)
     erreurs_llm: Mapped[int] = mapped_column(Integer, default=0)
+    refus_debit: Mapped[int] = mapped_column(Integer, default=0)
     appels_embeddings: Mapped[int] = mapped_column(Integer, default=0)
     duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     erreur: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -705,7 +706,7 @@ class Generation(Base):
     termine_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     COMPTEURS = ("appels_llm", "tokens_entree", "tokens_sortie", "reparations_json", "inachevees",
-                 "erreurs_llm", "appels_embeddings")
+                 "erreurs_llm", "refus_debit", "appels_embeddings")
 
     def to_dict(self) -> dict:
         d = lambda v: v.isoformat() if v else None  # noqa: E731

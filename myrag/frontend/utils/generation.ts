@@ -10,6 +10,7 @@ export interface Compteurs {
   reparations_json: number
   inachevees: number
   erreurs_llm: number
+  refus_debit?: number
   appels_embeddings: number
 }
 
@@ -101,7 +102,8 @@ export function resumeCout(run: Pick<Run, 'compteurs' | 'duree_s'>): string {
     `${nombreCourt(c.tokens_entree + c.tokens_sortie)} jetons (${nombreCourt(c.tokens_entree)} lus, ${nombreCourt(c.tokens_sortie)} écrits)`,
   ]
   if (c.reparations_json) morceaux.push(`${c.reparations_json} réponse${c.reparations_json > 1 ? 's' : ''} mal formée${c.reparations_json > 1 ? 's' : ''} réparée${c.reparations_json > 1 ? 's' : ''}`)
-  if (c.erreurs_llm) morceaux.push(`${c.erreurs_llm} erreur${c.erreurs_llm > 1 ? 's' : ''} du modèle`)
+  if (c.erreurs_llm) morceaux.push(`${c.erreurs_llm} erreur${c.erreurs_llm > 1 ? 's' : ''} du modèle`
+    + (c.refus_debit ? ` (dont ${c.refus_debit} refus de quota)` : ''))
   const d = dureeLisible(run.duree_s)
   if (d) morceaux.push(d)
   return morceaux.join(' · ')

@@ -65,6 +65,7 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
   - **les balises techniques d'OpenRAG** (`[CONTEXT]`, `* filename:`, `[CHUNK_START]`, `[CHUNK_END]`) ne sont jamais montrées : `decouperMorceau` ([utils/extrait.ts](myrag/frontend/utils/extrait.ts)) sépare le résumé, le nom de fichier et le texte ; `_decouper_morceau` fait la même découpe côté backend.
 
   Le backend relaie `/extract/{id}`, `/file/{id}` et `/static/{path}` d'OpenRAG via `/api/openrag/*` avec le token admin côté serveur — un lien ouvert dans un onglet contourne ainsi le 401 de l'API OpenRAG. `/api/openrag/extract/{id}` rend une page HTML autonome et lisible (paragraphes, adresses cliquables, **pas de lien « Retour »** : un onglet neuf n'a pas d'historique) ; `?raw=1` rend le JSON d'OpenRAG tel quel, balises comprises — c'est ce que lit la fenêtre de lecture. `/static/{path}` propage `?raw=1` quand il se replie sur le morceau.
+- **Questions générées par persona** (expérimental, extra `generation`) : à partir des passages d'une collection, ragas rédige des paires question / réponse de référence du point de vue de personas décrits par le gestionnaire ; relecture valider / rejeter, exports JSON et CSV, coût affiché. Voir [docs/generation.md](docs/generation.md).
 - **Graph de références croisées** (NetworkX + Cytoscape.js) pour les collections le supportant.
 - **Sync Keycloak ↔ OpenRAG** : propagation des groupes `rag-query/<collection>` vers les partitions.
 
@@ -280,6 +281,7 @@ Procédure détaillée (création de la base, compte de service Drive, dépannag
 
 - [docs/sources.md](docs/sources.md) — lire les sources d'une réponse : écrans, et règles à ne pas défaire.
 - [docs/collectif.md](docs/collectif.md) — le collectif : modèle, états, routes, fil d'avancement ; décision dans [ADR-0001](docs/adr/ADR-0001-collections-collaboratives-modele-et-etats.md).
+- [docs/generation.md](docs/generation.md) — générer des paires question / réponse par persona (ragas) : déroulé d'un run, coût, réglages, limites ; décision dans [ADR-0002](docs/adr/ADR-0002-generation-de-questions-par-persona.md).
 - [myrag/app/guide/](myrag/app/guide/) — le guide « Soyez acteurs vous-mêmes », en six étapes, servi par l'application.
 - [docs/drive-find-architecture.md](docs/drive-find-architecture.md) — comment Drive et son moteur de recherche s'articulent.
 - [CLAUDE.md](CLAUDE.md) — repères pour travailler dans le dépôt : dépendances, architecture interne, fichiers clés, variables d'environnement, problèmes connus.

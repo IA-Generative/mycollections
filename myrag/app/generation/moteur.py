@@ -194,8 +194,16 @@ def generer(morceaux: list[Morceau], personas: list[PersonaDemande], taille: int
         # ragas itère sur les scénarios d'un synthétiseur : s'ils ont échoué (raise_exceptions=False),
         # il reçoit NaN au lieu d'une liste. C'est un échec de la phase scénarios, dit comme tel.
         if "float" in str(e) and "iterable" in str(e):
-            resultat.erreur = ("Aucun scénario n'a pu être préparé : le modèle n'a pas su associer les personas "
-                               "aux thèmes des passages. Vérifiez les descriptions des personas.")
+            c = getattr(getattr(llm, "compteurs", None), "instantane", dict)()
+            if c.get("refus_debit"):
+                resultat.erreur = ("La passerelle MirAI a refusé des appels faute de quota (429) pendant la préparation "
+                                   "des questions. Réessayez plus tard, ou baissez MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE.")
+            elif c.get("erreurs_llm"):
+                resultat.erreur = (f"Le modèle de langage a échoué {c['erreurs_llm']} fois pendant la préparation des "
+                                   "questions : aucun scénario n'a pu être préparé. Réessayez dans un instant.")
+            else:
+                resultat.erreur = ("Aucun scénario n'a pu être préparé : le modèle n'a pas su associer les personas "
+                                   "aux thèmes des passages. Vérifiez les descriptions des personas.")
         else:
             resultat.erreur = message_sur(e)
         logger.warning("génération en échec : %s", type(e).__name__)

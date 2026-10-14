@@ -93,3 +93,27 @@ def test_jetons_lus_dans_usage_metadata_a_defaut():
     msg = AIMessage(content="{}", usage_metadata={"input_tokens": 7, "output_tokens": 3, "total_tokens": 10})
     r = LLMResult(generations=[[ChatGeneration(message=msg)]], llm_output={})
     assert modele._usage(r) == (7, 3, False)
+
+
+def test_debit_bloque_au_dela_du_quota_par_minute():
+    from app.generation.resultats import Debit
+    t = [0.0]
+    dormi = []
+    d = Debit(3, horloge=lambda: t[0], dormir=lambda s: (dormi.append(s), t.__setitem__(0, t[0] + s)))
+    for _ in range(3):
+        d.prendre()
+    assert dormi == []
+    d.prendre()  # la 4e attend que la 1re sorte de la fenêtre de 60 s
+    assert len(dormi) == 1 and 59.9 < dormi[0] < 60.2
+    Debit(0, dormir=lambda s: (_ for _ in ()).throw(AssertionError("0 = sans limite"))).prendre()
+
+
+def test_refus_de_debit_compte_et_dit():
+    from app.generation.resultats import message_sur
+
+    class RateLimitError(Exception):
+        pass
+    c = modele.Compteurs()
+    c.observer("x", None, 0.1, RateLimitError("Error code: 429 - rate limit exceeded"))
+    assert c.instantane()["refus_debit"] == 1 and c.instantane()["erreurs_llm"] == 1
+    assert "débit" in message_sur(RateLimitError("429"))

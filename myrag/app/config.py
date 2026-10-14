@@ -168,6 +168,11 @@ class Settings(BaseSettings):
     # des entités coûte un appel au modèle par passage).
     generation_morceaux_max: int = Field(default=200, validation_alias=AliasChoices(
         "MYCOLLECTIONS_GENERATION_MORCEAUX_MAX", "generation_morceaux_max"))
+    # Débit maximal vers la passerelle, tous fils confondus. La passerelle compte les appels PAR
+    # JETON (60 par minute pour celui d'OpenRAG, 10 pour d'autres) : un run trop rapide prend le
+    # quota d'un autre service qui partagerait le jeton. 0 = sans limite.
+    generation_appels_par_minute: int = Field(default=20, validation_alias=AliasChoices(
+        "MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE", "generation_appels_par_minute"))
     generation_parallelisme: int = Field(default=4, validation_alias=AliasChoices(
         "MYCOLLECTIONS_GENERATION_PARALLELISME", "generation_parallelisme"))
     generation_max_tokens: int = Field(default=4096, validation_alias=AliasChoices(

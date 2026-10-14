@@ -35,6 +35,10 @@ describe('resumeCout', () => {
     expect(resumeCout({ compteurs: COMPTEURS, duree_s: 290 }))
       .toBe('195 appels au modèle · 215 k jetons (190 k lus, 25 k écrits) · 3 réponses mal formées réparées · 4 min 50 s')
   })
+  it('dit les refus de quota de la passerelle', () => {
+    expect(resumeCout({ compteurs: { ...COMPTEURS, reparations_json: 0, erreurs_llm: 3, refus_debit: 2 }, duree_s: 5 }))
+      .toBe('195 appels au modèle · 215 k jetons (190 k lus, 25 k écrits) · 3 erreurs du modèle (dont 2 refus de quota) · 5 s')
+  })
   it('accorde au singulier et tait ce qui vaut zéro', () => {
     expect(resumeCout({ compteurs: { ...COMPTEURS, appels_llm: 1, tokens_entree: 10, tokens_sortie: 2, reparations_json: 0 }, duree_s: null }))
       .toBe('1 appel au modèle · 12 jetons (10 lus, 2 écrits)')

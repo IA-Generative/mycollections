@@ -127,6 +127,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
      ├── /api/openrag/static/{path}      → document complet (repli sur le morceau ; propage ?raw=1)
      ├── /api/sources/check-url          → verification URL distante
      ├── /api/sync                       → sync Keycloak ↔ OpenRAG
+     ├── /api/collections/{n}/generation → paires question/réponse par persona (ragas)
      ├── /api/v1/search[/scopes]         → recherche de Mon portail (contrat de recherche MirAI, sans LLM)
      ├── /graph                          → viewer Cytoscape.js
      └── /articles/{collection}/{id}     → vue article HTML DSFR
@@ -165,6 +166,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
 | `myrag/frontend/utils/extrait.ts` | `decouperMorceau` (retire les balises OpenRAG), exports ; pendant backend : `_decouper_morceau` dans `app/main.py` |
 | `myrag/frontend/pages/index.vue`, `myrag/frontend/utils/accueil.ts` | Accueil : decouvrir, explorer, creer ; ce que l'accueil raconte est en fonctions pures testees |
+| `myrag/app/generation/`, `myrag/app/routers/generation.py` | Génération de paires question/réponse par persona (ragas, extra optionnel) : lecture des passages, moteur, exécution en fil ; `docs/generation.md` |
 | `myrag/app/routers/accueil.py`, `categories.py`, `guide.py` | Exemple de question et bilan de l'accueil ; categories du catalogue ; guide en six etapes (`myrag/app/guide/*.md`) |
 | `myrag/frontend/pages/admin/create/` | Wizard 5 etapes |
 | `myrag/frontend/composables/useApi.ts` | Client API centralise |
@@ -230,6 +232,8 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
+| `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. Vides ⇒ routes de génération en 503 |
+| `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
 
 ## Groupes et droits
 
