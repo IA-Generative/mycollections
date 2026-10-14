@@ -1,0 +1,98 @@
+# Environnements de preview par pull request, déployés par l'Argo CD d'internal-gw
+# (ADR-0005 de mirai-apps-beta-private) : une PR labellisée `beta-preview` devient
+# https://mycollections-pr-<n>.beta-preview.numerique-interieur.com. Ce workflow ne fait que
+# publier les deux images `pr-<n>` (étiquette stable, réécrite à chaque commit) et commenter
+# la PR ; Argo CD crée l'environnement, le met à jour et le retire seul (fermeture de la PR ou
+# retrait du label). Jamais pour une PR de fork.
+#
+# Une preview partage l'OpenRAG de la bêta : elle ne crée et ne lit que des partitions
+# préfixées `pr-<n>-` (MYCOLLECTIONS_PARTITION_PREFIXE, imposé par le code), effacées à sa fin.
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions: {}
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  infos:
+    # Un label étranger aux previews ne relance rien.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && contains(github.event.pull_request.labels.*.name, 'beta-preview')
+      && (github.event.action != 'labeled' || github.event.label.name == 'beta-preview')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      code-date: ${{ steps.v.outputs.code_date }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: v
+        run: echo "code_date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+
+  # NB : fabnum construit le commit de fusion que GitHub prépare pour la PR ; /__version__
+  # annonce le commit de tête de la PR, celui qu'Argo CD affiche.
+  build-backend:
+    needs: [infos]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/backend
+      IMAGE_TAG: pr-${{ github.event.pull_request.number }}
+      IMAGE_CONTEXT: ./myrag
+      IMAGE_DOCKERFILE: ./myrag/Dockerfile
+      PUSH: true
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+      BUILD_ARGS: |
+        VERSION=pr-${{ github.event.pull_request.number }}
+        COMMIT=${{ github.event.pull_request.head.sha }}
+        BUILD=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        CODE_DATE=${{ needs.infos.outputs.code-date }}
+        SOURCE=${{ github.server_url }}/${{ github.repository }}
+
+  build-frontend:
+    needs: [infos]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/frontend
+      IMAGE_TAG: pr-${{ github.event.pull_request.number }}
+      IMAGE_CONTEXT: ./myrag/frontend
+      IMAGE_DOCKERFILE: ./myrag/frontend/Dockerfile
+      PUSH: true
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+
+  comment:
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Commenter l'adresse de preview
+        run: |
+          set -euo pipefail
+          corps="🔍 Preview du commit \`${SHA::8}\` — images"
+          corps+=" \`ghcr.io/ia-generative/mycollections/{backend,frontend}:pr-${PR}\`"
+          corps+=$'\n'"- bêta : https://mycollections-pr-${PR}.beta-preview.numerique-interieur.com"
+          corps+=$'\n\n'"Argo CD la déploie dans les minutes qui suivent, et la retire à la fermeture"
+          corps+=" de la PR ou au retrait du label. Les collections créées ici portent le préfixe"
+          corps+=" \`pr-${PR}-\` et sont effacées avec la preview."
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body "$corps"

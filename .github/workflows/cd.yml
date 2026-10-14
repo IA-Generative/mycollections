@@ -1,0 +1,121 @@
+# Livraison — release-please tient une PR « release X.Y.Z » sur main ; sa fusion publie
+# ghcr.io/ia-generative/mycollections/{backend,frontend}:X.Y.Z, attestées (provenance, SBOM,
+# signature). L'API embarque son journal (/app/version.json servi sur /__version__, ADR-0004).
+# Circuit des branches : PR → beta (déployée) → PR beta → main (publiée ici). Après une
+# publication, réaligner beta sur main par une PR « main → beta ».
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: dnum-mi/fabnum-cicd/.github/workflows/release-app.yml@v0.23.0
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+  build-backend:
+    needs: [release]
+    if: ${{ needs.release.outputs.release-created == 'true' }}
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/backend
+      IMAGE_TAG: ${{ needs.release.outputs.version }}
+      IMAGE_CONTEXT: ./myrag
+      IMAGE_DOCKERFILE: ./myrag/Dockerfile
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+      BUILD_ARGS: |
+        VERSION=${{ needs.release.outputs.version }}
+        COMMIT=${{ github.sha }}
+        BUILD=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        CODE_DATE=${{ github.event.head_commit.timestamp }}
+        SOURCE=${{ github.server_url }}/${{ github.repository }}
+
+  build-frontend:
+    needs: [release]
+    if: ${{ needs.release.outputs.release-created == 'true' }}
+    uses: dnum-mi/fabnum-cicd/.github/workflows/build-docker.yml@v0.23.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/frontend
+      IMAGE_TAG: ${{ needs.release.outputs.version }}
+      IMAGE_CONTEXT: ./myrag/frontend
+      IMAGE_DOCKERFILE: ./myrag/frontend/Dockerfile
+      BUILD_AMD64: true
+      BUILD_ARM64: false
+
+  # Les défauts d'attest-docker sont à `false` : un appel qui n'active rien n'atteste rien.
+  # Une paire build/attest par image : la sortie `digest` d'une matrice ne garde qu'une valeur.
+  attest-backend:
+    needs: [build-backend]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/attest-docker.yml@v0.23.0
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/backend
+      DIGEST: ${{ needs.build-backend.outputs.digest }}
+      PROVENANCE: true
+      SBOM: true
+      SIGN: true
+
+  attest-frontend:
+    needs: [build-frontend]
+    uses: dnum-mi/fabnum-cicd/.github/workflows/attest-docker.yml@v0.23.0
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      IMAGE_NAME: ghcr.io/ia-generative/mycollections/frontend
+      DIGEST: ${{ needs.build-frontend.outputs.digest }}
+      PROVENANCE: true
+      SBOM: true
+      SIGN: true
+
+  # Convention ADR-0004 : étiquette d'image = tag git sans le « v » = version.json (.version,
+  # .commit). On échoue plutôt que de laisser partir une image qui ment.
+  verify-version:
+    needs: [release, build-backend, build-frontend]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPOT: ghcr.io/ia-generative/mycollections
+      VERSION: ${{ needs.release.outputs.version }}
+      COMMIT: ${{ github.sha }}
+      ACTOR: ${{ github.actor }}
+      TOKEN: ${{ github.token }}
+    steps:
+      - name: Le tag git existe
+        env:
+          ORIGINE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: |
+          git ls-remote --exit-code "$ORIGINE" "refs/tags/v${VERSION}" >/dev/null \
+            || { echo "::error::tag git v${VERSION} absent"; exit 1; }
+      - name: Les deux images existent, l'API dit la même version et le même commit
+        run: |
+          set -euo pipefail
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin >/dev/null
+          docker buildx imagetools inspect "$DEPOT/frontend:$VERSION" >/dev/null
+          docker run --rm --entrypoint cat "$DEPOT/backend:$VERSION" /app/version.json > version.json
+          cat version.json
+          jq -e --arg v "$VERSION" --arg c "$COMMIT" '.version == $v and .commit == $c' version.json >/dev/null \
+            || { echo "::error::version.json ne correspond pas à $VERSION / $COMMIT"; exit 1; }

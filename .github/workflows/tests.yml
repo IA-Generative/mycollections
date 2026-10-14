@@ -1,18 +1,15 @@
-# Tests unitaires, à chaque pull request et sur main. Aucun secret : la suite de bout en bout
+# Tests unitaires : appelés par ci.yml à chaque pull request (ils comptent dans « All jobs
+# passed »), et rejoués après fusion sur main et beta. Aucun secret : la suite de bout en bout
 # (myrag/tests/e2e) s'ignore d'elle-même sans E2E_BASE_URL, elle se joue depuis un poste.
 name: tests
 
 on:
-  pull_request:
+  workflow_call:
   push:
-    branches: [main]
+    branches: [main, beta]
 
 permissions:
   contents: read
-
-concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   backend:
