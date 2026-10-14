@@ -80,7 +80,7 @@ const sources = [
     key: 'file',
     icon: '📄',
     name: 'Fichier unique',
-    description: 'Un fichier texte ou Markdown (.txt, .md, .csv). Les PDF et documents Word ne sont pas encore lus : enregistrez-les d\'abord au format texte.',
+    description: 'Un fichier texte (.txt, .md, .csv), PDF, Word, PowerPoint, un courriel ou une image. Plusieurs fichiers ou un dossier entier : depuis la fiche, une fois la collection créée.',
     refresh: false,
     strategy: 'auto',
     prompt_template: 'generic',

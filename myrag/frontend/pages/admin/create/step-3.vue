@@ -118,10 +118,10 @@
               <div class="fr-upload-group fr-mt-2w">
                 <label class="fr-label">
                   Deposer un fichier depuis votre ordinateur
-                  <span class="fr-hint-text">Formats acceptés : texte ou Markdown (.txt, .md, .csv). Un PDF ou un document Word doit d'abord être enregistré au format texte.</span>
+                  <span class="fr-hint-text">Formats acceptés : {{ FORMATS_LISIBLES }}. Pour déposer plusieurs fichiers ou un dossier entier, utilisez ensuite « Ajouter des documents » sur la fiche de la collection.</span>
                 </label>
                 <input type="file" class="fr-upload" @change="onFile"
-                       accept=".txt,.md,.markdown,.csv" />
+                       :accept="ACCEPT" />
               </div>
 
               <div v-if="file" class="fr-mt-2w">
@@ -136,7 +136,7 @@
               <div class="fr-input-group fr-mt-2w">
                 <label class="fr-label">
                   URL d'un fichier unique accessible en ligne
-                  <span class="fr-hint-text">Lien direct vers un fichier texte ou Markdown.</span>
+                  <span class="fr-hint-text">Lien direct vers un fichier : {{ FORMATS_LISIBLES }}.</span>
                 </label>
                 <input class="fr-input" v-model="remoteUrl"
                        placeholder="https://example.gouv.fr/documents/rapport.pdf" />
@@ -265,6 +265,7 @@
 </template>
 
 <script setup lang="ts">
+import { ACCEPT, FORMATS_LISIBLES } from '~/utils/depot'
 const route = useRoute()
 const router = useRouter()
 const collection = route.query.collection as string
