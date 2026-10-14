@@ -1,0 +1,2148 @@
+{
+  "uuid": "8fcd490e-d5c4-4c02-b7cc-04c9a7e34521",
+  "lastMigration": 33,
+  "name": "OpenRAG (mock)",
+  "endpointPrefix": "",
+  "latency": 0,
+  "port": 8180,
+  "hostname": "",
+  "rootChildren": [
+    {
+      "type": "route",
+      "uuid": "5661f94e-ca47-4655-bfa6-23929a503646"
+    },
+    {
+      "type": "route",
+      "uuid": "77600be5-2db4-4ec1-8e78-c9abaae6fb62"
+    },
+    {
+      "type": "route",
+      "uuid": "27492e71-777c-4a9a-941c-db4332e16c55"
+    },
+    {
+      "type": "route",
+      "uuid": "8302d174-fb1e-4547-a567-425915fbe842"
+    },
+    {
+      "type": "route",
+      "uuid": "c9d31f2e-6f1b-47e9-8ca2-df079082cbcf"
+    },
+    {
+      "type": "route",
+      "uuid": "e86bc4da-e584-42b5-9809-0e099504fcc9"
+    },
+    {
+      "type": "route",
+      "uuid": "2e1b7c09-1fdf-4f3d-af4b-c079aa432644"
+    },
+    {
+      "type": "route",
+      "uuid": "1bd629ca-dbab-4939-ba13-72a41c0e00dd"
+    },
+    {
+      "type": "route",
+      "uuid": "6ef3af65-d3de-4514-9918-2a225eeaeab2"
+    },
+    {
+      "type": "route",
+      "uuid": "6a18b994-447d-4b67-b5d2-56752b0e733b"
+    },
+    {
+      "type": "route",
+      "uuid": "ab9e0f36-40ad-45a1-9922-f9c11999fe22"
+    },
+    {
+      "type": "route",
+      "uuid": "0c6b35b4-dbd1-4ce9-b0be-62858a4b02cf"
+    },
+    {
+      "type": "route",
+      "uuid": "df335e86-6dcf-4d3f-aab7-04f1623c3ecc"
+    },
+    {
+      "type": "route",
+      "uuid": "b9384cdb-d08a-48db-9fd2-e52d970ec3cb"
+    },
+    {
+      "type": "route",
+      "uuid": "65e1f4bb-a1ed-4ee1-a340-332d99db1a42"
+    },
+    {
+      "type": "route",
+      "uuid": "d2464c09-d385-4ff8-a865-ee7901f57897"
+    },
+    {
+      "type": "route",
+      "uuid": "4d1b84a8-8171-46f8-9ee7-27f2f15bbd75"
+    },
+    {
+      "type": "route",
+      "uuid": "1c84985f-d9d6-4087-a026-851eb56c8d91"
+    },
+    {
+      "type": "route",
+      "uuid": "ce325b35-4c13-48d9-871c-3740f0a90f51"
+    }
+  ],
+  "folders": [],
+  "routes": [
+    {
+      "uuid": "5661f94e-ca47-4655-bfa6-23929a503646",
+      "type": "http",
+      "documentation": "État du service. Appelé par myrag (main.py) pour vérifier qu'OpenRAG répond. Corps en texte brut, comme le vrai OpenRAG. Sans authentification.",
+      "method": "get",
+      "endpoint": "/health_check",
+      "responses": [
+        {
+          "uuid": "a6a56f0e-197c-4159-9206-27fc8204e0de",
+          "body": "RAG API is up.",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Service actif",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "text/plain"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "77600be5-2db4-4ec1-8e78-c9abaae6fb62",
+      "type": "http",
+      "documentation": "Version du moteur, pour déboguer le mock (myrag ne l'appelle pas). Suffixe -mock.0 pour distinguer le mock du vrai service. Sans authentification.",
+      "method": "get",
+      "endpoint": "/version",
+      "responses": [
+        {
+          "uuid": "b134dcf7-4880-4996-a95f-a2f30fb2bef7",
+          "body": "{\"version\": \"9.9.9-mock.0\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Version du mock",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "27492e71-777c-4a9a-941c-db4332e16c55",
+      "type": "http",
+      "documentation": "Partitions connues d'OpenRAG, vues comme des modèles de chat. Appelé par myrag : catalogue (cartes orphelines « openrag-… »), vérification de nom à la création, assistant de création. « openrag-ma-collection » fait apparaître une carte orpheline de démonstration et rend ce nom indisponible ; « openrag-all » est la partition virtuelle du vrai OpenRAG (exclue du catalogue).",
+      "method": "get",
+      "endpoint": "/v1/models",
+      "responses": [
+        {
+          "uuid": "ab1aabff-030e-4542-91e6-39cf7cec654e",
+          "body": "{\"object\": \"list\", \"data\": [{\"id\": \"openrag-ma-collection\", \"object\": \"model\", \"created\": 1767225000, \"owned_by\": \"OpenRAG\"}, {\"id\": \"openrag-all\", \"object\": \"model\", \"created\": 1767225000, \"owned_by\": \"OpenRAG\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Deux partitions",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "d3395892-8298-4ca4-bb27-292109288b17",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "cd5807ef-1d40-47c1-ae6b-1674203128f7",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "5864b7dd-7103-4ed3-8bd6-95bfb5e05c1e",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "8302d174-fb1e-4547-a567-425915fbe842",
+      "type": "http",
+      "documentation": "Chat RAG. Appelé par myrag : playground (×6), banque de questions (auto-amorcage), graph_builder (résumé). Ordre des réponses : les prompts de myrag contenant des guillemets droits (résumé d'articles, questions en lignes) sont attrapés d'abord par des règles sur le contenu du message — réponses canned STATIQUES, échappement garanti par json.dumps, aucun écho. Viennent ensuite les échos pour les questions du playground : la réponse fait écho à la question (triples accolades, au milieu d'une chaîne : rendu brut sans échappement, les apostrophes françaises survivent — l'écho n'est pas adjacent aux guillemets de la valeur, donc Mockoon ne les retire pas), cite un morceau en lien inline ({{baseUrl}}/extract/101, identifiant numérique attendu par myrag) et se termine par un pied « Sources : » que myrag retire avant réécriture des liens. « extra » est une chaîne JSON comme dans le vrai OpenRAG (json.dumps), sans clé partition : myrag ne la lit jamais ici. citations_reported=false → myrag retient toutes les sources présentées. Limitation : une question du playground contenant un guillemet droit « casse le JSON renvoyé (echo textuel, sans état). R1 : question à deux messages (system + user, cas général myrag) ; R2 : question à un message.",
+      "method": "post",
+      "endpoint": "/v1/chat/completions",
+      "responses": [
+        {
+          "uuid": "5efedda5-0ec5-4170-a2b1-493dc0e3b817",
+          "body": "{\"id\": \"chatcmpl-mock-generation\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"mock-generation\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"entities\\\": [\\\"NATINF\\\", \\\"service de démonstration\\\", \\\"guide de démonstration\\\", \\\"tribunal pour enfants\\\", \\\"amende forfaitaire délictuelle\\\"]}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 400, \"completion_tokens\": 100, \"total_tokens\": 500}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Extraction NER (génération)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "d3f374bf-f707-476f-9aa3-40e13e467c51",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "Extrayez les entités nommées du texte",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "650a7669-38b6-4ef5-bbcb-74b1f84e16b4",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": true,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "e4790d9e-dd2b-4e25-b2cf-9263ab4d1a9e",
+          "body": "{\"id\": \"chatcmpl-mock-generation\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"mock-generation\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"keyphrases\\\": [\\\"ouverture des droits\\\", \\\"pièces à fournir\\\", \\\"dépôt du dossier\\\", \\\"accusé de réception\\\", \\\"copie numérique\\\", \\\"décisions antérieures\\\"]}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 400, \"completion_tokens\": 100, \"total_tokens\": 500}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Extraction mots-clés (génération)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "c11139f2-5938-4bf0-92e9-5a59ec61e6f1",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "mots-clés à partir du texte donné",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "53e05bf5-a8ee-4681-b3a2-24fd46d1cfa3",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": true,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "24b2faf1-7253-448b-8f20-837032e3523f",
+          "body": "{\"id\": \"chatcmpl-mock-generation\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"mock-generation\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"mapping\\\": {\\\"Lecteur des documents\\\": [\\\"NATINF\\\", \\\"service de démonstration\\\", \\\"guide de démonstration\\\", \\\"tribunal pour enfants\\\", \\\"amende forfaitaire délictuelle\\\", \\\"ouverture des droits\\\", \\\"pièces à fournir\\\", \\\"dépôt du dossier\\\", \\\"accusé de réception\\\", \\\"copie numérique\\\", \\\"décisions antérieures\\\"]}}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 400, \"completion_tokens\": 100, \"total_tokens\": 500}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Appariement thèmes/personas (génération)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "8beb618d-b62d-46e8-826a-03b2ffaaee51",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "associez à chaque persona les seuls thèmes",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "5b3bd95c-481e-4b00-b98e-ff5801d0fd9d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": true,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "0690657e-d35b-405c-8dff-80900e91688e",
+          "body": "{\"id\": \"chatcmpl-mock-generation\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"mock-generation\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"{\\\"query\\\": \\\"Quelles pièces faut-il fournir pour une demande d'ouverture des droits, et le service peut-il en demander les originaux ?\\\", \\\"answer\\\": \\\"Le dossier comporte une pièce d'identité en cours de validité, un justificatif de domicile de moins de trois mois et, le cas échéant, les décisions antérieures visées par le dispositif. Les pièces peuvent être fournies en copie numérique ; le service de démonstration se réserve le droit d'en demander les originaux.\\\"}\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 400, \"completion_tokens\": 100, \"total_tokens\": 500}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Question et réponse (génération)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "69baa406-a657-4e8b-8843-acdc2c68f1a0",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "Rédigez une question et sa réponse de référence à partir d'un seul passage",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "d904debe-80c0-48a5-b7cc-a0afb37f1cba",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": true,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "38acd4a6-dd8d-48ef-b919-8073777af859",
+          "body": "{\"id\": \"chatcmpl-mock-{{objectId}}\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"{{body 'model'}}\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Cet article présente la démarche fictive d'ouverture des droits du corpus de démonstration. Il décrit les étapes du parcours à titre d'exemple, sans valeur juridique. Il renvoie à la fiche NATINF de démonstration pour des exemples chiffrés fictifs. Ce texte ne sert qu'à tester le résumé automatique de Mes collections.\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 250, \"completion_tokens\": 90, \"total_tokens\": 340}, \"extra\": \"{\\\"sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"presented_sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"cited_sources\\\": [], \\\"citations_reported\\\": false}\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Résumé d'article (graph)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "4e348d68-4751-4852-8dab-4ed5b6b6184b",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "Résume l'article suivant",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "54af3130-08ed-465e-893f-5f5785961851",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "950c7103-7bcc-40c4-9c60-99da7185db14",
+          "body": "{\"id\": \"chatcmpl-mock-{{objectId}}\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"{{body 'model'}}\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Comment ouvrir mes droits ?\\nQuelles sont les étapes de la démarche d'ouverture des droits ?\\nQue contient la fiche NATINF de démonstration ?\\nQuels documents sont indexés dans la collection de démonstration ?\\nLe corpus de démonstration a-t-il une valeur juridique ?\\nComment suivre l'état d'une demande d'ouverture de droits ?\\nCombien de morceaux comporte le corpus de démonstration ?\\nÀ quoi sert le pied Sources dans une réponse du RAG ?\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 60, \"completion_tokens\": 110, \"total_tokens\": 170}, \"extra\": \"{\\\"sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"presented_sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"cited_sources\\\": [], \\\"citations_reported\\\": false}\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Questions en lignes (auto-amorcage de la banque)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "8b6ea92c-0731-45ee-9002-800e268bb9f3",
+              "target": "body",
+              "modifier": "messages.0.content",
+              "value": "une par ligne, sans numerotation",
+              "invert": false,
+              "operator": "regex"
+            },
+            {
+              "uuid": "a5e37212-876f-425b-9b9b-30ba014bd86a",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "d53225e6-5de5-4ff2-9d15-1c0c9701469b",
+          "body": "{\"id\": \"chatcmpl-mock-{{objectId}}\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"{{body 'model'}}\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Réponse du moteur de démonstration (mock OpenRAG, sans IA) à la question : « {{{body 'messages.1.content'}}} »\\n\\n\\nSources :\\n\\n1. [Guide ouverture des droits.md]({{baseUrl}}/static/101)\\n2. [Fiche NATINF démo.md]({{baseUrl}}/static/103)\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 42, \"completion_tokens\": 128, \"total_tokens\": 170}, \"extra\": \"{\\\"sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"presented_sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"cited_sources\\\": [], \\\"citations_reported\\\": false}\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Question à deux messages",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "c494506a-71ea-46f4-be8f-79746e5fab63",
+              "target": "body",
+              "modifier": "messages.1.role",
+              "value": "user",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "11e04658-ea46-4d51-936b-032eaa30182b",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "5e5982ab-af40-40a5-a2d4-8cb6e99e81b8",
+          "body": "{\"id\": \"chatcmpl-mock-{{objectId}}\", \"object\": \"chat.completion\", \"created\": 1767225000, \"model\": \"{{body 'model'}}\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"Réponse du moteur de démonstration (mock OpenRAG, sans IA) à la question : « {{{body 'messages.0.content'}}} »\\n\\nLe passage le plus pertinent vient du guide : [Guide ouverture des droits]({{baseUrl}}/extract/101).\\n\\nSources :\\n\\n1. [Guide ouverture des droits.md]({{baseUrl}}/static/101)\\n2. [Fiche NATINF démo.md]({{baseUrl}}/static/103)\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 42, \"completion_tokens\": 128, \"total_tokens\": 170}, \"extra\": \"{\\\"sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"presented_sources\\\": [{\\\"_id\\\": 101, \\\"file_id\\\": \\\"d1f2c3b4-a5e6-4789-8901-234567890abc\\\", \\\"filename\\\": \\\"guide-ouverture-droits.md\\\", \\\"original_filename\\\": \\\"Guide ouverture des droits.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 4096, \\\"content_sha256\\\": \\\"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/101\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/101\\\"}, {\\\"_id\\\": 103, \\\"file_id\\\": \\\"e2a3b4c5-d6f7-4890-9012-345678901bcd\\\", \\\"filename\\\": \\\"fiche-natinf-demo.md\\\", \\\"original_filename\\\": \\\"Fiche NATINF démo.md\\\", \\\"source\\\": \\\"\\\", \\\"page\\\": 1, \\\"mimetype\\\": \\\"text/markdown\\\", \\\"file_size\\\": 2560, \\\"content_sha256\\\": \\\"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\\\", \\\"created_at\\\": 1767225000, \\\"updated_at\\\": 1767225000, \\\"indexed_at\\\": 1767225000, \\\"source_type\\\": \\\"document\\\", \\\"chunk_url\\\": \\\"{{baseUrl}}/extract/103\\\", \\\"file_url\\\": \\\"{{baseUrl}}/static/103\\\"}], \\\"cited_sources\\\": [], \\\"citations_reported\\\": false}\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Question à un message",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "9ca0c3e6-6835-49fa-9fb2-05009434c83d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "3fe13a79-9aa4-41fa-937d-9569446bafe4",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "01659b8a-43e1-4fda-9c16-7aaea6324576",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "c9d31f2e-6f1b-47e9-8ca2-df079082cbcf",
+      "type": "http",
+      "documentation": "Recherche hybride. Appelée par myrag : playground (repli de recherche), Mon portail (recherche.py), sources.py. Partition reprise du paramètre « partitions » de la requête (recherche.py s'en sert pour rattacher un résultat à sa collection). Sans état : text et top_k sont ignorés, la même sélection de trois morceaux est toujours renvoyée (même pour une collection vide — le repli du playground fonctionne malgré tout). Multi-partitions : seule la première valeur est rendue.",
+      "method": "get",
+      "endpoint": "/search",
+      "responses": [
+        {
+          "uuid": "178ebe54-871c-4b66-a5b0-244d0b19af0f",
+          "body": "{\"documents\": [{\"link\": \"{{baseUrl}}/extract/101\", \"metadata\": {\"_id\": 101, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{queryParam 'partitions'}}\", \"score\": 0.99}, \"content\": \"[CONTEXT]\\n\\nCe passage introduit le guide de démonstration, décrivant une démarche fictive d'ouverture des droits utilisée pour tester Mes collections.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Conditions générales\\n\\nLa demande d'ouverture des droits s'effectue auprès du service de démonstration. Le\\ndemandeur doit résider dans la zone de couverture du dispositif et justifier d'une\\nsituation conforme au cadre de la démarche.\\n\\nLe dépôt du dossier est possible en ligne, par courrier ou sur place. Chaque demande\\nfait l'objet d'un accusé de réception mentionné dans le guide de démonstration.\\n\\n[CHUNK_END]\"}, {\"link\": \"{{baseUrl}}/extract/102\", \"metadata\": {\"_id\": 102, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{queryParam 'partitions'}}\", \"score\": 0.95}, \"content\": \"[CONTEXT]\\n\\nListe des pièces à fournir pour la démarche fictive d'ouverture des droits du guide de démonstration.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Pièces à fournir\\n\\nLe dossier de démonstration comporte une pièce d'identité en cours de validité, un\\njustificatif de domicile de moins de trois mois et, le cas échéant, les décisions\\nantérieures visées par le dispositif fictif.\\n\\nLes pièces peuvent être fournies en copie numérique ; le service de démonstration se\\nréserve le droit d'en demander les originaux.\\n\\n[CHUNK_END]\"}, {\"link\": \"{{baseUrl}}/extract/103\", \"metadata\": {\"_id\": 103, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{queryParam 'partitions'}}\", \"score\": 0.91}, \"content\": \"[CONTEXT]\\n\\nFiche de démonstration présentant une procédure fictive de sanction forfaitaire, sans valeur juridique.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Sanction forfaitaire — démo\\n\\nLa procédure fictive de la fiche de démonstration prévoit une sanction forfaitaire\\napplicable en cas de manquement constaté. Le montant et les modalités de recouvrement\\ndécrits ici n'ont aucune valeur juridique : ils servent uniquement à tester la lecture\\ndes morceaux.\\n\\n## Recours — démo\\n\\nLa contestation suit la procédure décrite dans la fiche de démonstration : demande\\nécrite dans le délai indiqué, examen par la commission fictive, puis réponse motivée.\\n\\n[CHUNK_END]\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Trois morceaux",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "8193d8d8-dbd0-41a2-a2ae-568a304e9dfb",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "d3f0b4c0-7e1f-41d7-bad6-cd20489f0939",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "272cf8a9-ef05-486a-97b7-63db5afe8472",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "e86bc4da-e584-42b5-9809-0e099504fcc9",
+      "type": "http",
+      "documentation": "Contenu d'un fichier, morceau par morceau. Appelé par myrag : get_file_content (citations du playground, graphe). Infidélité assumée : le vrai endpoint exige un paramètre « text » que myrag n'envoie pas (d'où les 422 réels, marqués « fragile » dans playground.py) ; le mock répond toujours 200 pour que le graphe et les citations fonctionnent. Partition reprise du chemin de la requête.",
+      "method": "get",
+      "endpoint": "/search/partition/:partition/file/:file_id",
+      "responses": [
+        {
+          "uuid": "1e66210e-9b97-4821-909f-e621eb246bcd",
+          "body": "{\"documents\": [{\"link\": \"{{baseUrl}}/extract/101\", \"metadata\": {\"_id\": 101, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\", \"score\": 0.99}, \"content\": \"[CONTEXT]\\n\\nCe passage introduit le guide de démonstration, décrivant une démarche fictive d'ouverture des droits utilisée pour tester Mes collections.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Conditions générales\\n\\nLa demande d'ouverture des droits s'effectue auprès du service de démonstration. Le\\ndemandeur doit résider dans la zone de couverture du dispositif et justifier d'une\\nsituation conforme au cadre de la démarche.\\n\\nLe dépôt du dossier est possible en ligne, par courrier ou sur place. Chaque demande\\nfait l'objet d'un accusé de réception mentionné dans le guide de démonstration.\\n\\n[CHUNK_END]\"}, {\"link\": \"{{baseUrl}}/extract/102\", \"metadata\": {\"_id\": 102, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\", \"score\": 0.95}, \"content\": \"[CONTEXT]\\n\\nListe des pièces à fournir pour la démarche fictive d'ouverture des droits du guide de démonstration.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Pièces à fournir\\n\\nLe dossier de démonstration comporte une pièce d'identité en cours de validité, un\\njustificatif de domicile de moins de trois mois et, le cas échéant, les décisions\\nantérieures visées par le dispositif fictif.\\n\\nLes pièces peuvent être fournies en copie numérique ; le service de démonstration se\\nréserve le droit d'en demander les originaux.\\n\\n[CHUNK_END]\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Guide (fichier 1)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "7d488ba9-3cd8-44d3-8ac1-18188d330914",
+              "target": "params",
+              "modifier": "file_id",
+              "value": "d1f2c3b4-a5e6-4789-8901-234567890abc",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "8ee7ae4f-1bfc-4d6b-addf-04398a850c77",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "7e3cb0d1-3539-4a6b-8358-7dfa403d5c61",
+          "body": "{\"documents\": [{\"link\": \"{{baseUrl}}/extract/103\", \"metadata\": {\"_id\": 103, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\", \"score\": 0.99}, \"content\": \"[CONTEXT]\\n\\nFiche de démonstration présentant une procédure fictive de sanction forfaitaire, sans valeur juridique.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Sanction forfaitaire — démo\\n\\nLa procédure fictive de la fiche de démonstration prévoit une sanction forfaitaire\\napplicable en cas de manquement constaté. Le montant et les modalités de recouvrement\\ndécrits ici n'ont aucune valeur juridique : ils servent uniquement à tester la lecture\\ndes morceaux.\\n\\n## Recours — démo\\n\\nLa contestation suit la procédure décrite dans la fiche de démonstration : demande\\nécrite dans le délai indiqué, examen par la commission fictive, puis réponse motivée.\\n\\n[CHUNK_END]\"}, {\"link\": \"{{baseUrl}}/extract/104\", \"metadata\": {\"_id\": 104, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\", \"score\": 0.95}, \"content\": \"[CONTEXT]\\n\\nCas pratiques fictifs de la fiche de démonstration illustrant la procédure.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Cas pratiques — démo\\n\\nTrois cas fictifs illustrent la fiche de démonstration : constat immédiat, constat\\ndifféré et récidive. Chaque cas précise la pièce à produire et le délai de réponse\\nattendu par le service.\\n\\n[CHUNK_END]\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Fiche NATINF (fichier 2)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "35417593-a319-4b62-868b-3e151a318b8b",
+              "target": "params",
+              "modifier": "file_id",
+              "value": "e2a3b4c5-d6f7-4890-9012-345678901bcd",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "064a0deb-f1d1-42cf-80b8-f923c856cc83",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "0bf1003c-7b8a-495f-8c0e-c9dd8010c906",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "5e03e818-2ef5-4fb5-85f7-b65c764168f9",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "34803642-d0bd-4267-bd30-03ef8e52bcc6",
+          "body": "{\"detail\": \"'{{urlParam 'file_id'}}' not found in partition '{{urlParam 'partition'}}'\"}",
+          "latency": 0,
+          "statusCode": 404,
+          "label": "Fichier inconnu",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "2e1b7c09-1fdf-4f3d-af4b-c079aa432644",
+      "type": "http",
+      "documentation": "Contenu contextuel d'un morceau. Appelé par myrag : corpus, génération (morceaux.py), proxy /api/openrag/extract/{id} (liens signés et pied des réponses de chat). Pas de clé « partition » dans metadata : une partition figée casserait le contrôle de lecture de myrag (get_collection → None → interdit pour un non-superadmin) ; sans la clé, la lecture passe (comportement observé quand OpenRAG omet la partition). Quatre identifiants connus : 101, 102 (guide), 103, 104 (fiche NATINF démo). Message d'erreur identique au vrai OpenRAG.",
+      "method": "get",
+      "endpoint": "/extract/:id",
+      "responses": [
+        {
+          "uuid": "decf27a4-671e-4604-a159-e44184315d94",
+          "body": "{\"page_content\": \"[CONTEXT]\\n\\nCe passage introduit le guide de démonstration, décrivant une démarche fictive d'ouverture des droits utilisée pour tester Mes collections.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Conditions générales\\n\\nLa demande d'ouverture des droits s'effectue auprès du service de démonstration. Le\\ndemandeur doit résider dans la zone de couverture du dispositif et justifier d'une\\nsituation conforme au cadre de la démarche.\\n\\nLe dépôt du dossier est possible en ligne, par courrier ou sur place. Chaque demande\\nfait l'objet d'un accusé de réception mentionné dans le guide de démonstration.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 101, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Morceau 101",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "9cc9d966-696e-4e27-b616-bcb27cde7ba2",
+              "target": "params",
+              "modifier": "id",
+              "value": "101",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "32b0ec2f-2f89-4c68-9a27-1f95cb38e628",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "e2ac018a-4a4b-4ae5-9856-7873ea04bbd7",
+          "body": "{\"page_content\": \"[CONTEXT]\\n\\nListe des pièces à fournir pour la démarche fictive d'ouverture des droits du guide de démonstration.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Pièces à fournir\\n\\nLe dossier de démonstration comporte une pièce d'identité en cours de validité, un\\njustificatif de domicile de moins de trois mois et, le cas échéant, les décisions\\nantérieures visées par le dispositif fictif.\\n\\nLes pièces peuvent être fournies en copie numérique ; le service de démonstration se\\nréserve le droit d'en demander les originaux.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 102, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Morceau 102",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "ed39e5db-98ec-48c6-aade-9e4f2f937c2d",
+              "target": "params",
+              "modifier": "id",
+              "value": "102",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "7a4058c7-615f-4d66-861b-14cd212edc5e",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "160da1cd-e8bf-44bc-bfc0-cb89504e6387",
+          "body": "{\"page_content\": \"[CONTEXT]\\n\\nFiche de démonstration présentant une procédure fictive de sanction forfaitaire, sans valeur juridique.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Sanction forfaitaire — démo\\n\\nLa procédure fictive de la fiche de démonstration prévoit une sanction forfaitaire\\napplicable en cas de manquement constaté. Le montant et les modalités de recouvrement\\ndécrits ici n'ont aucune valeur juridique : ils servent uniquement à tester la lecture\\ndes morceaux.\\n\\n## Recours — démo\\n\\nLa contestation suit la procédure décrite dans la fiche de démonstration : demande\\nécrite dans le délai indiqué, examen par la commission fictive, puis réponse motivée.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 103, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Morceau 103",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "b8cf3653-bcbf-4aef-857c-388c0239afa6",
+              "target": "params",
+              "modifier": "id",
+              "value": "103",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "372b94a8-5401-4947-afde-ab5518b9ec23",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "fac84fbb-edc8-45d6-8ceb-90b329ab205a",
+          "body": "{\"page_content\": \"[CONTEXT]\\n\\nCas pratiques fictifs de la fiche de démonstration illustrant la procédure.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Cas pratiques — démo\\n\\nTrois cas fictifs illustrent la fiche de démonstration : constat immédiat, constat\\ndifféré et récidive. Chaque cas précise la pièce à produire et le délai de réponse\\nattendu par le service.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 104, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Morceau 104",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "a4579c29-8890-4e4b-b1e2-2fed9f11997f",
+              "target": "params",
+              "modifier": "id",
+              "value": "104",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "b849b646-c1ad-422c-b5ae-a4ad87d4b91b",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "3e14c26b-555d-4d51-a7df-fc242e989db1",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "740b7f37-a8d4-4292-b66c-7f76fc508e40",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "0ba42d0c-2b02-4a2c-9c44-33b9156bff3b",
+          "body": "{\"detail\": \"Extract '{{urlParam 'id'}}' not found.\"}",
+          "latency": 0,
+          "statusCode": 404,
+          "label": "Morceau inconnu",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "1bd629ca-dbab-4939-ba13-72a41c0e00dd",
+      "type": "http",
+      "documentation": "Téléchargement public d'un morceau. Dans le vrai OpenRAG en production, ce chemin redirige vers l'authentification SSO ; myrag voit alors le code 302 et son proxy /api/openrag/static/{id} replie sur /extract/{id} (fenêtre de lecture SourceViewer). Le mock reproduit la redirection — d'où l'importance que /extract/101 réponde aussi.",
+      "method": "get",
+      "endpoint": "/static/:id",
+      "responses": [
+        {
+          "uuid": "45995897-2d36-4203-a510-d6729bfbcb92",
+          "body": "",
+          "latency": 0,
+          "statusCode": 302,
+          "label": "Redirection SSO (comme en prod)",
+          "headers": [
+            {
+              "key": "Location",
+              "value": "/auth/login"
+            },
+            {
+              "key": "content-type",
+              "value": "text/plain"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "23ab3602-e922-46e1-9894-f6866185e3c4",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "c70141d4-c39c-4819-a94f-3a9814d3d703",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "ad7a2b4c-08d0-442a-96e7-2a2f3e5834ba",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "6ef3af65-d3de-4514-9918-2a225eeaeab2",
+      "type": "http",
+      "documentation": "Fichier brut. Le vrai OpenRAG n'expose pas ce chemin (vérifié sur ses 86 routes) : myrag garde le proxy « for completeness ». Le mock renvoie le même 404 que le vrai service.",
+      "method": "get",
+      "endpoint": "/file/:id",
+      "responses": [
+        {
+          "uuid": "e1936b6d-4287-4258-a91c-93a5d5b891d7",
+          "body": "{\"detail\": \"Not Found\"}",
+          "latency": 0,
+          "statusCode": 404,
+          "label": "Not Found",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "e729b2c6-6a5f-4c61-a6c0-735e013ff44e",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "fecf7798-33ea-4aac-a545-ed830e656b69",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "e368380e-d2de-451f-b68a-cc6a08e89a9a",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "6a18b994-447d-4b67-b5d2-56752b0e733b",
+      "type": "http",
+      "documentation": "Création d'une partition (une collection côté myrag). Appelé à la création d'une collection, à l'ingestion et par la sync. Sans état : répond toujours 201, jamais 409 (le vrai OpenRAG : {\"detail\": \"Partition 'x' already exists.\"}). myrag comprend un corps vide comme un succès.",
+      "method": "post",
+      "endpoint": "/partition/:partition",
+      "responses": [
+        {
+          "uuid": "b31a6d6f-c2fb-4de7-8d91-9b3a0ac456df",
+          "body": "",
+          "latency": 0,
+          "statusCode": 201,
+          "label": "Partition créée",
+          "headers": [],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "aa00f61f-9d03-4fe7-a2b4-1d915e83ff95",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "bcf94907-8cca-4fa5-97cd-cde4ac474910",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "142b492c-56f0-4aa8-8a36-b7ed6668962d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "ab9e0f36-40ad-45a1-9922-f9c11999fe22",
+      "type": "http",
+      "documentation": "Suppression d'une partition. Appelé à la suppression d'une collection. Sans état : toujours 204, jamais 404 (le vrai distingue partition absente → 404 {\"detail\": \"Partition 'x' not found.\"}).",
+      "method": "delete",
+      "endpoint": "/partition/:partition",
+      "responses": [
+        {
+          "uuid": "753d45bd-8622-4828-9456-c277cb4d74c1",
+          "body": "",
+          "latency": 0,
+          "statusCode": 204,
+          "label": "Partition supprimée",
+          "headers": [],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "6184ca33-8409-4040-99fc-31ca2ad8ef35",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "871ed0fb-be2a-4001-b2ab-1c15f76df65a",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "882490ae-53ff-4eed-85c8-8764772eff30",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "0c6b35b4-dbd1-4ce9-b0be-62858a4b02cf",
+      "type": "http",
+      "documentation": "Fichiers d'une partition. Appelé par myrag : corpus, playground, catalogue, graphe. Sans état : les deux fichiers de démonstration sont toujours renvoyés, quelle que soit la partition demandée (même vide ou fictive) — suffisant pour l'affichage, pas pour compter sur l'état réel.",
+      "method": "get",
+      "endpoint": "/partition/:partition",
+      "responses": [
+        {
+          "uuid": "19612631-4c03-4b29-bfcf-22e78f740337",
+          "body": "{\"files\": [{\"link\": \"{{baseUrl}}/partition/{{urlParam 'partition'}}/file/d1f2c3b4-a5e6-4789-8901-234567890abc\", \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}, {\"link\": \"{{baseUrl}}/partition/{{urlParam 'partition'}}/file/e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Deux fichiers",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "7a223c51-dc1b-45a8-be23-f773f96af675",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "5a76e0d9-139c-47d5-a146-d42601667ee6",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "b1b57539-ffcf-43d1-be1d-1017cbfa233d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "df335e86-6dcf-4d3f-aab7-04f1623c3ecc",
+      "type": "http",
+      "documentation": "Fiche d'un fichier (métadonnées + identifiants de ses morceaux). Appelé par myrag : corpus.py, generation/morceaux.py. Partition reprise du chemin. Format d'erreur identique au vrai OpenRAG.",
+      "method": "get",
+      "endpoint": "/partition/:partition/file/:file_id",
+      "responses": [
+        {
+          "uuid": "15a24962-c139-4bd5-aa1a-054dc0dc1121",
+          "body": "{\"metadata\": {\"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}, \"documents\": [{\"link\": \"{{baseUrl}}/extract/101\"}, {\"link\": \"{{baseUrl}}/extract/102\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Guide (fichier 1)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "2da68599-1d46-4444-a63d-e4c686049c56",
+              "target": "params",
+              "modifier": "file_id",
+              "value": "d1f2c3b4-a5e6-4789-8901-234567890abc",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "8177a0dc-736e-4380-a188-f2054e4ab139",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "0099e605-a366-4f1f-97e9-7264e8396342",
+          "body": "{\"metadata\": {\"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}, \"documents\": [{\"link\": \"{{baseUrl}}/extract/103\"}, {\"link\": \"{{baseUrl}}/extract/104\"}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Fiche NATINF (fichier 2)",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "7a1c7ac9-91b0-41af-8047-b6b481f7faea",
+              "target": "params",
+              "modifier": "file_id",
+              "value": "e2a3b4c5-d6f7-4890-9012-345678901bcd",
+              "invert": false,
+              "operator": "equals"
+            },
+            {
+              "uuid": "39609314-9ede-49e8-a5fc-fc5a2350428d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "AND",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "d1d7e6bf-632d-4c5d-ac11-74b5e8d2ccf2",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "d14845d8-cff3-4a98-bce8-5d51c71bcfd8",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "4588d178-919a-49ed-a13b-029bc861c249",
+          "body": "{\"detail\": \"'{{urlParam 'file_id'}}' not found in partition '{{urlParam 'partition'}}'\"}",
+          "latency": 0,
+          "statusCode": 404,
+          "label": "Fichier inconnu",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "b9384cdb-d08a-48db-9fd2-e52d970ec3cb",
+      "type": "http",
+      "documentation": "Tous les morceaux d'une partition. Appelé par myrag : generation/morceaux.py (lecture des passages pour la génération de questions). include_embedding ignoré (myrag l'envoie à false). Sans état : les quatre morceaux de démonstration sont toujours renvoyés. Enveloppe {\"chunks\": […} identique au vrai OpenRAG.",
+      "method": "get",
+      "endpoint": "/partition/:partition/chunks",
+      "responses": [
+        {
+          "uuid": "950295db-ad1c-4bef-8f6e-e1d42652ab14",
+          "body": "{\"chunks\": [{\"link\": \"{{baseUrl}}/extract/101\", \"content\": \"[CONTEXT]\\n\\nCe passage introduit le guide de démonstration, décrivant une démarche fictive d'ouverture des droits utilisée pour tester Mes collections.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Conditions générales\\n\\nLa demande d'ouverture des droits s'effectue auprès du service de démonstration. Le\\ndemandeur doit résider dans la zone de couverture du dispositif et justifier d'une\\nsituation conforme au cadre de la démarche.\\n\\nLe dépôt du dossier est possible en ligne, par courrier ou sur place. Chaque demande\\nfait l'objet d'un accusé de réception mentionné dans le guide de démonstration.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 101, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}}, {\"link\": \"{{baseUrl}}/extract/102\", \"content\": \"[CONTEXT]\\n\\nListe des pièces à fournir pour la démarche fictive d'ouverture des droits du guide de démonstration.\\n\\n* filename: guide-ouverture-droits.md\\n\\n[CHUNK_START]\\n\\n# Guide ouverture des droits\\n\\n## Pièces à fournir\\n\\nLe dossier de démonstration comporte une pièce d'identité en cours de validité, un\\njustificatif de domicile de moins de trois mois et, le cas échéant, les décisions\\nantérieures visées par le dispositif fictif.\\n\\nLes pièces peuvent être fournies en copie numérique ; le service de démonstration se\\nréserve le droit d'en demander les originaux.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 102, \"file_id\": \"d1f2c3b4-a5e6-4789-8901-234567890abc\", \"filename\": \"guide-ouverture-droits.md\", \"original_filename\": \"Guide ouverture des droits.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 4096, \"content_sha256\": \"3f2a9c1d8e4b7a6f5c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}}, {\"link\": \"{{baseUrl}}/extract/103\", \"content\": \"[CONTEXT]\\n\\nFiche de démonstration présentant une procédure fictive de sanction forfaitaire, sans valeur juridique.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Sanction forfaitaire — démo\\n\\nLa procédure fictive de la fiche de démonstration prévoit une sanction forfaitaire\\napplicable en cas de manquement constaté. Le montant et les modalités de recouvrement\\ndécrits ici n'ont aucune valeur juridique : ils servent uniquement à tester la lecture\\ndes morceaux.\\n\\n## Recours — démo\\n\\nLa contestation suit la procédure décrite dans la fiche de démonstration : demande\\nécrite dans le délai indiqué, examen par la commission fictive, puis réponse motivée.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 103, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 1, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}}, {\"link\": \"{{baseUrl}}/extract/104\", \"content\": \"[CONTEXT]\\n\\nCas pratiques fictifs de la fiche de démonstration illustrant la procédure.\\n\\n* filename: fiche-natinf-demo.md\\n\\n[CHUNK_START]\\n\\n# Fiche NATINF démo\\n\\n## Cas pratiques — démo\\n\\nTrois cas fictifs illustrent la fiche de démonstration : constat immédiat, constat\\ndifféré et récidive. Chaque cas précise la pièce à produire et le délai de réponse\\nattendu par le service.\\n\\n[CHUNK_END]\", \"metadata\": {\"_id\": 104, \"file_id\": \"e2a3b4c5-d6f7-4890-9012-345678901bcd\", \"filename\": \"fiche-natinf-demo.md\", \"original_filename\": \"Fiche NATINF démo.md\", \"source\": \"\", \"page\": 2, \"mimetype\": \"text/markdown\", \"file_size\": 2560, \"content_sha256\": \"8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b87d\", \"created_at\": 1767225000, \"updated_at\": 1767225000, \"indexed_at\": 1767225000, \"partition\": \"{{urlParam 'partition'}}\"}}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Quatre morceaux",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "8e19f3ce-e36b-46f2-80c1-4a23533563cb",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "be7330e5-05bd-4ea4-86f3-821e591cb144",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "7fa057c8-0d5e-4096-a0ea-06a02837d8f7",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "65e1f4bb-a1ed-4ee1-a340-332d99db1a42",
+      "type": "http",
+      "documentation": "Ajout d'un membre à une partition (sync Keycloak → OpenRAG). myrag envoie un formulaire (user_id, role=défaut « viewer »). Sans état : toujours 201, jamais 409 (le vrai : « … already has access … » si déjà membre).",
+      "method": "post",
+      "endpoint": "/partition/:partition/users",
+      "responses": [
+        {
+          "uuid": "8279e485-ec17-413c-aaf6-4faf375408cf",
+          "body": "",
+          "latency": 0,
+          "statusCode": 201,
+          "label": "Membre ajouté",
+          "headers": [],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "211fe73e-8207-40e8-99e7-5ff52969a57e",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "4dc1c75d-9916-4237-9ec8-84d307e2abc5",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "2a8bc01c-9ff9-46fe-a471-ca05670fc92b",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "d2464c09-d385-4ff8-a865-ee7901f57897",
+      "type": "http",
+      "documentation": "Indexation d'un fichier (ingestion). myrag envoie un multipart (champ « file ») : ignoré, le mock raisonne sur le chemin seul. Renvoie l'URL d'une tâche ; myrag ne consulte jamais task_status_url (grep négatif) — aucun état n'est nécessaire, chaque réponse déclare la tâche réussie.",
+      "method": "post",
+      "endpoint": "/indexer/partition/:partition/file/:file_id",
+      "responses": [
+        {
+          "uuid": "85ff6622-0fbc-4e81-8efd-f47e30229b3d",
+          "body": "{\"task_status_url\": \"{{baseUrl}}/indexer/task/{{objectId}}\"}",
+          "latency": 0,
+          "statusCode": 201,
+          "label": "Tâche créée",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "8efe6587-129b-401f-91df-bea96d9d7350",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "fb483075-2005-4a3b-9b5d-3ae0fc6f772d",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "155437a3-e196-4ff1-917c-b8ad54b6293d",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "4d1b84a8-8171-46f8-9ee7-27f2f15bbd75",
+      "type": "http",
+      "documentation": "État d'une tâche d'indexation (non appelé par myrag ; inclus pour que le task_status_url de l'indexation soit consultable à la main). Toujours SUCCESS (le vrai : « SUCCESS » / « FAILED » ; 404 : {\"detail\": \"Task 'x' not found.\"}).",
+      "method": "get",
+      "endpoint": "/indexer/task/:task_id",
+      "responses": [
+        {
+          "uuid": "14780f11-bc35-4de6-a0bc-c8f0a65d8680",
+          "body": "{\"task_id\": \"{{urlParam 'task_id'}}\", \"task_state\": \"SUCCESS\", \"details\": {\"processed\": 1, \"failed\": 0}}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Tâche réussie",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "3032d694-2611-4211-aeac-9151443288b2",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "d247f13b-85a8-458b-8894-3ad5206cff1f",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "52db7f40-8693-4073-99fe-6345a2c769c1",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "1c84985f-d9d6-4087-a026-851eb56c8d91",
+      "type": "http",
+      "documentation": "Utilisateurs OpenRAG (sync). myrag appelle /users/ avec le slash final. Deux comptes de démonstration, sans jeton dans la réponse (comme le vrai). Leurs external_user_id fictifs ne correspondent jamais aux subs Keycloak : chaque synchronisation recrée donc des utilisateurs (POST /users/) — limitation assumée, sans état.",
+      "method": "get",
+      "endpoint": "/users/",
+      "responses": [
+        {
+          "uuid": "e49d4337-f212-47e5-b555-1307d7d6b540",
+          "body": "{\"users\": [{\"id\": 1, \"display_name\": \"Admin local (démo)\", \"external_user_id\": \"admin-local-demo\", \"email\": null, \"is_admin\": true, \"created_at\": 1767225000}, {\"id\": 2, \"display_name\": \"Lecteur local (démo)\", \"external_user_id\": \"lecteur-local-demo\", \"email\": null, \"is_admin\": false, \"created_at\": 1767225000}]}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Deux utilisateurs",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "d0dc1c3f-2f90-4233-8e43-176817ce17cb",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "406d29ea-16fa-4828-846a-8b91b2333088",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "5db2eb45-8635-40c1-9734-a719be46d010",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "ce325b35-4c13-48d9-871c-3740f0a90f51",
+      "type": "http",
+      "documentation": "Création d'un utilisateur OpenRAG (sync). myrag poste {display_name, external_user_id, is_admin} en JSON. Échos en doubles accolades : Mockoon n'échappe pas les apostrophes (O'Brien passe tel quel) ; les triples accolades, elles, retireraient les guillemets adjacents et casseraient le JSON. id et is_admin sans guillemets (nombre et booléen rendus bruts), id aléatoire jamais mémorisé (chaque sync recrée l'utilisateur), token factice. Limitation : un guillemet droit « dans une valeur casse le JSON (echo textuel).",
+      "method": "post",
+      "endpoint": "/users/",
+      "responses": [
+        {
+          "uuid": "34ee041f-a674-4fbf-908c-081063adc196",
+          "body": "{\"id\": {{int 1000 999999}}, \"display_name\": \"{{body 'display_name'}}\", \"external_user_id\": \"{{body 'external_user_id'}}\", \"email\": null, \"is_admin\": {{body 'is_admin'}}, \"token\": \"mock-{{objectId}}\", \"created_at\": 1767225000}",
+          "latency": 0,
+          "statusCode": 201,
+          "label": "Utilisateur créé",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "688fe5eb-9032-4773-bd41-cd93b25639c5",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": false,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        },
+        {
+          "uuid": "d9fc6a81-6e06-4d57-ab55-2d4ff5c3a1c6",
+          "body": "{\"detail\": \"Not authenticated\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Sans jeton",
+          "headers": [
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "www-authenticate",
+              "value": "Bearer"
+            }
+          ],
+          "bodyType": "inline",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "uuid": "477baa72-cd26-4d58-be1e-136144512300",
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "^Bearer .+",
+              "invert": true,
+              "operator": "regex"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    }
+  ],
+  "proxyMode": false,
+  "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "tlsOptions": {
+    "pfxPath": "",
+    "keyPath": "",
+    "certPath": "",
+    "passphrase": ""
+  },
+  "cors": true,
+  "headers": [],
+  "proxyReqHeaders": [],
+  "proxyResHeaders": [],
+  "data": [],
+  "callbacks": []
+}
