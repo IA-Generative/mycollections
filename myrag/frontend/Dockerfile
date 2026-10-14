@@ -32,7 +32,9 @@ RUN npx nuxt generate
 
 
 # Runtime stage — tiny nginx serving the static SPA with client-side routing fallback.
-FROM nginx:1.27-alpine
+# 1.27 (Alpine 3.21) portait une vulnérabilité critique relevée par le scan de la CI.
+# Pas d'`apk upgrade` ici : il bloque le script d'entrée de l'image (`apk manifest nginx`).
+FROM nginx:1.29-alpine
 
 RUN rm -rf /usr/share/nginx/html/* \
     && rm /etc/nginx/conf.d/default.conf
