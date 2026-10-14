@@ -6,8 +6,8 @@
  * view after every vote without caring about which backend table the
  * question actually came from.
  *
- * Auto-seed rule: if the bank is empty on first load, call /generate-eval
- * once to produce a fresh dataset — otherwise the page shows no guidance.
+ * Auto-seed rule: if the bank is empty on first load, run generate() once to
+ * produce a fresh dataset — otherwise the page shows no guidance.
  * The user answered "oui au 1er chargement" in the design review, so this
  * runs without asking, and the user still controls further generations via
  * the explicit "Generate more" button.
@@ -60,11 +60,9 @@ export function useBank(collection: string) {
    * Generate fresh test questions and persist them as an EvalDataset so
    * subsequent loads see them classified as 'generated'.
    *
-   * We deliberately use /chat with a list-producing prompt rather than
-   * /generate-eval. The latter depends on an OpenRAG internal endpoint
-   * (get_file_content) that 400s on a number of partitions, leaving the
-   * bank permanently empty on those collections. /chat uses the public
-   * RAG pipeline and works anywhere the playground itself works.
+   * Uses /chat with a list-producing prompt: it rides the public RAG
+   * pipeline and works anywhere the playground itself works, so the
+   * seeded bank never depends on an internal endpoint.
    */
   async function generate() {
     if (isGenerating.value) return

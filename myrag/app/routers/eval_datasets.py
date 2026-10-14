@@ -1,8 +1,8 @@
 """EvalDataset persistence — lets the playground bank store auto-generated
 and imported question sets. The wizard step-4 historically kept its JSON
 in-memory / localStorage; this router exposes the DB-backed CRUD so the
-playground can READ what the wizard (eventually) writes and WRITE the result
-of /generate-eval so it survives reloads.
+playground can READ what the wizard writes and WRITE the question sets
+(bank auto-seed, wizard import) so they survive reloads.
 """
 
 from __future__ import annotations

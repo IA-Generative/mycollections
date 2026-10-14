@@ -7,6 +7,11 @@ Relues (valider / rejeter) puis exportées, ces paires servent à évaluer les r
 l'assistant. La bibliothèque est [ragas](https://github.com/vibrantlabsai/ragas) (`ragas.testset`),
 en flux « pré-découpé » : elle travaille sur les passages déjà indexés, pas sur les fichiers.
 
+Le bouton « Generer automatiquement » de l'étape « Mesure d'evaluation » de l'assistant de création
+utilise le même moteur : il lance un run de 8 paires (deux premiers personas de la collection, ou
+un persona créé d'office), le suit et en tire le jeu de test d'évaluation, complété des deux
+questions hors-sujet qui éprouvent le garde-fou.
+
 Réservé à qui gère la collection (créateur, groupe `<racine>/<nom>-admin`, administration).
 
 ## Comment un run se déroule

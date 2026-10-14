@@ -3,8 +3,8 @@
 Consolidates 4 sources into one flat list the frontend can render in the
 playground's right column:
 
-- 🤖 generated  : questions auto-produced by /generate-eval (stored as
-                  EvalDataset rows with name ending in '-generated')
+- 🤖 generated  : EvalDataset rows auto-seeded by the bank itself (chat prompt)
+                  or produced by the wizard's ragas generation
 - 📄 imported   : EvalDataset rows created from the wizard step-4 JSON import
 - 👎 fb_neg     : Feedback rows with rating < 0 (the real complaints)
 - 👍 promoted   : QRCache entries with source == "feedback" (curated answers)
@@ -13,7 +13,7 @@ The bank is the READ surface. Writes go through existing endpoints:
 - POST /api/feedback/ingest (👎)
 - POST /api/feedback/{col}/{fbid}/promote (👍 from a feedback)
 - POST /api/qr-cache/{col} (👍 manual — see qr_cache_router)
-- POST /api/playground/{col}/generate-eval (auto-seed)
+- POST /api/eval/{col}/datasets (auto-seed / wizard import)
 """
 
 from __future__ import annotations

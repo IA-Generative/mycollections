@@ -37,7 +37,6 @@ ECRITURES = [
     ("delete", "/api/qr-cache/{n}/x", None),
     ("post", "/api/eval/{n}/datasets", {"name": "jeu", "questions": []}),
     ("delete", "/api/eval/{n}/datasets/1", None),
-    ("post", "/api/playground/{n}/generate-eval", {}),
     ("post", "/api/sources/legifrance/add", {"collection": "{n}", "legifrance_id": "LEGITEXT000006070158", "type": "code"}),
     ("post", "/api/sources/drive/sync/{n}", None),
 ]

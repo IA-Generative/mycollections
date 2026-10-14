@@ -161,7 +161,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/chunker.py` | 4 strategies de decoupage |
 | `myrag/app/services/graph_builder.py` | Graph NetworkX + Cytoscape.js |
 | `myrag/app/routers/ingest.py` | Upload + from-url + reindex |
-| `myrag/app/routers/playground.py` | Chat RAG avec fallback + auto-eval |
+| `myrag/app/routers/playground.py` | Chat RAG avec fallback |
 | `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |
 | `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
 | `myrag/frontend/utils/extrait.ts` | `decouperMorceau` (retire les balises OpenRAG), exports ; pendant backend : `_decouper_morceau` dans `app/main.py` |

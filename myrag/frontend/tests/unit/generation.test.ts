@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   bilanRelecture, dureeLisible, libelleEtatRun, libelleModele, libellePhase, libelleRelecture, libelleStyle, nombreCourt,
-  nomFichierExport, progressionRun, resumeCout, validerPersona, EXEMPLES_PERSONAS,
+  nomFichierExport, pairesVersJeu, progressionRun, resumeCout, validerPersona, EXEMPLES_PERSONAS, HORS_SUJET,
+  PERSONNA_DEFAUT,
 } from '../../utils/generation'
 
 const COMPTEURS = { appels_llm: 195, tokens_entree: 190_400, tokens_sortie: 24_900, reparations_json: 3, inachevees: 0, erreurs_llm: 0, appels_embeddings: 0 }
@@ -71,6 +72,34 @@ describe('validerPersona', () => {
   })
   it('accepte les exemples proposés', () => {
     for (const e of EXEMPLES_PERSONAS) expect(validerPersona(e)).toEqual({})
+  })
+  it('accepte le persona créé d’office par l’assistant de création', () => {
+    expect(validerPersona(PERSONNA_DEFAUT)).toEqual({})
+  })
+})
+
+describe('pairesVersJeu', () => {
+  const paires = [
+    { id: 'a', question: 'Quelle procedure suivre ?', reponse: 'Deposer une demande.', persona: 'Agent', relecture: 'brut' },
+    { id: 'b', question: 'Quel delai ?', reponse: 'Trois mois.', persona: 'RH', relecture: 'valide' },
+    { id: 'c', question: 'Rejetee ?', reponse: 'Hors sujet.', persona: 'RH', relecture: 'rejete' },
+  ]
+
+  it('fait du run un jeu de test : les paires non rejetées, leurs réponses pour référence', () => {
+    const jeu = pairesVersJeu(paires, 'faq-sdst')
+    expect(jeu.name).toBe('faq-sdst-evaluation')
+    expect(jeu.questions.map(q => q.id)).toEqual(['a', 'b', 'hors-sujet-1', 'hors-sujet-2'])
+    expect(jeu.questions[0]).toMatchObject({
+      question: 'Quelle procedure suivre ?',
+      expected_answer: 'Deposer une demande.',
+      must_cite: [],
+      tags: ['Agent'],
+    })
+  })
+  it('termine par les questions hors-sujet, qui éprouvent le garde-fou', () => {
+    const jeu = pairesVersJeu([], 'faq-sdst')
+    expect(jeu.questions).toHaveLength(HORS_SUJET.length)
+    for (const q of HORS_SUJET) expect(q.out_of_scope).toBe(true)
   })
 })
 

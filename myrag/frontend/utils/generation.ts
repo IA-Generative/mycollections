@@ -164,3 +164,67 @@ export const EXEMPLES_PERSONAS = [
   { nom: 'Gestionnaire RH de proximité', description_role: "Gestionnaire des ressources humaines dans un service déconcentré. Répond à un agent qui s'interroge sur sa mobilité, ses congés ou sa rémunération." },
   { nom: 'Agent du support informatique', description_role: "Technicien du support informatique du ministère. Aide un agent qui ne peut plus se connecter, cherche un logiciel ou signale une panne de poste." },
 ]
+
+/** Le persona créé d'office quand la génération de l'assistant part sans aucun persona. */
+export const PERSONNA_DEFAUT = {
+  nom: 'Lecteur des documents',
+  description_role: 'Personne qui consulte la collection pour la première fois et cherche une information précise que contiennent ses documents.',
+}
+
+/** Une question du jeu de test d'évaluation (format historique de l'étape 4 de l'assistant). */
+export interface QuestionEval {
+  id: string
+  question: string
+  expected_answer: string
+  must_cite: string[]
+  tags: string[]
+  out_of_scope?: boolean
+  note?: string
+}
+
+export interface JeuEval { name: string, description: string, questions: QuestionEval[] }
+
+/** Questions hors-sujet ajoutées à tout jeu généré : vérifient que le RAG refuse
+ *  de fabriquer une réponse quand le sujet n'est pas couvert. */
+export const HORS_SUJET: QuestionEval[] = [
+  {
+    id: 'hors-sujet-1',
+    question: "Quel est l'age du capitaine ?",
+    expected_answer: '',
+    must_cite: [],
+    tags: ['hors-sujet'],
+    out_of_scope: true,
+    note: 'Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.',
+  },
+  {
+    id: 'hors-sujet-2',
+    question: 'Quelle est la capitale de la Mongolie ?',
+    expected_answer: '',
+    must_cite: [],
+    tags: ['hors-sujet'],
+    out_of_scope: true,
+    note: 'Question hors-sujet pour verifier que le RAG ne fabrique pas de reponse.',
+  },
+]
+
+/** Le jeu de test d'évaluation tiré des paires d'un run : chaque paire non rejetée
+ *  devient une question avec sa réponse de référence, complétée des hors-sujet. */
+export function pairesVersJeu(
+  paires: Pick<Paire, 'id' | 'question' | 'reponse' | 'persona' | 'relecture'>[],
+  collection: string,
+): JeuEval {
+  const questions = paires
+    .filter(p => p.relecture !== 'rejete')
+    .map(p => ({
+      id: p.id,
+      question: p.question,
+      expected_answer: p.reponse,
+      must_cite: [],
+      tags: [p.persona],
+    }))
+  return {
+    name: `${collection}-evaluation`,
+    description: 'Jeu de test genere automatiquement',
+    questions: [...questions, ...HORS_SUJET],
+  }
+}

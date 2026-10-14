@@ -84,8 +84,15 @@
               </label>
             </div>
 
-            <div v-if="generating" class="fr-mt-1w">
-              <p class="fr-text--xs" style="color:#666;">Le modèle lit la collection et propose des questions…</p>
+            <div v-if="generating" class="fr-mt-1w" aria-live="polite">
+              <p class="fr-text--xs" style="color:#666;">
+                {{ runSuivi
+                  ? `${libellePhase(runSuivi.phase)}… — la generation lit les documents et redige des paires question / reponse ; comptez quelques minutes.`
+                  : 'La generation demarre…' }}
+              </p>
+              <progress v-if="runSuivi" :value="progressionRun(runSuivi)" max="100"
+                        :aria-label="`Avancement de la generation : ${progressionRun(runSuivi)} %`"
+                        style="width:100%;height:8px;"></progress>
             </div>
 
             <div v-if="generateError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w">
@@ -220,7 +227,9 @@ const collection = route.query.collection as string
 const { get, post, patch } = useApi()
 
 import { renderMarkdownSafe } from '~/utils/sanitize'
+import { PERSONNA_DEFAUT, libellePhase, pairesVersJeu, progressionRun, type Run } from '~/utils/generation'
 
+const g = useGeneration()
 const question = ref('')
 const response = ref('')
 const sourceNames = ref<string[]>([])
@@ -229,6 +238,7 @@ const datasetCount = ref(0)
 const generating = ref(false)
 const generateError = ref('')
 const generatedDataset = ref<any>(null)
+const runSuivi = ref<Run | null>(null)
 const running = ref(false)
 const promptPatched = ref(false)
 const runProgress = ref(0)
@@ -249,22 +259,52 @@ async function test() {
   testing.value = false
 }
 
+/** Generer le jeu de test par le moteur ragas (le meme que l'onglet « Questions
+ *  generees » de la collection) : lancer un run, le suivre jusqu'au bout, en
+ *  tirer le jeu de test d'evaluation. */
 async function generateDataset() {
   generating.value = true
   generateError.value = ''
   generatedDataset.value = null
+  runSuivi.value = null
   try {
-    const data = await post(`/api/playground/${collection}/generate-eval`, {})
-    if (data.questions && data.questions.length > 0) {
-      generatedDataset.value = data
-      datasetCount.value = data.questions.length
-    } else {
-      generateError.value = data.error || 'Aucune question generee. Reessayez.'
+    // Le service de generation doit etre installe et configure (sinon 503, dit ce qui manque).
+    const etat = await g.etat(collection)
+    // Personas : les deux premiers de la collection, ou un persona cree d'office.
+    let personas = (etat.personas || []).slice(0, 2)
+    if (!personas.length) {
+      const r = await g.creerPersona(collection, PERSONNA_DEFAUT)
+      personas = [r.persona]
     }
+    // Un run tourne deja ? On le suit au lieu d'en lancer un autre (sinon 409).
+    let run: Run = etat.run_actif
+    if (!run) {
+      const r = await g.lancer(collection, {
+        personas: personas.map((p: any) => p.id),
+        taille: 8,
+        distribution: { entites: 1 },
+      })
+      run = r.run
+    }
+    runSuivi.value = run
+    // Suivi du run : phase et progression, jusqu'a ce qu'il finisse.
+    while (run.actif) {
+      await new Promise<void>(res => setTimeout(res, 3000))
+      run = (await g.run(collection, run.id)).run
+      runSuivi.value = run
+    }
+    if (run.etat === 'erreur') throw new Error(run.erreur || 'La generation a echoue.')
+    // Les paires du run deviennent le jeu de test d'evaluation.
+    const page = await g.paires(collection, run.id, { par_page: '100' })
+    const jeu = pairesVersJeu(page.paires || [], collection)
+    if (!jeu.questions.length) throw new Error('Aucune question generee. Reessayez.')
+    generatedDataset.value = jeu
+    datasetCount.value = jeu.questions.length
   } catch (e: any) {
     generateError.value = messageErreur(e)
   }
   generating.value = false
+  runSuivi.value = null
 }
 
 function downloadDataset() {

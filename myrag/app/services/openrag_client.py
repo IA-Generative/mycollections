@@ -200,8 +200,8 @@ class OpenRAGClient:
 
     async def get_file_content(self, partition: str, file_id: str) -> str:
         """Best-effort plain-text retrieval of an indexed file's content.
-        Used by generate-eval to build a sample. Returns an empty string if
-        the endpoint is unavailable."""
+        Used by the article graph and résumés to read back indexed files.
+        Returns an empty string if the endpoint is unavailable."""
         try:
             data = await self._get(f"/search/partition/{partition}/file/{file_id}")
         except httpx.HTTPStatusError:
