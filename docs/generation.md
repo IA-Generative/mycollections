@@ -1,16 +1,16 @@
 # Générer des paires question / réponse par persona
 
-L'onglet « Questions générées » d'une collection fait rédiger, à partir de ses propres documents,
+« Faire rédiger par l'IA », dans la page Qualité d'une collection, fait rédiger, à partir de ses propres documents,
 des paires **question / réponse de référence / passages d'origine**, du point de vue de
 **personas** : la personne qui interroge la collection et la situation dans laquelle elle le fait.
 Relues (valider / rejeter) puis exportées, ces paires servent à évaluer les réponses de
 l'assistant. La bibliothèque est [ragas](https://github.com/vibrantlabsai/ragas) (`ragas.testset`),
 en flux « pré-découpé » : elle travaille sur les passages déjà indexés, pas sur les fichiers.
 
-Le bouton « Generer automatiquement » de l'étape « Mesure d'evaluation » de l'assistant de création
-utilise le même moteur : il lance un run de 8 paires (deux premiers personas de la collection, ou
-un persona créé d'office), le suit et en tire le jeu de test d'évaluation, complété des deux
-questions hors-sujet qui éprouvent le garde-fou.
+Les paires générées **sont** des questions du jeu de questions de référence de la collection
+(origine « générée ») : elles arrivent « à relire » dans la page Qualité et à l'étape 4 de
+l'assistant (« Faire rédiger par l'IA »), qui lancent et suivent la même rédaction. Voir
+[qualite.md](qualite.md).
 
 Réservé à qui gère la collection (créateur, groupe `<racine>/<nom>-admin`, administration).
 
@@ -24,8 +24,8 @@ Réservé à qui gère la collection (créateur, groupe `<racine>/<nom>-admin`, 
 | `enregistrement` | les paires sont écrites avec les identifiants de leur passage (`chunk_id` OpenRAG, `file_id`) et son texte | aucun |
 
 Un run de 30 paires sur une collection assez grande consulte donc environ 120 passages :
-≈ 120 + 30 + 30 appels. La durée, les appels et les jetons lus et écrits sont affichés dans
-l'onglet, enregistrés avec le run, écrits dans le journal du service (une ligne `generation
+≈ 120 + 30 + 30 appels. La durée, les appels et les jetons lus et écrits sont enregistrés avec
+le run (`GET …/generation/runs/{id}`), écrits dans le journal du service (une ligne `generation
 run=…`, sans aucun texte) et dans le fil de la collection (`generation.terminee`).
 
 Ragas fait varier la forme des questions (bien rédigée, syntaxe approximative, fautes de frappe,

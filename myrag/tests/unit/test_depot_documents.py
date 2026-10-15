@@ -126,6 +126,13 @@ def test_reindexer_une_collection_mixte(client, en_tant_que, creer_collection, n
         r = client.post(f"/api/ingest/{nom}/reindex", params={"strategy": "section"})
         assert r.status_code == 200, r.text
         assert r.json()["files_reindexed"] == 2
+        # Les envois partent en tâche de fond : on les attend tant que le faux client est en place.
+        import time
+
+        for _ in range(100):
+            if cls.return_value.upload_document.await_count >= 2:
+                break
+            time.sleep(0.02)
     assert cls.return_value.upload_document.await_count == 2  # le PDF, à chaque fois tel quel
 
 

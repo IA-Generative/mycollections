@@ -122,6 +122,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
      ├── /api/collections                → CRUD collections (SQLAlchemy DB)
      ├── /api/collections/{n}/publish    → publication dans OWUI
      ├── /api/feedback                   → feedback OWUI
+     ├── /api/collections/{n}/qualite    → jeu de questions de reference, mesures (juge IA), synthese
      ├── /api/playground/{n}/chat        → test RAG avec debug
      ├── /api/openrag/extract/{id}       → morceau relu dans OpenRAG : page HTML lisible, ou JSON brut avec ?raw=1
      ├── /api/openrag/static/{path}      → document complet (repli sur le morceau ; propage ?raw=1)
@@ -168,6 +169,8 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/frontend/pages/index.vue`, `myrag/frontend/utils/accueil.ts` | Accueil : decouvrir, explorer, creer ; ce que l'accueil raconte est en fonctions pures testees |
 | `myrag/app/generation/`, `myrag/app/routers/generation.py` | Génération de paires question/réponse par persona (ragas, extra optionnel) : lecture des passages, moteur, exécution en fil ; `docs/generation.md` |
 | `myrag/app/routers/accueil.py`, `categories.py`, `guide.py` | Exemple de question et bilan de l'accueil ; categories du catalogue ; guide en six etapes (`myrag/app/guide/*.md`) |
+| `myrag/app/routers/qualite.py`, `app/services/questions_store.py`, `app/services/mesure/` | Page Qualite : jeu de questions unifie, mesure (verdicts, juge, execution), synthese (docs/qualite.md) |
+| `myrag/frontend/pages/c/[id]/qualite.vue`, `components/qualite/`, `utils/qualite.ts` | Page Qualite et etape 4 de l'assistant (memes composants) |
 | `myrag/frontend/pages/admin/create/` | Wizard 5 etapes |
 | `myrag/frontend/composables/useApi.ts` | Client API centralise |
 
@@ -233,6 +236,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
 | `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |
+| `MYCOLLECTIONS_MESURE_JUGE_MODELE` / `_PARALLELISME` / `_QUESTIONS_MAX` / `_DUREE_MAX_S` / `_DELAI_APPEL_S` | `` / `2` / `200` / `1800` / `120` | Mesure de la qualite (docs/qualite.md) : modele du juge (vide ⇒ celui de la generation), questions en parallele, plafond, duree max, delai par appel |
 | `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
 
 ## Groupes et droits

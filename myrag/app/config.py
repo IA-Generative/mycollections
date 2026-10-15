@@ -173,6 +173,15 @@ class Settings(BaseSettings):
     generation_delai_appel_s: int = Field(default=180, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_DELAI_APPEL_S", "generation_delai_appel_s"))
     generation_duree_max_s: int = Field(default=1800, validation_alias=AliasChoices("MYCOLLECTIONS_GENERATION_DUREE_MAX_S", "generation_duree_max_s"))
 
+    # ─── Mesure de qualité (docs/qualite.md) ──────────────────────────────────────────
+    # Le juge qui compare réponse obtenue et réponse de référence : le fournisseur de la
+    # génération ; modèle vide ⇒ celui de la génération (ou le serveur en aval choisit).
+    mesure_juge_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_MESURE_JUGE_MODELE", "mesure_juge_modele"))
+    mesure_parallelisme: int = Field(default=2, validation_alias=AliasChoices("MYCOLLECTIONS_MESURE_PARALLELISME", "mesure_parallelisme"))
+    mesure_questions_max: int = Field(default=200, validation_alias=AliasChoices("MYCOLLECTIONS_MESURE_QUESTIONS_MAX", "mesure_questions_max"))
+    mesure_duree_max_s: int = Field(default=1800, validation_alias=AliasChoices("MYCOLLECTIONS_MESURE_DUREE_MAX_S", "mesure_duree_max_s"))
+    mesure_delai_appel_s: int = Field(default=120, validation_alias=AliasChoices("MYCOLLECTIONS_MESURE_DELAI_APPEL_S", "mesure_delai_appel_s"))
+
     model_config = {"env_prefix": "", "env_file": ".env", "extra": "ignore", "populate_by_name": True}
 
 

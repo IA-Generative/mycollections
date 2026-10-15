@@ -107,26 +107,30 @@ def test_le_critere_d_ouverture_compte_les_amorces_en_controle(client, en_tant_q
 
 @pytest.mark.asyncio
 async def test_la_banque_se_met_a_jour_quand_le_catalogue_change(creer_collection, nom):
-    """Une réponse attendue fausse se corrigeait dans le dépôt sans jamais
-    atteindre la collection en service : le jeu ne se créait qu'une fois."""
-    import json as _json
-
+    """Une réponse attendue fausse se corrigeait dans le dépôt sans jamais atteindre la
+    collection en service. Mais une correction faite à la main par le gestionnaire gagne sur le
+    catalogue, et une question retirée du catalogue disparaît si personne ne l'a touchée."""
     from sqlalchemy import select
 
     from app.database import async_session
-    from app.models.db import EvalDataset
-    from app.services.amorces.banque import NOM_JEU, poser_questions
+    from app.models.db import PaireQA
+    from app.services import questions_store
+    from app.services.amorces.banque import poser_questions
 
     creer_collection(nom)
-    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "faux"}]) == 1
+    assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "faux"}, {"question": "Q3 ?", "expected_answer": "c"}]) == 2
     assert await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "juste"}, {"question": "Q2 ?", "expected_answer": "b"}]) == 2
 
-    async with async_session() as session:
-        jeux = (await session.execute(select(EvalDataset).where(EvalDataset.collection_name == nom))).scalars().all()
-    assert len(jeux) == 1, "un seul jeu, mis à jour — jamais un doublon"
-    questions = _json.loads(jeux[0].questions_json)
-    assert [q["expected_answer"] for q in questions] == ["juste", "b"]
-    assert jeux[0].name == NOM_JEU
+    async def jeu():
+        async with async_session() as session:
+            r = await session.execute(select(PaireQA).where(PaireQA.collection_name == nom, PaireQA.origine == "amorce").order_by(PaireQA.rang))
+            return [(q.source_ref, q.question, q.reponse, q.relecture) for q in r.scalars().all()]
+
+    assert await jeu() == [("amorce:1", "Q1 ?", "juste", "valide"), ("amorce:2", "Q2 ?", "b", "valide")]
+    q1 = (await questions_store.lister_questions(nom, texte="Q1"))["questions"][0]
+    await questions_store.modifier_question(nom, q1["id"], {"reponse": "corrigée à la main"}, None)
+    await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "catalogue"}])
+    assert await jeu() == [("amorce:1", "Q1 ?", "corrigée à la main", "valide")]
 
 
 def test_les_reponses_attendues_de_natinf_collent_a_la_source():

@@ -639,6 +639,10 @@ class Amorce(Base):
 ETATS_GENERATION = ("en_attente", "en_cours", "termine", "erreur")
 PHASES_GENERATION = ("attente", "lecture", "extraction", "generation", "enregistrement", "fini")
 RELECTURES_PAIRE = ("brut", "valide", "rejete")
+#: D'où vient une question de référence (docs/qualite.md).
+ORIGINES_QUESTION = ("generee", "importee", "saisie", "avis", "amorce")
+#: Ce qu'une mesure de qualité dit d'une réponse.
+VERDICTS_MESURE = ("conforme", "partiel", "non_conforme", "refus_ok", "refus_ko", "sans_source", "erreur")
 
 
 class Persona(Base):
@@ -738,19 +742,26 @@ class Generation(Base):
 
 
 class PaireQA(Base):
-    """Une paire générée : la question d'un persona, la réponse de référence, et les passages
-    d'où elle vient. Le texte des passages est GARDÉ : leur identifiant OpenRAG change à la
-    réindexation, la paire doit rester lisible."""
+    """Une question de référence du jeu de questions d'une collection, quelle que soit sa
+    provenance (`origine`) : générée par persona (ragas), importée, saisie, tirée d'un avis ou
+    d'une amorce. Sa réponse de référence est modifiable ; les passages d'où elle vient sont
+    GARDÉS en texte (leur identifiant OpenRAG change à la réindexation). Le nom de classe reste
+    celui des paires générées, d'où elle est partie (docs/qualite.md)."""
 
     __tablename__ = "paire_qa"
     __table_args__ = (
         CheckConstraint(_domaine("relecture", RELECTURES_PAIRE), name="paire_qa_relecture_valide"),
         CheckConstraint("relecture = 'brut' OR relu_le IS NOT NULL", name="paire_qa_relecture_datee"),
         Index("paire_qa_run_persona", "run_id", "persona_nom"),
+        CheckConstraint(_domaine("origine", ORIGINES_QUESTION), name="paire_qa_origine_valide"),
+        Index("paire_qa_collection_origine", "collection_name", "origine"),
+        Index("paire_qa_source_ref", "collection_name", "source_ref", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
-    run_id: Mapped[str] = mapped_column(String(36), index=True)
+    # Le run de génération d'où vient la question ; NULL pour les autres origines, et pour une
+    # question validée dont le run a été supprimé (elle reste dans le jeu).
+    run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     collection_name: Mapped[str] = mapped_column(String(255), index=True)
     rang: Mapped[int] = mapped_column(Integer, default=0)
     question: Mapped[str] = mapped_column(Text)
@@ -765,11 +776,41 @@ class PaireQA(Base):
     relu_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     relu_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # ─── Jeu de questions (docs/qualite.md) ───
+    origine: Mapped[str] = mapped_column(String(20), default="generee", server_default="generee")
+    # Clé d'idempotence des migrations et des imports (« eval:3:q1 », « qr:ab12cd34 », « amorce:4 »).
+    source_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    feedback_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    must_cite_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    tags_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    # La bonne réponse est un refus (question hors du champ de la collection).
+    hors_sujet: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Réponse à servir telle quelle quand la question est reconnue (lot ultérieur, désactivé).
+    fiable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    dernier_verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    derniere_mesure_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    derniere_mesure_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    modifie_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    modifie_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    servie_fois: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    servie_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     def to_dict(self) -> dict:
+        d = lambda v: v.isoformat() if v else None  # noqa: E731
         return {
             "id": self.id,
             "run_id": self.run_id,
+            "origine": self.origine,
+            "feedback_id": self.feedback_id,
+            "must_cite": json.loads(self.must_cite_json or "[]"),
+            "tags": json.loads(self.tags_json or "[]"),
+            "hors_sujet": bool(self.hors_sujet),
+            "fiable": bool(self.fiable),
+            "dernier_verdict": self.dernier_verdict,
+            "derniere_mesure_le": d(self.derniere_mesure_le),
+            "derniere_mesure_id": self.derniere_mesure_id,
+            "modifie_le": d(self.modifie_le),
+            "servie_fois": self.servie_fois or 0,
             "collection": self.collection_name,
             "rang": self.rang,
             "question": self.question,
@@ -783,4 +824,130 @@ class PaireQA(Base):
             "commentaire": self.commentaire,
             "relu_le": self.relu_le.isoformat() if self.relu_le else None,
             "cree_le": self.cree_le.isoformat() if self.cree_le else "",
+        }
+
+
+# ─── Mesure de qualité (docs/qualite.md) ─────────────────────────────────────────────
+ETATS_MESURE = ("en_attente", "en_cours", "termine", "erreur")
+PHASES_MESURE = ("attente", "questions", "reponses", "synthese", "fini")
+METHODES_MESURE = ("judge", "similarite")
+
+
+class Mesure(Base):
+    """Une mesure de la qualité d'une collection : chaque question du jeu posée à la collection,
+    sa réponse comparée à la réponse de référence, et la synthèse — gardée pour suivre la qualité
+    dans le temps."""
+
+    __tablename__ = "mesure"
+    __table_args__ = (
+        CheckConstraint(_domaine("etat", ETATS_MESURE), name="mesure_etat_valide"),
+        CheckConstraint(_domaine("phase", PHASES_MESURE), name="mesure_phase_valide"),
+        CheckConstraint("etat <> 'erreur' OR erreur IS NOT NULL", name="mesure_erreur_motivee"),
+        Index("mesure_collection_date", "collection_name", "cree_le"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    collection_name: Mapped[str] = mapped_column(String(255), index=True)
+    etat: Mapped[str] = mapped_column(String(20), default="en_attente")
+    phase: Mapped[str] = mapped_column(String(20), default="attente")
+    methode: Mapped[str] = mapped_column(String(20), default="judge")
+    modele: Mapped[str] = mapped_column(String(120), default="")
+    filtre_json: Mapped[str] = mapped_column(Text, default="{}")
+    nb_questions: Mapped[int] = mapped_column(Integer, default=0)
+    nb_traitees: Mapped[int] = mapped_column(Integer, default=0)
+    nb_conformes: Mapped[int] = mapped_column(Integer, default=0)
+    nb_partielles: Mapped[int] = mapped_column(Integer, default=0)
+    nb_non_conformes: Mapped[int] = mapped_column(Integer, default=0)
+    nb_refus_ok: Mapped[int] = mapped_column(Integer, default=0)
+    nb_refus_ko: Mapped[int] = mapped_column(Integer, default=0)
+    nb_sans_source: Mapped[int] = mapped_column(Integer, default=0)
+    nb_erreurs: Mapped[int] = mapped_column(Integer, default=0)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    appels_chat: Mapped[int] = mapped_column(Integer, default=0)
+    appels_llm: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_entree: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_sortie: Mapped[int] = mapped_column(Integer, default=0)
+    erreurs_llm: Mapped[int] = mapped_column(Integer, default=0)
+    refus_debit: Mapped[int] = mapped_column(Integer, default=0)
+    duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    erreur: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lance_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    demarre_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    termine_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    COMPTEURS = ("appels_chat", "appels_llm", "tokens_entree", "tokens_sortie", "erreurs_llm", "refus_debit")
+    VERDICTS = ("nb_conformes", "nb_partielles", "nb_non_conformes", "nb_refus_ok", "nb_refus_ko", "nb_sans_source", "nb_erreurs")
+
+    def to_dict(self) -> dict:
+        d = lambda v: v.isoformat() if v else None  # noqa: E731
+        return {
+            "id": self.id,
+            "collection": self.collection_name,
+            "etat": self.etat,
+            "phase": self.phase,
+            "actif": self.etat in ("en_attente", "en_cours"),
+            "methode": self.methode,
+            "modele": self.modele,
+            "filtre": json.loads(self.filtre_json or "{}"),
+            "nb_questions": self.nb_questions,
+            "nb_traitees": self.nb_traitees,
+            "verdicts": {k[3:]: getattr(self, k) for k in self.VERDICTS},
+            "score": self.score,
+            "compteurs": {k: getattr(self, k) for k in self.COMPTEURS},
+            "duree_s": self.duree_s,
+            "erreur": self.erreur,
+            "cree_le": d(self.cree_le),
+            "demarre_le": d(self.demarre_le),
+            "termine_le": d(self.termine_le),
+        }
+
+
+class MesureResultat(Base):
+    """Le résultat d'une question dans une mesure. L'instantané (question, référence) est gardé :
+    l'historique reste lisible quand la question est modifiée ou supprimée ensuite."""
+
+    __tablename__ = "mesure_resultat"
+    __table_args__ = (
+        CheckConstraint(_domaine("verdict", VERDICTS_MESURE), name="mesure_resultat_verdict_valide"),
+        Index("mesure_resultat_mesure_verdict", "mesure_id", "verdict"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    mesure_id: Mapped[str] = mapped_column(String(36), index=True)
+    collection_name: Mapped[str] = mapped_column(String(255), index=True)
+    question_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    question_texte: Mapped[str] = mapped_column(Text, default="")
+    reponse_reference: Mapped[str] = mapped_column(Text, default="")
+    hors_sujet: Mapped[bool] = mapped_column(Boolean, default=False)
+    persona_nom: Mapped[str] = mapped_column(String(120), default="")
+    origine: Mapped[str] = mapped_column(String(20), default="")
+    reponse_obtenue: Mapped[str] = mapped_column(Text, default="")
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    repli: Mapped[str] = mapped_column(String(20), default="aucun")
+    verdict: Mapped[str] = mapped_column(String(20))
+    justification: Mapped[str] = mapped_column(Text, default="")
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    methode: Mapped[str] = mapped_column(String(20), default="judge")
+    duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "mesure_id": self.mesure_id,
+            "question_id": self.question_id,
+            "question": self.question_texte,
+            "reponse_reference": self.reponse_reference,
+            "hors_sujet": bool(self.hors_sujet),
+            "persona": self.persona_nom,
+            "origine": self.origine,
+            "reponse_obtenue": self.reponse_obtenue,
+            "sources": json.loads(self.sources_json or "[]"),
+            "repli": self.repli,
+            "verdict": self.verdict,
+            "justification": self.justification,
+            "score": self.score,
+            "methode": self.methode,
+            "duree_s": self.duree_s,
         }
