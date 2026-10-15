@@ -66,6 +66,9 @@ async def lifespan(app: FastAPI):
         from app.services.generation_store import marquer_interrompus
 
         await marquer_interrompus()
+        from app.services.mesure_store import marquer_interrompues
+
+        await marquer_interrompues()
     yield
     if reprise and not reprise.done():
         reprise.cancel()

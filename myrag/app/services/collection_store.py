@@ -16,6 +16,8 @@ from app.models.db import (
     Generation,
     GrilleControle,
     IngestJob,
+    Mesure,
+    MesureResultat,
     PaireQA,
     Persona,
     Proposition,
@@ -211,6 +213,8 @@ async def purge_collection(name: str) -> dict:
             PaireQA,
             Generation,
             Persona,
+            Mesure,
+            MesureResultat,
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)

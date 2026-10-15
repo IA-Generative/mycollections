@@ -157,3 +157,89 @@ async def supprimer(collection: str, ident: str, user: CurrentUser = Depends(ger
     except Introuvable as e:
         _traduire(e)
     return {"status": "deleted"}
+
+
+# ─── Synthèse et mesures ──────────────────────────────────────────────────────────
+
+
+class MesureEntree(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seulement_validees: bool = True
+    origines: list[str] = Field(default_factory=list, max_length=5)
+
+
+@router.get("")
+async def synthese(collection: str, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.services import qualite
+
+    return await qualite.synthese(collection)
+
+
+@router.post("/mesures", status_code=202)
+async def lancer_mesure(collection: str, corps: MesureEntree, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.config import settings
+    from app.services import generation_store, mesure_store
+    from app.services.mesure import execution
+
+    if any(o not in ORIGINES_QUESTION for o in corps.origines):
+        raise HTTPException(status_code=422, detail=f"origines parmi {', '.join(ORIGINES_QUESTION)}")
+    if await generation_store.run_actif(collection):
+        raise HTTPException(status_code=409, detail="Une génération de questions est en cours : mesurez quand elle sera finie.")
+    questions = await store.questions_a_mesurer(collection, seulement_validees=corps.seulement_validees, origines=corps.origines or None)
+    if not questions:
+        raise HTTPException(status_code=409, detail="Aucune question à mesurer : validez d'abord des questions du jeu.")
+    if len(questions) > settings.mesure_questions_max:
+        raise HTTPException(status_code=413, detail=f"{len(questions)} questions : {settings.mesure_questions_max} au plus par mesure. Filtrez par origine.")
+    try:
+        mesure = await mesure_store.creer_mesure(collection, corps.model_dump(), settings.mesure_juge_modele or settings.generation_llm_modele, len(questions), user.sub)
+    except Conflit as e:
+        _traduire(e)
+    await consigner("collection", collection, "mesure.lancee", user.sub, collection_name=collection, detail={"mesure": mesure["id"], "questions": len(questions)})
+    execution.lancer(mesure, collection, questions)
+    return {"mesure": mesure, "appels_estimes": 2 * len(questions)}
+
+
+@router.get("/mesures")
+async def lister_mesures(collection: str, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.services import mesure_store
+
+    return {"mesures": await mesure_store.lister_mesures(collection)}
+
+
+@router.get("/mesures/{ident}")
+async def lire_mesure(collection: str, ident: str, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.services import mesure_store
+
+    try:
+        return {"mesure": await mesure_store.lire_mesure(collection, ident)}
+    except Introuvable as e:
+        _traduire(e)
+
+
+@router.get("/mesures/{ident}/resultats")
+async def resultats(
+    collection: str,
+    ident: str,
+    verdict: str | None = Query(None, max_length=20),
+    page: int = Query(1, ge=1),
+    par_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(gerer_la_collection),
+):
+    from app.services import mesure_store
+
+    try:
+        await mesure_store.lire_mesure(collection, ident)
+    except Introuvable as e:
+        _traduire(e)
+    return await mesure_store.lister_resultats(collection, ident, verdict=verdict, page=page, par_page=par_page)
+
+
+@router.delete("/mesures/{ident}")
+async def supprimer_mesure(collection: str, ident: str, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.services import mesure_store
+
+    try:
+        await mesure_store.supprimer_mesure(collection, ident)
+    except (Conflit, Introuvable) as e:
+        _traduire(e)
+    return {"status": "deleted"}

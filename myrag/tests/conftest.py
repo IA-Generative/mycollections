@@ -52,6 +52,8 @@ TABLES_PAR_COLLECTION = (
     "persona",
     "generation",
     "paire_qa",
+    "mesure",
+    "mesure_resultat",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])
