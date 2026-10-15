@@ -30,3 +30,11 @@ data:
   # public ingress. Auth is per-user: the admin's OWUI API key is sent
   # with each publish request.
   OWUI_URL: "http://openwebui.myrag.svc.cluster.local"
+  # Génération de questions par persona (docs/generation.md). La passerelle MirAI, OpenAI-compatible.
+  # Le jeton (MYCOLLECTIONS_GENERATION_LLM_CLE) est dans myrag-secrets ; il doit être PROPRE à Mes
+  # collections : la passerelle compte son quota par jeton. Vides ⇒ les routes répondent 503.
+  MYCOLLECTIONS_GENERATION_LLM_URL: "https://passerelle-llm.fake-domain.name/v1"
+  MYCOLLECTIONS_GENERATION_LLM_MODELE: "chat"
+  MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE: "bge-m3"
+  MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE: "20"
+  RAGAS_DO_NOT_TRACK: "true"

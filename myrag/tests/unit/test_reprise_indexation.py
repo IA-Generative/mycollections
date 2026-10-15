@@ -20,12 +20,12 @@ def _deposer(client, nom):
 async def test_un_travail_interrompu_reprend_au_demarrage(client, en_tant_que, creer_collection, nom):
     from app.routers import ingest
     from app.services.job_store import get_job, update_job
+
     creer_collection(nom)
     en_tant_que(personne("createur"))
     # Le dépôt s'arrête avant l'envoi des morceaux : la tâche de fond ne tourne pas (comme un pod
     # arrêté juste après le découpage), et ne peut donc pas finir le travail en concurrence du test.
-    with patch("app.routers.ingest.OpenRAGClient") as cls, \
-         patch("app.routers.ingest._upload_chunks_background", new=AsyncMock(return_value=None)):
+    with patch("app.routers.ingest.OpenRAGClient") as cls, patch("app.routers.ingest._upload_chunks_background", new=AsyncMock(return_value=None)):
         cls.return_value.create_partition = AsyncMock(return_value={})
         job_id = _deposer(client, nom).json()["job_id"]
     await update_job(job_id, status="uploading", uploaded_chunks=0, failed_chunks=0)  # comme après un arrêt
@@ -42,6 +42,7 @@ async def test_un_travail_interrompu_reprend_au_demarrage(client, en_tant_que, c
 async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant_que, creer_collection, nom):
     from app.routers import ingest
     from app.services.job_store import create_job, get_job, update_job
+
     creer_collection(nom)
     job = await create_job(nom, "disparu.md", "auto", "public")
     await update_job(job["job_id"], status="uploading")
@@ -54,6 +55,7 @@ async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant
 async def test_un_morceau_deja_indexe_compte_comme_reussi(client, en_tant_que, creer_collection, nom):
     from app.routers import ingest
     from app.services.job_store import create_job, get_job
+
     creer_collection(nom)
     job = await create_job(nom, "x.md", "auto", "public")
     deja = httpx.HTTPStatusError("409", request=httpx.Request("POST", "http://o"), response=httpx.Response(409))

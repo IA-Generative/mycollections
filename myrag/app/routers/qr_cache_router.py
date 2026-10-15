@@ -1,44 +1,17 @@
-"""QRCache HTTP surface — used by the playground to promote a question+answer
-to the cache without going through a Feedback row first (e.g. the user voted
-👍 on a response generated from an auto-seed question, not from an OWUI
-complaint). Promotion from a Feedback still goes through
-POST /api/feedback/{col}/{fbid}/promote.
+"""Remplacé par le jeu de questions de référence (docs/qualite.md) : les « réponses validées » (fichier qr_cache.json).
+
+Les routes répondent 410 et disent où aller. Elles disparaîtront à la version suivante.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from fastapi import Depends
-from app.routers._droits import gerer_la_collection, lire_la_collection
-from pydantic import BaseModel
-
-from app.services.qr_cache import QRCache
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/qr-cache", tags=["QRCache"])
 
-
-class AddRequest(BaseModel):
-    question: str
-    answer: str
-    tags: list[str] = []
-    source: str = "manual"  # manual | feedback | import
+_DETAIL = "Remplacé par /api/collections/{collection}/qualite/questions (jeu de questions de référence)."
 
 
-@router.get("/{collection}", dependencies=[Depends(lire_la_collection)])
-async def list_entries(collection: str):
-    cache = QRCache()
-    return {"entries": [e.to_dict() for e in cache.list(collection)]}
-
-
-@router.post("/{collection}", dependencies=[Depends(gerer_la_collection)])
-async def add_entry(collection: str, req: AddRequest):
-    cache = QRCache()
-    entry = cache.add(collection, req.question, req.answer, req.tags, req.source)
-    return {"status": "added", "entry": entry.to_dict()}
-
-
-@router.delete("/{collection}/{entry_id}", dependencies=[Depends(gerer_la_collection)])
-async def delete_entry(collection: str, entry_id: str):
-    cache = QRCache()
-    cache.delete(collection, entry_id)
-    return {"status": "deleted"}
+@router.api_route("/{collection}{reste:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+async def remplace(collection: str, reste: str = ""):
+    raise HTTPException(status_code=410, detail=_DETAIL)

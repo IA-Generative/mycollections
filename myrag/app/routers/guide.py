@@ -16,7 +16,7 @@ def pages() -> list[dict]:
     resultat = []
     for chemin in sorted(DOSSIER.glob("*.md")):
         texte = chemin.read_text(encoding="utf-8")
-        titre = next((l[2:].strip() for l in texte.splitlines() if l.startswith("# ")), chemin.stem)
+        titre = next((ligne[2:].strip() for ligne in texte.splitlines() if ligne.startswith("# ")), chemin.stem)
         slug = re.sub(r"^\d+-", "", chemin.stem)
         resultat.append({"slug": slug, "titre": titre, "ordre": len(resultat) + 1, "fichier": chemin.name, "markdown": texte})
     return resultat
@@ -24,8 +24,7 @@ def pages() -> list[dict]:
 
 @router.get("")
 async def lister():
-    return {"titre": "Soyez acteurs vous-mêmes",
-            "pages": [{k: v for k, v in p.items() if k != "markdown"} for p in pages()]}
+    return {"titre": "Soyez acteurs vous-mêmes", "pages": [{k: v for k, v in p.items() if k != "markdown"} for p in pages()]}
 
 
 @router.get("/{slug}")

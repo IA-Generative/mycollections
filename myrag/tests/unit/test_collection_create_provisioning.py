@@ -11,13 +11,12 @@ Verrouille le fix de Bug 1 :
 
 import os
 import sqlite3
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import CurrentUser, current_user
-
 
 CREATOR = CurrentUser(sub="creator-sub", username="creator", groups=["/myrag/unrelated"])
 THIRD = CurrentUser(sub="third-sub", username="third", groups=["/myrag/other"])
@@ -41,8 +40,10 @@ def _reset_collections_table():
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     import app.config
+
     monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
     from app.main import app
+
     app.dependency_overrides.clear()
     with TestClient(app) as client:
         _reset_collections_table()
@@ -57,9 +58,7 @@ def _as(app, user: CurrentUser):
 def _no_openrag(mock_cls, partitions=()):
     m = mock_cls.return_value
     m.create_partition = AsyncMock(return_value={})
-    m.list_models = AsyncMock(return_value={
-        "data": [{"id": f"openrag-{p}"} for p in partitions]
-    })
+    m.list_models = AsyncMock(return_value={"data": [{"id": f"openrag-{p}"} for p in partitions]})
     m.list_files = AsyncMock(return_value=[])
     return m
 
@@ -70,9 +69,14 @@ def test_createur_voit_sa_collection_et_groupe_autorise_aussi(mock_cls, app_clie
     _no_openrag(mock_cls)
 
     _as(app, CREATOR)
-    resp = client.post("/api/collections", json={
-        "name": "victor", "scope": "group", "scope_groups": ["/dir/legal"],
-    })
+    resp = client.post(
+        "/api/collections",
+        json={
+            "name": "victor",
+            "scope": "group",
+            "scope_groups": ["/dir/legal"],
+        },
+    )
     assert resp.status_code == 200, resp.text
 
     # Le créateur voit sa collection (via created_by, sans appartenir au groupe).
@@ -109,8 +113,7 @@ def test_check_name_autoritaire(mock_cls, app_client):
     rep = client.get("/api/collections/check-name", params={"name": "occupee"}).json()
     assert (rep["available"], rep["reason"]) == (False, "partition")
     # libre
-    assert client.get("/api/collections/check-name", params={"name": "tout-neuf"}).json() == {
-        "available": True}
+    assert client.get("/api/collections/check-name", params={"name": "tout-neuf"}).json() == {"available": True}
 
 
 @patch("app.routers.collections.SyncService")
@@ -118,24 +121,33 @@ def test_check_name_autoritaire(mock_cls, app_client):
 @patch("app.routers.collections.OpenRAGClient")
 def test_provisioning_appele_dans_l_ordre(mock_or, mock_kc, mock_sync, app_client, monkeypatch):
     import app.config
+
     # Active le provisioning (sinon sauté en l'absence d'identifiants Keycloak).
     monkeypatch.setattr(app.config.settings, "keycloak_admin_password", "x")
 
     app, client = app_client
     _no_openrag(mock_or)
     kc = mock_kc.return_value
-    kc.create_collection_groups = AsyncMock(return_value={
-        "user_group_id": "ug", "admin_group_id": "ag",
-        "user_group_path": "/myrag/victor", "admin_group_path": "/myrag/victor-admin",
-    })
+    kc.create_collection_groups = AsyncMock(
+        return_value={
+            "user_group_id": "ug",
+            "admin_group_id": "ag",
+            "user_group_path": "/myrag/victor",
+            "admin_group_path": "/myrag/victor-admin",
+        }
+    )
     kc.add_user_to_group = AsyncMock()
     sync = mock_sync.return_value
     sync.sync_collection = AsyncMock(return_value={"synced": 1, "errors": 0})
 
     _as(app, CREATOR)
-    resp = client.post("/api/collections", json={
-        "name": "victor", "scope_groups": ["/dir/legal"],
-    })
+    resp = client.post(
+        "/api/collections",
+        json={
+            "name": "victor",
+            "scope_groups": ["/dir/legal"],
+        },
+    )
     assert resp.status_code == 200
 
     kc.create_collection_groups.assert_awaited_once_with("victor")
@@ -150,6 +162,7 @@ def test_provisioning_appele_dans_l_ordre(mock_or, mock_kc, mock_sync, app_clien
 @patch("app.routers.collections.OpenRAGClient")
 def test_provisioning_echoue_creation_ok(mock_or, mock_kc, mock_sync, app_client, monkeypatch):
     import app.config
+
     monkeypatch.setattr(app.config.settings, "keycloak_admin_password", "x")
 
     app, client = app_client

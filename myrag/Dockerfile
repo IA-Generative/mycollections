@@ -5,7 +5,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+# La génération de questions (ragas, docs/generation.md) est un extra : AVEC_GENERATION=0 donne
+# une image sans elle (les routes de génération répondent alors 503, le reste est inchangé).
+ARG AVEC_GENERATION=1
+RUN if [ "$AVEC_GENERATION" = "1" ]; then uv sync --frozen --no-install-project --no-dev --extra generation; \
+    else uv sync --frozen --no-install-project --no-dev; fi
+
+# ragas envoie des statistiques d'usage à son éditeur sauf avis contraire : aucune donnée ne doit
+# sortir du ministère. Les barres de progression de ragas n'ont rien à faire dans les journaux.
+ENV RAGAS_DO_NOT_TRACK=true TQDM_DISABLE=1
 
 # L'environnement est dans l'image : on le lance directement. `uv run` voudrait écrire son
 # cache sous $HOME, impossible avec une racine en lecture seule (le pod ne démarrait pas).

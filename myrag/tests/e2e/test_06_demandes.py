@@ -3,6 +3,7 @@
 La demande d'essai est close par l'API à la fin (l'auteur en a le droit) : rien ne reste
 en vue des autres testeurs, l'accueil ne la mettra pas « en ce moment ».
 """
+
 from __future__ import annotations
 
 import re
@@ -27,8 +28,7 @@ def demande_essai(session_testeur, capacite_demandes):
     boite = {"id": None}
     yield boite
     if boite["id"]:
-        session_testeur.post(f"/api/demandes/{boite['id']}/clore",
-                             {"motif": "Demande d'essai de la suite de tests : close automatiquement."})
+        session_testeur.post(f"/api/demandes/{boite['id']}/clore", {"motif": "Demande d'essai de la suite de tests : close automatiquement."})
 
 
 def test_la_page_explique_le_seuil_et_le_garant(session_testeur, capacite_demandes, captures):

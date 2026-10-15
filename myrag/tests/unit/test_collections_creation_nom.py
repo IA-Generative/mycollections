@@ -15,9 +15,15 @@ def _creer(client, name, partitions=(), **champs):
         return client.post("/api/collections", json={"name": name, "scope": "group", "scope_groups": [GROUPE_TESTEURS], **champs})
 
 
-@pytest.mark.parametrize("name,motif", [
-    ("Test trajectoire écologie", "format"), ("demo-refusee", "prefixe"), ("ab", "longueur"), ("templates", "reserve"),
-])
+@pytest.mark.parametrize(
+    "name,motif",
+    [
+        ("Test trajectoire écologie", "format"),
+        ("demo-refusee", "prefixe"),
+        ("ab", "longueur"),
+        ("templates", "reserve"),
+    ],
+)
 def test_un_identifiant_fautif_est_refuse_avec_son_motif(client, en_tant_que, name, motif):
     en_tant_que(personne(1))
     r = _creer(client, name)

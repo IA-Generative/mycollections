@@ -17,7 +17,9 @@ _SERVICE_TOKENS: dict[str, tuple[str, float]] = {}
 
 
 async def get_service_token(
-    client_id: str, client_secret: str, realm: str | None = None,
+    client_id: str,
+    client_secret: str,
+    realm: str | None = None,
     scope: str = "openid",
 ) -> str:
     """Fetch an access_token via client_credentials for a confidential client.
@@ -103,7 +105,8 @@ class KeycloakClient:
                 # sur le mot de passe admin. Cause racine fréquente du sync KO.
                 logger.warning(
                     "client_credentials KO pour le client '%s' (secret/rôles ?): %s — bascule mot de passe admin",
-                    self.client_id, e,
+                    self.client_id,
+                    e,
                 )
 
         # Fallback: admin password on master realm

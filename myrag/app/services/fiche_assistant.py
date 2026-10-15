@@ -18,9 +18,8 @@ from sqlalchemy import select
 
 from app.database import async_session
 from app.models.db import Categorie, Collection, Publication
-from app.services import etats
+from app.services import etats, owui_client
 from app.services.nommage import titre_de, titre_depuis_alias
-from app.services import owui_client
 
 
 class GroupeInconnu(ValueError):
@@ -28,9 +27,7 @@ class GroupeInconnu(ValueError):
 
     def __init__(self, noms: list[str]):
         self.noms = noms
-        super().__init__(
-            "groupe inconnu de l'assistant : " + ", ".join(noms)
-            + ". Indiquez le nom d'un groupe tel qu'il apparaît dans l'assistant.")
+        super().__init__("groupe inconnu de l'assistant : " + ", ".join(noms) + ". Indiquez le nom d'un groupe tel qu'il apparaît dans l'assistant.")
 
 
 class PasPubliee(Exception):
@@ -74,8 +71,7 @@ async def _voulue(name: str) -> dict:
         }
 
 
-async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None,
-                             garder_les_droits: bool = False) -> dict:
+async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None, garder_les_droits: bool = False) -> dict:
     """Pose (ou repose) la fiche de la collection dans l'assistant. `a_sec` : dit ce qui
     partirait, sans rien écrire. Lève PasPubliee si la collection n'a pas à y être.
 
@@ -99,13 +95,18 @@ async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None,
 
 async def publiees() -> list[str]:
     async with async_session() as session:
-        lignes = (await session.execute(
-            select(Publication.collection_name)
-            .join(Collection, Collection.name == Publication.collection_name)
-            .where(Publication.state == "published", Publication.alias_enabled.is_(True),
-                   Collection.archived_at.is_(None))
-            .order_by(Publication.collection_name)
-        )).scalars().all()
+        lignes = (
+            (
+                await session.execute(
+                    select(Publication.collection_name)
+                    .join(Collection, Collection.name == Publication.collection_name)
+                    .where(Publication.state == "published", Publication.alias_enabled.is_(True), Collection.archived_at.is_(None))
+                    .order_by(Publication.collection_name)
+                )
+            )
+            .scalars()
+            .all()
+        )
         return list(lignes)
 
 
@@ -137,4 +138,5 @@ if __name__ == "__main__":
     async def _main():
         await init_db()
         print(json.dumps(await resynchroniser_toutes(a_sec="--a-sec" in sys.argv), ensure_ascii=False, indent=2))
+
     asyncio.run(_main())

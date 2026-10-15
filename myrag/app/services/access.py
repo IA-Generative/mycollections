@@ -59,10 +59,7 @@ def chemins(groups: list[str] | None) -> list[str]:
     if any(not g.startswith("/") for g in valeurs):
         if not _noms_courts_signales:
             _noms_courts_signales = True
-            logger.warning(
-                "Claim `groups` en noms courts (mapper full.path=false) : aucun droit "
-                "n'en est tiré — superadmin et groupes de collection restent inopérants"
-            )
+            logger.warning("Claim `groups` en noms courts (mapper full.path=false) : aucun droit n'en est tiré — superadmin et groupes de collection restent inopérants")
         return []
     return valeurs
 
@@ -78,7 +75,7 @@ def _leaf(path: str) -> str | None:
     p = path.rstrip("/")
     if not p.startswith(prefix):
         return None
-    leaf = p[len(prefix):]
+    leaf = p[len(prefix) :]
     if not leaf or "/" in leaf:
         return None
     return leaf

@@ -58,6 +58,7 @@ TAILLE_EXTRAIT = 300
 
 # ─── Erreurs du contrat ──────────────────────────────────────────────────────────────────────
 
+
 class ErreurRecherche(Exception):
     def __init__(self, statut: int, code: str, message: str, entetes: dict[str, str] | None = None):
         super().__init__(code)
@@ -65,8 +66,7 @@ class ErreurRecherche(Exception):
 
 
 def _erreur(statut: int, code: str, message: str, entetes: dict[str, str] | None = None) -> JSONResponse:
-    return JSONResponse(status_code=statut, content={"error": {"code": code, "message": message}},
-                        headers={**(entetes or {}), "Cache-Control": "no-store"})
+    return JSONResponse(status_code=statut, content={"error": {"code": code, "message": message}}, headers={**(entetes or {}), "Cache-Control": "no-store"})
 
 
 _CODES_HTTP = {
@@ -104,6 +104,7 @@ class _RouteRecherche(APIRoute):
 
 
 # ─── Garde : jeton, audience, groupe exigé, débit ────────────────────────────────────────────
+
 
 def _garde(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> None:
     """Le jeton est valide, nous est destiné, et son porteur passe la garde de groupe.
@@ -147,8 +148,7 @@ def _limiter(cle: str) -> None:
             del _fenetres[k]
     _fenetres[cle] = (minute, compte)
     if compte > plafond:
-        raise ErreurRecherche(429, "rate_limited", "Trop de recherches, réessayez dans un instant",
-                              {"Retry-After": str(60 - int(maintenant) % 60)})
+        raise ErreurRecherche(429, "rate_limited", "Trop de recherches, réessayez dans un instant", {"Retry-After": str(60 - int(maintenant) % 60)})
 
 
 async def _utilisateur(user: CurrentUser = Depends(current_user)) -> CurrentUser:
@@ -159,11 +159,11 @@ async def _utilisateur(user: CurrentUser = Depends(current_user)) -> CurrentUser
     return user
 
 
-router = APIRouter(prefix=PREFIXE, tags=["recherche"], route_class=_RouteRecherche,
-                   dependencies=[Depends(_garde)])
+router = APIRouter(prefix=PREFIXE, tags=["recherche"], route_class=_RouteRecherche, dependencies=[Depends(_garde)])
 
 
 # ─── Droits : ce que la personne lit, et à quel titre ────────────────────────────────────────
+
 
 def _droit(fiche: dict, user: CurrentUser) -> tuple[str, str]:
     """(right, group) : `owner/mine` pour le créateur, `public/public` pour une collection
@@ -180,9 +180,11 @@ async def _collections_lisibles(user: CurrentUser) -> list[dict]:
     """Les fiches (hors archivées) que la personne peut lire — la règle de `access.can_read`,
     celle de la liste des collections. Une partition sans fiche n'est pas proposée."""
     fiches = await list_collections(include_archived=False)
-    return [f for f in fiches if access.can_read(
-        name=f["name"], scope=f.get("scope"), scope_groups=f.get("scope_groups"),
-        created_by=f.get("created_by"), user_groups=user.groups, user_sub=user.sub)]
+    return [
+        f
+        for f in fiches
+        if access.can_read(name=f["name"], scope=f.get("scope"), scope_groups=f.get("scope_groups"), created_by=f.get("created_by"), user_groups=user.groups, user_sub=user.sub)
+    ]
 
 
 _ORDRE_GROUPES = {"mine": 0, "shared": 1, "public": 2}
@@ -200,6 +202,7 @@ async def perimetres(user: CurrentUser = Depends(_utilisateur)):
 
 
 # ─── Paramètres ──────────────────────────────────────────────────────────────────────────────
+
 
 def _invalide(message: str) -> ErreurRecherche:
     return ErreurRecherche(400, "invalid_query", message)
@@ -264,6 +267,7 @@ def _lire_perimetre(request: Request) -> list[str] | None:
 
 # ─── Texte : brut, borné, surligné en unités UTF-16 ──────────────────────────────────────────
 
+
 def _texte_brut(texte: str) -> str:
     """Un passage tel qu'on peut l'afficher : sans balises OpenRAG, sans HTML, sans
     caractères de contrôle, sans le gros du balisage Markdown, espaces resserrés."""
@@ -296,8 +300,7 @@ def _motif(q: str) -> re.Pattern | None:
     if not termes:
         return None
     termes.sort(key=len, reverse=True)
-    morceaux = ["".join(f"[{_VARIANTES[c]}]" if c in _VARIANTES else re.escape(c) for c in t)
-                for t in termes[:20]]
+    morceaux = ["".join(f"[{_VARIANTES[c]}]" if c in _VARIANTES else re.escape(c) for c in t) for t in termes[:20]]
     return re.compile(r"(?<!\w)(?:" + "|".join(morceaux) + ")", re.IGNORECASE)
 
 
@@ -330,6 +333,7 @@ def _extrait(texte: str, motif: re.Pattern | None) -> str:
 
 # ─── Moteur : un appel pour toutes les collections, sinon une par une ────────────────────────
 
+
 class _MoteurIndisponible(Exception):
     pass
 
@@ -358,8 +362,7 @@ async def _interroger(partitions: list[str], q: str, top_k: int) -> list[dict]:
 
     rendus = await asyncio.gather(*(un_appel([p]) for p in partitions), return_exceptions=True)
     reussis = [r for r in rendus if not isinstance(r, BaseException)]
-    pannes = [r for r in rendus if isinstance(r, BaseException)
-              and not (isinstance(r, httpx.HTTPStatusError) and r.response.status_code < 500)]
+    pannes = [r for r in rendus if isinstance(r, BaseException) and not (isinstance(r, httpx.HTTPStatusError) and r.response.status_code < 500)]
     if not reussis and pannes:
         raise _MoteurIndisponible
     # Entrelacés rang par rang : aucune collection ne passe devant les autres d'office.
@@ -431,8 +434,7 @@ def _page(meta: dict) -> int | None:
     return p if isinstance(p, int) and not isinstance(p, bool) and p > 0 else None
 
 
-def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser,
-                motif: re.Pattern | None, depuis, jusqu) -> list[dict]:
+def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser, motif: re.Pattern | None, depuis, jusqu) -> list[dict]:
     """Les morceaux groupés par document (rang d'OpenRAG conservé), au plus trois passages."""
     resultats: dict[tuple[str, str], dict] = {}
     for doc in docs:
@@ -469,14 +471,16 @@ def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser,
         if s is not None and (r["score"] is None or s > r["score"]):
             r["score"] = s
         extrait = _extrait(texte, motif)
-        r["hits"].append({
-            "snippet": extrait,
-            "highlights": _surlignages(extrait, motif),
-            "field": "content",
-            "location": {"start_seconds": None, "end_seconds": None, "page": _page(meta)},
-            "speaker": None,
-            "url": _lien(ident) or r["url"],
-        })
+        r["hits"].append(
+            {
+                "snippet": extrait,
+                "highlights": _surlignages(extrait, motif),
+                "field": "content",
+                "location": {"start_seconds": None, "end_seconds": None, "page": _page(meta)},
+                "speaker": None,
+                "url": _lien(ident) or r["url"],
+            }
+        )
     sortie = []
     for r in resultats.values():
         if not _dans_les_bornes(r.pop("_quand"), depuis, jusqu):
@@ -488,8 +492,7 @@ def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser,
 
 
 @router.get("")
-async def rechercher(request: Request, q: str | None = None, limit: str | None = None,
-                     user: CurrentUser = Depends(_utilisateur)):
+async def rechercher(request: Request, q: str | None = None, limit: str | None = None, user: CurrentUser = Depends(_utilisateur)):
     """Les documents des collections lisibles qui répondent à `q`."""
     _limiter(user.sub)
     texte = (q or "").strip()
@@ -505,8 +508,7 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
     lisibles = {f["name"]: f for f in await _collections_lisibles(user)}
     # Une collection inconnue ou sans droit est ignorée, pas refusée (contrat).
     noms = [n for n in demandees if n in lisibles] if demandees is not None else list(lisibles)
-    vide = {"source": SOURCE, "query": texte, "total": 0, "truncated": False,
-            "total_is_lower_bound": False, "results": []}
+    vide = {"source": SOURCE, "query": texte, "total": 0, "truncated": False, "total_is_lower_bound": False, "results": []}
     if not noms:
         return vide
 
@@ -520,17 +522,22 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
 
     resultats = _construire(docs, {n: lisibles[n] for n in noms}, user, _motif(texte), depuis, jusqu)
     # Journal sans la question ni les contenus : des tailles et une durée.
-    logger.info("Recherche : %d collection(s), %d morceau(x), %d résultat(s), %d ms",
-                len(noms), len(docs), len(resultats), int((time.monotonic() - debut) * 1000))
+    logger.info("Recherche : %d collection(s), %d morceau(x), %d résultat(s), %d ms", len(noms), len(docs), len(resultats), int((time.monotonic() - debut) * 1000))
     # Le moteur a rendu autant de passages que demandé : il en reste peut-être d'autres, `total`
     # n'est alors qu'un minimum, et la liste est tronquée par définition.
     borne_basse = len(docs) >= top_k
-    return {"source": SOURCE, "query": texte, "total": len(resultats),
-            "truncated": borne_basse or len(resultats) > limite,
-            "total_is_lower_bound": borne_basse, "results": resultats[:limite]}
+    return {
+        "source": SOURCE,
+        "query": texte,
+        "total": len(resultats),
+        "truncated": borne_basse or len(resultats) > limite,
+        "total_is_lower_bound": borne_basse,
+        "results": resultats[:limite],
+    }
 
 
 # ─── CORS des seules routes du contrat ───────────────────────────────────────────────────────
+
 
 def _route_du_contrat(chemin: str) -> bool:
     chemin = chemin.rstrip("/")
@@ -560,17 +567,19 @@ class CorsRecherche:
         if scope["method"] == "OPTIONS" and origine and "access-control-request-method" in entetes:
             demandes = {h.strip().lower() for h in entetes.get("access-control-request-headers", "").split(",") if h.strip()}
             if permise and entetes["access-control-request-method"].upper() == "GET" and demandes <= {"authorization"}:
-                reponse: Response = Response(status_code=204, headers={
-                    "Access-Control-Allow-Origin": permise,
-                    "Access-Control-Allow-Methods": "GET",
-                    "Access-Control-Allow-Headers": "Authorization",
-                    "Access-Control-Max-Age": "600",
-                    "Vary": "Origin",
-                    "Cache-Control": "no-store",
-                })
+                reponse: Response = Response(
+                    status_code=204,
+                    headers={
+                        "Access-Control-Allow-Origin": permise,
+                        "Access-Control-Allow-Methods": "GET",
+                        "Access-Control-Allow-Headers": "Authorization",
+                        "Access-Control-Max-Age": "600",
+                        "Vary": "Origin",
+                        "Cache-Control": "no-store",
+                    },
+                )
             else:
-                reponse = PlainTextResponse("Origine ou requête non autorisée", status_code=403,
-                                            headers={"Vary": "Origin", "Cache-Control": "no-store"})
+                reponse = PlainTextResponse("Origine ou requête non autorisée", status_code=403, headers={"Vary": "Origin", "Cache-Control": "no-store"})
             await reponse(scope, receive, send)
             return
 

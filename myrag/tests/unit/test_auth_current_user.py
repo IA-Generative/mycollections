@@ -29,11 +29,13 @@ def test_auth_disabled_returns_synthetic_superadmin(monkeypatch):
 
 
 def test_parses_sub_username_and_groups(auth_on):
-    u = appel(claims={
-        "sub": "abc-123",
-        "preferred_username": "alice",
-        "groups": ["/myrag/collec-a", "/myrag/collec-a-admin"],
-    })
+    u = appel(
+        claims={
+            "sub": "abc-123",
+            "preferred_username": "alice",
+            "groups": ["/myrag/collec-a", "/myrag/collec-a-admin"],
+        }
+    )
     assert u.sub == "abc-123"
     assert u.username == "alice"
     assert u.groups == ["/myrag/collec-a", "/myrag/collec-a-admin"]
@@ -60,6 +62,7 @@ def test_username_falls_back_to_email(auth_on):
 
 
 # --- Identité résolue par /userinfo quand le jeton d'accès ne la porte pas ---------
+
 
 class _Jetons:
     """Substitut de credentials HTTPBearer."""

@@ -2,12 +2,10 @@
 
 La séquence partage la page du testeur : chaque étape reprend là où la précédente s'arrête.
 """
+
 from __future__ import annotations
 
 import re
-
-import httpx
-import pytest
 
 from tests.e2e.conftest import DOCUMENT_TEMOIN, QUESTION_TEMOIN, TEMOIN, attendre
 
@@ -37,8 +35,7 @@ def test_etape_2_identifier(session_testeur, collection_essai, captures):
     captures.prendre(page, "05-creation-2-identification")
     _suivant(page)
     page.wait_for_url(re.compile(r"/admin/create/step-3"), timeout=60_000)
-    assert session_testeur.get(f"/api/collections/{collection_essai}").status == 200, \
-        "la collection créée n'est pas relue par son créateur"
+    assert session_testeur.get(f"/api/collections/{collection_essai}").status == 200, "la collection créée n'est pas relue par son créateur"
 
 
 def test_etape_3_deposer_le_document(session_testeur, collection_essai, captures):
@@ -60,13 +57,22 @@ def test_etape_3_deposer_le_document(session_testeur, collection_essai, captures
     page.wait_for_url(re.compile(r"/admin/create/step-4"), timeout=30_000)
 
 
-def test_etape_4_tester_la_collection(session_testeur, captures):
+def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, captures):
     page = session_testeur.page
-    page.locator("textarea").first.fill(QUESTION_TEMOIN)
-    captures.prendre(page, "05-creation-4-evaluation", mobile=False)
-    page.get_by_role("button", name=re.compile(r"^\s*Tester\s*$")).click()
-    attendre(lambda: TEMOIN in session_testeur.texte(), delai=180,
-             motif=f"le témoin « {TEMOIN} » dans la réponse de l'étape 4")
+    # Le jeu de questions : une question saisie, avec sa réponse de référence, entre validée.
+    page.get_by_role("button", name="Ajouter une question").click()
+    champs = page.locator(".jeu__panneau textarea")
+    champs.nth(0).fill(QUESTION_TEMOIN)
+    champs.nth(1).fill(TEMOIN)
+    page.get_by_role("button", name=re.compile(r"Ajouter au jeu")).click()
+    attendre(lambda: "Question ajoutée au jeu" in session_testeur.texte(), delai=30, motif="la question ajoutée au jeu")
+    assert "Mesurer avec 1 question validée" in session_testeur.texte(), "la question saisie doit être mesurable"
+    captures.prendre(page, "05-creation-4-jeu", mobile=False)
+    # Une question libre, posée tout de suite à la collection.
+    page.get_by_text("Poser une question libre à la collection").click()
+    page.locator("#etape4-question").fill(QUESTION_TEMOIN)
+    page.get_by_role("button", name=re.compile(r"^\s*Poser la question\s*$")).click()
+    attendre(lambda: TEMOIN in page.locator(".etape4__reponse").inner_text(), delai=180, motif=f"le témoin « {TEMOIN} » dans la réponse de l'étape 4")
     captures.prendre(page, "05-creation-4-reponse", mobile=False)
     _suivant(page)
     page.wait_for_url(re.compile(r"/admin/create/step-5"), timeout=30_000)
@@ -92,7 +98,8 @@ def test_un_pdf_est_refuse_avec_une_explication(session_testeur, collection_essa
     r = session_testeur.page.request.post(
         f"{session_testeur.base}/api/ingest/{collection_essai}",
         headers={"Authorization": f"Bearer {session_testeur.jeton}"},
-        multipart={"file": {"name": "a.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.7 binaire"}})
+        multipart={"file": {"name": "a.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.7 binaire"}},
+    )
     assert r.status == 415 and "texte" in r.text()
 
 
@@ -100,6 +107,7 @@ def test_un_lien_de_graphe_d_une_collection_non_publique_est_ferme_sans_signatur
     """Les vues ouvertes sans jeton (graphe, articles) ne servent une collection non publiée à
     tous que par un lien signé ; la fiche en obtient un pour son iframe."""
     import httpx
+
     with httpx.Client(timeout=20.0) as client:
         assert client.get(f"{cible['base']}/graph/data?corpus_id={collection_essai}").status_code == 401
         assert client.get(f"{cible['base']}/articles/{collection_essai}/1").status_code == 401

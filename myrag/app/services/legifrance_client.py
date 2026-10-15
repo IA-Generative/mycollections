@@ -53,12 +53,15 @@ class LegifranceClient:
         if self._token and time.time() < self._token_expires:
             return self._token
 
-        result = await self._post_form(self.PISTE_TOKEN_URL, {
-            "grant_type": "client_credentials",
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "scope": "openid",
-        })
+        result = await self._post_form(
+            self.PISTE_TOKEN_URL,
+            {
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "scope": "openid",
+            },
+        )
         self._token = result["access_token"]
         self._token_expires = time.time() + result.get("expires_in", 3600) - 60
         return self._token
@@ -96,14 +99,17 @@ class LegifranceClient:
 
     async def search(self, query: str, fond: str = "CODE_DATE", page_size: int = 10) -> dict:
         """Search Legifrance by text query."""
-        return await self._api_post("/search", {
-            "fond": fond,
-            "recherche": {
-                "champs": [{"typeChamp": "ALL", "criteres": [{"typeRecherche": "EXACTE", "valeur": query}]}],
-                "pageNumber": 1,
-                "pageSize": page_size,
+        return await self._api_post(
+            "/search",
+            {
+                "fond": fond,
+                "recherche": {
+                    "champs": [{"typeChamp": "ALL", "criteres": [{"typeRecherche": "EXACTE", "valeur": query}]}],
+                    "pageNumber": 1,
+                    "pageSize": page_size,
+                },
             },
-        })
+        )
 
     async def get_article(self, article_id: str) -> dict:
         """Get a single article by LEGIARTI ID."""
@@ -111,17 +117,23 @@ class LegifranceClient:
 
     async def get_code_toc(self, code_id: str) -> dict:
         """Get table of contents for a code."""
-        return await self._api_post("/consult/code/tableMatieres", {
-            "textId": code_id,
-            "date": time.strftime("%Y-%m-%d"),
-        })
+        return await self._api_post(
+            "/consult/code/tableMatieres",
+            {
+                "textId": code_id,
+                "date": time.strftime("%Y-%m-%d"),
+            },
+        )
 
     async def get_article_by_num(self, code_id: str, article_num: str) -> dict:
         """Get an article by code ID and article number (e.g., L421-1)."""
-        return await self._api_post("/consult/getArticleByNum", {
-            "textId": code_id,
-            "articleNum": article_num,
-        })
+        return await self._api_post(
+            "/consult/getArticleByNum",
+            {
+                "textId": code_id,
+                "articleNum": article_num,
+            },
+        )
 
     def is_configured(self) -> bool:
         """Check if PISTE credentials are configured."""

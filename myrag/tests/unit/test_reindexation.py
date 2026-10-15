@@ -36,6 +36,7 @@ def test_redeposer_ou_reindexer_ne_duplique_ni_les_sources_ni_le_corpus(client, 
 def test_une_source_disparue_est_refusee_sans_rien_effacer(client, en_tant_que, creer_collection, nom):
     import os
     import pathlib
+
     creer_collection(nom)
     en_tant_que(personne("createur"))
     with patch("app.routers.ingest.OpenRAGClient") as cls:
@@ -44,6 +45,7 @@ def test_une_source_disparue_est_refusee_sans_rien_effacer(client, en_tant_que, 
         cls.return_value.upload_chunk = AsyncMock(return_value={})
         _deposer(client, nom)
         from app.config import settings
+
         for f in (pathlib.Path(settings.data_dir) / "_sources" / nom).glob("*"):
             os.remove(f)
         r = client.post(f"/api/ingest/{nom}/reindex?strategy=article")

@@ -5,7 +5,8 @@ from tests.conftest import SUPERADMIN, personne
 
 GARANT = personne("garant")
 PROPOSITION = {
-    "cible_type": "ligne", "cible_ref": "NATINF 7987 · libellé",
+    "cible_type": "ligne",
+    "cible_ref": "NATINF 7987 · libellé",
     "avant": "Conduite d'un véhicule sans permis",
     "apres": "Conduite d'un véhicule sans être titulaire du permis correspondant",
     "justification": "Le libellé court prête à confusion avec la conduite malgré suspension.",

@@ -13,11 +13,11 @@ import sys
 
 
 async def _jouer(ident: str, max_documents: int | None, purger: bool = False) -> int:
+    import app.models.db  # noqa: F401 — enregistre les tables
     from app.amorces import entree
     from app.database import init_db
     from app.routers.amorces import _executer, _preparer
     from app.services import collectif_store as store
-    import app.models.db  # noqa: F401 — enregistre les tables
 
     e = entree(ident)
     if not e:
@@ -30,6 +30,7 @@ async def _jouer(ident: str, max_documents: int | None, purger: bool = False) ->
     await store.marquer_amorce(ident, "en_cours", collection_name=name)
     if purger:
         from app.services.amorces import ingestion
+
         await ingestion.purger(name)
         await store.consigner("collection", name, "import.purge", robot=f"amorce:{ident}", collection_name=name)
     try:

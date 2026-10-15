@@ -1,5 +1,6 @@
-"""Dépôt de documents (diagnostic d'octobre 2026) : seul le texte est indexé, et seul qui gère
-la collection l'alimente."""
+"""Dépôt de documents (diagnostic d'octobre 2026) : le découpage maison ne lit que du texte, un
+binaire inconnu est refusé, et seul qui gère la collection l'alimente. Les documents (PDF, Word…)
+passent par OpenRAG : test_depot_documents.py."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -14,7 +15,7 @@ from tests.conftest import personne
 def test_un_fichier_qui_n_est_pas_du_texte_est_refuse_avec_une_explication(contenu):
     with pytest.raises(HTTPException) as e:
         texte_ou_refus(contenu, "x")
-    assert e.value.status_code == 415 and "texte" in e.value.detail
+    assert e.value.status_code == 415 and "Formats acceptés" in e.value.detail
 
 
 def test_le_texte_passe_en_utf8_et_en_windows():
@@ -34,5 +35,8 @@ def test_seul_qui_gere_alimente_la_collection(client, en_tant_que, creer_collect
         cls.return_value.upload_chunk = AsyncMock(return_value={})
         r = client.post(f"/api/ingest/{nom}", files={"file": ("a.md", b"# Titre\n\nTexte.", "text/markdown")})
     assert r.status_code == 200, r.text
-    r = client.post(f"/api/ingest/{nom}", files={"file": ("a.pdf", b"%PDF-1.7 binaire", "application/pdf")})
+    # Un binaire déguisé en texte, ou un format inconnu, reste refusé.
+    r = client.post(f"/api/ingest/{nom}", files={"file": ("a.md", b"%PDF-1.7 binaire", "text/markdown")})
+    assert r.status_code == 415
+    r = client.post(f"/api/ingest/{nom}", files={"file": ("a.exe", b"MZ\x90\x00binaire", "application/octet-stream")})
     assert r.status_code == 415

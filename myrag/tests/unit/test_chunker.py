@@ -1,16 +1,13 @@
 """Tests for MyRAG chunker strategies (TDD - written before implementation)."""
 
-import pytest
-
 from app.services.chunker import (
     chunk_by_article,
-    chunk_by_section,
-    chunk_by_qr,
     chunk_by_length,
-    detect_strategy,
+    chunk_by_qr,
+    chunk_by_section,
     chunk_document,
+    detect_strategy,
 )
-
 
 # --- Sample documents ---
 
@@ -86,6 +83,7 @@ assez long et contenir des informations variees sur differents sujets sans marqu
 
 # --- Tests: detection de strategie ---
 
+
 class TestDetectStrategy:
     def test_detects_legal_code(self):
         assert detect_strategy(CESEDA_SAMPLE) == "article"
@@ -101,6 +99,7 @@ class TestDetectStrategy:
 
 
 # --- Tests: decoupage par article ---
+
 
 class TestChunkByArticle:
     def test_extracts_articles(self):
@@ -187,6 +186,7 @@ class TestChunkByArticle:
 
 # --- Tests: decoupage par section ---
 
+
 class TestChunkBySection:
     def test_extracts_sections(self):
         chunks = chunk_by_section(REPORT_SAMPLE)
@@ -212,6 +212,7 @@ class TestChunkBySection:
 
 # --- Tests: decoupage par Q&R ---
 
+
 class TestChunkByQR:
     def test_extracts_qr_pairs(self):
         chunks = chunk_by_qr(FAQ_SAMPLE)
@@ -234,6 +235,7 @@ class TestChunkByQR:
 
 
 # --- Tests: decoupage par longueur ---
+
 
 class TestChunkByLength:
     def test_chunks_have_max_length(self):
@@ -260,6 +262,7 @@ class TestChunkByLength:
 
 
 # --- Tests: chunk_document (auto-detection) ---
+
 
 class TestChunkDocument:
     def test_auto_detects_and_chunks_legal(self):
@@ -302,7 +305,7 @@ class TestDecoupageParLongueurFinDeTexte:
     def test_le_nombre_de_morceaux_reste_proportionne(self):
         """Sans la sortie de boucle, tout document produisait `overlap` morceaux de
         queue en plus — indépendamment de sa taille."""
-        texte = "abcdefghij " * 200          # 2200 caractères
+        texte = "abcdefghij " * 200  # 2200 caractères
         morceaux = chunk_by_length(texte, max_chars=512, overlap=50)
         assert len(morceaux) <= 2 + len(texte) // (512 - 50)
 

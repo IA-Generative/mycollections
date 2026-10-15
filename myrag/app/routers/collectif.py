@@ -10,7 +10,13 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.db import CIBLES_PROPOSITION, ETATS_SIGNALEMENT, MOTIFS_SIGNALEMENT
 from app.routers._collectif_commun import (
-    Identite, capacite, collection_lisible, date_avant, exiger_garant, identite, limite,
+    Identite,
+    capacite,
+    collection_lisible,
+    date_avant,
+    exiger_garant,
+    identite,
+    limite,
 )
 from app.services import collectif_store as store
 from app.services.etats import RefusTransition
@@ -109,6 +115,7 @@ class TraitementEntree(BaseModel):
 
 # ─── État ─────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/{name}/etat")
 async def lire_etat(f: dict = Depends(collection_lisible), moi: Identite = Depends(identite)):
     return await store.lire_etat(f["name"], moi.hash, moi.superadmin)
@@ -126,6 +133,7 @@ async def changer_etat(entree: EtatEntree, f: dict = Depends(collection_lisible)
 
 
 # ─── Grille ───────────────────────────────────────────────────────────────────────
+
 
 @router.get("/{name}/grille")
 async def lire_grille(f: dict = Depends(collection_lisible)):
@@ -147,6 +155,7 @@ async def relire(f: dict = Depends(collection_lisible), moi: Identite = Depends(
 
 
 # ─── Propositions ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/{name}/propositions")
 async def lister_propositions(f: dict = Depends(collection_lisible), etat: str | None = Query(None)):
@@ -188,6 +197,7 @@ async def refuser_proposition(ident: str, entree: RefusEntree, f: dict = Depends
 
 # ─── Signalements ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/{name}/signalements")
 async def lister_signalements(f: dict = Depends(collection_lisible), etat: str | None = Query(None)):
     return {"collection": f["name"], "signalements": await store.lister_signalements(f["name"], etat)}
@@ -209,9 +219,9 @@ async def traiter_signalement(ident: str, entree: TraitementEntree, f: dict = De
 
 # ─── Journal et abonnement ────────────────────────────────────────────────────────
 
+
 @router.get("/{name}/journal")
-async def journal(f: dict = Depends(collection_lisible), limite_: int = Depends(limite),
-                  avant: datetime | None = Depends(date_avant)):
+async def journal(f: dict = Depends(collection_lisible), limite_: int = Depends(limite), avant: datetime | None = Depends(date_avant)):
     return await store.journal_de("collection", f["name"], limite_, avant)
 
 

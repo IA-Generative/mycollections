@@ -1,4 +1,5 @@
 """Le guide « Soyez acteurs vous-mêmes » : six pages, lisibles, cohérentes avec l'interface."""
+
 from __future__ import annotations
 
 import re
@@ -28,14 +29,13 @@ def test_le_sommaire_mene_a_chaque_page(session_testeur, pages_du_guide, capture
         assert page.locator(f"a[href='/guide/{p['slug']}']").count() >= 1, f"pas de lien vers « {p['titre']} »"
     page.locator(f"a[href='/guide/{pages_du_guide[0]['slug']}']").first.click()
     page.wait_for_url(re.compile(r"/guide/"), timeout=30_000)
-    attendre(lambda: "Proposer une modification" in session_testeur.texte(), delai=20, pas=1,
-             motif="le contenu de la page du guide")
+    attendre(lambda: "Proposer une modification" in session_testeur.texte(), delai=20, pas=1, motif="le contenu de la page du guide")
     assert page.locator("h1").first.inner_text().strip()
     captures.prendre(page, "09-guide-page-1")
 
 
 def test_le_sommaire_annonce_le_bon_nombre_de_pages(session_testeur, pages_du_guide):
-    page = session_testeur.aller("/guide")
+    session_testeur.aller("/guide")
     texte = session_testeur.texte()
     annonce = re.search(r"\b(Cinq|Six|cinq|six)\s+pages\b", texte)
     assert not annonce or annonce.group(1).lower() == "six", "le sommaire annonce un autre nombre de pages"

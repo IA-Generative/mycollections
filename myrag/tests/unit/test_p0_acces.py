@@ -16,8 +16,7 @@ ETRANGER = CurrentUser(sub="etranger", username="e", groups=["/g/rien-a-voir"])
 
 
 def _avis(client, nom):
-    return client.post("/api/feedback/ingest", json={
-        "collection": nom, "question": "Q ?", "response": "R.", "rating": -1})
+    return client.post("/api/feedback/ingest", json={"collection": nom, "question": "Q ?", "response": "R.", "rating": -1})
 
 
 def test_qui_lit_la_collection_peut_donner_un_avis(client, en_tant_que, creer_collection, nom):

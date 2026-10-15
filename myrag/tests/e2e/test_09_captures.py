@@ -1,9 +1,8 @@
 """Une image de chaque écran, à 1280 px et à 390 px, avec son texte visible : l'instrument du
 rapport d'ergonomie. Ne s'exécute qu'avec E2E_CAPTURES ; ne vérifie rien d'autre que
 « l'écran se charge »."""
-from __future__ import annotations
 
-import re
+from __future__ import annotations
 
 import pytest
 

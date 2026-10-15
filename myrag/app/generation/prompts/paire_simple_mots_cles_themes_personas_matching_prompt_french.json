@@ -1,0 +1,40 @@
+{
+  "ragas_version": "0.4.3",
+  "original_hash": null,
+  "language": "french",
+  "instruction": "À partir d'une liste de thèmes et d'une liste de personas décrits par leur rôle, associez à chaque persona les seuls thèmes sur lesquels ce persona poserait vraisemblablement une question, dans sa situation. Un thème qui ne concerne pas son rôle ne lui est pas associé ; un persona peut n'avoir aucun thème (liste vide). Reprenez les noms des personas EXACTEMENT tels qu'ils sont donnés, et les thèmes tels qu'ils figurent dans la liste.",
+  "examples": [
+    {
+      "input": {
+        "themes": [
+          "Empathie",
+          "Inclusivité",
+          "Télétravail",
+          "Licence logicielle"
+        ],
+        "personas": [
+          {
+            "name": "Responsable RH",
+            "role_description": "Veille à l'inclusion et au soutien des agents."
+          },
+          {
+            "name": "Chef d'équipe à distance",
+            "role_description": "Anime une équipe qui travaille à distance."
+          }
+        ]
+      },
+      "output": {
+        "mapping": {
+          "Responsable RH": [
+            "Inclusivité",
+            "Empathie"
+          ],
+          "Chef d'équipe à distance": [
+            "Télétravail",
+            "Empathie"
+          ]
+        }
+      }
+    }
+  ]
+}

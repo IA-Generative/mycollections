@@ -1,14 +1,12 @@
 """Tests for graph builder (TDD)."""
 
-import json
 import pytest
 
 from app.services.graph_builder import (
     GraphBuilder,
-    extract_references,
     build_graph_from_chunks,
+    extract_references,
 )
-
 
 SAMPLE_CHUNKS = [
     {

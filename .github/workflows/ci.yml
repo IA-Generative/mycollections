@@ -18,6 +18,27 @@ jobs:
     uses: dnum-mi/fabnum-cicd/.github/workflows/lint-commits.yml@v0.23.0
     permissions:
       contents: read
+    with:
+      MAX_SUBJECT_LENGTH: 120
+
+  # ruff : le backend est formaté et vérifié (pre-commit en local, ici pour ce qu'il ne voit pas).
+  lint-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: myrag
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: myrag/uv.lock
+      - run: uv sync --frozen --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
 
   # Le binaire gitleaks (MIT), pas l'action officielle (licence d'organisation). Le dépôt l'a
   # déjà en pre-commit ; la CI le rejoue sur ce qu'un hook local ne voit pas.

@@ -68,8 +68,7 @@ def test_chemin_exige_refuse_un_claim_en_noms_courts(chemin_exige):
 
 
 def test_bascule_les_deux_formes_passent(monkeypatch):
-    monkeypatch.setattr(app.config.settings, "myrag_groupe_exige",
-                        " mirai-beta-testeurs , /g/mirai-beta-testeurs ")
+    monkeypatch.setattr(app.config.settings, "myrag_groupe_exige", " mirai-beta-testeurs , /g/mirai-beta-testeurs ")
     _exiger_le_groupe({"groups": ["mirai-beta-testeurs", "Admins"]})
     _exiger_le_groupe({"groups": ["/g/mirai-beta-testeurs", "/g/BACI/Admins"]})
     with pytest.raises(HTTPException):

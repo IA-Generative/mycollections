@@ -203,9 +203,10 @@ async function onVote(msg: any, vote: 'up' | 'down') {
     const question = prev?.content || ''
     if (!question) return
     if (vote === 'up') {
-      await post(`/api/qr-cache/${id}`, {
-        question, answer: msg.content, source: 'manual',
-      })
+      // Une question libre jugée bien répondue entre au jeu de questions, validée.
+      await post(`/api/collections/${id}/qualite/questions`, {
+        question, reponse: msg.content, relecture: 'valide',
+      }).catch(() => { /* déjà dans le jeu : rien à faire */ })
     } else {
       await post(`/api/feedback/ingest`, {
         collection: id, question, response: msg.content, rating: -1,

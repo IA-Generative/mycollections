@@ -15,7 +15,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 
 from app.database import async_session
-from app.models.db import Categorie, Collection, EvalDataset, Publication, Signalement, UsageQuestion, utcnow
+from app.models.db import Categorie, Collection, PaireQA, Publication, Signalement, UsageQuestion, utcnow
 from app.services import access
 from app.services.nommage import titre_de
 from app.services.pseudo import condenser
@@ -47,51 +47,63 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
     AUTRES en ont fait sur la fenêtre : mes propres essais ne comptent pas."""
     depuis = utcnow() - timedelta(days=FENETRE_JOURS)
     async with async_session() as session:
-        cols = (await session.execute(
-            select(Collection).where(Collection.archived_at.is_(None))
-            .where((Collection.created_by == sub) | (Collection.garant_hash == mon_hash))
-            .order_by(Collection.name)
-        )).scalars().all()
+        cols = (
+            (
+                await session.execute(
+                    select(Collection)
+                    .where(Collection.archived_at.is_(None))
+                    .where((Collection.created_by == sub) | (Collection.garant_hash == mon_hash))
+                    .order_by(Collection.name)
+                )
+            )
+            .scalars()
+            .all()
+        )
         if not cols:
             return {"collections": [], "fenetre_jours": FENETRE_JOURS, "actives": 0, "questions": 0, "mes_essais": 0, "personnes": None}
         noms = [c.name for c in cols]
         categories = {k.cle: k.libelle for k in (await session.execute(select(Categorie))).scalars().all()}
-        publiees = set((await session.execute(
-            select(Publication.collection_name).where(Publication.collection_name.in_(noms), Publication.state == "published")
-        )).scalars().all())
-        des_autres = (UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis,
-                      (UsageQuestion.auteur_hash.is_(None)) | (UsageQuestion.auteur_hash != mon_hash))
-        questions = dict((await session.execute(
-            select(UsageQuestion.collection_name, func.count()).where(*des_autres).group_by(UsageQuestion.collection_name)
-        )).all())
-        personnes = (await session.execute(
-            select(func.count(func.distinct(UsageQuestion.auteur_hash))).where(*des_autres, UsageQuestion.auteur_hash.is_not(None))
-        )).scalar() or 0
+        publiees = set((await session.execute(select(Publication.collection_name).where(Publication.collection_name.in_(noms), Publication.state == "published"))).scalars().all())
+        des_autres = (UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis, (UsageQuestion.auteur_hash.is_(None)) | (UsageQuestion.auteur_hash != mon_hash))
+        questions = dict((await session.execute(select(UsageQuestion.collection_name, func.count()).where(*des_autres).group_by(UsageQuestion.collection_name))).all())
+        personnes = (await session.execute(select(func.count(func.distinct(UsageQuestion.auteur_hash))).where(*des_autres, UsageQuestion.auteur_hash.is_not(None)))).scalar() or 0
         # Mes propres essais ne comptent pas — mais on les DIT : un « 0 » nu, pour qui vient de poser
         # six questions, se lit comme une panne du compteur.
-        les_miennes = (await session.execute(
-            select(func.count()).where(UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis,
-                                       UsageQuestion.auteur_hash == mon_hash)
-        )).scalar() or 0
-        signalements = dict((await session.execute(
-            select(Signalement.collection_name, func.count())
-            .where(Signalement.collection_name.in_(noms), Signalement.etat == "ouvert").group_by(Signalement.collection_name)
-        )).all())
+        les_miennes = (
+            await session.execute(select(func.count()).where(UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis, UsageQuestion.auteur_hash == mon_hash))
+        ).scalar() or 0
+        signalements = dict(
+            (
+                await session.execute(
+                    select(Signalement.collection_name, func.count())
+                    .where(Signalement.collection_name.in_(noms), Signalement.etat == "ouvert")
+                    .group_by(Signalement.collection_name)
+                )
+            ).all()
+        )
 
-    lignes = [{
-        "name": c.name, "titre": titre_de(c.to_dict()),
-        "categorie": c.categorie, "categorie_libelle": categories.get(c.categorie or ""),
-        "etat_collab": c.etat_collab, "publiee": c.name in publiees,
-        "questions": questions.get(c.name, 0), "signalements_ouverts": signalements.get(c.name, 0),
-    } for c in cols]
-    lignes.sort(key=lambda l: (-l["questions"], l["titre"].lower()))
+    lignes = [
+        {
+            "name": c.name,
+            "titre": titre_de(c.to_dict()),
+            "categorie": c.categorie,
+            "categorie_libelle": categories.get(c.categorie or ""),
+            "etat_collab": c.etat_collab,
+            "publiee": c.name in publiees,
+            "questions": questions.get(c.name, 0),
+            "signalements_ouverts": signalements.get(c.name, 0),
+        }
+        for c in cols
+    ]
+    lignes.sort(key=lambda ligne: (-ligne["questions"], ligne["titre"].lower()))
     return {
-        "collections": lignes, "fenetre_jours": FENETRE_JOURS,
-        "actives": sum(1 for l in lignes if l["publiee"]),
-        "questions": sum(l["questions"] for l in lignes),
+        "collections": lignes,
+        "fenetre_jours": FENETRE_JOURS,
+        "actives": sum(1 for ligne in lignes if ligne["publiee"]),
+        "questions": sum(ligne["questions"] for ligne in lignes),
         "mes_essais": les_miennes,
         "personnes": personnes if personnes >= SEUIL_PERSONNES else None,
-        "signalements_ouverts": sum(l["signalements_ouverts"] for l in lignes),
+        "signalements_ouverts": sum(ligne["signalements_ouverts"] for ligne in lignes),
     }
 
 
@@ -100,27 +112,41 @@ async def exemple(user_groups: list[str], user_sub: str, sauf: str | None = None
     de SON JEU D'ÉVALUATION. Jamais une question posée par un utilisateur (avis, cache) :
     celles-là ne s'affichent pas sur une page d'accueil."""
     async with async_session() as session:
-        cols = (await session.execute(
-            select(Collection).where(Collection.archived_at.is_(None), Collection.etat_collab == "publiee_tous")
-        )).scalars().all()
-        lisibles = {c.name: c for c in cols if access.can_read(
-            name=c.name, scope=c.scope, scope_groups=json.loads(c.scope_groups_json or "[]"),
-            created_by=c.created_by, user_groups=user_groups, user_sub=user_sub)}
+        cols = (await session.execute(select(Collection).where(Collection.archived_at.is_(None), Collection.etat_collab == "publiee_tous"))).scalars().all()
+        lisibles = {
+            c.name: c
+            for c in cols
+            if access.can_read(
+                name=c.name, scope=c.scope, scope_groups=json.loads(c.scope_groups_json or "[]"), created_by=c.created_by, user_groups=user_groups, user_sub=user_sub
+            )
+        }
         if not lisibles:
             return None
-        jeux = (await session.execute(select(EvalDataset).where(EvalDataset.collection_name.in_(list(lisibles))))).scalars().all()
+        jeu = await session.execute(
+            select(PaireQA.collection_name, PaireQA.question).where(
+                PaireQA.collection_name.in_(list(lisibles)),
+                PaireQA.hors_sujet.is_(False),
+                PaireQA.relecture != "rejete",
+                PaireQA.origine != "avis",  # jamais une question posée par un usager
+            )
+        )
+        lignes = jeu.all()
         categories = {k.cle: k.libelle for k in (await session.execute(select(Categorie))).scalars().all()}
     questions: dict[str, list[str]] = {}
-    for jeu in jeux:
-        for q in json.loads(jeu.questions_json or "[]"):
-            texte = (q.get("question") or "").strip()
-            if texte and not q.get("out_of_scope") and len(texte) <= 160:
-                questions.setdefault(jeu.collection_name, []).append(texte)
+    for nom, texte in lignes:
+        texte = (texte or "").strip()
+        if texte and len(texte) <= 160:
+            questions.setdefault(nom, []).append(texte)
     candidates = [n for n in questions if n != sauf] or list(questions)
     if not candidates:
         return None
     name = random.choice(candidates)
     c = lisibles[name]
-    return {"name": name, "titre": titre_de(c.to_dict()), "categorie": c.categorie,
-            "categorie_libelle": categories.get(c.categorie or ""), "question": random.choice(questions[name]),
-            "autres": len(candidates) > 1}
+    return {
+        "name": name,
+        "titre": titre_de(c.to_dict()),
+        "categorie": c.categorie,
+        "categorie_libelle": categories.get(c.categorie or ""),
+        "question": random.choice(questions[name]),
+        "autres": len(candidates) > 1,
+    }

@@ -117,12 +117,14 @@ class BaseConnector:
 {
     "article": "L421-1",
     "page": 42,
-    "livre": "IV", "titre": "II", "chapitre": "III",
+    "livre": "IV",
+    "titre": "II",
+    "chapitre": "III",
     "parent_path": "Livre-IV/Titre-II/Chapitre-III",
     "references": ["L110-1", "L321-4"],
     "referenced_by": [],
     "graph_ready": False,
-    "sensitivity": "public"
+    "sensitivity": "public",
 }
 ```
 

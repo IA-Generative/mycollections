@@ -259,8 +259,7 @@ async def desabonner(ident: str, moi: Identite = Depends(identite)):
 
 
 @router.get("/{ident}/journal")
-async def journal(ident: str, moi: Identite = Depends(identite),
-                  limite_: int = Depends(limite), avant: datetime | None = Depends(date_avant)):
+async def journal(ident: str, moi: Identite = Depends(identite), limite_: int = Depends(limite), avant: datetime | None = Depends(date_avant)):
     try:
         await store.auteur_de(ident)
     except store.Introuvable as e:

@@ -4,7 +4,6 @@ description: Recherche RAG + graph de references dans les collections MyRAG
 version: 0.1.0
 """
 
-import json
 import re
 
 import requests
@@ -97,7 +96,7 @@ class Tools:
             sources_html += f"""
             <div style="border:1px solid #e5e5e5;border-radius:4px;padding:8px;margin:4px 0;">
                 <a href="{link}" target="_blank" style="color:#000091;font-weight:bold;text-decoration:none;">
-                    {filename or f'Source {i+1}'}
+                    {filename or f"Source {i + 1}"}
                 </a>
                 <p style="font-size:0.8rem;color:#666;margin:4px 0 0 0;">{content}...</p>
             </div>"""
@@ -194,7 +193,7 @@ ro.observe(document.body);
             else:
                 html = f"<html><body><p>Article {article_id} non trouve.</p></body></html>"
         except Exception:
-            html = f"<html><body><p>Erreur de connexion a MyRAG.</p></body></html>"
+            html = "<html><body><p>Erreur de connexion a MyRAG.</p></body></html>"
 
         # Get article data for LLM context
         article = self._get_article(collection, article_id)
@@ -297,7 +296,7 @@ ro.observe(document.body);
 </script>
 </head><body>
 <h2>📋 Table des matieres — {col}</h2>
-<p style="color:#666;font-size:0.85rem;">{len(data.get('nodes',[]))} articles</p>
+<p style="color:#666;font-size:0.85rem;">{len(data.get("nodes", []))} articles</p>
 {toc_html}
 <div style="margin-top:16px;">
 <a href="{myrag}/graph?corpus_id={col}" target="_blank" style="color:#000091;">📊 Voir le graph</a>

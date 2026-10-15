@@ -1,0 +1,23 @@
+{
+  "ragas_version": "0.4.3",
+  "original_hash": null,
+  "language": "french",
+  "instruction": "Extrayez un maximum de max_num mots-clés à partir du texte donné.",
+  "examples": [
+    {
+      "input": {
+        "text": "L'intelligence artificielle\n\nL'intelligence artificielle transforme divers secteurs en automatisant des tâches qui nécessitaient auparavant l'intelligence humaine. De la santé à la finance, l'IA est utilisée pour analyser de vastes quantités de données de manière rapide et précise. Cette technologie stimule également les innovations dans des domaines tels que les voitures autonomes et les recommandations personnalisées.",
+        "max_num": 5
+      },
+      "output": {
+        "keyphrases": [
+          "L'intelligence artificielle",
+          "automatisation des tâches",
+          "santé",
+          "voitures autonomes",
+          "recommandations personnalisées"
+        ]
+      }
+    }
+  ]
+}

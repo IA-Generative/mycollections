@@ -1,7 +1,8 @@
 """Tests for OpenRAG API client (TDD)."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.openrag_client import OpenRAGClient
 
@@ -25,7 +26,7 @@ class TestOpenRAGClient:
     async def test_create_partition(self, client):
         with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value = {"status": "created"}
-            result = await client.create_partition("test-collection")
+            await client.create_partition("test-collection")
             mock_post.assert_called_once()
             assert "partition/test-collection" in str(mock_post.call_args)
 
@@ -38,14 +39,14 @@ class TestOpenRAGClient:
         }
         with patch.object(client, "_upload_file", new_callable=AsyncMock) as mock_upload:
             mock_upload.return_value = {"task_status_url": "/indexer/task/123"}
-            result = await client.upload_chunk("test-collection", chunk)
+            await client.upload_chunk("test-collection", chunk)
             mock_upload.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_search(self, client):
         with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {"documents": [{"content": "result"}]}
-            result = await client.search("test-collection", "query", top_k=5)
+            await client.search("test-collection", "query", top_k=5)
             mock_get.assert_called_once()
 
     @pytest.mark.asyncio

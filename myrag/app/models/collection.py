@@ -1,11 +1,10 @@
 """Collection model — config for a MyRAG collection."""
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from app.config import settings
-
 
 # --- Prompt templates catalog ---
 # Each template is tailored for a specific type of document corpus.
@@ -25,7 +24,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Si l'information n'est pas dans le contexte, dis-le clairement
 - Reponds dans la meme langue que la question""",
     },
-
     "juridique": {
         "name": "Juridique (codes, lois)",
         "description": "Pour les codes juridiques (CESEDA, Code civil, etc.) avec citation d'articles",
@@ -53,7 +51,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Si l'information n'est pas dans le contexte, dis-le clairement
 - Ne fais pas de conseil juridique personnalise, oriente vers un professionnel""",
     },
-
     "ceseda": {
         "name": "CESEDA (droit des etrangers)",
         "description": "Specialise pour le Code de l'entree et du sejour des etrangers et du droit d'asile",
@@ -82,7 +79,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Si l'information n'est pas dans le contexte, dis-le clairement
 - Ne fais pas de conseil juridique personnalise, oriente vers un professionnel""",
     },
-
     "multi_thematique": {
         "name": "Corpus multi-thematique",
         "description": "Pour les gros corpus couvrant plusieurs domaines avec des documents de natures variees",
@@ -105,7 +101,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Base-toi exclusivement sur les documents fournis dans le contexte
 - Si la question couvre plusieurs domaines, traite chaque aspect separement""",
     },
-
     "faq": {
         "name": "FAQ / Base de connaissances",
         "description": "Pour les bases de questions-reponses et la documentation utilisateur",
@@ -128,7 +123,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Si la question n'est pas couverte par la base, dis-le clairement
 - Ne fabrique pas de reponse a partir de rien""",
     },
-
     "multimedia": {
         "name": "Multimedia et images",
         "description": "Pour les corpus contenant des images, videos, transcriptions audio et documents visuels",
@@ -151,7 +145,6 @@ PROMPT_TEMPLATES: dict[str, dict] = {
 - Les transcriptions et descriptions d'images peuvent contenir des erreurs de reconnaissance
 - Signale quand une information semble incertaine (qualite de transcription, captioning ambigu)""",
     },
-
     "technique": {
         "name": "Documentation technique",
         "description": "Pour la documentation technique, les rapports, les specifications et les manuels",
@@ -190,12 +183,14 @@ def list_prompt_templates() -> list[dict]:
     """List all available prompt templates."""
     result = []
     for key, tpl in PROMPT_TEMPLATES.items():
-        result.append({
-            "key": key,
-            "name": tpl["name"],
-            "description": tpl["description"],
-            "icon": tpl["icon"],
-        })
+        result.append(
+            {
+                "key": key,
+                "name": tpl["name"],
+                "description": tpl["description"],
+                "icon": tpl["icon"],
+            }
+        )
     return result
 
 
@@ -258,6 +253,7 @@ load_custom_templates()
 
 # --- Source config ---
 
+
 @dataclass
 class SourceConfig:
     type: str = ""  # legifrance | file | directory | drive | nextcloud | resana
@@ -283,6 +279,7 @@ class SourceConfig:
 
 # --- Publication config ---
 
+
 @dataclass
 class PublicationConfig:
     state: str = "draft"  # draft | published | disabled | archived
@@ -302,9 +299,7 @@ class PublicationConfig:
     # Mode C — tool
     tool_enabled: bool = False
     tool_target_models: list = field(default_factory=list)
-    tool_methods: list = field(default_factory=lambda: [
-        "search_collection", "view_article", "explore_graph", "browse_collection"
-    ])
+    tool_methods: list = field(default_factory=lambda: ["search_collection", "view_article", "explore_graph", "browse_collection"])
 
     # Visibility
     visibility: str = "all"  # all | group | users
@@ -325,6 +320,7 @@ class PublicationConfig:
 
 
 # --- Collection config ---
+
 
 @dataclass
 class CollectionConfig:

@@ -1,31 +1,74 @@
 """MyRAG (beta) — Front augmente DSFR pour OpenRAG."""
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
 from contextlib import asynccontextmanager
 
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials
+
+import app.generation as generation_paquet
+from app import version as version_module
+from app.auth import AUTH_REQUIRED, CurrentUser, _bearer_scheme, current_user
 from app.config import settings
 from app.database import init_db
-from app.services import capacites
-from app.services.openrag_client import OpenRAGClient
-from app import version as version_module
-from app.routers import ingest, collections, sync, graph, articles, sources, feedback, publication, playground, playground_bank, qr_cache_router, eval_datasets
 from app.routers import accueil as accueil_routeur
-from app.routers import amorces, bus, categories, collectif, corpus, demandes, fiches, guide
-from app.routers import recherche
+from app.routers import (
+    amorces,
+    articles,
+    bus,
+    categories,
+    collectif,
+    collections,
+    corpus,
+    demandes,
+    eval_datasets,
+    feedback,
+    fiches,
+    graph,
+    guide,
+    ingest,
+    playground,
+    playground_bank,
+    publication,
+    qr_cache_router,
+    recherche,
+    sources,
+    sync,
+)
+from app.routers import generation as generation_routeur
+from app.routers import qualite as qualite_routeur
+from app.routers._acces_navigateur import acces_extrait, peut_lire
+from app.services import access, capacites
+from app.services.openrag_client import OpenRAGClient
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Import models so tables are registered
     import app.models.db  # noqa: F401
+
     await init_db()
+    # Les anciens magasins de questions (jeux de test, réponses validées, avis promus) versés
+    # dans le jeu de questions de référence — idempotent, ne lève jamais (docs/qualite.md).
+    from app.services.migration_questions import migrer_vers_questions
+
+    await migrer_vers_questions()
     # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
     import asyncio
+
     from app.routers.ingest import reprendre_les_travaux_interrompus
+
     reprise = asyncio.create_task(reprendre_les_travaux_interrompus()) if settings.reprise_au_demarrage else None
+    if settings.reprise_au_demarrage:
+        # Une génération ne se reprend pas (ragas ne sait pas repartir d'une phase) : elle est
+        # marquée interrompue, avec ce qu'il faut faire.
+        from app.services.generation_store import marquer_interrompus
+
+        await marquer_interrompus()
+        from app.services.mesure_store import marquer_interrompues
+
+        await marquer_interrompues()
     yield
     if reprise and not reprise.done():
         reprise.cancel()
@@ -72,12 +115,14 @@ class _SansSondes:
         if self._RECHERCHE + "?" in msg and not forme_uvicorn:
             # Forme inattendue : la ligne est réécrite plutôt que de laisser passer la requête.
             import re
+
             record.msg, record.args = re.sub(r"(/api/v1/search[^?\s\"]*)\?[^\s\"]*", r"\1", msg), ()
             msg = record.msg
         return '"GET /health ' not in msg and '"GET /__version__ ' not in msg
 
 
 import logging as _logging  # noqa: E402
+
 _logging.getLogger("uvicorn.access").addFilter(_SansSondes())
 
 #: Le dernier bilan des dépendances, gardé 30 s : les sondes de Kubernetes appellent /health
@@ -88,12 +133,15 @@ _SANTE_DUREE_S = 30.0
 
 async def _etat_des_dependances() -> dict:
     import time
+
     if _sante_cache and time.monotonic() - _sante_cache["a"] < _SANTE_DUREE_S:
         return _sante_cache["etat"]
     etat = {}
     try:
         from sqlalchemy import text
+
         from app.database import async_session
+
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
         etat["base"] = "ok"
@@ -132,10 +180,6 @@ async def root():
     )
 
 
-from app.auth import AUTH_REQUIRED, CurrentUser, _bearer_scheme, current_user
-from app.routers._acces_navigateur import acces_extrait, peut_lire
-from app.services import access
-
 # Routes XHR (le front attache un Bearer via useApi) → garde JWT activable par
 # AUTH_ENABLED. Exemptés : graph/articles (HTML servi en iframe/lien direct,
 # sans Authorization possible) et les
@@ -161,6 +205,10 @@ app.include_router(guide.router, dependencies=AUTH_REQUIRED)
 app.include_router(categories.router, dependencies=AUTH_REQUIRED)
 app.include_router(accueil_routeur.router, dependencies=AUTH_REQUIRED)
 app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
+# Génération de paires question/réponse par persona (ragas, docs/generation.md) : 503 si absente.
+app.include_router(generation_routeur.router, dependencies=AUTH_REQUIRED)
+# Piloter la qualité : jeu de questions de référence, mesure, synthèse (docs/qualite.md).
+app.include_router(qualite_routeur.router, dependencies=AUTH_REQUIRED)
 # La version que l'image porte (ADR-0004) : sans jeton, hors schéma, lue par le noteur de la plateforme.
 app.include_router(version_module.router)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.
@@ -186,6 +234,8 @@ async def get_config():
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
         "drive_url": settings.drive_url,
+        # La génération de questions est-elle installée et configurée ? (l'onglet ne s'affiche que si oui)
+        "generation": generation_paquet.prete(),
         # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,
         # jamais bloquant). L'écran lit aussi /_beta/capacites.json en même origine ;
         # ceci est son repli, et la valeur que le SERVEUR applique.
@@ -199,6 +249,7 @@ async def openrag_health():
     directly (CORS) so the service status (useEtatService) calls this instead.
     """
     from app.services.openrag_client import OpenRAGClient
+
     client = OpenRAGClient(timeout=5.0)
     ok = await client.health_check()
     # Sans l'adresse du moteur : la route est publique, l'adresse interne n'a rien à y faire.
@@ -213,6 +264,7 @@ def _paragraphes_html(texte: str) -> str:
     deviennent des liens. Pas de moteur Markdown ici : la page reste autonome."""
     import html as _h
     import re
+
     blocs = [b.strip() for b in re.split(r"\n\s*\n", texte or "") if b.strip()]
     rendus = []
     for bloc in blocs:
@@ -238,13 +290,10 @@ def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status
     statut et le début de la réponse brute, pour garder un indice.
     """
     import html as _h
+
     title = f"Extrait · {chunk_id[:12]}…"
     if status >= 400 or payload is None:
-        body = (
-            f"<h1>Extrait indisponible</h1>"
-            f"<p class='meta'>OpenRAG a renvoyé HTTP {status}.</p>"
-            f"<pre class='brut'>{_h.escape(raw.decode('utf-8', 'replace')[:2000])}</pre>"
-        )
+        body = f"<h1>Extrait indisponible</h1><p class='meta'>OpenRAG a renvoyé HTTP {status}.</p><pre class='brut'>{_h.escape(raw.decode('utf-8', 'replace')[:2000])}</pre>"
     else:
         content = payload.get("page_content") or payload.get("content") or payload.get("text") or ""
         contexte, fichier, corps = _decouper_morceau(str(content))
@@ -266,9 +315,9 @@ def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status
             + (f"<p class='meta'>{' &middot; '.join(meta_parts)}</p>" if meta_parts else "")
             + f"<div class='texte'>{_paragraphes_html(corps) or '<p><em>(extrait vide)</em></p>'}</div>"
             + (
-                "<aside class='contexte'><p class='contexte-titre'>À propos du document "
-                "<span>— résumé automatique</span></p>"
-                f"{_paragraphes_html(contexte)}</aside>" if contexte else ""
+                f"<aside class='contexte'><p class='contexte-titre'>À propos du document <span>— résumé automatique</span></p>{_paragraphes_html(contexte)}</aside>"
+                if contexte
+                else ""
             )
         )
     # CSS en ligne : la page est autonome, sans ressource DSFR à aller chercher
@@ -302,6 +351,7 @@ async def _exiger_lecture_du_morceau(contenu: bytes, user: CurrentUser) -> None:
     """Le morceau appartient à une collection (sa partition) : son lecteur doit pouvoir la lire.
     Une réponse sans partition lisible (erreur d'OpenRAG) passe : il n'y a rien à protéger."""
     import json as _json
+
     try:
         charge = _json.loads(contenu)
     except Exception:
@@ -311,17 +361,18 @@ async def _exiger_lecture_du_morceau(contenu: bytes, user: CurrentUser) -> None:
     if not partition:
         return
     from app.services.collection_store import get_collection
+
     if not peut_lire(await get_collection(partition), partition, user):
         raise HTTPException(status_code=404, detail="Extrait introuvable")
 
 
 @app.get("/api/openrag/extract/{chunk_id}")
-async def openrag_extract_proxy(chunk_id: str, request: Request, raw: bool = False,
-                                credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
+async def openrag_extract_proxy(chunk_id: str, request: Request, raw: bool = False, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
     """Un morceau d'OpenRAG, relayé avec le jeton admin — pour qui présente un lien signé
     par Mes collections, ou un jeton qui lit la collection du morceau (P0, octobre 2026 :
     la route était ouverte à tous, les identifiants sont des entiers devinables)."""
     from app.security_utils import reject_path_traversal
+
     reject_path_traversal(chunk_id, field="chunk_id")
     user = await acces_extrait(chunk_id, request, credentials)
     return await _extrait(chunk_id, raw, user)
@@ -339,10 +390,12 @@ async def _extrait(chunk_id: str, raw: bool, user: CurrentUser | None):
     browser tab is unreadable. Pass ?raw=1 to get the upstream JSON as-is
     (useful for debugging or programmatic access).
     """
-    import httpx
     import json as _json
+
+    import httpx
     from fastapi import Response
     from fastapi.responses import HTMLResponse
+
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
     url = f"{settings.openrag_url.rstrip('/')}/extract/{chunk_id}"
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -367,14 +420,15 @@ async def _extrait(chunk_id: str, raw: bool, user: CurrentUser | None):
 
 
 @app.get("/api/openrag/file/{file_id}")
-async def openrag_file_proxy(file_id: str, request: Request,
-                             credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
+async def openrag_file_proxy(file_id: str, request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
     """Proxy for OpenRAG's /file/<id> endpoint (rarely emitted in practice,
     but kept for completeness).
     """
     import httpx
     from fastapi import Response
+
     from app.security_utils import reject_path_traversal
+
     reject_path_traversal(file_id, field="file_id")
     await acces_extrait(file_id, request, credentials)
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
@@ -400,8 +454,10 @@ async def owui_probe(user: CurrentUser = Depends(current_user)):
     """
     if not access.is_superadmin(user.groups):
         raise HTTPException(status_code=403, detail="Diagnostic réservé à l'administration")
-    from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
     import httpx
+
+    from app.services.owui_client import OwuiAdminUnavailable, OwuiClient
+
     try:
         client = OwuiClient()
     except OwuiAdminUnavailable as e:
@@ -412,30 +468,31 @@ async def owui_probe(user: CurrentUser = Depends(current_user)):
         "calls": [],
     }
     probes = [
-        ("GET", "/api/v1/auths", None),              # whoami — confirms key validity
-        ("GET", "/api/v1/users/", None),             # admin-only — confirms admin role
+        ("GET", "/api/v1/auths", None),  # whoami — confirms key validity
+        ("GET", "/api/v1/users/", None),  # admin-only — confirms admin role
         ("GET", "/api/v1/models/model", {"id": "openrag-bas"}),
-        ("GET", "/api/models", None),                # full model list incl. discovered base models
-        ("GET", "/openai/models", None),             # OWUI's OpenAI proxy listing
+        ("GET", "/api/models", None),  # full model list incl. discovered base models
+        ("GET", "/openai/models", None),  # OWUI's OpenAI proxy listing
     ]
     async with httpx.AsyncClient(timeout=10.0) as h:
         for method, path, params in probes:
             try:
-                r = await h.request(method, f"{client.base_url}{path}",
-                                    params=params, headers=client._headers())
-                out["calls"].append({
-                    "method": method, "path": path,
-                    "status": r.status_code,
-                    "ok": r.status_code < 400,
-                })
+                r = await h.request(method, f"{client.base_url}{path}", params=params, headers=client._headers())
+                out["calls"].append(
+                    {
+                        "method": method,
+                        "path": path,
+                        "status": r.status_code,
+                        "ok": r.status_code < 400,
+                    }
+                )
             except Exception:
                 out["calls"].append({"method": method, "path": path, "error": "request failed"})
     return out
 
 
 @app.get("/api/openrag/static/{filepath:path}")
-async def openrag_static_proxy(filepath: str, request: Request, raw: bool = False,
-                               credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
+async def openrag_static_proxy(filepath: str, request: Request, raw: bool = False, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)):
     """Proxy for OpenRAG's /static/<hashname> URLs — what source.file_url
     points to for whole-document access. Auth-protected on OpenRAG's side
     (redirects to /auth/login for anonymous callers), relayed here with
@@ -446,7 +503,9 @@ async def openrag_static_proxy(filepath: str, request: Request, raw: bool = Fals
     """
     import httpx
     from fastapi import Response
+
     from app.security_utils import reject_path_traversal
+
     reject_path_traversal(filepath, field="filepath")
     user = await acces_extrait(filepath, request, credentials)
     headers = {"Authorization": f"Bearer {settings.openrag_admin_token}"}
@@ -457,8 +516,7 @@ async def openrag_static_proxy(filepath: str, request: Request, raw: bool = Fals
     # c'était une page Keycloak servie en 200 au lieu du document. Le morceau
     # porte le même identifiant : on le rend à la place, plutôt qu'une page de
     # connexion à un service que l'utilisateur ne connaît pas.
-    if upstream.status_code in (301, 302, 303, 307, 308) or \
-            upstream.headers.get("content-type", "").startswith("text/html"):
+    if upstream.status_code in (301, 302, 303, 307, 308) or upstream.headers.get("content-type", "").startswith("text/html"):
         return await _extrait(filepath, raw, user)
     # Preserve content-disposition so browsers can hint a filename on save.
     resp_headers = {}

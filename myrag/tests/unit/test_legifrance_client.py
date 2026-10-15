@@ -1,7 +1,8 @@
 """Tests for Legifrance PISTE client (TDD)."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.legifrance_client import (
     LegifranceClient,
@@ -11,30 +12,22 @@ from app.services.legifrance_client import (
 
 class TestParseUrl:
     def test_parse_code(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158")
         assert result["type"] == "code"
         assert result["id"] == "LEGITEXT000006070158"
 
     def test_parse_article(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824")
         assert result["type"] == "article"
         assert result["id"] == "LEGIARTI000049803824"
 
     def test_parse_loi(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000886460"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000886460")
         assert result["type"] == "loi"
         assert result["id"] == "JORFTEXT000000886460"
 
     def test_parse_jo(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000000886460"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000000886460")
         assert result["type"] == "jo"
         assert result["id"] == "JORFTEXT000000886460"
 
@@ -43,16 +36,12 @@ class TestParseUrl:
         assert result is None
 
     def test_parse_with_trailing_slash(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158/"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158/")
         assert result["type"] == "code"
         assert result["id"] == "LEGITEXT000006070158"
 
     def test_parse_with_params(self):
-        result = parse_legifrance_url(
-            "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824?dateVersion=20260101"
-        )
+        result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824?dateVersion=20260101")
         assert result["type"] == "article"
         assert result["id"] == "LEGIARTI000049803824"
 

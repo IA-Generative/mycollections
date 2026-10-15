@@ -32,8 +32,7 @@ async def config_du_visualiseur(corpus_id: str) -> dict:
         async with async_session() as session:
             col = await session.get(Collection, corpus_id)
             pub = await session.get(Publication, corpus_id)
-            if (col and pub and not col.archived_at and pub.state == "published"
-                    and pub.alias_enabled and pub.visibility == "all"):
+            if col and pub and not col.archived_at and pub.state == "published" and pub.alias_enabled and pub.visibility == "all":
                 modele = f"openrag-{col.name}"
     return {"openwebui_url": public, "assistant_model": modele}
 
@@ -42,6 +41,7 @@ def injecter_config(html: str, config: dict) -> str:
     """Pose `window.GRAPH_VIEWER_CONFIG` en tête de page. Tout `<` est écrit `\\u003c` : aucune
     valeur ne peut refermer la balise script, ni en ouvrir une."""
     import json
+
     charge = json.dumps(config, ensure_ascii=False).replace("<", "\\u003c")
     return html.replace("<body>", f"<body>\n  <script>window.GRAPH_VIEWER_CONFIG = {charge};</script>", 1)
 
@@ -53,6 +53,7 @@ async def graph_viewer(
 ):
     """Serve the Cytoscape.js graph viewer."""
     import os
+
     viewer_path = os.path.join(os.path.dirname(__file__), "..", "static", "graph_view.html")
     if not os.path.exists(viewer_path):
         raise HTTPException(status_code=404, detail="Graph viewer not found")
@@ -68,6 +69,7 @@ async def lien_du_visualiseur(collection: str, user: CurrentUser = Depends(curre
 
     from app.routers._acces_navigateur import peut_lire
     from app.services import liens
+
     if not peut_lire(await get_collection(collection), collection, user):
         raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
     url = f"/graph?corpus_id={quote(collection)}"
@@ -108,23 +110,27 @@ async def related_articles(
 
     nodes = []
     for node_id, attrs in subgraph.nodes(data=True):
-        nodes.append({
-            "id": node_id,
-            "label": attrs.get("label", node_id),
-            "livre": attrs.get("livre", ""),
-            "titre": attrs.get("titre", ""),
-            "chapitre": attrs.get("chapitre", ""),
-            "referenced_by": attrs.get("referenced_by", []),
-            "is_focus": node_id == article,
-        })
+        nodes.append(
+            {
+                "id": node_id,
+                "label": attrs.get("label", node_id),
+                "livre": attrs.get("livre", ""),
+                "titre": attrs.get("titre", ""),
+                "chapitre": attrs.get("chapitre", ""),
+                "referenced_by": attrs.get("referenced_by", []),
+                "is_focus": node_id == article,
+            }
+        )
 
     edges = []
     for source, target, attrs in subgraph.edges(data=True):
-        edges.append({
-            "source": source,
-            "target": target,
-            "description": attrs.get("description", "cite"),
-        })
+        edges.append(
+            {
+                "source": source,
+                "target": target,
+                "description": attrs.get("description", "cite"),
+            }
+        )
 
     return {
         "focus": article,
@@ -139,6 +145,7 @@ async def related_articles(
 async def graph_config():
     """Config for the graph viewer."""
     from app.config import settings
+
     return {
         "api_base_url": settings.myrag_public_url,
         "graphrag_viewer_url": settings.graphrag_viewer_url,
@@ -153,8 +160,10 @@ async def _exiger_gestionnaire(collection: str, user: CurrentUser) -> dict | Non
     """
     fiche = await get_collection(collection)
     if not access.can_write(
-        name=collection, created_by=(fiche or {}).get("created_by"),
-        user_groups=user.groups, user_sub=user.sub,
+        name=collection,
+        created_by=(fiche or {}).get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     return fiche
@@ -166,9 +175,7 @@ class GraphImportRequest(BaseModel):
 
 
 @router.put("/{collection}")
-async def import_graph(
-    collection: str, req: GraphImportRequest, user: CurrentUser = Depends(current_user)
-):
+async def import_graph(collection: str, req: GraphImportRequest, user: CurrentUser = Depends(current_user)):
     """Dépose un graphe construit hors de MyRAG (même forme que ``graph.json``).
 
     Réservé aux gestionnaires de la collection. Le graphe importé est protégé :
@@ -229,12 +236,18 @@ async def build_graph(
             articles.append((nom, str(f["file_id"]), f))
     if not articles:
         # Rien à construire : surtout ne pas écraser un graphe existant par un graphe vide.
-        raise HTTPException(status_code=422, detail=(
-            "Aucun article dans cette collection : le graphe relie des articles de code découpés "
-            "un par un (« Article L… »). Choisissez le découpage par article, ou importez un graphe."))
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Aucun article dans cette collection : le graphe relie des articles de code découpés "
+                "un par un (« Article L… »). Choisissez le découpage par article, ou importez un graphe."
+            ),
+        )
 
     import asyncio
+
     from app.services.graph_builder import extract_references
+
     limite = asyncio.Semaphore(8)
 
     async def lire(nom: str, file_id: str, meta: dict) -> dict:
@@ -247,8 +260,10 @@ async def build_graph(
             "filename": nom,
             "metadata": {
                 "article": article,
-                "livre": meta.get("livre", ""), "titre": meta.get("titre", ""),
-                "chapitre": meta.get("chapitre", ""), "references": references,
+                "livre": meta.get("livre", ""),
+                "titre": meta.get("titre", ""),
+                "chapitre": meta.get("chapitre", ""),
+                "references": references,
                 "parent_path": meta.get("parent_path", ""),
             },
         }
@@ -298,14 +313,14 @@ async def summarize_articles(
     # Le texte complet des articles : relu dans OpenRAG, comme à la construction (avant : cherché
     # sous data_dir/<collection>/*.md, où rien n'est jamais écrit).
     from app.services.openrag_client import OpenRAGClient
+
     client = OpenRAGClient()
     chunks = []
     for f in await client.list_files(collection):
         nom = str(f.get("original_filename") or f.get("filename") or "")
         article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
         if article in long_articles and f.get("file_id"):
-            chunks.append({"content": await client.get_file_content(collection, str(f["file_id"])),
-                           "metadata": {"article": article}})
+            chunks.append({"content": await client.get_file_content(collection, str(f["file_id"])), "metadata": {"article": article}})
 
     result = await _builder.summarize_long_articles(collection=collection, chunks=chunks, threshold=effective_threshold)
     return {
@@ -316,4 +331,3 @@ async def summarize_articles(
         "articles_needing_summary": len(long_articles),
         **result,
     }
-

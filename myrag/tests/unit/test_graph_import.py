@@ -1,14 +1,13 @@
 """Import d'un graphe construit hors de MyRAG (PUT /graph/{collection})."""
 
 import json
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.auth import CurrentUser, current_user
 from app.services.graph_builder import GraphBuilder, GraphImportError, graph_from_import
-
 
 GESTIONNAIRE = CurrentUser(sub="g1", username="gest", groups=["/myrag/grimp-ceseda-admin"])
 LECTEUR = CurrentUser(sub="l1", username="lecteur", groups=["/myrag/grimp-autre-admin"])
@@ -41,12 +40,15 @@ class TestGraphFromImport:
         assert graph.edges["L423-3", "L423-1"]["description"] == "cite"
         assert graph.edges["L423-3", "L423-1"]["origine"] == "legi"
 
-    @pytest.mark.parametrize("data, fragment", [
-        ({"nodes": [], "edges": []}, "non vide"),
-        ({"nodes": [{"label": "sans id"}], "edges": []}, "« id »"),
-        ({"nodes": [{"id": "A"}, {"id": "A"}], "edges": []}, "en double"),
-        ({"nodes": [{"id": "A"}], "edges": [{"source": "A", "target": "B"}]}, "nœud absent"),
-    ])
+    @pytest.mark.parametrize(
+        "data, fragment",
+        [
+            ({"nodes": [], "edges": []}, "non vide"),
+            ({"nodes": [{"label": "sans id"}], "edges": []}, "« id »"),
+            ({"nodes": [{"id": "A"}, {"id": "A"}], "edges": []}, "en double"),
+            ({"nodes": [{"id": "A"}], "edges": [{"source": "A", "target": "B"}]}, "nœud absent"),
+        ],
+    )
     def test_malformed_graphs_are_refused(self, data, fragment):
         with pytest.raises(GraphImportError, match=fragment):
             graph_from_import(data)
@@ -63,9 +65,11 @@ class TestGraphFromImport:
 def app_client(tmp_path, monkeypatch):
     import app.config
     import app.routers.graph as graph_router
+
     monkeypatch.setattr(app.config.settings, "data_dir", str(tmp_path))
     monkeypatch.setattr(graph_router, "_builder", GraphBuilder(data_dir=str(tmp_path)))
     from app.main import app
+
     app.dependency_overrides.clear()
     with TestClient(app) as client:
         yield app, client
@@ -186,4 +190,3 @@ class TestBuildAndSummarizeAreReservedToManagers:
         _as(app, GESTIONNAIRE)
         r = client.post("/graph/grimp-ceseda/summarize")
         assert r.status_code == 200 and r.json()["status"] == "disabled"
-

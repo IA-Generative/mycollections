@@ -60,10 +60,17 @@ def decision_depuis_xml(xml: bytes) -> dict | None:
     corps = "\n".join(s.strip() for s in _BALISES.sub("\n", brut).splitlines() if s.strip())
     champ = lambda n: (dossier.findtext(n) or "").strip()  # noqa: E731
     return {
-        "code_juridiction": champ("Code_Juridiction"), "juridiction": champ("Nom_Juridiction"),
-        "numero": champ("Numero_Dossier"), "date": champ("Date_Lecture"), "ecli": champ("Numero_ECLI"),
-        "type": champ("Type_Decision"), "recours": champ("Type_Recours"), "publication": champ("Code_Publication"),
-        "solution": champ("Solution"), "formation": champ("Formation_Jugement"), "texte": corps,
+        "code_juridiction": champ("Code_Juridiction"),
+        "juridiction": champ("Nom_Juridiction"),
+        "numero": champ("Numero_Dossier"),
+        "date": champ("Date_Lecture"),
+        "ecli": champ("Numero_ECLI"),
+        "type": champ("Type_Decision"),
+        "recours": champ("Type_Recours"),
+        "publication": champ("Code_Publication"),
+        "solution": champ("Solution"),
+        "formation": champ("Formation_Jugement"),
+        "texte": corps,
     }
 
 
@@ -75,14 +82,18 @@ def retenue(d: dict, mots_cles: list[str], codes_publication: list[str] | None) 
 
 
 def document_depuis(d: dict, fonds: str) -> Document:
-    md = [f"# {d['juridiction'] or d['code_juridiction']} — {d['type'] or 'décision'} n° {d['numero']} du {d['date']}", "",
-          f"- Juridiction : {d['juridiction']} ({d['code_juridiction']})", f"- Numéro : {d['numero']}", f"- Date de lecture : {d['date']}"]
+    md = [
+        f"# {d['juridiction'] or d['code_juridiction']} — {d['type'] or 'décision'} n° {d['numero']} du {d['date']}",
+        "",
+        f"- Juridiction : {d['juridiction']} ({d['code_juridiction']})",
+        f"- Numéro : {d['numero']}",
+        f"- Date de lecture : {d['date']}",
+    ]
     for k, lib in (("ecli", "ECLI"), ("recours", "Type de recours"), ("solution", "Solution"), ("formation", "Formation"), ("publication", "Code de publication")):
         if d.get(k):
             md.append(f"- {lib} : {d[k]}")
     md += ["", "Source : opendata.justice-administrative.fr, décision pseudonymisée à la source.", "", "## Texte intégral", "", d["texte"]]
-    return Document(nom=f"{FONDS[fonds]}-{d['numero']}-{d['date']}.md", texte="\n".join(md),
-                    metadonnees={"juridiction": d["code_juridiction"], "date": d["date"]})
+    return Document(nom=f"{FONDS[fonds]}-{d['numero']}-{d['date']}.md", texte="\n".join(md), metadonnees={"juridiction": d["code_juridiction"], "date": d["date"]})
 
 
 def decisions_du_zip(octets: bytes) -> list[dict]:
@@ -100,6 +111,7 @@ def decisions_du_zip(octets: bytes) -> list[dict]:
 async def importer(collection: str, entree: dict, *, deja_importes: list[str] | None = None) -> dict:
     """Importe les mois manquants, dans l'ordre, jusqu'à `max_mois_par_run`."""
     from app.services.amorces.ingestion import ingerer
+
     p = entree.get("parametres", {})
     fonds = p.get("fonds", ["DCA", "DTA"])
     mots = p.get("mots_cles", ["CESEDA"])
@@ -127,8 +139,14 @@ async def importer(collection: str, entree: dict, *, deja_importes: list[str] | 
                 dates.append(d["date"])
         mois_faits.append(f"{f}-{a:04d}{m:02d}")
     bilan = await ingerer(collection, docs, strategie="section", max_documents=p.get("max_documents"))
-    couverture = {"fonds": fonds, "mots_cles": mots, "mois_importes": sorted(faits | set(mois_faits)),
-                  "juridictions": sorted(juridictions), "dates": [min(dates), max(dates)] if dates else [],
-                  "decisions_lues": lues, "decisions_retenues": retenues,
-                  "reste_a_importer": max(0, len([1 for (a, m) in mois_entre(p.get("depuis", "2024-01")) for f in fonds]) - len(faits | set(mois_faits)))}
+    couverture = {
+        "fonds": fonds,
+        "mots_cles": mots,
+        "mois_importes": sorted(faits | set(mois_faits)),
+        "juridictions": sorted(juridictions),
+        "dates": [min(dates), max(dates)] if dates else [],
+        "decisions_lues": lues,
+        "decisions_retenues": retenues,
+        "reste_a_importer": max(0, len([1 for (a, m) in mois_entre(p.get("depuis", "2024-01")) for f in fonds]) - len(faits | set(mois_faits))),
+    }
     return {**bilan, "couverture": couverture, "lignes_importees": retenues, "mois_importes": mois_faits}

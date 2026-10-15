@@ -11,8 +11,7 @@ import pytest
 from tests.conftest import TABLES_PAR_COLLECTION, personne
 
 TABLES_HISTORIQUES = {
-    "collections": {"name", "scope", "scope_groups_json", "created_by", "archived_at", "system_prompt",
-                    "titre", "categorie"},
+    "collections": {"name", "scope", "scope_groups_json", "created_by", "archived_at", "system_prompt", "titre", "categorie"},
     "categories": {"cle", "libelle", "description", "ordre"},
     "publications": {"collection_name", "state", "visibility"},
     "publication_history": {"collection_name", "action", "acted_by"},
@@ -73,8 +72,7 @@ def test_la_purge_vide_aussi_les_tables_du_collectif(client, en_tant_que, creer_
     client.post(f"/api/collections/{nom}/abonner")
     en_tant_que(garant)
     client.post(f"/api/collections/{nom}/archive")
-    with patch("app.services.collection_store.OpenRAGClient", create=True), \
-         patch("app.routers.collections.OpenRAGClient") as cls:
+    with patch("app.services.collection_store.OpenRAGClient", create=True), patch("app.routers.collections.OpenRAGClient") as cls:
         cls.return_value.delete_partition = AsyncMock(return_value={})
         r = client.delete(f"/api/collections/{nom}")
     assert r.status_code == 200, r.text

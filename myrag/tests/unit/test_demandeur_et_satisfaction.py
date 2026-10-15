@@ -41,6 +41,7 @@ def _sql(requete: str, params=()):
 
 def _hash(qui):
     from app.services.pseudo import condenser
+
     return condenser(qui.sub)
 
 
@@ -62,6 +63,7 @@ def _publier_a_tous(client, en_tant_que, creer_collection, nom, ident):
 
 # ─── Le rôle « demandeur » ──────────────────────────────────────────────────────────────────
 
+
 def test_l_auteur_est_demandeur_d_office_sans_compter_parmi_les_soutiens(client, en_tant_que):
     d = _deposer(client, en_tant_que)
     assert d["je_suis_demandeur"] is True and d["nb_soutiens"] == 0 and d["roles"] == {"demandeur": 1}
@@ -81,6 +83,7 @@ def test_demandeur_n_est_pas_un_role_que_l_on_prend(client, en_tant_que):
 
 # ─── La boucle de satisfaction ──────────────────────────────────────────────────────────────
 
+
 def test_publiee_a_tous_la_demande_attend_l_avis_de_son_auteur(client, en_tant_que, creer_collection, nom, cloche):
     d = _deposer(client, en_tant_que)
     _publier_a_tous(client, en_tant_que, creer_collection, nom, d["id"])
@@ -89,7 +92,7 @@ def test_publiee_a_tous_la_demande_attend_l_avis_de_son_auteur(client, en_tant_q
     assert vue["etat"] == "a_confirmer" and vue["collection_name"] == nom and vue["confirmation_avant"]
     sollicite = [e for e in cloche if _hash(AUTEUR) in e[0] and "Répond-elle à votre besoin" in e[1]]
     assert sollicite and "5 jours" in sollicite[0][1]
-    assert sollicite[0][0] == [_hash(AUTEUR)]   # à l'auteur seul
+    assert sollicite[0][0] == [_hash(AUTEUR)]  # à l'auteur seul
 
 
 def test_oui_la_demande_est_realisee_et_le_courriel_efface(client, en_tant_que, creer_collection, nom, cloche):
@@ -108,7 +111,7 @@ def test_non_la_demande_redevient_un_chantier_et_le_garant_est_prevenu(client, e
     client.post(f"/api/demandes/{d['id']}/soutenir", json={"role": "garant"})
     _publier_a_tous(client, en_tant_que, creer_collection, nom, d["id"])
     en_tant_que(AUTEUR)
-    assert client.post(f"/api/demandes/{d['id']}/satisfaction", json={"satisfait": False}).status_code == 422   # le motif est dû
+    assert client.post(f"/api/demandes/{d['id']}/satisfaction", json={"satisfait": False}).status_code == 422  # le motif est dû
     r = client.post(f"/api/demandes/{d['id']}/satisfaction", json={"satisfait": False, "motif": "Il manque les arrêts de 2025."})
     assert r.status_code == 200, r.text
     vue = r.json()["demande"]
@@ -116,7 +119,7 @@ def test_non_la_demande_redevient_un_chantier_et_le_garant_est_prevenu(client, e
     assert vue["confirmation_avant"] is None
     prevenu = [e for e in cloche if e[0] == [_hash(GARANT)]]
     assert prevenu and "Il manque les arrêts de 2025." in prevenu[0][1]
-    assert _sql("SELECT contact FROM demande WHERE id = ?", (d["id"],)) == [("auteur@interieur.gouv.fr",)]   # la demande continue
+    assert _sql("SELECT contact FROM demande WHERE id = ?", (d["id"],)) == [("auteur@interieur.gouv.fr",)]  # la demande continue
 
 
 def test_seul_l_auteur_ou_l_administration_repond(client, en_tant_que, creer_collection, nom, cloche):
@@ -140,7 +143,7 @@ def test_sans_reponse_sous_5_jours_elle_est_realisee_sans_reponse(client, en_tan
     il_y_a = lambda jours: (utcnow() - timedelta(days=jours)).strftime("%Y-%m-%d %H:%M:%S.%f")  # noqa: E731
     _sql("UPDATE demande SET confirmation_demandee_le = ? WHERE id = ?", (il_y_a(4), d["id"]))
     en_tant_que(AUTRE)
-    assert client.get(f"/api/demandes/{d['id']}").json()["demande"]["etat"] == "a_confirmer"   # 4 jours : on attend
+    assert client.get(f"/api/demandes/{d['id']}").json()["demande"]["etat"] == "a_confirmer"  # 4 jours : on attend
     _sql("UPDATE demande SET confirmation_demandee_le = ? WHERE id = ?", (il_y_a(6), d["id"]))
     liste = {x["id"]: x for x in client.get("/api/demandes").json()["demandes"]}
     assert (liste[d["id"]]["etat"], liste[d["id"]]["satisfaction"]) == ("realisee", "sans_reponse")
@@ -156,8 +159,10 @@ def test_clore_une_demande_efface_le_courriel(client, en_tant_que):
 
 
 def test_la_cloche_de_l_auteur_porte_la_demande_a_confirmer(client, en_tant_que, creer_collection, nom, cloche):
-    from app.services import collectif_store as store
     import asyncio
+
+    from app.services import collectif_store as store
+
     d = _deposer(client, en_tant_que)
     _publier_a_tous(client, en_tant_que, creer_collection, nom, d["id"])
     suivi = asyncio.run(store.suivi_pour(_hash(AUTEUR)))
@@ -167,6 +172,7 @@ def test_la_cloche_de_l_auteur_porte_la_demande_a_confirmer(client, en_tant_que,
 
 def test_regle_pure_de_l_echeance():
     from app.services.etats import confirmation_echue
+
     maintenant = utcnow()
     assert confirmation_echue("a_confirmer", maintenant - timedelta(days=6), maintenant, 5) is True
     assert confirmation_echue("a_confirmer", maintenant - timedelta(days=4), maintenant, 5) is False

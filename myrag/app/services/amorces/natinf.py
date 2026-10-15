@@ -23,15 +23,18 @@ QUALIFICATION = ("Qualification de l'infraction", "qualification_infraction")
 NATURE = ("Nature de l'infraction", "nature_infraction")
 
 
-def numero(l: dict) -> str:
-    return colonne(l, *NUMERO).strip()
+def numero(ligne: dict) -> str:
+    return colonne(ligne, *NUMERO).strip()
 
 
-def _fiche(l: dict, enrichi: dict | None) -> str:
-    lignes = [f"## NATINF {numero(l)} — {colonne(l, *QUALIFICATION)}", "",
-              f"- Nature : {colonne(l, *NATURE)}",
-              f"- Définie par : {colonne(l, 'Définie par', 'definie_par')}",
-              f"- Réprimée par : {colonne(l, 'Réprimée par', 'reprimee_par')}"]
+def _fiche(ligne: dict, enrichi: dict | None) -> str:
+    lignes = [
+        f"## NATINF {numero(ligne)} — {colonne(ligne, *QUALIFICATION)}",
+        "",
+        f"- Nature : {colonne(ligne, *NATURE)}",
+        f"- Définie par : {colonne(ligne, 'Définie par', 'definie_par')}",
+        f"- Réprimée par : {colonne(ligne, 'Réprimée par', 'reprimee_par')}",
+    ]
     if enrichi:
         for p in enrichi.get("peines_principales") or []:
             lignes.append(f"- Peine principale : {p.get('display_description') or p.get('template_label', '')}")
@@ -44,14 +47,16 @@ def _fiche(l: dict, enrichi: dict | None) -> str:
 
 def documents_depuis(lignes: list[dict], enrichis: dict[str, dict] | None = None) -> tuple[list[Document], dict]:
     enrichis = enrichis or {}
-    lignes = [l for l in lignes if numero(l).isdigit()]
-    lignes.sort(key=lambda l: int(numero(l)))
+    lignes = [ligne for ligne in lignes if numero(ligne).isdigit()]
+    lignes.sort(key=lambda ligne: int(numero(ligne)))
     docs = []
     for i in range(0, len(lignes), PAR_DOCUMENT):
-        lot = lignes[i:i + PAR_DOCUMENT]
+        lot = lignes[i : i + PAR_DOCUMENT]
         premier, dernier = numero(lot[0]), numero(lot[-1])
-        texte = "\n\n".join([f"# Nomenclature NATINF — codes {premier} à {dernier}", "Source : ministère de la Justice (data.gouv.fr), enrichie par natinfo.app."] +
-                            [_fiche(l, enrichis.get(numero(l))) for l in lot])
+        texte = "\n\n".join(
+            [f"# Nomenclature NATINF — codes {premier} à {dernier}", "Source : ministère de la Justice (data.gouv.fr), enrichie par natinfo.app."]
+            + [_fiche(ligne, enrichis.get(numero(ligne))) for ligne in lot]
+        )
         docs.append(Document(nom=f"natinf-{int(premier):05d}-{int(dernier):05d}.md", texte=texte))
     return docs, {"codes": len(lignes), "enrichis": len(enrichis), "documents": len(docs)}
 
@@ -64,7 +69,7 @@ async def enrichir(numeros: list[str], base_url: str, maximum: int) -> dict[str,
     numeros = numeros[: max(0, maximum)]
     async with httpx.AsyncClient(timeout=60.0) as client:
         for i in range(0, len(numeros), 50):
-            lot = numeros[i:i + 50]
+            lot = numeros[i : i + 50]
             r = await client.post(f"{base_url.rstrip('/')}/api/natinfs/batch/", json={"numeros": lot}, headers=entetes)
             if r.status_code == 429:
                 break  # la limite de débit : on garde ce qu'on a, le prochain import complètera
@@ -76,9 +81,10 @@ async def enrichir(numeros: list[str], base_url: str, maximum: int) -> dict[str,
 
 async def importer(collection: str, entree: dict) -> dict:
     from app.services.amorces.ingestion import ingerer
+
     p = entree.get("parametres", {})
     lignes = lire_csv(await reseau.telecharger(p["url_liste"]))
-    numeros = [numero(l) for l in lignes]
+    numeros = [numero(ligne) for ligne in lignes]
     enrichis = {}
     if p.get("enrichir_max", 0) > 0:
         try:

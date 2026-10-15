@@ -157,6 +157,5 @@ async def signaler(entree: BusSignalement):
             raise HTTPException(status_code=422, detail="version illisible (base64 attendu)")
         if not contenu or len(contenu) > VERSION_MAX:
             raise HTTPException(status_code=413, detail="version vide ou trop lourde (5 Mio au plus)")
-        proposition = await store.deposer_version(entree.collection, entree.document or entree.version.nom,
-                                                  entree.version.nom, contenu, h, signalement["id"])
+        proposition = await store.deposer_version(entree.collection, entree.document or entree.version.nom, entree.version.nom, contenu, h, signalement["id"])
     return {"signalement": signalement, "proposition": proposition}

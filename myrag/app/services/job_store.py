@@ -6,17 +6,19 @@ Replaces the in-memory job_tracker.py.
 import logging
 import uuid
 
-logger = logging.getLogger("myrag.jobs")
-
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.db import IngestJob, utcnow
 
+logger = logging.getLogger("myrag.jobs")
+
 
 async def create_job(
-    collection: str, filename: str, strategy: str, sensitivity: str,
+    collection: str,
+    filename: str,
+    strategy: str,
+    sensitivity: str,
     source_path: str = "",
 ) -> dict:
     job = IngestJob(
@@ -76,14 +78,13 @@ async def complete_job(job_id: str):
         job.completed_at = utcnow()
         await session.commit()
         collection, filename = job.collection_name, job.filename
-        detail = {"fichiers": 1, "fichier": filename, "morceaux": job.total_chunks,
-                  "morceaux_en_echec": job.failed_chunks, "job_id": job_id}
+        detail = {"fichiers": 1, "fichier": filename, "morceaux": job.total_chunks, "morceaux_en_echec": job.failed_chunks, "job_id": job_id}
     # Le fil d'avancement : un import terminé est un événement de la collection, signé
     # du robot d'ingestion — c'est ici qu'on sait ce qui a été réellement indexé.
     try:
         from app.services.collectif_store import consigner
-        await consigner("collection", collection, "import.termine", robot="ingest",
-                        collection_name=collection, detail=detail)
+
+        await consigner("collection", collection, "import.termine", robot="ingest", collection_name=collection, detail=detail)
     except Exception as e:  # noqa: BLE001 — le journal ne fait jamais échouer un job
         logger.warning("journal import.termine (%s) : %s", job_id, e)
 

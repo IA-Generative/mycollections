@@ -6,8 +6,8 @@
  * view after every vote without caring about which backend table the
  * question actually came from.
  *
- * Auto-seed rule: if the bank is empty on first load, call /generate-eval
- * once to produce a fresh dataset — otherwise the page shows no guidance.
+ * Auto-seed rule: if the bank is empty on first load, run generate() once to
+ * produce a fresh dataset — otherwise the page shows no guidance.
  * The user answered "oui au 1er chargement" in the design review, so this
  * runs without asking, and the user still controls further generations via
  * the explicit "Generate more" button.
@@ -33,7 +33,7 @@ export interface BankStats {
 }
 
 export function useBank(collection: string) {
-  const { get, post, del } = useApi()
+  const { get, post, patch, del } = useApi()
 
   const items = ref<BankItem[]>([])
   const stats = ref<BankStats>({ total: 0, generated: 0, imported: 0, fb_neg: 0, promoted: 0 })
@@ -60,11 +60,9 @@ export function useBank(collection: string) {
    * Generate fresh test questions and persist them as an EvalDataset so
    * subsequent loads see them classified as 'generated'.
    *
-   * We deliberately use /chat with a list-producing prompt rather than
-   * /generate-eval. The latter depends on an OpenRAG internal endpoint
-   * (get_file_content) that 400s on a number of partitions, leaving the
-   * bank permanently empty on those collections. /chat uses the public
-   * RAG pipeline and works anywhere the playground itself works.
+   * Uses /chat with a list-producing prompt: it rides the public RAG
+   * pipeline and works anywhere the playground itself works, so the
+   * seeded bank never depends on an internal endpoint.
    */
   async function generate() {
     if (isGenerating.value) return
@@ -90,11 +88,10 @@ export function useBank(collection: string) {
         .map((q: string, i: number) => ({ id: `auto-${Date.now()}-${i}`, question: q, expected_answer: '' }))
 
       if (questions.length) {
-        await post(`/api/eval/${collection}/datasets`, {
-          name: `${collection}-evaluation`,
-          description: 'Jeu de test genere automatiquement',
-          questions,
-        }).catch(() => { /* non-fatal: load() will just show nothing new */ })
+        // Au jeu de questions de la collection (à relire : elles n'ont pas encore de réponse).
+        await post(`/api/collections/${collection}/qualite/questions/import`, {
+          questions, origine: 'generee',
+        }).catch(() => { /* non bloquant : load() n'affichera simplement rien de nouveau */ })
       }
       await load()
     } finally {
@@ -116,16 +113,14 @@ export function useBank(collection: string) {
    * promote from.
    */
   async function voteUp(item: BankItem, answer: string) {
+    const racine = `/api/collections/${collection}/qualite/questions`
     if (item.source === 'fb_neg' && item.metadata?.feedback_id) {
-      await post(`/api/feedback/${collection}/${item.metadata.feedback_id}/promote`, {
-        promote_to: 'qr',
-        corrected_answer: answer,
-      })
-    } else {
-      await post(`/api/qr-cache/${collection}`, {
-        question: item.question,
-        answer,
-        source: 'manual',
+      // L'avis devient une question du jeu, avec la réponse jugée bonne.
+      await post(`${racine}/depuis-avis/${item.metadata.feedback_id}`, { reponse: answer }).catch(() => {})
+    } else if (item.metadata?.question_id) {
+      // La question est validée ; sans réponse de référence, elle prend celle-ci.
+      await patch(`${racine}/${item.metadata.question_id}`, {
+        relecture: 'valide', ...(item.expected_answer ? {} : { reponse: answer }),
       })
     }
     await load()
@@ -149,16 +144,11 @@ export function useBank(collection: string) {
   }
 
   async function removeItem(item: BankItem) {
-    if (item.source === 'promoted' && item.metadata?.qr_id) {
-      await del(`/api/qr-cache/${collection}/${item.metadata.qr_id}`).catch(() => {})
-    } else if (item.source === 'generated' || item.source === 'imported') {
-      // Deletes the whole dataset, which may contain other questions.
-      // The UI warns the user before wiring this button up.
-      if (item.metadata?.dataset_id) {
-        await del(`/api/eval/${collection}/datasets/${item.metadata.dataset_id}`).catch(() => {})
-      }
+    // Une question se retire seule (avant : tout le jeu de test qui la contenait partait avec).
+    if (item.metadata?.question_id) {
+      await del(`/api/collections/${collection}/qualite/questions/${item.metadata.question_id}`).catch(() => {})
     }
-    // fb_neg: never destructive from the bank (audit trail lives in /c/{id}).
+    // fb_neg : jamais supprimé depuis la banque (l'avis reste lisible dans la page Qualité).
     await load()
   }
 

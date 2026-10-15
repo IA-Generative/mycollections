@@ -25,7 +25,8 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: myrag/uv.lock
-      - run: uv sync --frozen
+      # L'extra « generation » (ragas) est installé pour que ses tests tournent ; sans lui ils sont ignorés.
+      - run: uv sync --frozen --extra generation
       - run: uv run python -m pytest tests -q
 
   frontend:

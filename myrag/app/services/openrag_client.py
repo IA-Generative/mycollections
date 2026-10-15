@@ -69,9 +69,7 @@ class OpenRAGClient:
                 return {"status": "ok"}
             return resp.json()
 
-    async def _upload_file(
-        self, path: str, file_content: bytes, filename: str, metadata: dict | None = None
-    ) -> dict:
+    async def _upload_file(self, path: str, file_content: bytes, filename: str, metadata: dict | None = None) -> dict:
         _verifier_chemin(path)
         headers = {"Authorization": f"Bearer {self.admin_token}"}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -143,6 +141,38 @@ class OpenRAGClient:
             filename=filename,
         )
 
+    async def upload_document(self, partition: str, filename: str, content: bytes, mimetype: str, metadata: dict | None = None) -> dict:
+        """Un document entier (PDF, Word…) confié à OpenRAG, qui le lit et le découpe lui-même.
+        Rend `{"file_id", "task_id"}` : l'indexation est asynchrone, `task_state` la suit."""
+        import json as _json
+
+        file_id = str(uuid.uuid4())
+        path = f"/indexer/partition/{partition}/file/{file_id}"
+        _verifier_chemin(path)
+        donnees = {"metadata": _json.dumps({"mimetype": mimetype, **(metadata or {})}, ensure_ascii=False)}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                f"{self.base_url}{path}",
+                headers={"Authorization": f"Bearer {self.admin_token}"},
+                files={"file": (filename, io.BytesIO(content), mimetype)},
+                data=donnees,
+            )
+            resp.raise_for_status()
+            corps = resp.json() if resp.content else {}
+        url = str(corps.get("task_status_url") or "")
+        return {"file_id": file_id, "task_id": url.rstrip("/").rsplit("/", 1)[-1] if url else ""}
+
+    async def task_state(self, task_id: str) -> dict:
+        """L'état d'une indexation (`QUEUED`, `RUNNING`, `COMPLETED`/`SUCCESS`, `FAILED`)."""
+        return await self._get(f"/indexer/task/{task_id}")
+
+    async def task_error(self, task_id: str) -> str:
+        try:
+            d = await self._get(f"/indexer/task/{task_id}/error")
+        except httpx.HTTPError:
+            return ""
+        return str(d.get("detail") or d.get("error") or d)[:500] if isinstance(d, dict) else str(d)[:500]
+
     async def upload_chunks(self, partition: str, chunks: list[dict]) -> list[dict]:
         results = []
         for chunk in chunks:
@@ -150,9 +180,7 @@ class OpenRAGClient:
             results.append(result)
         return results
 
-    async def search(
-        self, partition: str | list[str], query: str, top_k: int = 5
-    ) -> dict:
+    async def search(self, partition: str | list[str], query: str, top_k: int = 5) -> dict:
         """`/search` d'OpenRAG. `partition` : un nom, ou une liste (`partitions=a&partitions=b`).
         Une liste vide est refusée : OpenRAG la lirait comme « toutes les partitions »."""
         partitions = [partition] if isinstance(partition, str) else list(partition)
@@ -162,8 +190,7 @@ class OpenRAGClient:
             verifier_partition(p)
         return await self._get(
             "/search",
-            params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0],
-                    "top_k": top_k},
+            params={"text": query, "partitions": partitions if len(partitions) > 1 else partitions[0], "top_k": top_k},
         )
 
     async def chat(
@@ -178,7 +205,7 @@ class OpenRAGClient:
         """
         if (settings.partition_prefixe or "").strip():
             # `openrag-all` interrogerait toutes les partitions, celles de la bêta comprises.
-            verifier_partition(model[len("openrag-"):] if model.startswith("openrag-") else model)
+            verifier_partition(model[len("openrag-") :] if model.startswith("openrag-") else model)
         body = {"model": model, "messages": messages, "temperature": temperature, **extra}
         return await self._post("/v1/chat/completions", json=body)
 
@@ -205,6 +232,24 @@ class OpenRAGClient:
             raise
         return data if isinstance(data, dict) else None
 
+    async def partition_chunks(self, partition: str, file_id: str | None = None, limit: int | None = None) -> list[dict] | None:
+        """Les morceaux d'une partition, texte compris, sans vecteurs (`GET /partition/<p>/chunks`),
+        filtrés sur un fichier si `file_id`. `None` si l'instance ne connaît pas la route (OpenRAG
+        ancien) : l'appelant se replie sur `file_detail` + `extract`."""
+        params: dict = {"include_embedding": "false"}
+        if file_id:
+            params["file_id"] = file_id
+        if limit is not None:
+            params["limit"] = limit
+        try:
+            data = await self._get(f"/partition/{partition}/chunks", params=params)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (404, 405):
+                return None
+            raise
+        chunks = data.get("chunks") if isinstance(data, dict) else None
+        return chunks if isinstance(chunks, list) else None
+
     async def extract(self, chunk_id: str) -> dict | None:
         """Un morceau relu (`GET /extract/<id>`), balises techniques comprises. `None` s'il manque."""
         try:
@@ -225,10 +270,7 @@ class OpenRAGClient:
             return ""
         if isinstance(data, dict):
             chunks = data.get("chunks") or data.get("documents") or []
-            return "\n\n".join(
-                c.get("content", "") if isinstance(c, dict) else str(c)
-                for c in chunks
-            )
+            return "\n\n".join(c.get("content", "") if isinstance(c, dict) else str(c) for c in chunks)
         return ""
 
     async def list_models(self) -> dict:

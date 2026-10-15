@@ -21,7 +21,7 @@ def decoder(octets: bytes) -> str:
     echantillon = octets[:200000]
     cp1252 = sum(echantillon.count(b) for b in (b"\xe9", b"\xe8", b"\xe0", b"\xea"))
     cp850 = sum(echantillon.count(b) for b in (b"\x82", b"\x8a", b"\x85", b"\x88"))
-    for encodage in (("cp850", "cp1252") if cp850 > cp1252 else ("cp1252", "cp850")):
+    for encodage in ("cp850", "cp1252") if cp850 > cp1252 else ("cp1252", "cp850"):
         try:
             return octets.decode(encodage)
         except UnicodeDecodeError:
@@ -72,8 +72,10 @@ def colonne(ligne: dict, *candidates: str) -> str:
     for c in candidates:
         if c in ligne:
             return ligne[c]
+
     def _plat(t: str) -> str:
         return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower().strip()
+
     plats = {_plat(k): v for k, v in ligne.items()}
     for c in candidates:
         if _plat(c) in plats:

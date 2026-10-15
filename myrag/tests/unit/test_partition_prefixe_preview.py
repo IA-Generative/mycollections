@@ -40,19 +40,22 @@ async def test_hors_preview_rien_ne_change(client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("appel", [
-    lambda c: c.create_partition("codes-natinf"),
-    lambda c: c.delete_partition("codes-natinf"),
-    lambda c: c.list_files("codes-natinf"),
-    lambda c: c.file_detail("codes-natinf", "f1"),
-    lambda c: c.upload_chunk("codes-natinf", {"content": "x"}),
-    lambda c: c.search("codes-natinf", "q"),
-    lambda c: c.search(["pr-12-a", "codes-natinf"], "q"),
-    lambda c: c.chat("openrag-codes-natinf", []),
-    lambda c: c.chat("openrag-all", []),
-    lambda c: c._upload_form("/partition/codes-natinf/users", {"user_id": "1"}),
-    lambda c: c.create_partition("pr-12-"),
-])
+@pytest.mark.parametrize(
+    "appel",
+    [
+        lambda c: c.create_partition("codes-natinf"),
+        lambda c: c.delete_partition("codes-natinf"),
+        lambda c: c.list_files("codes-natinf"),
+        lambda c: c.file_detail("codes-natinf", "f1"),
+        lambda c: c.upload_chunk("codes-natinf", {"content": "x"}),
+        lambda c: c.search("codes-natinf", "q"),
+        lambda c: c.search(["pr-12-a", "codes-natinf"], "q"),
+        lambda c: c.chat("openrag-codes-natinf", []),
+        lambda c: c.chat("openrag-all", []),
+        lambda c: c._upload_form("/partition/codes-natinf/users", {"user_id": "1"}),
+        lambda c: c.create_partition("pr-12-"),
+    ],
+)
 async def test_en_preview_une_partition_de_la_beta_est_refusee_sans_appel(preview, client, appel):
     contexte, http = _http_qui_repond()
     with patch("app.services.openrag_client.httpx.AsyncClient", return_value=contexte):
@@ -86,6 +89,7 @@ def test_hors_preview_le_nommage_ne_change_pas():
 
 def test_adresse_interne_du_sso_pour_le_serveur_seulement(monkeypatch):
     from app import auth
+
     monkeypatch.setattr(settings, "keycloak_url", "https://sso.fake-domain.name")
     monkeypatch.setattr(settings, "keycloak_realm", "preview")
     monkeypatch.setattr(settings, "keycloak_internal_url", "")

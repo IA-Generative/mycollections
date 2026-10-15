@@ -23,6 +23,7 @@ def _rejouer():
     async def _f():
         async with engine.begin() as conn:
             await _retro_remplir_titres(conn)
+
     asyncio.run(_f())
 
 
@@ -38,6 +39,7 @@ def anciennes(client, purger):
     async def _creer():
         for n in NOMS:
             await create_collection({"name": n})
+
     asyncio.run(_creer())
     _sql(f"UPDATE collections SET titre = '' WHERE name IN ({','.join('?' * len(NOMS))})", NOMS)
     _sql("UPDATE collections SET titre = 'Saisi à la main' WHERE name = 'reprise-deja-titree'")
@@ -46,11 +48,10 @@ def anciennes(client, purger):
 
     async def _publier():
         async with async_session() as session:
-            session.add(Publication(collection_name="demo-reprise-alias", state="published",
-                                    alias_name="📚 Marchés publics — seuils 2026"))
-            session.add(Publication(collection_name="demo-reprise-defaut", state="published",
-                                    alias_name="📚 demo-reprise-defaut"))
+            session.add(Publication(collection_name="demo-reprise-alias", state="published", alias_name="📚 Marchés publics — seuils 2026"))
+            session.add(Publication(collection_name="demo-reprise-defaut", state="published", alias_name="📚 demo-reprise-defaut"))
             await session.commit()
+
     asyncio.run(_publier())
     yield
     for n in NOMS:
@@ -84,6 +85,7 @@ def test_un_titre_saisi_n_est_jamais_ecrase_et_rejouer_ne_change_rien(anciennes)
 def test_une_amorce_nait_avec_son_titre_et_sa_rubrique(client, en_tant_que, purger, monkeypatch):
     from app.routers import amorces as routeur
     from tests.conftest import SUPERADMIN
+
     monkeypatch.delitem(routeur.CONNECTEURS, "natinfo")
     purger("amorce-natinf")
     en_tant_que(SUPERADMIN)

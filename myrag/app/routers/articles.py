@@ -88,6 +88,7 @@ async def article_json(collection: str, article_id: str):
 def _signature_recue(request: Request, collection: str) -> str:
     """`&exp=…&sig=…` si la page a été ouverte par un lien signé encore valide, sinon vide."""
     from urllib.parse import urlencode
+
     q = request.query_params
     if liens.valide(liens.portee_graphe(collection), q.get("exp"), q.get("sig")):
         return "&" + urlencode({"exp": q["exp"], "sig": q["sig"]})

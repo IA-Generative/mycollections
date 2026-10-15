@@ -5,24 +5,28 @@ import logging
 from pathlib import Path
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
 from app.models.db import (
     Collection,
-    utcnow,
-    Evenement,
-    GrilleControle,
-    Proposition,
-    Signalement,
-    UsageQuestion,
     EvalDataset,
     EvalRun,
+    Evenement,
     Feedback,
+    Generation,
+    GrilleControle,
     IngestJob,
+    Mesure,
+    MesureResultat,
+    PaireQA,
+    Persona,
+    Proposition,
     Publication,
     PublicationHistory,
+    Signalement,
     SourceFile,
+    UsageQuestion,
+    utcnow,
 )
 
 logger = logging.getLogger("myrag.collection_store")
@@ -82,10 +86,21 @@ async def update_collection(name: str, updates: dict) -> dict | None:
     # `categorie` n'y est pas, exprès : le classement est un geste d'administration
     # (PUT /api/categories/affectations), pas un réglage du propriétaire.
     allowed = {
-        "titre", "description", "strategy", "sensitivity", "scope",
-        "graph_enabled", "ai_summary_enabled", "ai_summary_threshold",
-        "contact_name", "contact_email", "prompt_template",
-        "system_prompt", "source_type", "source_url", "source_config_json",
+        "titre",
+        "description",
+        "strategy",
+        "sensitivity",
+        "scope",
+        "graph_enabled",
+        "ai_summary_enabled",
+        "ai_summary_threshold",
+        "contact_name",
+        "contact_email",
+        "prompt_template",
+        "system_prompt",
+        "source_type",
+        "source_url",
+        "source_config_json",
     }
     async with async_session() as session:
         c = await session.get(Collection, name)
@@ -167,9 +182,7 @@ async def purge_collection(name: str) -> dict:
     # 2. Source files on disk
     files_deleted = 0
     async with async_session() as session:
-        paths_rows = await session.execute(
-            select(SourceFile.storage_path).where(SourceFile.collection_name == name)
-        )
+        paths_rows = await session.execute(select(SourceFile.storage_path).where(SourceFile.collection_name == name))
         for (path,) in paths_rows:
             if not path:
                 continue
@@ -183,10 +196,25 @@ async def purge_collection(name: str) -> dict:
     counts: dict[str, int] = {}
     async with async_session() as session:
         for model in (
-            SourceFile, EvalRun, EvalDataset, Feedback,
-            IngestJob, PublicationHistory, Publication,
+            SourceFile,
+            EvalRun,
+            EvalDataset,
+            Feedback,
+            IngestJob,
+            PublicationHistory,
+            Publication,
             # Le collectif — une table oubliée ici laisse des orphelins.
-            Proposition, Signalement, GrilleControle, Evenement, UsageQuestion,
+            Proposition,
+            Signalement,
+            GrilleControle,
+            Evenement,
+            UsageQuestion,
+            # Le jeu de questions et la génération (oubliés jusqu'ici : orphelins après purge).
+            PaireQA,
+            Generation,
+            Persona,
+            Mesure,
+            MesureResultat,
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)
@@ -200,6 +228,7 @@ async def purge_collection(name: str) -> dict:
 
     # Abonnements (clé composite, pas de collection_name) et demande d'origine.
     from app.services.collectif_store import delier_collection
+
     await delier_collection(name)
 
     return {

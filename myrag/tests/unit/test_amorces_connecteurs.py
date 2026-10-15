@@ -10,31 +10,42 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.amorces import baac, ingestion, justice_administrative as ja, natinf, reseau, rne, sdis, ssmsi
+from app.services.amorces import baac, ingestion, natinf, reseau, rne, sdis, ssmsi
+from app.services.amorces import justice_administrative as ja
 from app.services.amorces.tabulaire import lire_csv, nombre
 
-SSMSI = ('﻿"Code_departement";"Code_region";"annee";"indicateur";"unite_de_compte";"nombre";"taux_pour_mille";"insee_pop";"insee_pop_millesime";"insee_log";"insee_log_millesime"\n'
-         '"01";"84";"2016";"Homicides";"Victime";"5";"0,0078318";"638425";"2016";"308491";"2016"\n'
-         '"01";"84";"2017";"Homicides";"Victime";"7";"0,0108";"640000";"2017";"309000";"2017"\n'
-         '"02";"32";"2016";"Homicides";"Victime";"10";"0,0186520";"536136";"2016";"264180";"2016"\n'
-         '"02";"32";"2016";"Vols de véhicules";"Véhicule";"1 234";"2,3";"536136";"2016";"264180";"2016"\n').encode("utf-8")
-SDIS_2024 = "Année;Zone;Région;Numéro;Département;Catégorie A;Incendies;Secours à personne;Accidents de circulation;Risques technologiques;Opérations diverses;Total interventions\n2024;Sud-est;Auvergne-Rhône-Alpes;1;Ain;B;2 183;35 396;2 982;378;4 196;45 135\n2024;Nord;Hauts-de-France;2;Aisne;B;2 694;31 056;2 129;475;4 321;40 675\n".encode("cp1252")
+SSMSI = (
+    '﻿"Code_departement";"Code_region";"annee";"indicateur";"unite_de_compte";"nombre";"taux_pour_mille";"insee_pop";"insee_pop_millesime";"insee_log";"insee_log_millesime"\n'
+    '"01";"84";"2016";"Homicides";"Victime";"5";"0,0078318";"638425";"2016";"308491";"2016"\n'
+    '"01";"84";"2017";"Homicides";"Victime";"7";"0,0108";"640000";"2017";"309000";"2017"\n'
+    '"02";"32";"2016";"Homicides";"Victime";"10";"0,0186520";"536136";"2016";"264180";"2016"\n'
+    '"02";"32";"2016";"Vols de véhicules";"Véhicule";"1 234";"2,3";"536136";"2016";"264180";"2016"\n'
+).encode("utf-8")
+SDIS_2024 = "Année;Zone;Région;Numéro;Département;Catégorie A;Incendies;Secours à personne;Accidents de circulation;Risques technologiques;Opérations diverses;Total interventions\n2024;Sud-est;Auvergne-Rhône-Alpes;1;Ain;B;2 183;35 396;2 982;378;4 196;45 135\n2024;Nord;Hauts-de-France;2;Aisne;B;2 694;31 056;2 129;475;4 321;40 675\n".encode(
+    "cp1252"
+)
 CARACT = '"Num_Acc";"jour";"mois";"an";"hrmn";"lum";"dep";"com";"agg";"int";"atm";"col";"adr";"lat";"long"\n"202400000001";"25";"03";"2024";"07:40";"2";"70";"70285";"1";"1";"5";"1";"D438";"47,5";"6,7"\n"202400000002";"20";"03";"2024";"15:05";"1";"21";"21054";"2";"3";"7";"6";"RUE";"47,0";"4,8"\n"202400000003";"22";"04";"2024";"19:30";"2";"70";"70285";"2";"1";"1";"6";"Allée";"44,9";"2,4"\n'.encode()
 USAGERS = '"Num_Acc";"id_usager";"grav"\n"202400000001";"a";"2"\n"202400000001";"b";"4"\n"202400000003";"c";"3"\n'.encode()
-MAIRES = ("Code du département;Libellé du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Code de la catégorie socio-professionnelle;Libellé de la catégorie socio-professionnelle;Date de début du mandat;Date de début de la fonction\n"
-          "01;Ain;01001;L'Abergement-Clémenciat;EVALET TAPONAT;Line;F;1967-07-22;38;Ingénieur;2026-03-15;2026-03-23\n"
-          "01;Ain;01002;L'Abergement-De-Varey;COUROUBLE;François;M;1958-02-21;31;Profession libérale;2026-03-15;2026-03-20\n").encode()
-CM = ("Code du département;Libellé du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Date de début du mandat;Libellé de la fonction;Date de début de la fonction;Code nationalité\n"
-      "01;Ain;01001;L'Abergement-Clémenciat;DUPONT;Jean;M;1970-01-01;2026-03-15;;;FR\n01;Ain;01001;L'Abergement-Clémenciat;MARTIN;Anne;F;1980-01-01;2026-03-15;;;FR\n").encode()
-NATINF = "Numéro NATINF;Nature de l'infraction;Qualification de l'infraction;Définie par;Réprimée par\n7;Délit;RETRAIT DE LA PROVISION D'UN CHEQUE;ART.L.163-2 C.M.F.;ART.L.163-2 AL.1 C.M.F.\n8;Délit;OPPOSITION AU PAIEMENT D'UN CHEQUE;ART.L.163-2 C.M.F.;ART.L.163-6 C.M.F.\n".encode("cp1252")
+MAIRES = (
+    "Code du département;Libellé du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Code de la catégorie socio-professionnelle;Libellé de la catégorie socio-professionnelle;Date de début du mandat;Date de début de la fonction\n"
+    "01;Ain;01001;L'Abergement-Clémenciat;EVALET TAPONAT;Line;F;1967-07-22;38;Ingénieur;2026-03-15;2026-03-23\n"
+    "01;Ain;01002;L'Abergement-De-Varey;COUROUBLE;François;M;1958-02-21;31;Profession libérale;2026-03-15;2026-03-20\n"
+).encode()
+CM = (
+    "Code du département;Libellé du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Date de début du mandat;Libellé de la fonction;Date de début de la fonction;Code nationalité\n"
+    "01;Ain;01001;L'Abergement-Clémenciat;DUPONT;Jean;M;1970-01-01;2026-03-15;;;FR\n01;Ain;01001;L'Abergement-Clémenciat;MARTIN;Anne;F;1980-01-01;2026-03-15;;;FR\n"
+).encode()
+NATINF = "Numéro NATINF;Nature de l'infraction;Qualification de l'infraction;Définie par;Réprimée par\n7;Délit;RETRAIT DE LA PROVISION D'UN CHEQUE;ART.L.163-2 C.M.F.;ART.L.163-2 AL.1 C.M.F.\n8;Délit;OPPOSITION AU PAIEMENT D'UN CHEQUE;ART.L.163-2 C.M.F.;ART.L.163-6 C.M.F.\n".encode(
+    "cp1252"
+)
 
 
 def _xml(numero, date, juridiction, code, texte, publication="C"):
-    return f'''﻿<?xml version="1.0" encoding="UTF-8" ?>
-<Document><Donnees_Techniques><Identification>DCA_{numero}_{date.replace('-', '')}.xml</Identification></Donnees_Techniques>
+    return f"""﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Document><Donnees_Techniques><Identification>DCA_{numero}_{date.replace("-", "")}.xml</Identification></Donnees_Techniques>
 <Dossier><Code_Juridiction>{code}</Code_Juridiction><Nom_Juridiction>{juridiction}</Nom_Juridiction><Numero_Dossier>{numero}</Numero_Dossier>
 <Date_Lecture>{date}</Date_Lecture><Type_Decision>Arrêt</Type_Decision><Type_Recours>excès de pouvoir</Type_Recours><Code_Publication>{publication}</Code_Publication><Solution>Rejet</Solution></Dossier>
-<Decision><Texte_Integral><p>Vu la procédure suivante :</p><p>{texte}</p></Texte_Integral></Decision></Document>'''.encode("utf-8")
+<Decision><Texte_Integral><p>Vu la procédure suivante :</p><p>{texte}</p></Texte_Integral></Decision></Document>""".encode("utf-8")
 
 
 def _zip(*fichiers):
@@ -45,9 +56,14 @@ def _zip(*fichiers):
     return tampon.getvalue()
 
 
-ZIP_CAA = _zip(("DCA_24LY00001_20240110.xml", _xml("24LY00001", "2024-01-10", "Cour administrative d'appel de Lyon", "CAA69", "Refus de titre de séjour sur le fondement du CESEDA.")),
-               ("DCA_24BX00002_20240112.xml", _xml("24BX00002", "2024-01-12", "Cour administrative d'appel de Bordeaux", "CAA33", "Marché public de travaux, résiliation.")),
-               ("DCA_24MA00003_20240115.xml", _xml("24MA00003", "2024-01-15", "Cour administrative d'appel de Marseille", "CAA13", "Obligation de quitter le territoire français contestée.", "D")))
+ZIP_CAA = _zip(
+    ("DCA_24LY00001_20240110.xml", _xml("24LY00001", "2024-01-10", "Cour administrative d'appel de Lyon", "CAA69", "Refus de titre de séjour sur le fondement du CESEDA.")),
+    ("DCA_24BX00002_20240112.xml", _xml("24BX00002", "2024-01-12", "Cour administrative d'appel de Bordeaux", "CAA33", "Marché public de travaux, résiliation.")),
+    (
+        "DCA_24MA00003_20240115.xml",
+        _xml("24MA00003", "2024-01-15", "Cour administrative d'appel de Marseille", "CAA13", "Obligation de quitter le territoire français contestée.", "D"),
+    ),
+)
 
 
 @pytest.fixture
@@ -59,6 +75,7 @@ def sans_reseau(monkeypatch):
         if url not in fichiers:
             raise RuntimeError(f"404 introuvable : {url}")
         return fichiers[url]
+
     monkeypatch.setattr(reseau, "telecharger", _tele)
     with patch("app.services.amorces.ingestion.OpenRAGClient") as cls:
         cls.return_value.create_partition = AsyncMock(return_value={})
@@ -121,6 +138,7 @@ class TestJusticeAdministrative:
         assert ja.url_du_mois("DTA", 2024, 1) == "https://opendata.justice-administrative.fr/DTA/2024/01/TA_202401.zip"
         assert ja.url_du_mois("DCA", 2024, 12).endswith("/DCA/2024/12/CAA_202412.zip")
         from datetime import date
+
         assert ja.mois_entre("2024-11", date(2025, 2, 10)) == [(2024, 11), (2024, 12), (2025, 1)]
 
     def test_le_filtre_par_mots_cles_et_publication(self):
@@ -135,6 +153,7 @@ class TestJusticeAdministrative:
     @pytest.mark.asyncio
     async def test_import_incremental_par_mois(self, sans_reseau, creer_collection, nom, monkeypatch):
         from datetime import date
+
         monkeypatch.setattr(ja, "date", type("D", (), {"today": staticmethod(lambda: date(2024, 4, 1))}))
         sans_reseau[ja.url_du_mois("DCA", 2024, 1)] = ZIP_CAA
         sans_reseau[ja.url_du_mois("DCA", 2024, 2)] = ZIP_CAA
@@ -157,7 +176,9 @@ async def test_l_ingestion_est_idempotente(sans_reseau, creer_collection, nom):
     assert b2["documents"] == 0 and b2["ignores"] == 2
     b3 = await ingestion.ingerer(nom, [ingestion.Document("a.md", "# A\n\ntexte a modifié")])
     assert b3["documents"] == 1 and b3["versions"] == 1
-    import os, sqlite3
+    import os
+    import sqlite3
+
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     assert con.execute("SELECT count(*) FROM source_files WHERE collection_name=?", (nom,)).fetchone()[0] == 2
     con.close()
@@ -181,14 +202,14 @@ SSMSI_75 = SSMSI_69.replace("69", "75").replace("1234", "9876")
 class TestSituer:
     def _morceaux(self, nom, texte):
         from app.services.chunker import chunk_document
+
         doc = ingestion.Document(nom, texte)
         return ingestion.situer(doc, chunk_document(texte, strategy="section", sensitivity="public"))
 
     def test_le_texte_commence_par_le_titre_du_document_et_de_la_section(self):
         m = self._morceaux("ssmsi-departement-69.md", SSMSI_69)
         cambriolages = next(x for x in m if "1234" in x["content"])
-        assert cambriolages["content"].startswith(
-            "# Délinquance — département 69\n## Cambriolages (unité : infraction) — département 69\n\n| année")
+        assert cambriolages["content"].startswith("# Délinquance — département 69\n## Cambriolages (unité : infraction) — département 69\n\n| année")
         entete = next(x for x in m if "Source : SSMSI." in x["content"])
         assert entete["content"].startswith("# Délinquance — département 69\n\nSource"), "le titre n'est pas répété en section"
 
@@ -217,10 +238,14 @@ async def test_un_ancien_decoupage_repasse_en_nouvelle_version(sans_reseau, cree
     creer_collection(nom)
     docs = [ingestion.Document("a.md", "# A\n\ntexte a")]
     await ingestion.ingerer(nom, docs)
-    import os, sqlite3
+    import os
+    import sqlite3
+
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     assert con.execute("SELECT strategy_used FROM source_files WHERE collection_name=?", (nom,)).fetchone()[0] == "section-v2"
-    con.execute("UPDATE source_files SET strategy_used='section' WHERE collection_name=?", (nom,)); con.commit(); con.close()
+    con.execute("UPDATE source_files SET strategy_used='section' WHERE collection_name=?", (nom,))
+    con.commit()
+    con.close()
     b = await ingestion.ingerer(nom, docs)
     assert b["versions"] == 1 and b["ignores"] == 0
     assert (await ingestion.ingerer(nom, docs))["ignores"] == 1

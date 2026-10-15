@@ -19,7 +19,7 @@ def decouper_morceau(texte: str | None) -> tuple[str, str, str]:
     debut = texte.find("[CHUNK_START]")
     if debut < 0:
         return "", "", re.sub(r"\[CHUNK_END\]\s*$", "", texte).strip()
-    apres = texte[debut + len("[CHUNK_START]"):]
+    apres = texte[debut + len("[CHUNK_START]") :]
     fin = apres.rfind("[CHUNK_END]")
     corps = (apres if fin < 0 else apres[:fin]).strip()
     entete = re.sub(r"^\s*\[CONTEXT\]", "", texte[:debut])
@@ -27,5 +27,5 @@ def decouper_morceau(texte: str | None) -> tuple[str, str, str]:
     m = _FICHIER.search(entete)
     if m:
         fichier = m.group(1).strip()
-        entete = entete[:m.start()] + entete[m.end():]
+        entete = entete[: m.start()] + entete[m.end() :]
     return entete.strip(), fichier, corps

@@ -6,14 +6,14 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from app.routers._droits import gerer_la_collection, lire_la_collection
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
 from app.config import settings
+from app.routers._droits import gerer_la_collection, lire_la_collection
+from app.security_utils import assert_public_http_url, ssrf_request_guard
 from app.services.collectif_store import consigner
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
-from app.security_utils import assert_public_http_url, ssrf_request_guard
 
 # Hook anti-SSRF appliqué à tous les fetch d'URL fournies par l'utilisateur.
 _SSRF_HOOKS = {"request": [ssrf_request_guard]}
@@ -21,7 +21,7 @@ _SSRF_HOOKS = {"request": [ssrf_request_guard]}
 # Safety caps for the synchronous fetch in /drive/add — protect against both
 # ingress timeouts and OOM. If a user really needs more, they can fractionner.
 DRIVE_MAX_FILES = 500
-DRIVE_MAX_TOTAL_BYTES = 500 * 1024 * 1024   # 500 MB
+DRIVE_MAX_TOTAL_BYTES = 500 * 1024 * 1024  # 500 MB
 
 
 def _bearer(authorization: str | None) -> str:
@@ -32,6 +32,7 @@ def _bearer(authorization: str | None) -> str:
             detail="Missing or invalid Authorization header (expected 'Bearer <token>').",
         )
     return authorization.split(" ", 1)[1].strip()
+
 
 logger = logging.getLogger("myrag.sources")
 
@@ -160,12 +161,14 @@ async def add_source(req: AddSourceByIdRequest, user: CurrentUser = Depends(curr
     if not config:
         raise HTTPException(status_code=404, detail=f"Collection '{req.collection}' not found")
 
-    await update_collection(req.collection, {
-        "source_type": "legifrance",
-        "source_url": req.legifrance_id,
-    })
-    await consigner("synchronisation", req.collection, "source.enregistree", user.sub,
-                    collection_name=req.collection, detail={"source": "legifrance", "id": req.legifrance_id})
+    await update_collection(
+        req.collection,
+        {
+            "source_type": "legifrance",
+            "source_url": req.legifrance_id,
+        },
+    )
+    await consigner("synchronisation", req.collection, "source.enregistree", user.sub, collection_name=req.collection, detail={"source": "legifrance", "id": req.legifrance_id})
 
     return {
         "status": "registered",
@@ -231,8 +234,7 @@ def _drive_client_for_user(user_token: str):
             status_code=503,
             detail="Drive n'est pas configure (DRIVE_URL manquant).",
         )
-    return DriveClient(settings.drive_url, user_token,
-                       public_host=settings.drive_public_host or None)
+    return DriveClient(settings.drive_url, user_token, public_host=settings.drive_public_host or None)
 
 
 async def _drive_service_client():
@@ -249,16 +251,13 @@ async def _drive_service_client():
             detail="Drive n'est pas configure (DRIVE_URL / DRIVE_CLIENT_SECRET manquants).",
         )
     try:
-        token = await get_service_token(
-            settings.drive_client_id, settings.drive_client_secret
-        )
+        token = await get_service_token(settings.drive_client_id, settings.drive_client_secret)
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=502,
             detail=f"Echec auth Keycloak client_credentials: {e.response.status_code}",
         )
-    return DriveClient(settings.drive_url, token,
-                       public_host=settings.drive_public_host or None)
+    return DriveClient(settings.drive_url, token, public_host=settings.drive_public_host or None)
 
 
 def _map_drive_item(raw: dict) -> dict:
@@ -333,9 +332,7 @@ async def drive_status(collection: str):
     }
 
 
-async def _ingest_downloaded_files(
-    collection: str, files: list[tuple[bytes, str, str]]
-) -> list[str]:
+async def _ingest_downloaded_files(collection: str, files: list[tuple[bytes, str, str]]) -> list[str]:
     """Ingest already-downloaded bytes into the standard pipeline, one job
     per file. Runs in the background — at this point the user token is no
     longer needed because the bytes are in memory.
@@ -348,8 +345,12 @@ async def _ingest_downloaded_files(
     for content, filename, src_url in files:
         try:
             result = await _ingest_content(
-                collection=collection, filename=filename, content=content,
-                strategy="auto", sensitivity="public", source_path=src_url,
+                collection=collection,
+                filename=filename,
+                content=content,
+                strategy="auto",
+                sensitivity="public",
+                source_path=src_url,
             )
             if "job_id" in result:
                 job_ids.append(result["job_id"])
@@ -401,8 +402,7 @@ async def add_drive_source(
     folder_title = req.folder_title or folder.get("title") or folder.get("filename") or req.folder_id
 
     # Sync download — while the user's access token is still valid.
-    connector = DriveConnector(settings.drive_url, user_token, req.folder_id,
-                               public_host=settings.drive_public_host or None)
+    connector = DriveConnector(settings.drive_url, user_token, req.folder_id, public_host=settings.drive_public_host or None)
     downloaded: list[tuple[bytes, str, str]] = []
     total_bytes = 0
     try:
@@ -425,7 +425,7 @@ async def add_drive_source(
             if total_bytes > DRIVE_MAX_TOTAL_BYTES:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Dossier trop volumineux: >{DRIVE_MAX_TOTAL_BYTES // (1024*1024)} Mo cumulés. Fractionnez.",
+                    detail=f"Dossier trop volumineux: >{DRIVE_MAX_TOTAL_BYTES // (1024 * 1024)} Mo cumulés. Fractionnez.",
                 )
             downloaded.append((content, filename, doc.url))
     finally:
@@ -438,20 +438,28 @@ async def add_drive_source(
         "drive_url": settings.drive_url,
         "last_sync_at": None,
     }
-    await update_collection(req.collection, {
-        "source_type": "drive",
-        "source_url": f"{settings.drive_url}/items/{req.folder_id}",
-        "source_config_json": json.dumps(source_config),
-    })
+    await update_collection(
+        req.collection,
+        {
+            "source_type": "drive",
+            "source_url": f"{settings.drive_url}/items/{req.folder_id}",
+            "source_config_json": json.dumps(source_config),
+        },
+    )
 
     # Fire-and-forget async ingest from bytes already in memory — no Drive
     # calls from here on, so the user's token can expire without impact.
     task = asyncio.create_task(_ingest_downloaded_files(req.collection, downloaded))
     loop = asyncio.get_running_loop()
     loop._drive_import_tasks = getattr(loop, "_drive_import_tasks", []) + [task]
-    await consigner("synchronisation", req.collection, "synchro.terminee", user.sub,
-                    collection_name=req.collection,
-                    detail={"source": "drive", "fichiers": len(downloaded), "octets": total_bytes})
+    await consigner(
+        "synchronisation",
+        req.collection,
+        "synchro.terminee",
+        user.sub,
+        collection_name=req.collection,
+        detail={"source": "drive", "fichiers": len(downloaded), "octets": total_bytes},
+    )
 
     return {
         "status": "registered",
@@ -473,10 +481,10 @@ async def sync_drive_source(
     """Delta-sync: re-ingest files modified since the last sync. Uses the
     caller's user token for impersonation (same ACL as /drive/add)."""
     await gerer_la_collection(collection, user)
+    from app.models.db import utcnow
+    from app.routers.ingest import _ingest_content
     from app.services.collection_store import get_collection, update_collection
     from app.services.connectors.drive import DriveConnector
-    from app.routers.ingest import _ingest_content
-    from app.models.db import utcnow
 
     user_token = _bearer(authorization)
 
@@ -497,8 +505,12 @@ async def sync_drive_source(
         for doc in updated:
             content, filename = await connector.fetch_document(doc.id)
             result = await _ingest_content(
-                collection=collection, filename=filename, content=content,
-                strategy="auto", sensitivity="public", source_path=doc.url,
+                collection=collection,
+                filename=filename,
+                content=content,
+                strategy="auto",
+                sensitivity="public",
+                source_path=doc.url,
             )
             if "job_id" in result:
                 job_ids.append(result["job_id"])
@@ -507,8 +519,9 @@ async def sync_drive_source(
 
     cfg["last_sync_at"] = utcnow().isoformat()
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
-    await consigner("synchronisation", collection, "synchro.terminee", user.sub, collection_name=collection,
-                    detail={"source": "drive", "fichiers": len(updated), "jobs": len(job_ids)})
+    await consigner(
+        "synchronisation", collection, "synchro.terminee", user.sub, collection_name=collection, detail={"source": "drive", "fichiers": len(updated), "jobs": len(job_ids)}
+    )
 
     return {
         "status": "synced",

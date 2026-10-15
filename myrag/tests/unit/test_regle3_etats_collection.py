@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.etats import (
-    MENTION_VERIFICATION, RefusTransition, grille_complete, mention_verification, transition_collection,
+    MENTION_VERIFICATION,
+    RefusTransition,
+    grille_complete,
+    mention_verification,
+    transition_collection,
 )
 from tests.conftest import SUPERADMIN, personne
 
@@ -119,8 +123,10 @@ class TestSurLesRoutes:
         """Rétro-remplissage : publiée « tout le monde » ⇒ publiee_tous ; sinon publiee_groupe."""
         import asyncio
         import os
+
         from sqlalchemy import text
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
         from app.database import _retro_remplir_etat_collab
         from app.models.db import Collection, Publication
 
@@ -144,6 +150,8 @@ class TestSurLesRoutes:
                 resultat = dict(lignes.all())
             await moteur.dispose()
             return resultat
+
         etats = asyncio.run(_jouer())
         assert etats == {"retro-tous": "publiee_tous", "retro-groupe": "publiee_groupe"}
-        purger("retro-tous"); purger("retro-groupe")
+        purger("retro-tous")
+        purger("retro-groupe")

@@ -37,8 +37,7 @@ def _entetes(access_token: str, public_host: str | None) -> dict:
 class DriveClient:
     """Thin async HTTP client for the Suite Numerique Drive API."""
 
-    def __init__(self, base_url: str, access_token: str, timeout: float = 30.0,
-                 public_host: str | None = None):
+    def __init__(self, base_url: str, access_token: str, timeout: float = 30.0, public_host: str | None = None):
         self.base_url = base_url.rstrip("/")
         # IMPORTANT: /external_api/v1.0/ — the OIDC-RS protected variant.
         # /api/v1.0/ requires a session cookie (user login) and would 500
@@ -51,9 +50,7 @@ class DriveClient:
         )
 
     async def list_children(self, folder_id: str, page: int = 1) -> dict:
-        resp = await self._client.get(
-            f"/items/{folder_id}/children/", params={"page": page}
-        )
+        resp = await self._client.get(f"/items/{folder_id}/children/", params={"page": page})
         resp.raise_for_status()
         return resp.json()
 
@@ -82,8 +79,7 @@ class DriveClient:
 class DriveConnector(BaseConnector):
     """BaseConnector implementation backed by Suite Numerique Drive."""
 
-    def __init__(self, base_url: str, access_token: str, folder_id: str,
-                 public_host: str | None = None):
+    def __init__(self, base_url: str, access_token: str, folder_id: str, public_host: str | None = None):
         self.client = DriveClient(base_url, access_token, public_host=public_host)
         self.folder_id = folder_id
         self.base_url = base_url.rstrip("/")
@@ -99,11 +95,7 @@ class DriveConnector(BaseConnector):
         comparison — works because ISO-8601 is lexicographically ordered)."""
         if not since:
             return await self.list_documents()
-        return [
-            doc
-            async for doc in self._iter_files(self.folder_id, recursive=True)
-            if doc.updated_at and doc.updated_at >= since
-        ]
+        return [doc async for doc in self._iter_files(self.folder_id, recursive=True) if doc.updated_at and doc.updated_at >= since]
 
     async def _iter_files(self, folder_id: str, recursive: bool):
         page = 1

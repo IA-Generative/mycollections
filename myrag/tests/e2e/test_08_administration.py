@@ -1,4 +1,5 @@
 """L'administration : réservée aux superadmins, et cohérente (pas de lien mort)."""
+
 from __future__ import annotations
 
 import re
@@ -30,9 +31,8 @@ def test_l_administration_s_ouvre_au_superadmin(session_admin, captures):
 def test_les_cartes_de_l_administration_menent_quelque_part(session_admin):
     page = session_admin.aller("/admin")
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
-    liens = [page.locator("a[href^='/admin/']").nth(i).get_attribute("href")
-             for i in range(page.locator("a[href^='/admin/']").count())]
-    for lien in sorted(set(l for l in liens if l)):
+    liens = [page.locator("a[href^='/admin/']").nth(i).get_attribute("href") for i in range(page.locator("a[href^='/admin/']").count())]
+    for lien in sorted(set(lien for lien in liens if lien)):
         session_admin.aller(lien)
         page.wait_for_timeout(1_500)
         texte = session_admin.texte()
