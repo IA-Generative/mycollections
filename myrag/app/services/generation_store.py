@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from math import ceil
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.database import async_session
@@ -157,7 +157,9 @@ async def supprimer_run(name: str, ident: str) -> None:
             raise Introuvable("Génération introuvable")
         if g.etat in ACTIFS:
             raise Conflit("Une génération en cours ne se supprime pas")
-        await s.execute(delete(PaireQA).where(PaireQA.run_id == ident))
+        # Les paires validées font partie du jeu de questions : elles survivent au run, détachées.
+        await s.execute(delete(PaireQA).where(PaireQA.run_id == ident, PaireQA.relecture != "valide"))
+        await s.execute(update(PaireQA).where(PaireQA.run_id == ident).values(run_id=None))
         await s.delete(g)
         await s.commit()
 
@@ -225,15 +227,11 @@ async def paires_pour_export(name: str, run_id: str) -> list[dict]:
 
 
 async def relire_paire(name: str, ident: str, relecture: str, commentaire: str | None, sub: str | None) -> dict:
-    async with async_session() as s:
-        p = await s.get(PaireQA, ident)
-        if not p or p.collection_name != name:
-            raise Introuvable("Paire introuvable")
-        p.relecture = relecture
-        if commentaire is not None:
-            p.commentaire = commentaire
-        p.relu_le = utcnow() if relecture != "brut" else None
-        p.relu_par_hash = condense(sub) if relecture != "brut" else None
-        await s.commit()
-        await s.refresh(p)
-        return p.to_dict()
+    """La relecture d'une paire (route historique de l'onglet « Questions générées ») : c'est une
+    modification de question du jeu, avec les mêmes règles (une paire rejetée n'est plus fiable)."""
+    from app.services import questions_store
+
+    champs = {"relecture": relecture}
+    if commentaire is not None:
+        champs["commentaire"] = commentaire
+    return await questions_store.modifier_question(name, ident, champs, sub)

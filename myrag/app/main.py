@@ -37,6 +37,7 @@ from app.routers import (
     sync,
 )
 from app.routers import generation as generation_routeur
+from app.routers import qualite as qualite_routeur
 from app.routers._acces_navigateur import acces_extrait, peut_lire
 from app.services import access, capacites
 from app.services.openrag_client import OpenRAGClient
@@ -198,6 +199,8 @@ app.include_router(accueil_routeur.router, dependencies=AUTH_REQUIRED)
 app.include_router(fiches.router, dependencies=AUTH_REQUIRED)
 # Génération de paires question/réponse par persona (ragas, docs/generation.md) : 503 si absente.
 app.include_router(generation_routeur.router, dependencies=AUTH_REQUIRED)
+# Piloter la qualité : jeu de questions de référence, mesure, synthèse (docs/qualite.md).
+app.include_router(qualite_routeur.router, dependencies=AUTH_REQUIRED)
 # La version que l'image porte (ADR-0004) : sans jeton, hors schéma, lue par le noteur de la plateforme.
 app.include_router(version_module.router)
 # Le bus de la bêta : une machine, authentifiée par secret partagé — pas de jeton d'utilisateur.

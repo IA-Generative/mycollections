@@ -13,8 +13,11 @@ from app.models.db import (
     EvalRun,
     Evenement,
     Feedback,
+    Generation,
     GrilleControle,
     IngestJob,
+    PaireQA,
+    Persona,
     Proposition,
     Publication,
     PublicationHistory,
@@ -204,6 +207,10 @@ async def purge_collection(name: str) -> dict:
             GrilleControle,
             Evenement,
             UsageQuestion,
+            # Le jeu de questions et la génération (oubliés jusqu'ici : orphelins après purge).
+            PaireQA,
+            Generation,
+            Persona,
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)

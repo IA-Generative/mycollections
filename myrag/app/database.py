@@ -58,6 +58,79 @@ async def init_db():
         await _migrate_add_column(conn, "satisfaction", "VARCHAR(20)", "VARCHAR(20)", table="demande")
         await _migrate_add_column(conn, "motif_insatisfaction", "TEXT", "TEXT", table="demande")
         await _elargir_etats_demande(conn)
+        # Jeu de questions de référence (docs/qualite.md) : paire_qa étendue.
+        for col, lite, pg in _COLONNES_QUESTIONS:
+            await _migrate_add_column(conn, col, lite, pg, table="paire_qa")
+        await _rendre_run_id_facultatif(conn)
+        await _creer_index_questions(conn)
+
+
+#: (colonne, type SQLite, type PostgreSQL) ajoutées à paire_qa pour le jeu de questions.
+_COLONNES_QUESTIONS = (
+    ("origine", "VARCHAR(20) DEFAULT 'generee'", "VARCHAR(20) DEFAULT 'generee'"),
+    ("source_ref", "VARCHAR(120)", "VARCHAR(120)"),
+    ("feedback_id", "INTEGER", "INTEGER"),
+    ("must_cite_json", "TEXT DEFAULT '[]'", "TEXT DEFAULT '[]'"),
+    ("tags_json", "TEXT DEFAULT '[]'", "TEXT DEFAULT '[]'"),
+    ("hors_sujet", "BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE"),
+    ("fiable", "BOOLEAN DEFAULT 0", "BOOLEAN DEFAULT FALSE"),
+    ("dernier_verdict", "VARCHAR(20)", "VARCHAR(20)"),
+    ("derniere_mesure_le", "DATETIME", "TIMESTAMP"),
+    ("derniere_mesure_id", "VARCHAR(36)", "VARCHAR(36)"),
+    ("modifie_par_hash", "VARCHAR(64)", "VARCHAR(64)"),
+    ("modifie_le", "DATETIME", "TIMESTAMP"),
+    ("servie_fois", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+    ("servie_le", "DATETIME", "TIMESTAMP"),
+)
+
+
+async def _rendre_run_id_facultatif(conn):
+    """paire_qa.run_id devient facultatif (une question saisie n'a pas de run).
+
+    PostgreSQL : un ALTER suffit. SQLite ne sait pas retirer un NOT NULL : la table est
+    reconstruite à l'identique, données comprises, si (et seulement si) la contrainte est encore
+    là — les bases des previews sont des SQLite qui ont déjà la table."""
+
+    def _sync(sync_conn):
+        if sync_conn.dialect.name != "sqlite":
+            sync_conn.exec_driver_sql("ALTER TABLE paire_qa ALTER COLUMN run_id DROP NOT NULL")
+            return
+        colonnes = sync_conn.exec_driver_sql("PRAGMA table_info(paire_qa)").fetchall()
+        if not any(c[1] == "run_id" and c[3] for c in colonnes):  # c[3] = notnull
+            return
+        noms = [c[1] for c in colonnes]
+        for (nom,) in sync_conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='paire_qa' AND sql IS NOT NULL").fetchall():
+            sync_conn.exec_driver_sql(f'DROP INDEX IF EXISTS "{nom}"')
+        sync_conn.exec_driver_sql("ALTER TABLE paire_qa RENAME TO paire_qa_avant_jeu")
+        Base.metadata.tables["paire_qa"].create(sync_conn)
+        table = Base.metadata.tables["paire_qa"]
+        lus = []
+        for nom in noms:
+            col = table.c.get(nom)
+            defaut = getattr(getattr(col, "default", None), "arg", None) if col is not None else None
+            # Une colonne devenue obligatoire reprend sa valeur par défaut quand l'ancienne était vide.
+            if col is not None and not col.nullable and isinstance(defaut, (str, int, float, bool)):
+                valeur = f"'{defaut}'" if isinstance(defaut, str) else str(int(defaut) if isinstance(defaut, bool) else defaut)
+                lus.append(f"COALESCE({nom}, {valeur})")
+            elif col is not None and not col.nullable and nom in ("question", "reponse"):
+                lus.append(f"COALESCE({nom}, '')")
+            elif col is not None and not col.nullable and nom == "cree_le":
+                lus.append("COALESCE(cree_le, CURRENT_TIMESTAMP)")
+            else:
+                lus.append(nom)
+        sync_conn.exec_driver_sql(f"INSERT INTO paire_qa ({', '.join(noms)}) SELECT {', '.join(lus)} FROM paire_qa_avant_jeu")
+        sync_conn.exec_driver_sql("DROP TABLE paire_qa_avant_jeu")
+
+    await conn.run_sync(_sync)
+
+
+async def _creer_index_questions(conn):
+    """Les index du jeu de questions sur une table paire_qa qui existait déjà (create_all ne
+    touche pas une table existante). Même syntaxe en SQLite et en PostgreSQL."""
+    from sqlalchemy import text
+
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS paire_qa_collection_origine ON paire_qa (collection_name, origine)"))
+    await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS paire_qa_source_ref ON paire_qa (collection_name, source_ref)"))
 
 
 async def _elargir_etats_demande(conn):
