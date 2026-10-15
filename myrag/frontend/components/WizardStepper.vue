@@ -24,7 +24,7 @@ defineProps<{
   currentStep: number
 }>()
 
-const steps = ['Source', 'Identification', 'Données', 'Évaluation', 'Partage']
+const steps = ['Source', 'Identification', 'Données', 'Questions et qualité', 'Partage']
 </script>
 
 <style>

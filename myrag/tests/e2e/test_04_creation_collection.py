@@ -57,12 +57,22 @@ def test_etape_3_deposer_le_document(session_testeur, collection_essai, captures
     page.wait_for_url(re.compile(r"/admin/create/step-4"), timeout=30_000)
 
 
-def test_etape_4_tester_la_collection(session_testeur, captures):
+def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, captures):
     page = session_testeur.page
-    page.locator("textarea").first.fill(QUESTION_TEMOIN)
-    captures.prendre(page, "05-creation-4-evaluation", mobile=False)
-    page.get_by_role("button", name=re.compile(r"^\s*Tester\s*$")).click()
-    attendre(lambda: TEMOIN in session_testeur.texte(), delai=180, motif=f"le témoin « {TEMOIN} » dans la réponse de l'étape 4")
+    # Le jeu de questions : une question saisie, avec sa réponse de référence, entre validée.
+    page.get_by_role("button", name="Ajouter une question").click()
+    champs = page.locator(".jeu__panneau textarea")
+    champs.nth(0).fill(QUESTION_TEMOIN)
+    champs.nth(1).fill(TEMOIN)
+    page.get_by_role("button", name=re.compile(r"Ajouter au jeu")).click()
+    attendre(lambda: "Question ajoutée au jeu" in session_testeur.texte(), delai=30, motif="la question ajoutée au jeu")
+    assert "Mesurer avec 1 question validée" in session_testeur.texte(), "la question saisie doit être mesurable"
+    captures.prendre(page, "05-creation-4-jeu", mobile=False)
+    # Une question libre, posée tout de suite à la collection.
+    page.get_by_text("Poser une question libre à la collection").click()
+    page.locator("#etape4-question").fill(QUESTION_TEMOIN)
+    page.get_by_role("button", name=re.compile(r"^\s*Poser la question\s*$")).click()
+    attendre(lambda: TEMOIN in page.locator(".etape4__reponse").inner_text(), delai=180, motif=f"le témoin « {TEMOIN} » dans la réponse de l'étape 4")
     captures.prendre(page, "05-creation-4-reponse", mobile=False)
     _suivant(page)
     page.wait_for_url(re.compile(r"/admin/create/step-5"), timeout=30_000)

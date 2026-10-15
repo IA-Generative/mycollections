@@ -84,22 +84,26 @@
                réordonne son contenu (le titre passait sous la jauge). -->
           <section class="fiche-qualite" aria-labelledby="fiche-qualite-titre">
             <h3 id="fiche-qualite-titre" class="fr-h6 fr-mb-1w">Qualité</h3>
-            <div class="myrag-quality-bar">
-              <div class="myrag-quality-bar__fill"
-                   :class="qualityClass(feedbackStats.satisfaction_rate)"
-                   :style="{ width: `${feedbackStats.satisfaction_rate * 100}%` }">
+            <template v-if="mesure">
+              <div class="myrag-quality-bar" role="img" :aria-label="`Qualité mesurée : ${mesure.score} sur 100`">
+                <div class="myrag-quality-bar__fill" :class="qualityClass(mesure.score / 100)" :style="{ width: `${mesure.score}%` }" />
               </div>
-            </div>
+              <p class="fr-text--sm fr-mt-1w fr-mb-0">
+                <strong>{{ mesure.score }} %</strong> · {{ appreciation(mesure.score).libelle }}<br>
+                <span class="fiche-discret">{{ mesure.verdicts.conformes + mesure.verdicts.refus_ok }} / {{ mesure.nb_traitees }} réponses justes · mesurée le {{ dateMesure(mesure.cree_le) }}</span>
+              </p>
+            </template>
+            <p v-else class="fr-text--sm fr-mb-0">{{ peutGerer ? 'Aucune mesure pour l\'instant.' : '' }}</p>
             <p class="fr-text--sm fr-mt-1w fr-mb-0">
               <template v-if="feedbackStats.total">
-                {{ Math.round(feedbackStats.satisfaction_rate * 100) }} % de satisfaction
-                ({{ feedbackStats.positive }} 👍 / {{ feedbackStats.negative }} 👎)
+                👍 {{ Math.round(feedbackStats.satisfaction_rate * 100) }} % de satisfaction ({{ feedbackStats.total }} avis)
               </template>
-              <template v-else>Aucun avis pour l'instant.</template>
+              <template v-else>Aucun avis d'usager pour l'instant.</template>
             </p>
-            <p v-if="feedbackStats.pending_review > 0" class="fr-text--sm fr-mt-1w fr-mb-0">
-              ⚠ {{ feedbackStats.pending_review }} avis en attente de relecture
+            <p v-if="peutGerer && feedbackStats.pending_review > 0" class="fr-text--sm fr-mt-1v fr-mb-0">
+              {{ feedbackStats.pending_review }} avis à relire
             </p>
+            <NuxtLink v-if="peutGerer" :to="`/c/${id}/qualite`" class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-2w">Piloter la qualité →</NuxtLink>
           </section>
         </div>
       </div>
@@ -173,43 +177,6 @@
           </NuxtLink>
         </div>
 
-        <!-- Feedback tab -->
-        <div v-show="tab === 'feedback'" v-bind="panneau('feedback')">
-          <div v-if="feedbackItems.length === 0" class="fr-callout">
-            <p>Aucun avis pour cette collection.</p>
-          </div>
-          <div v-else class="fr-table">
-            <table>
-              <thead>
-                <tr><th>Question</th><th>Note</th><th>État</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                <tr v-for="fb in feedbackItems" :key="fb.id">
-                  <td>{{ fb.question.substring(0, 80) }}...</td>
-                  <td>{{ fb.rating > 0 ? '👍' : '👎' }}</td>
-                  <td><span class="fr-badge fr-badge--sm">{{ libelleStatutAvis(fb.status) }}</span></td>
-                  <td>
-                    <button v-if="fb.status === 'pending'" class="fr-btn fr-btn--sm fr-btn--tertiary"
-                            @click="reviewFeedback(fb.id, 'reviewed')">Valider</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Questions générées : paires question / réponse par persona (ragas). Montée à la première ouverture. -->
-        <div v-show="tab === 'generation'" v-bind="panneau('generation')">
-          <GenerationOnglet v-if="generationVue" :collection="id" />
-        </div>
-
-        <!-- Q&R tab -->
-        <div v-show="tab === 'qr'" v-bind="panneau('qr')">
-          <p class="fr-text--sm">Réponses validées — des réponses relues et retenues pour les questions fréquentes.</p>
-          <NuxtLink :to="`/c/${id}/config`" class="fr-btn fr-btn--sm fr-mt-2w">
-            Gérer les réponses validées
-          </NuxtLink>
-        </div>
       </div>
     </div>
   </div>
@@ -217,12 +184,13 @@
 
 <script setup lang="ts">
 import { messageErreur } from '~/utils/collectif'
-import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleStatutAvis } from '~/utils/libelles'
+import { libelleStrategie, libelleSensibilite, libelleConsignes } from '~/utils/libelles'
+import { appreciation, dateMesure } from '~/utils/qualite'
 import { ongletDeLAdresse, libelleSansCompteur } from '~/utils/filAriane'
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
-const { get, patch } = useApi()
+const { get } = useApi()
 const c = useCollectif()
 const { isAdmin } = useAdminAuth()
 const { capacites, charger: chargerCapacites } = useCapacites()
@@ -281,20 +249,16 @@ const loadError = ref<string>('')
 const adopting = ref(false)
 const adoptError = ref<string>('')
 const feedbackStats = ref({ satisfaction_rate: 0, positive: 0, negative: 0, total: 0, pending_review: 0 })
-const feedbackItems = ref<any[]>([])
+const mesure = ref<any>(null)
 const loading = ref(true)
 const tab = ref('consulter')
 
 /** Ce que l'appelant peut faire de la collection (dit par l'API) : on n'offre que ces gestes. */
 const peutGerer = computed(() => !!collection.value?.mes_droits?.ecrire)
-const RESERVES_A_QUI_GERE = new Set(['prompt', 'feedback', 'qr', 'generation', `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
+const RESERVES_A_QUI_GERE = new Set(['prompt', `/c/${id}/qualite`, `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
 
 /** Les rubriques de la fiche, dans l'ordre de la rangée d'onglets. */
-const onglets = computed(() => ongletsTous.value
-  .filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle))
-  .filter(o => o.cle !== 'generation' || generationDisponible.value))
-/** La génération de questions est-elle installée et configurée sur ce service ? (`/api/config`) */
-const generationDisponible = ref(false)
+const onglets = computed(() => ongletsTous.value.filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle)))
 const ongletsTous = computed(() => {
   const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
   return [
@@ -305,9 +269,6 @@ const ongletsTous = computed(() => {
     { cle: 'historique', libelle: 'Historique' },
     { cle: 'discussion', libelle: 'Discussion' },
     { cle: 'prompt', libelle: "Consignes données à l'assistant" },
-    { cle: 'feedback', libelle: `Avis (${feedbackStats.value.total})` },
-    { cle: 'qr', libelle: 'Réponses validées' },
-    { cle: 'generation', libelle: 'Questions générées' },
   ]
 })
 
@@ -315,6 +276,10 @@ const ongletsTous = computed(() => {
 // arrière ou un rechargement rouvrent la même rubrique. « Consulter », l'onglet par défaut,
 // n'y figure pas — les liens existants vers `/c/{id}` ne changent pas.
 const ONGLET_PAR_DEFAUT = 'consulter'
+// Les anciens onglets Avis, Réponses validées et Questions générées vivent dans la page Qualité.
+const ANCIENS: Record<string, string> = { feedback: 'avis', qr: 'jeu', generation: 'jeu' }
+const ancien = ANCIENS[String(route.query.onglet || '')]
+if (ancien) navigateTo(`/c/${id}/qualite${ancien === 'jeu' ? '' : `?onglet=${ancien}`}`, { replace: true })
 const ongletDemande = () => ongletDeLAdresse(route.query.onglet, onglets.value.map(o => o.cle), ONGLET_PAR_DEFAUT)
 tab.value = ongletDemande()
 watch(tab, (t) => {
@@ -332,6 +297,8 @@ const rubrique = computed(() => libelleSansCompteur(onglets.value.find(o => o.cl
 /** Les gestes de la fiche, filtrés selon les droits. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
 const actions = computed(() => actionsToutes.value.filter(a => peutGerer.value || !RESERVES_A_QUI_GERE.has(a.vers)))
 const actionsToutes = computed(() => [
+  { vers: `/c/${id}/qualite`, libelle: 'Piloter la qualité', icone: 'fr-icon-line-chart-line', rang: 'fr-btn--secondary',
+    aide: "La page Qualité : le jeu de questions de référence, les mesures, les avis des usagers et les leviers pour améliorer les réponses." },
   { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
     aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
   { vers: `/c/${id}/graph`, libelle: 'Voir les liens entre documents', icone: 'fr-icon-links-line', rang: 'fr-btn--secondary',
@@ -375,8 +342,6 @@ const badges = computed(() => {
 
 const documentsVus = ref(false)
 watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
-const generationVue = ref(false)
-watch(tab, (t) => { if (t === 'generation') generationVue.value = true }, { immediate: true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
 function panneau(cle: string) {
@@ -408,11 +373,6 @@ function qualityClass(rate: number) {
   if (rate >= 0.7) return 'myrag-quality-bar__fill--good'
   if (rate >= 0.4) return 'myrag-quality-bar__fill--medium'
   return 'myrag-quality-bar__fill--bad'
-}
-
-async function reviewFeedback(fbId: string, status: string) {
-  await patch(`/api/feedback/${id}/${fbId}/review`, { status })
-  feedbackItems.value = feedbackItems.value.map(f => f.id === fbId ? { ...f, status } : f)
 }
 
 /**
@@ -458,19 +418,10 @@ onMounted(async () => {
   }
   // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
   chargerCollectif()
-  // L'onglet « Questions générées » n'existe que si le service sait générer ; un lien
-  // `?onglet=generation` arrivé avant cette réponse rouvre l'onglet une fois qu'on le sait.
-  get('/api/config').then((c: any) => {
-    generationDisponible.value = c?.generation === true
-    if (route.query.onglet === 'generation') tab.value = ongletDemande()
-  }).catch(() => {})
-  // Feedback is optional — missing stats shouldn't blank the page.
-  try {
-    feedbackStats.value = await get(`/api/feedback/${id}/stats`)
-    const fbData = await get(`/api/feedback/${id}`)
-    feedbackItems.value = fbData.feedback || []
-  } catch {
-    // best-effort
+  // La qualité est facultative : une statistique absente ne vide pas la page.
+  try { feedbackStats.value = await get(`/api/feedback/${id}/stats`) } catch { /* best-effort */ }
+  if (peutGerer.value) {
+    try { mesure.value = (await useQualite(id).synthese()).derniere_terminee } catch { /* best-effort */ }
   }
   loading.value = false
 })
@@ -479,5 +430,6 @@ onMounted(async () => {
 <style scoped>
 .fiche-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
 .fiche-badges .fr-badge { cursor: help; }
+.fiche-discret { color: var(--text-mention-grey); }
 .fiche-qualite { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; background: var(--background-default-grey); }
 </style>
