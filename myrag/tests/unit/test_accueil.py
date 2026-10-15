@@ -101,17 +101,10 @@ def test_les_signalements_ouverts_me_sont_rappeles(client, en_tant_que, creer_co
 
 
 def _jeu(nom, questions):
-    import json
+    """Des questions au jeu de questions de la collection (format de l'import)."""
+    from app.services import questions_store
 
-    from app.database import async_session
-    from app.models.db import EvalDataset
-
-    async def _f():
-        async with async_session() as s:
-            s.add(EvalDataset(collection_name=nom, name=f"{nom}-evaluation", description="", questions_json=json.dumps(questions)))
-            await s.commit()
-
-    asyncio.run(_f())
+    asyncio.run(questions_store.importer_questions(nom, questions, None))
 
 
 def test_l_exemple_vient_du_jeu_d_evaluation_d_une_collection_publiee_a_tous(client, en_tant_que, creer_collection, nom):

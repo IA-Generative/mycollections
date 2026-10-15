@@ -58,6 +58,8 @@ class ImportEntree(BaseModel):
     model_config = ConfigDict(extra="forbid")
     questions: list[dict] | None = None
     samples: list[dict] | None = None
+    # « generee » pour les questions que la banque du bac à sable fait rédiger.
+    origine: str = Field(default="importee", pattern="^(importee|generee)$")
 
 
 class AvisEntree(BaseModel):
@@ -99,7 +101,7 @@ async def importer(collection: str, corps: ImportEntree, user: CurrentUser = Dep
     if not items:
         raise HTTPException(status_code=422, detail="Le fichier ne contient aucune question (clé « questions » ou « samples »).")
     try:
-        bilan = await store.importer_questions(collection, items, user.sub, origine="importee")
+        bilan = await store.importer_questions(collection, items, user.sub, origine=corps.origine)
     except ValueError as e:
         _traduire(e)
     await consigner("collection", collection, "questions.importees", user.sub, collection_name=collection, detail=bilan)

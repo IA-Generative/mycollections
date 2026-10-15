@@ -15,7 +15,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 
 from app.database import async_session
-from app.models.db import Categorie, Collection, EvalDataset, Publication, Signalement, UsageQuestion, utcnow
+from app.models.db import Categorie, Collection, PaireQA, Publication, Signalement, UsageQuestion, utcnow
 from app.services import access
 from app.services.nommage import titre_de
 from app.services.pseudo import condenser
@@ -122,14 +122,21 @@ async def exemple(user_groups: list[str], user_sub: str, sauf: str | None = None
         }
         if not lisibles:
             return None
-        jeux = (await session.execute(select(EvalDataset).where(EvalDataset.collection_name.in_(list(lisibles))))).scalars().all()
+        jeu = await session.execute(
+            select(PaireQA.collection_name, PaireQA.question).where(
+                PaireQA.collection_name.in_(list(lisibles)),
+                PaireQA.hors_sujet.is_(False),
+                PaireQA.relecture != "rejete",
+                PaireQA.origine != "avis",  # jamais une question posée par un usager
+            )
+        )
+        lignes = jeu.all()
         categories = {k.cle: k.libelle for k in (await session.execute(select(Categorie))).scalars().all()}
     questions: dict[str, list[str]] = {}
-    for jeu in jeux:
-        for q in json.loads(jeu.questions_json or "[]"):
-            texte = (q.get("question") or "").strip()
-            if texte and not q.get("out_of_scope") and len(texte) <= 160:
-                questions.setdefault(jeu.collection_name, []).append(texte)
+    for nom, texte in lignes:
+        texte = (texte or "").strip()
+        if texte and len(texte) <= 160:
+            questions.setdefault(nom, []).append(texte)
     candidates = [n for n in questions if n != sauf] or list(questions)
     if not candidates:
         return None

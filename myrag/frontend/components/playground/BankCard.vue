@@ -52,17 +52,10 @@ const canRemove = computed(() =>
   || props.item.source === 'imported',
 )
 
-const removeWarning = computed(() => {
-  if (props.item.source === 'generated' || props.item.source === 'imported') {
-    return 'Supprime tout le jeu de test (peut contenir d\'autres questions)'
-  }
-  return 'Retire des réponses validées'
-})
+const removeWarning = computed(() => 'Retire cette question du jeu de questions de la collection')
 
 function onRemove() {
-  if (props.item.source === 'generated' || props.item.source === 'imported') {
-    if (!confirm(removeWarning.value + '. Continuer ?')) return
-  }
+  if (!confirm(removeWarning.value + ' ?')) return
   emit('remove')
 }
 </script>
