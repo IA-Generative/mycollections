@@ -18,10 +18,7 @@ MESSAGE_VERIFICATION = (
     "circuit de contrôle."
 )
 
-MESSAGE_ARCHIVEE = (
-    "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord "
-    "(page Publication, ou catalogue d'administration)."
-)
+MESSAGE_ARCHIVEE = "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord (page Publication, ou catalogue d'administration)."
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
 
@@ -43,8 +40,7 @@ async def _fiche_pour(name: str, user: CurrentUser, *, ecrire: bool) -> dict | N
         if not gere:
             raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
         return None
-    lit = gere or access.can_read(name=name, scope=fiche.get("scope"), scope_groups=fiche.get("scope_groups"),
-                                  created_by=cree_par, user_groups=user.groups, user_sub=user.sub)
+    lit = gere or access.can_read(name=name, scope=fiche.get("scope"), scope_groups=fiche.get("scope_groups"), created_by=cree_par, user_groups=user.groups, user_sub=user.sub)
     if not lit:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     if ecrire and not gere:
@@ -69,9 +65,12 @@ class PublishRequest(BaseModel):
 async def _historique(session, name: str, limite: int = 20) -> list[dict]:
     """Les derniers gestes, les plus anciens d'abord : quoi et quand — jamais le courriel de qui."""
     from sqlalchemy import select
-    lignes = (await session.execute(
-        select(PublicationHistory).where(PublicationHistory.collection_name == name)
-        .order_by(PublicationHistory.acted_at.desc()).limit(limite))).scalars().all()
+
+    lignes = (
+        (await session.execute(select(PublicationHistory).where(PublicationHistory.collection_name == name).order_by(PublicationHistory.acted_at.desc()).limit(limite)))
+        .scalars()
+        .all()
+    )
     return [{"action": h.action, "at": h.acted_at.isoformat() if h.acted_at else None} for h in reversed(lignes)]
 
 
@@ -84,8 +83,7 @@ async def get_publication_status(name: str, user: CurrentUser = Depends(current_
         if not pub:
             # Jamais publiée : les valeurs par défaut du formulaire, dites par l'API (la case
             # « proposer dans l'assistant » arrivait décochée et le partage ne publiait rien).
-            return {"collection": name, "state": "draft", "archivee": archivee, "alias_enabled": True,
-                    "tool_enabled": False, "embed_enabled": False, "visibility_groups": []}
+            return {"collection": name, "state": "draft", "archivee": archivee, "alias_enabled": True, "tool_enabled": False, "embed_enabled": False, "visibility_groups": []}
         return {**pub.to_dict(), "archivee": archivee, "history": await _historique(session, name)}
 
 
@@ -142,12 +140,14 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
             action=pub.state,
             acted_by=pub.published_by,
             acted_at=now,
-            details_json=json.dumps({
-                "alias": pub.alias_enabled,
-                "tool": pub.tool_enabled,
-                "embed": pub.embed_enabled,
-                "visibility": pub.visibility,
-            }),
+            details_json=json.dumps(
+                {
+                    "alias": pub.alias_enabled,
+                    "tool": pub.tool_enabled,
+                    "embed": pub.embed_enabled,
+                    "visibility": pub.visibility,
+                }
+            ),
         )
         session.add(history)
 
@@ -163,8 +163,9 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     owui_error: str | None = None
     if req.alias_enabled and pub.state == "published":
         try:
-            from app.services.owui_client import OwuiAdminUnavailable
             from app.services.fiche_assistant import synchroniser_fiche
+            from app.services.owui_client import OwuiAdminUnavailable
+
             # Tout ce qui part au socle se décide à UN endroit (nom = titre, étiquette =
             # catégorie, portée, mention de vérification) : la resynchronisation l'appelle
             # aussi. La fiche RECOUVRE le modèle `openrag-<col>` reçu de la connexion
@@ -181,8 +182,11 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
             owui_error = f"La collection n'a pas pu être posée dans l'assistant ({type(e).__name__} : {e}). L'état local est enregistré ; réessayez « Mettre à jour »."
 
     await collectif_store.consigner(
-        "collection", name, "publication.publiee" if pub.state == "published" else "publication.brouillon",
-        user.sub, collection_name=name,
+        "collection",
+        name,
+        "publication.publiee" if pub.state == "published" else "publication.brouillon",
+        user.sub,
+        collection_name=name,
         detail={"visibility": pub.visibility, "alias": pub.alias_enabled, "owui": owui_result is not None},
     )
     result = pub.to_dict()
@@ -204,7 +208,8 @@ async def _retirer_du_socle(name: str) -> str | None:
     effacée. Le seul symptôme visible était une réponse vide.
     """
     try:
-        from app.services.owui_client import OwuiClient, OwuiAdminUnavailable
+        from app.services.owui_client import OwuiAdminUnavailable, OwuiClient
+
         try:
             client = OwuiClient()
         except OwuiAdminUnavailable as e:
@@ -224,16 +229,18 @@ async def unpublish_collection(name: str, user: CurrentUser = Depends(current_us
             raise HTTPException(status_code=404, detail=f"No publication for '{name}'")
         pub.state = "disabled"
 
-        session.add(PublicationHistory(
-            collection_name=name, action="disabled", acted_by=user.username or user.sub or "?",
-        ))
+        session.add(
+            PublicationHistory(
+                collection_name=name,
+                action="disabled",
+                acted_by=user.username or user.sub or "?",
+            )
+        )
         await session.commit()
 
     erreur = await _retirer_du_socle(name)
-    await collectif_store.consigner("collection", name, "publication.retiree", user.sub, collection_name=name,
-                                    detail={"owui_retire": erreur is None})
-    return {"state": "disabled", "collection": name,
-            "owui": {"removed": erreur is None, "error": erreur}}
+    await collectif_store.consigner("collection", name, "publication.retiree", user.sub, collection_name=name, detail={"owui_retire": erreur is None})
+    return {"state": "disabled", "collection": name, "owui": {"removed": erreur is None, "error": erreur}}
 
 
 @router.post("/{name}/archive")
@@ -255,15 +262,18 @@ async def archive_collection(name: str, user: CurrentUser = Depends(current_user
         if pub:
             pub.state = "archived"
             pub_state = pub.state
-        session.add(PublicationHistory(
-            collection_name=name, action="archived", acted_by=user.username or user.sub or "?",
-        ))
+        session.add(
+            PublicationHistory(
+                collection_name=name,
+                action="archived",
+                acted_by=user.username or user.sub or "?",
+            )
+        )
         await session.commit()
 
     # Archivée = retirée : la fiche ne doit plus être offerte dans l'assistant (avant : elle y restait).
     erreur_socle = await _retirer_du_socle(name) if etait_servie else None
-    await collectif_store.consigner("collection", name, "collection.archivee", user.sub, collection_name=name,
-                                    detail={"owui_retire": etait_servie and erreur_socle is None})
+    await collectif_store.consigner("collection", name, "collection.archivee", user.sub, collection_name=name, detail={"owui_retire": etait_servie and erreur_socle is None})
     return {
         "collection": name,
         "archived_at": result["archived_at"],
@@ -287,9 +297,13 @@ async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(c
         pub = await session.get(Publication, name)
         if pub and pub.state == "archived":
             pub.state = "disabled"
-        session.add(PublicationHistory(
-            collection_name=name, action="unarchived", acted_by=user.username or user.sub or "?",
-        ))
+        session.add(
+            PublicationHistory(
+                collection_name=name,
+                action="unarchived",
+                acted_by=user.username or user.sub or "?",
+            )
+        )
         await session.commit()
 
     await collectif_store.consigner("collection", name, "collection.desarchivee", user.sub, collection_name=name)
@@ -300,18 +314,11 @@ async def unarchive_collection_endpoint(name: str, user: CurrentUser = Depends(c
 async def publication_history(name: str, user: CurrentUser = Depends(current_user)):
     await _fiche_pour(name, user, ecrire=False)
     from sqlalchemy import select
+
     async with async_session() as session:
-        result = await session.execute(
-            select(PublicationHistory)
-            .where(PublicationHistory.collection_name == name)
-            .order_by(PublicationHistory.acted_at.desc())
-        )
+        result = await session.execute(select(PublicationHistory).where(PublicationHistory.collection_name == name).order_by(PublicationHistory.acted_at.desc()))
         entries = result.scalars().all()
         return {
             "collection": name,
-            "history": [
-                {"action": h.action, "at": h.acted_at.isoformat(), "by": h.acted_by,
-                 "details": json.loads(h.details_json or "{}")}
-                for h in entries
-            ],
+            "history": [{"action": h.action, "at": h.acted_at.isoformat(), "by": h.acted_by, "details": json.loads(h.details_json or "{}")} for h in entries],
         }

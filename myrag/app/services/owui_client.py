@@ -53,10 +53,7 @@ def grants_de_partage(visibility: str, groupes: list[str] | None) -> list[dict]:
     « tout compte connecté », soit `user/*`.
     """
     if visibility == "group" and groupes:
-        return [
-            {"principal_type": "group", "principal_id": g, "permission": "read"}
-            for g in groupes
-        ]
+        return [{"principal_type": "group", "principal_id": g, "permission": "read"} for g in groupes]
     if visibility == "all":
         return [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
     return []
@@ -69,9 +66,16 @@ _META_GERE = ("description", "profile_image_url", "suggestion_prompts", "tags", 
 TAG_MES_COLLECTIONS = "Mes collections"
 
 
-def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = "",
-                    system_prompt: str = "", suggestions_fournies: bool = False,
-                    tags_geres: set[str] | None = None, garder_les_droits: bool = False) -> dict:
+def fusionner_fiche(
+    existante: dict | None,
+    voulue: dict,
+    *,
+    description: str = "",
+    system_prompt: str = "",
+    suggestions_fournies: bool = False,
+    tags_geres: set[str] | None = None,
+    garder_les_droits: bool = False,
+) -> dict:
     """Ce qu'on envoie au socle : la fiche VOULUE, sans rien effacer de ce qu'on ne gère pas.
 
     Republier une collection réécrivait la fiche entière : le prompt système réglé dans
@@ -100,8 +104,7 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
     if garder_les_droits:
         # Le socle rend ses droits enrichis (id, dates…) ; on ne lui renvoie que ce qu'il attend.
         fiche["access_grants"] = [
-            {k: g[k] for k in ("principal_type", "principal_id", "permission") if k in g}
-            for g in existante.get("access_grants") or [] if isinstance(g, dict)
+            {k: g[k] for k in ("principal_type", "principal_id", "permission") if k in g} for g in existante.get("access_grants") or [] if isinstance(g, dict)
         ]
         fiche["access_control"] = existante.get("access_control")
 
@@ -117,8 +120,7 @@ def fusionner_fiche(existante: dict | None, voulue: dict, *, description: str = 
         meta["profile_image_url"] = meta_avant["profile_image_url"]
     noms = [t.get("name") for t in meta.get("tags") or [] if isinstance(t, dict)]
     geres = set(tags_geres or ()) | {TAG_MES_COLLECTIONS} | set(noms)
-    autres = [t for t in meta_avant.get("tags") or []
-              if isinstance(t, dict) and t.get("name") and t.get("name") not in geres]
+    autres = [t for t in meta_avant.get("tags") or [] if isinstance(t, dict) and t.get("name") and t.get("name") not in geres]
     meta["tags"] = autres + list(meta.get("tags") or [])
     fiche["meta"] = meta
     return fiche
@@ -129,8 +131,7 @@ class FicheAbsente(Exception):
 
 
 class OwuiClient:
-    def __init__(self, api_key: str | None = None, base_url: str | None = None,
-                 timeout: float = 15.0):
+    def __init__(self, api_key: str | None = None, base_url: str | None = None, timeout: float = 15.0):
         self.api_key = api_key or settings.owui_admin_api_key
         if not self.api_key:
             raise OwuiAdminUnavailable(
@@ -184,10 +185,7 @@ class OwuiClient:
                 headers=self._headers(),
             )
         if resp.status_code == 401:
-            raise PermissionError(
-                "OWUI a rejete la cle admin (cle invalide ou expiree). "
-                "Regenere une cle dans OWUI > Parametres > Compte > Cles API."
-            )
+            raise PermissionError("OWUI a rejete la cle admin (cle invalide ou expiree). Regenere une cle dans OWUI > Parametres > Compte > Cles API.")
         resp.raise_for_status()
         data = resp.json()
         return data if data else None
@@ -244,17 +242,13 @@ class OwuiClient:
             "meta": {
                 "description": description or description_par_defaut or f"Collection MyRAG {model_id}",
                 "profile_image_url": "/static/favicon.png",
-                "suggestion_prompts": [
-                    {"content": p} for p in (suggestion_prompts or [])
-                ],
+                "suggestion_prompts": [{"content": p} for p in (suggestion_prompts or [])],
                 # La catégorie d'abord (le sélecteur de l'assistant filtre par étiquette),
                 # puis la marque de provenance, qui sert à retrouver NOS fiches.
                 "tags": [{"name": t} for t in dict.fromkeys([*(tags or []), TAG_MES_COLLECTIONS]) if t],
                 "capabilities": {"vision": False, "usage": False, "citations": True},
             },
-            "params": (
-                {"system": system_prompt} if system_prompt else {}
-            ),
+            "params": ({"system": system_prompt} if system_prompt else {}),
             # `None` veut dire « cette fiche RECOUVRE le modele de connexion qui porte le
             # meme identifiant » — c'est le cas quand la collection est servie
             # directement par OpenRAG, declare comme connexion du socle. Y remettre
@@ -271,9 +265,15 @@ class OwuiClient:
             "access_grants": access_grants or [],
             "is_active": True,
         }
-        body = fusionner_fiche(existante, body, description=description, system_prompt=system_prompt,
-                               suggestions_fournies=suggestion_prompts is not None, tags_geres=tags_geres,
-                               garder_les_droits=garder_les_droits)
+        body = fusionner_fiche(
+            existante,
+            body,
+            description=description,
+            system_prompt=system_prompt,
+            suggestions_fournies=suggestion_prompts is not None,
+            tags_geres=tags_geres,
+            garder_les_droits=garder_les_droits,
+        )
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             # Update first — succeeds only if the model already exists.
@@ -298,16 +298,9 @@ class OwuiClient:
             if cre.status_code in (401, 403):
                 # Both calls hit a real auth failure — the key truly lacks
                 # the required role.
-                raise PermissionError(
-                    f"OWUI a rejete la cle admin (HTTP {cre.status_code}). "
-                    f"Reponse: {cre.text[:300]}. URL: {cre.request.url}."
-                )
+                raise PermissionError(f"OWUI a rejete la cle admin (HTTP {cre.status_code}). Reponse: {cre.text[:300]}. URL: {cre.request.url}.")
             if not cre.is_success:
-                raise RuntimeError(
-                    f"OWUI create/update echoue — update HTTP {upd.status_code}: "
-                    f"{upd.text[:200]} / create HTTP {cre.status_code}: "
-                    f"{cre.text[:200]}"
-                )
+                raise RuntimeError(f"OWUI create/update echoue — update HTTP {upd.status_code}: {upd.text[:200]} / create HTTP {cre.status_code}: {cre.text[:200]}")
             return cre.json()
 
     async def delete_model(self, model_id: str) -> None:
@@ -318,7 +311,8 @@ class OwuiClient:
                 ("DELETE", f"/api/v1/models/{model_id}", None),
             ):
                 resp = await client.request(
-                    method, f"{self.base_url}{path}",
+                    method,
+                    f"{self.base_url}{path}",
                     # L'identifiant est passé des deux façons : en paramètre de requête
                     # pour les socles récents, dans le corps pour les anciens.
                     params={"id": model_id},

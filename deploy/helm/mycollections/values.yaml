@@ -1,0 +1,83 @@
+# Valeurs NEUTRES : ce dépôt est public. Les adresses réelles, le SSO et les secrets d'un
+# environnement vivent dans son dépôt de déploiement (valeurs passées à Argo CD).
+#
+# Les noms d'objets et les sélecteurs sont FIGÉS (myrag-backend, myrag-frontend, myrag-config,
+# myrag-sources, Ingress mycollections) : un déploiement existant est repris tel quel, sans
+# recréer ni le volume des sources ni les Deployments (un sélecteur ne se modifie pas).
+
+host: mycollections.fake-domain.name
+
+images:
+  backend:
+    repository: ghcr.io/ia-generative/mycollections/backend
+    tag: ""            # obligatoire : une étiquette FIXE (X.Y.Z, beta-<sha8>, pr-<n>)
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: ghcr.io/ia-generative/mycollections/frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []   # ex. [{name: registry-pull-secret}]
+
+# Étiquettes ajoutées aux métadonnées de tous les objets (jamais aux sélecteurs, immuables) —
+# ex. `mirai-preview: beta`, que l'automate du SSO des previews exige sur l'Ingress.
+commonLabels: {}
+
+# Annotations posées sur les deux gabarits de pod : une valeur qui change relance les pods
+# (ex. le commit d'une preview dont l'étiquette d'image ne change pas).
+podAnnotations: {}
+
+ingress:
+  enabled: true
+  className: nginx
+  # Vide : pas de certificat demandé (ex. preview servie par un certificat joker existant).
+  clusterIssuer: ""
+  tlsSecretName: mycollections-tls
+  annotations: {}
+
+backend:
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 384Mi}
+    limits: {cpu: "1", memory: 1536Mi}
+  # Secret existant chargé en variables d'environnement (DATABASE_URL, OPENRAG_ADMIN_TOKEN…).
+  # Vide : aucun. Sans DATABASE_URL, l'API prend une base SQLite sur le volume des sources.
+  existingSecret: ""
+  # Variables en clair ajoutées à la ConfigMap myrag-config (chaînes uniquement).
+  config:
+    AUTH_ENABLED: "true"
+    KEYCLOAK_URL: "https://sso.fake-domain.name"
+    KEYCLOAK_REALM: "exemple"
+    DATA_DIR: "/app/data"
+
+frontend:
+  replicas: 2
+  resources:
+    requests: {cpu: 20m, memory: 48Mi}
+    limits: {cpu: 200m, memory: 192Mi}
+  # Servi en /config.json et lu au démarrage par l'interface (utils/configExecution.ts).
+  config:
+    myragApiUrl: ""            # vide = même origine
+    keycloakUrl: "https://sso.fake-domain.name"
+    keycloakRealm: "exemple"
+    keycloakClientId: "mycollections-front"
+    authEnabled: true
+    appTitle: "Mes collections"
+
+persistence:
+  size: 20Gi
+  storageClass: ""
+
+# Remontée des avis du socle vers la banque de questions (lit la base du socle).
+feedbackCronJob:
+  enabled: false
+  suspend: true
+  schedule: "*/15 * * * *"
+
+# Preview : à la suppression de l'application, un Job (hook Argo CD PreDelete) efface chez
+# OpenRAG les partitions de la preview (préfixe MYCOLLECTIONS_PARTITION_PREFIXE).
+previewNettoyage:
+  enabled: false
+
+# Objets supplémentaires rendus tels quels (politiques réseau propres à un environnement…).
+extraObjects: []

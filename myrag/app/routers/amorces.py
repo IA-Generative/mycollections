@@ -30,16 +30,22 @@ _taches: list[asyncio.Task] = []
 
 
 def _fusion(e: dict, etat: dict | None, collection: dict | None) -> dict:
-    return {**{k: v for k, v in e.items() if k != "questions"}, "nb_questions": len(e.get("questions", [])),
-            "etat_import": "jamais", "collection_name": None, "dernier_import_le": None, "erreur": None, "detail": {},
-            **{k: v for k, v in (etat or {}).items() if k != "id"},
-            "etat_collab": (collection or {}).get("etat_collab")}
+    return {
+        **{k: v for k, v in e.items() if k != "questions"},
+        "nb_questions": len(e.get("questions", [])),
+        "etat_import": "jamais",
+        "collection_name": None,
+        "dernier_import_le": None,
+        "erreur": None,
+        "detail": {},
+        **{k: v for k, v in (etat or {}).items() if k != "id"},
+        "etat_collab": (collection or {}).get("etat_collab"),
+    }
 
 
 async def _ouverture(catalogue: list[dict], collections: dict[str, dict]) -> dict:
     avancees = [e["id"] for e in catalogue if (collections.get(e["collection"]) or {}).get("etat_collab") in _AVANCEES]
-    return {"requis": OUVERTURE_REQUIS, "en_controle": len(avancees), "amorces": avancees,
-            "ouverte": len(avancees) >= OUVERTURE_REQUIS}
+    return {"requis": OUVERTURE_REQUIS, "en_controle": len(avancees), "amorces": avancees, "ouverte": len(avancees) >= OUVERTURE_REQUIS}
 
 
 @router.get("")
@@ -48,13 +54,13 @@ async def lister(moi: Identite = Depends(identite)):
     etats_ = await store.etats_des_amorces()
     noms = {e["collection"] for e in catalogue}
     collections = {c["name"]: c for c in await db_list_collections(include_archived=True) if c["name"] in noms}
-    return {"amorces": [_fusion(e, etats_.get(e["id"]), collections.get(e["collection"])) for e in catalogue],
-            "ouverture": await _ouverture(catalogue, collections)}
+    return {"amorces": [_fusion(e, etats_.get(e["id"]), collections.get(e["collection"])) for e in catalogue], "ouverture": await _ouverture(catalogue, collections)}
 
 
 async def _categorie_connue(cle: str | None) -> str | None:
     """La rubrique que propose le catalogue, si l'administration ne l'a pas retirée."""
     from app.services import categorie_store
+
     return cle if cle and any(c["cle"] == cle for c in await categorie_store.lister()) else None
 
 
@@ -62,14 +68,20 @@ async def _preparer(e: dict) -> str:
     """Crée la collection amorcée, sa grille pré-remplie et sa banque de questions — idempotent."""
     name = e["collection"]
     if not await db_get_collection(name):
-        await db_create_collection({
-            "name": name, "titre": e.get("titre", ""), "categorie": await _categorie_connue(e.get("categorie")),
-            "description": e.get("description", ""), "scope": "group",
-            "scope_groups_json": "[]", "created_by": "", "source_type": e.get("connecteur", ""),
-            "source_url": e.get("source_url", ""),
-        })
-        await store.initialiser_collection(name, None, garant_pressenti=e.get("garant_pressenti", ""),
-                                           grille=e.get("grille"), robot="amorce")
+        await db_create_collection(
+            {
+                "name": name,
+                "titre": e.get("titre", ""),
+                "categorie": await _categorie_connue(e.get("categorie")),
+                "description": e.get("description", ""),
+                "scope": "group",
+                "scope_groups_json": "[]",
+                "created_by": "",
+                "source_type": e.get("connecteur", ""),
+                "source_url": e.get("source_url", ""),
+            }
+        )
+        await store.initialiser_collection(name, None, garant_pressenti=e.get("garant_pressenti", ""), grille=e.get("grille"), robot="amorce")
     await poser_questions(name, e.get("questions", []))
     return name
 
@@ -87,20 +99,19 @@ async def _executer(ident: str, e: dict, name: str, *, depuis_zero: bool = False
     except Exception as ex:  # noqa: BLE001 — l'échec se consigne, il ne se perd pas
         logger.warning("import de l'amorce %s échoué : %s", ident, ex)
         await store.marquer_amorce(ident, "echec", collection_name=name, erreur=str(ex))
-        await store.consigner("collection", name, "import.echoue", robot=f"amorce:{ident}", collection_name=name,
-                              detail={"erreur": str(ex)[:500]})
+        await store.consigner("collection", name, "import.echoue", robot=f"amorce:{ident}", collection_name=name, detail={"erreur": str(ex)[:500]})
         raise
     if resultat.get("couverture"):
         await store.poser_couverture(name, resultat["couverture"], f"amorce:{ident}")
     await store.marquer_amorce(ident, "termine", collection_name=name, detail=resultat)
-    await store.consigner("collection", name, "import.termine", robot=f"amorce:{ident}", collection_name=name,
-                          detail={k: v for k, v in resultat.items() if k != "couverture"})
+    await store.consigner("collection", name, "import.termine", robot=f"amorce:{ident}", collection_name=name, detail={k: v for k, v in resultat.items() if k != "couverture"})
     return resultat
 
 
 @router.post("/{ident}/import")
-async def importer(ident: str, moi: Identite = Depends(exiger_superadmin), synchrone: bool = Query(False),
-                   purger: bool = Query(False, description="Vider la partition et réindexer tout")):
+async def importer(
+    ident: str, moi: Identite = Depends(exiger_superadmin), synchrone: bool = Query(False), purger: bool = Query(False, description="Vider la partition et réindexer tout")
+):
     e = entree(ident)
     if not e:
         raise HTTPException(status_code=404, detail=f"Amorce inconnue : {ident}")

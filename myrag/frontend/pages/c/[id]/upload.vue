@@ -5,18 +5,11 @@
     <h1 class="fr-h3">Ajouter des documents — {{ titre }}</h1>
 
     <div class="fr-grid-row fr-grid-row--gutters">
-      <div class="fr-col-8">
-        <!-- File upload -->
-        <div class="fr-upload-group">
-          <label class="fr-label" for="file">Document à ajouter</label>
-          <input id="file" type="file" class="fr-upload" @change="onFileChange"
-                 accept=".txt,.md,.markdown,.csv" />
-        </div>
-
+      <div class="fr-col-12 fr-col-lg-8">
         <!-- Strategy -->
         <div class="fr-select-group fr-mt-2w">
           <label class="fr-label" for="strategy">Découpage du document
-            <span class="fr-hint-text">Comment le document est coupé en passages, que l'assistant retrouve et cite.</span>
+            <span class="fr-hint-text">Comment un fichier texte (.txt, .md, .csv) est coupé en passages, que l'assistant retrouve et cite. Les PDF, Word et autres documents sont découpés par le moteur de recherche.</span>
           </label>
           <select id="strategy" class="fr-select" v-model="strategy">
             <option value="auto">Automatique (détection du type)</option>
@@ -38,20 +31,10 @@
           </select>
         </div>
 
-        <!-- Submit -->
-        <button class="fr-btn fr-mt-4w" @click="upload" :disabled="!file || uploading || rechercheIndisponible">
-          {{ uploading ? 'Envoi en cours…' : 'Ajouter le document' }}
-        </button>
+        <DepotZone class="fr-mt-4w" :collection="id" :strategy="strategy" :sensitivity="sensitivity" :desactive="rechercheIndisponible" />
         <p v-if="rechercheIndisponible" class="fr-message fr-message--info fr-mt-1w">
           L'ajout de documents reviendra avec la recherche. Le bandeau en haut de la page vous préviendra.
         </p>
-
-        <!-- Result -->
-        <div v-if="result" class="fr-alert fr-alert--success fr-mt-4w">
-          <p>Document reçu et découpé en {{ result.total_chunks }} passage(s) : son ajout à la collection se poursuit.</p>
-          <p class="fr-text--sm">Suivi du traitement : <a :href="`${baseUrl}/api/ingest/jobs/${result.job_id}`" target="_blank">{{ result.job_id }}</a></p>
-        </div>
-
         <div v-if="error" class="fr-alert fr-alert--error fr-mt-4w">
           <p>{{ error }}</p>
         </div>
@@ -64,37 +47,9 @@
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
-const { uploadFile, baseUrl } = useApi()
 // Le document irait au moteur de recherche : pendant une panne, l'envoi échouerait.
 const { rechercheIndisponible } = useEtatService()
-
-const file = ref<File | null>(null)
 const strategy = ref('auto')
 const sensitivity = ref('public')
-const uploading = ref(false)
-const result = ref<any>(null)
 const error = ref('')
-
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement
-  file.value = input.files?.[0] || null
-}
-
-async function upload() {
-  if (!file.value) return
-  uploading.value = true
-  result.value = null
-  error.value = ''
-
-  try {
-    result.value = await uploadFile(`/api/ingest/${id}`, file.value, {
-      strategy: strategy.value,
-      sensitivity: sensitivity.value,
-    })
-  } catch (e: any) {
-    error.value = messageErreur(e)
-  } finally {
-    uploading.value = false
-  }
-}
 </script>

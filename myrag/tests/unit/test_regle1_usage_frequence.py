@@ -80,13 +80,14 @@ def test_un_contact_explicitement_refuse_reste_refuse(client, en_tant_que):
 
 def test_le_courriel_ne_se_lit_que_par_le_garant_et_l_administration(client, en_tant_que):
     from tests.conftest import SUPERADMIN
+
     en_tant_que(personne(1))
     r = client.post("/api/demandes", json={**DEMANDE, "contact": "eric@interieur.gouv.fr"})
     assert r.status_code == 201 and "eric@" not in r.text
     ident = r.json()["demande"]["id"]
     en_tant_que(personne(2))
-    assert "eric@" not in client.get(f"/api/demandes/{ident}").text   # un soutien quelconque : non
-    assert "eric@" not in client.get("/api/demandes").text            # la liste : jamais
+    assert "eric@" not in client.get(f"/api/demandes/{ident}").text  # un soutien quelconque : non
+    assert "eric@" not in client.get("/api/demandes").text  # la liste : jamais
     client.post(f"/api/demandes/{ident}/soutenir", json={"role": "garant"})
     assert client.get(f"/api/demandes/{ident}").json()["demande"]["contact_auteur"] == "eric@interieur.gouv.fr"
     en_tant_que(SUPERADMIN)

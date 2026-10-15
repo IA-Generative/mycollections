@@ -7,14 +7,23 @@ from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
 from app.routers.publication import _fiche_pour
-
+from app.services.feedback_store import (
+    feedback_stats as db_stats,
+)
+from app.services.feedback_store import (
+    get_feedback as db_get,
+)
 from app.services.feedback_store import (
     ingest_feedback as db_ingest,
+)
+from app.services.feedback_store import (
     list_feedback as db_list,
-    get_feedback as db_get,
-    review_feedback as db_review,
+)
+from app.services.feedback_store import (
     promote_feedback as db_promote,
-    feedback_stats as db_stats,
+)
+from app.services.feedback_store import (
+    review_feedback as db_review,
 )
 
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
@@ -76,8 +85,7 @@ async def feedback_stats_endpoint(collection: str, user: CurrentUser = Depends(c
 
 
 @router.patch("/{collection}/{feedback_id}/review")
-async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest,
-                                   user: CurrentUser = Depends(current_user)):
+async def review_feedback_endpoint(collection: str, feedback_id: int, req: ReviewRequest, user: CurrentUser = Depends(current_user)):
     await _fiche_pour(collection, user, ecrire=True)
     fb = await db_get(feedback_id)
     if not fb or fb.get("collection") != collection:
@@ -89,8 +97,7 @@ async def review_feedback_endpoint(collection: str, feedback_id: int, req: Revie
 
 
 @router.post("/{collection}/{feedback_id}/promote")
-async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest,
-                                    user: CurrentUser = Depends(current_user)):
+async def promote_feedback_endpoint(collection: str, feedback_id: int, req: PromoteRequest, user: CurrentUser = Depends(current_user)):
     await _fiche_pour(collection, user, ecrire=True)
     fb = await db_get(feedback_id)
     if not fb or fb.get("collection") != collection:
@@ -98,9 +105,24 @@ async def promote_feedback_endpoint(collection: str, feedback_id: int, req: Prom
 
     await db_promote(feedback_id, promote_to=req.promote_to)
 
-    if req.promote_to == "qr" and req.corrected_answer:
-        from app.services.qr_cache import QRCache
-        cache = QRCache()
-        cache.add(collection, fb["question"], req.corrected_answer, source="feedback")
+    # L'avis devient une question du jeu de questions (docs/qualite.md). Avec une réponse corrigée
+    # (« réponse validée » de l'écran), elle est validée et sa réponse est fiable.
+    from app.services import questions_store
+    from app.services.collectif_store import Conflit
+
+    reponse = (req.corrected_answer or "").strip()
+    try:
+        q = await questions_store.creer_question(
+            collection,
+            {"question": fb["question"], "reponse": reponse, "relecture": "valide" if reponse else "brut"},
+            user.sub,
+            origine="avis",
+            source_ref=f"feedback:{feedback_id}",
+            feedback_id=feedback_id,
+        )
+        if reponse and req.promote_to == "qr":
+            await questions_store.modifier_question(collection, q["id"], {"fiable": True}, user.sub)
+    except Conflit:
+        pass  # déjà dans le jeu : la promotion ne crée pas de doublon
 
     return {"status": "promoted", "promote_to": req.promote_to}

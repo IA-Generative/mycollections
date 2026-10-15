@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client():
     from app.main import app
+
     return TestClient(app)
 
 
@@ -29,15 +30,22 @@ def collection_name(request):
 
     async def _purge():
         import sqlite3
+
         from app.config import settings
+
         # Best-effort direct DB cleanup (bypasses archive requirement)
         if "sqlite" in settings.database_url:
             db_path = settings.database_url.split("///")[-1]
             try:
                 conn = sqlite3.connect(db_path)
                 for t in (
-                    "source_files", "eval_runs", "eval_datasets", "feedback",
-                    "ingest_jobs", "publication_history", "publications",
+                    "source_files",
+                    "eval_runs",
+                    "eval_datasets",
+                    "feedback",
+                    "ingest_jobs",
+                    "publication_history",
+                    "publications",
                 ):
                     conn.execute(f"DELETE FROM {t} WHERE collection_name = ?", (name,))
                 conn.execute("DELETE FROM collections WHERE name = ?", (name,))
@@ -114,9 +122,7 @@ class TestPurge:
 
     @patch("app.services.openrag_client.OpenRAGClient.delete_partition", new_callable=AsyncMock)
     @patch("app.routers.collections.OpenRAGClient")
-    def test_purge_cascades_all_tables(
-        self, mock_router_client_cls, mock_delete_partition, client, collection_name
-    ):
+    def test_purge_cascades_all_tables(self, mock_router_client_cls, mock_delete_partition, client, collection_name):
         mock_router_client_cls.return_value.create_partition = AsyncMock()
         mock_delete_partition.return_value = {"status": "ok"}
         client.post("/api/collections", json={"name": collection_name})

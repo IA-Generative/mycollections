@@ -1,19 +1,17 @@
 """Les liens vers les sources passent par notre proxy — jamais par l'API publique
 d'OpenRAG, dont le SSO finit en « User does not have access to this file »."""
 
-from unittest.mock import AsyncMock, patch
-
 import httpx
-import pytest
 
 from app.routers.playground import relier_au_proxy, retirer_le_pied_sources, situer_source
 
 
 def test_les_liens_de_la_reponse_sont_ramenes_sur_le_proxy_et_signes():
     import re
+
     from app.services import liens
-    texte = ("**Sources :** 1. [ssmsi_69.md](https://api.openrag-mirai.numerique-interieur.com/static/468450154026104240)"
-             " 2. [x](http://openrag:8080/extract/12)")
+
+    texte = "**Sources :** 1. [ssmsi_69.md](https://api.openrag-mirai.numerique-interieur.com/static/468450154026104240) 2. [x](http://openrag:8080/extract/12)"
     rendu = relier_au_proxy(texte)
     trouves = re.findall(r"\(/api/openrag/extract/(\d+)\?exp=(\d+)&sig=([0-9a-f]+)\)", rendu)
     assert [t[0] for t in trouves] == ["468450154026104240", "12"], rendu
@@ -36,15 +34,20 @@ def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch, clie
     appels = []
 
     class FauxClient:
-        def __init__(self, *a, **k): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
         async def get(self, url, headers=None):
             appels.append(url)
             if "/static/" in url:
                 return _Reponse(302, headers={"location": "/auth/login?next=%2Fstatic%2F42", "content-type": "text/html"})
-            return _Reponse(200, b'{"page_content": "| 2024 | 8302 |", "metadata": {"filename": "ssmsi_69.md"}}',
-                            {"content-type": "application/json"})
+            return _Reponse(200, b'{"page_content": "| 2024 | 8302 |", "metadata": {"filename": "ssmsi_69.md"}}', {"content-type": "application/json"})
 
     monkeypatch.setattr(httpx, "AsyncClient", FauxClient)
     r = client.get("/api/openrag/static/42")
@@ -53,11 +56,14 @@ def test_static_renvoye_vers_le_sso_rend_le_morceau_a_la_place(monkeypatch, clie
 
 
 def test_le_pied_sources_est_retire_de_la_reponse():
-    texte = ("Les homicides sont exprimés en unité : Victime.\n\n---\n\n**Sources :**\n\n"
-             "1. [ssmsi_04.md](https://api.openrag/static/1)\n2. [ssmsi_48.md](https://api.openrag/static/2)\n")
+    texte = (
+        "Les homicides sont exprimés en unité : Victime.\n\n---\n\n**Sources :**\n\n"
+        "1. [ssmsi_04.md](https://api.openrag/static/1)\n2. [ssmsi_48.md](https://api.openrag/static/2)\n"
+    )
     assert retirer_le_pied_sources(texte) == "Les homicides sont exprimés en unité : Victime."
-    assert retirer_le_pied_sources("Réponse sans pied.\n\nSources : voir le rapport.") == "Réponse sans pied.\n\nSources : voir le rapport.", \
+    assert retirer_le_pied_sources("Réponse sans pied.\n\nSources : voir le rapport.") == "Réponse sans pied.\n\nSources : voir le rapport.", (
         "une phrase qui parle de sources n'est pas un pied"
+    )
 
 
 def test_une_source_prend_le_titre_de_sa_section():
@@ -71,10 +77,12 @@ def test_une_source_prend_le_titre_de_sa_section():
 def test_le_libelle_survit_au_resume_qu_openrag_ajoute():
     """Un morceau rendu par /search commence par « [CONTEXT] … [CHUNK_START] » :
     les puces du repli affichaient le nom de fichier brut faute de lire plus loin."""
-    contenu = ("[CONTEXT]\n\nCe document présente la définition juridique du délit d'achat…\n\n"
-               "* filename: natinf-07742-08552--106.md\n\n[CHUNK_START]\n\n"
-               "# Nomenclature NATINF — codes 7742 à 8552\n"
-               "## NATINF 7987 — ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME\n\n- Nature : Délit")
+    contenu = (
+        "[CONTEXT]\n\nCe document présente la définition juridique du délit d'achat…\n\n"
+        "* filename: natinf-07742-08552--106.md\n\n[CHUNK_START]\n\n"
+        "# Nomenclature NATINF — codes 7742 à 8552\n"
+        "## NATINF 7987 — ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME\n\n- Nature : Délit"
+    )
     s = situer_source({"content": contenu})
     assert s["libelle"] == "NATINF 7987 — ACHAT EN CONNAISSANCE DE CAUSE DE PRODUITS DE LA PECHE MARITIME"
     assert s["titre_document"] == "Nomenclature NATINF — codes 7742 à 8552"

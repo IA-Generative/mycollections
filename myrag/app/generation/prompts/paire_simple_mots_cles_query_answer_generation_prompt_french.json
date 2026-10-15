@@ -1,0 +1,25 @@
+{
+  "ragas_version": "0.4.3",
+  "original_hash": null,
+  "language": "french",
+  "instruction": "Rédigez une question et sa réponse de référence à partir d'un seul passage, en respectant les conditions données (persona, terme, style, longueur). La réponse doit être entièrement fidèle au passage : n'utilisez que ce qu'il dit.\n### Consignes :\n1. **La question** : celle que poserait le persona, dans sa situation, en employant le terme. Le style (query_style) se respecte tel quel : « Perfect grammar » = une question bien écrite ; « Poor grammar » = une syntaxe approximative ; « Misspelled queries » = quelques fautes de frappe ; « Web search like queries » = des mots-clés comme dans un moteur de recherche. La longueur (query_length) vaut short, medium ou long.\n2. **La réponse** : complète et précise, construite uniquement à partir du passage. N'ajoutez rien qui n'y figure pas ou ne s'en déduit pas directement.\n3. **Contexte supplémentaire** (llm_context, s'il est fourni) : suivez-le pour le type de question et la forme de la réponse, toujours sans sortir du passage.\nRédigez la question et la réponse en français.",
+  "examples": [
+    {
+      "input": {
+        "persona": {
+          "name": "Agent d'accueil en préfecture",
+          "role_description": "Reçoit au guichet des usagers étrangers et répond à leurs questions sur leur titre de séjour."
+        },
+        "term": "carte de séjour pluriannuelle",
+        "query_style": "Perfect grammar",
+        "query_length": "medium",
+        "context": "La carte de séjour pluriannuelle est délivrée, après un premier titre d'un an, à l'étranger qui justifie de son assiduité aux formations prescrites par le contrat d'intégration républicaine. Sa durée est de quatre ans au plus.",
+        "llm_context": null
+      },
+      "output": {
+        "query": "Un usager titulaire d'un premier titre d'un an peut-il obtenir une carte de séjour pluriannuelle, et pour combien de temps ?",
+        "answer": "Oui, s'il justifie de son assiduité aux formations prescrites par le contrat d'intégration républicaine. La carte de séjour pluriannuelle est alors délivrée pour une durée de quatre ans au plus."
+      }
+    }
+  ]
+}

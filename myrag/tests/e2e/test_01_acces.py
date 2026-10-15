@@ -5,6 +5,7 @@ Les routes de FERMEES_P0 répondaient sans jeton jusqu'au lot P0 du diagnostic d
 (avis des utilisateurs, relais OpenRAG, état du service). Les vues du graphe et des articles
 restent ouvertes pour une collection publiée à tous ; pour les autres, voir test_04.
 """
+
 from __future__ import annotations
 
 import httpx
@@ -12,17 +13,27 @@ import pytest
 
 #: Ce qu'une API de collections doit refuser sans jeton : des lectures de données déposées.
 FERMEES = [
-    "/api/collections", "/api/categories", "/api/guide", "/api/demandes",
-    "/api/accueil/exemple", "/api/accueil/mes-collections", "/api/ingest/jobs",
-    "/api/sync/groups", "/api/qr-cache/x", "/api/eval/x/datasets", "/api/playground/x/bank",
-    "/api/collections/templates", "/api/sources/check-url", "/api/bus/demandes",
+    "/api/collections",
+    "/api/categories",
+    "/api/guide",
+    "/api/demandes",
+    "/api/accueil/exemple",
+    "/api/accueil/mes-collections",
+    "/api/ingest/jobs",
+    "/api/sync/groups",
+    "/api/qr-cache/x",
+    "/api/eval/x/datasets",
+    "/api/playground/x/bank",
+    "/api/collections/templates",
+    "/api/sources/check-url",
+    "/api/bus/demandes",
 ]
 
 #: Routes fermées par le lot P0 du diagnostic d'octobre 2026 (elles répondaient sans jeton).
 FERMEES_P0 = [
-    "/api/feedback/{collection}",            # questions et réponses des utilisateurs
+    "/api/feedback/{collection}",  # questions et réponses des utilisateurs
     "/api/feedback/{collection}/stats",
-    "/api/openrag/extract/1",                # relais OpenRAG au jeton admin : lien signé ou jeton
+    "/api/openrag/extract/1",  # relais OpenRAG au jeton admin : lien signé ou jeton
     "/api/openrag/static/1",
     "/api/openrag/file/1",
     "/graph/config",
@@ -78,6 +89,7 @@ def test_un_compte_hors_du_groupe_est_refuse(verdict_hors_groupe):
 def test_un_lien_partage_mene_a_la_page_demandee(navigateur, cible):
     """Un collègue reçoit le lien du guide, se connecte, et doit arriver SUR le guide."""
     from tests.e2e.conftest import _ouvrir
+
     issue, _, contexte = _ouvrir(navigateur, cible, "E2E_TESTEUR", obligatoire=True, chemin="/guide")
     try:
         assert issue == "entre"

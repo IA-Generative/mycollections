@@ -24,6 +24,7 @@ def test_sans_sel_on_refuse():
 
 def test_sans_sel_les_routes_repondent_503(client, en_tant_que, monkeypatch):
     from app.config import settings
+
     monkeypatch.setattr(settings, "myrag_pseudo_sel", "")
     en_tant_que(personne(1))
     assert client.post("/api/demandes", json=DEMANDE).status_code == 503
@@ -41,5 +42,5 @@ def test_aucun_sub_en_clair_apres_un_parcours(client, en_tant_que, creer_collect
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     for table in ("demande", "soutien", "abonnement", "proposition", "signalement", "grille_controle", "evenement"):
         lignes = con.execute(f"SELECT * FROM {table}").fetchall()
-        assert not any("personne-clair" in str(v) for l in lignes for v in l), table
+        assert not any("personne-clair" in str(v) for ligne in lignes for v in ligne), table
     con.close()

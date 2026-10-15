@@ -18,8 +18,7 @@ from app.auth import CurrentUser, _bearer_scheme, current_user, verify_jwt
 from app.config import settings
 from app.services import access, liens
 
-MESSAGE_401 = ("Ce lien n'est plus valable, ou n'a pas été remis par Mes collections : "
-               "ouvrez la source depuis la collection.")
+MESSAGE_401 = "Ce lien n'est plus valable, ou n'a pas été remis par Mes collections : ouvrez la source depuis la collection."
 
 
 async def publiee_a_tous(collection: str) -> bool:
@@ -32,8 +31,7 @@ async def publiee_a_tous(collection: str) -> bool:
     async with async_session() as session:
         col = await session.get(Collection, collection)
         pub = await session.get(Publication, collection)
-    return bool(col and pub and not col.archived_at and pub.state == "published"
-                and pub.alias_enabled and pub.visibility == "all")
+    return bool(col and pub and not col.archived_at and pub.state == "published" and pub.alias_enabled and pub.visibility == "all")
 
 
 async def utilisateur_facultatif(credentials: HTTPAuthorizationCredentials | None) -> CurrentUser | None:
@@ -47,12 +45,12 @@ async def utilisateur_facultatif(credentials: HTTPAuthorizationCredentials | Non
 def peut_lire(fiche: dict | None, collection: str, user: CurrentUser) -> bool:
     if fiche is None:
         return access.can_write(name=collection, created_by=None, user_groups=user.groups, user_sub=user.sub)
-    return access.can_read(name=collection, scope=fiche.get("scope"), scope_groups=fiche.get("scope_groups"),
-                           created_by=fiche.get("created_by"), user_groups=user.groups, user_sub=user.sub)
+    return access.can_read(
+        name=collection, scope=fiche.get("scope"), scope_groups=fiche.get("scope_groups"), created_by=fiche.get("created_by"), user_groups=user.groups, user_sub=user.sub
+    )
 
 
-async def exiger_lecture(collection: str, request: Request,
-                         credentials: HTTPAuthorizationCredentials | None) -> None:
+async def exiger_lecture(collection: str, request: Request, credentials: HTTPAuthorizationCredentials | None) -> None:
     if not settings.auth_enabled:
         return
     if await publiee_a_tous(collection):
@@ -64,25 +62,23 @@ async def exiger_lecture(collection: str, request: Request,
     if user is None:
         raise HTTPException(status_code=401, detail=MESSAGE_401)
     from app.services.collection_store import get_collection
+
     if not peut_lire(await get_collection(collection), collection, user):
         raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
 
 
-async def lecture_de_la_collection(collection: str, request: Request,
-                                   credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> None:
+async def lecture_de_la_collection(collection: str, request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> None:
     """Dépendance pour les routes dont la collection est dans le chemin."""
     await exiger_lecture(collection, request, credentials)
 
 
-async def lecture_du_corpus(request: Request, corpus_id: str = "",
-                            credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> None:
+async def lecture_du_corpus(request: Request, corpus_id: str = "", credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme)) -> None:
     """Dépendance pour les routes dont la collection est le paramètre `corpus_id`."""
     if corpus_id:
         await exiger_lecture(corpus_id, request, credentials)
 
 
-async def acces_extrait(ident: str, request: Request,
-                        credentials: HTTPAuthorizationCredentials | None) -> CurrentUser | None:
+async def acces_extrait(ident: str, request: Request, credentials: HTTPAuthorizationCredentials | None) -> CurrentUser | None:
     """Un extrait ou un document d'OpenRAG : lien signé, ou jeton. Rend l'appelant (None si
     l'entrée s'est faite par signature ou sans authentification) : la route vérifie ensuite
     qu'il lit la collection de l'extrait."""

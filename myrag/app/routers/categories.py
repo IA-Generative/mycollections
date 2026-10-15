@@ -74,8 +74,7 @@ async def affecter(req: Affectations, moi: Identite = Depends(exiger_superadmin)
 @router.patch("/{cle}")
 async def modifier(cle: str, req: ModifierCategorie, moi: Identite = Depends(exiger_superadmin)):
     try:
-        return {"categorie": await store.modifier(cle, libelle=req.libelle, description=req.description),
-                "resync_conseillee": req.libelle is not None}
+        return {"categorie": await store.modifier(cle, libelle=req.libelle, description=req.description), "resync_conseillee": req.libelle is not None}
     except store.Introuvable:
         raise HTTPException(status_code=404, detail=f"Catégorie inconnue : {cle}")
 

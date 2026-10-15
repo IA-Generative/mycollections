@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrag-frontend
+  labels:
+    app: myrag-frontend
+    {{- include "mycollections.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "mycollections.selecteur" (dict "app" "myrag-frontend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mycollections.selecteur" (dict "app" "myrag-frontend") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101          # utilisateur nginx de l'image alpine
+        runAsGroup: 101
+        fsGroup: 101
+      containers:
+        - name: frontend
+          image: {{ include "mycollections.image" (dict "image" .Values.images.frontend "nom" "frontend") }}
+          imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          securityContext:
+            {{- include "mycollections.securiteConteneur" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+              readOnly: true
+            # Racine en lecture seule : nginx écrit ses caches et son PID.
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: myrag-frontend-config
+        - name: cache
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myrag-frontend
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "mycollections.selecteur" (dict "app" "myrag-frontend") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

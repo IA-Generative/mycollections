@@ -1,4 +1,5 @@
 """Page « extrait » ouverte en onglet : lisible, sans balises techniques, sans « Retour »."""
+
 from app.main import _decouper_morceau, _extract_render_html, _paragraphes_html
 
 RELU = """[CONTEXT]
@@ -48,9 +49,7 @@ def test_la_page_est_lisible():
 
 
 def test_les_metadonnees_imbriquees_sont_lues():
-    page = _extract_render_html(
-        {"page_content": "texte", "metadata": {"original_filename": "<a>.md", "partition": "demo"}},
-        "abc", b"", 200)
+    page = _extract_render_html({"page_content": "texte", "metadata": {"original_filename": "<a>.md", "partition": "demo"}}, "abc", b"", 200)
     assert "&lt;a&gt;.md" in page and "<a>.md" not in page
     assert "<strong>Collection</strong> : demo" in page
 

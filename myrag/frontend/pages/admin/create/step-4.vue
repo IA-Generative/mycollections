@@ -1,452 +1,165 @@
 <template>
   <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
+    <nav role="navigation" class="fr-breadcrumb" aria-label="vous êtes ici :">
       <ol class="fr-breadcrumb__list">
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
         <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Evaluation</a></li>
+        <li><a class="fr-breadcrumb__link" aria-current="page">Questions et qualité</a></li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">Mesure d'evaluation — {{ collection }}</h1>
-    <p class="fr-text--lg fr-mb-4w">Étape 4 sur 5 — Vérifiez la qualité des réponses avant de partager</p>
+    <h1 class="fr-h3">Vos questions, votre qualité — {{ collection }}</h1>
+    <p class="fr-text--lg fr-mb-4w">Étape 4 sur 5 — Vérifiez que la collection répond juste, avant de la partager</p>
 
     <WizardStepper :current-step="4" />
 
-    <div class="fr-col-8">
-      <!-- Quick test -->
-      <div class="fr-card fr-mb-4w">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-card__title">Tester le RAG</h3>
-            <div class="fr-input-group">
-              <textarea class="fr-input" v-model="question" rows="2"
-                        placeholder="Posez une question de test..."
-                        @keydown.enter.exact.prevent="!testing && question.trim() && test()"></textarea>
-            </div>
-            <button class="fr-btn fr-btn--sm fr-mt-1w" @click="test" :disabled="testing || !question.trim()">
-              {{ testing ? 'Test...' : 'Tester' }}
-            </button>
-            <div v-if="response" class="fr-mt-2w fr-p-2w myrag-md-preview" v-html="renderedResponse">
-            </div>
-            <div v-if="sourceNames.length" class="fr-mt-1w">
-              <p class="fr-text--xs" style="color:#666;">
-                Sources utilisees : {{ sourceNames.join(', ') }}
-              </p>
-            </div>
-            <div v-if="response && !sourceNames.length" class="fr-mt-1w">
-              <p class="fr-text--xs" style="color:#b34000;">
-                Aucune source retrouvee — le RAG n'a pas trouve de chunks pertinents.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Eval dataset -->
-      <div class="fr-card fr-mb-4w">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-card__title">Jeu de test (optionnel)</h3>
-            <p class="fr-text--sm">
-              Importez un fichier JSON de questions-reponses pour evaluer la qualite du RAG.
-              <a href="/exemple-evaluation.json" download class="fr-link fr-link--sm">
-                Telecharger un exemple de format
-              </a>
-            </p>
-
-            <details class="fr-mt-1w fr-mb-2w">
-              <summary class="fr-text--xs" style="cursor:pointer;color:#666;">
-                Voir le format attendu
-              </summary>
-              <pre class="fr-mt-1w" style="background:#f6f6f6;padding:0.8rem;border-radius:4px;font-size:0.75rem;overflow-x:auto;max-height:200px;">{
-  "name": "nom-du-jeu-de-test",
-  "description": "Description du jeu de test",
-  "questions": [
-    {
-      "id": "q1",
-      "question": "Votre question ici ?",
-      "expected_answer": "La reponse attendue...",
-      "must_cite": ["mot-cle-1", "mot-cle-2"],
-      "tags": ["theme"]
-    }
-  ]
-}</pre>
-            </details>
-
-            <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
-              <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="generateDataset" :disabled="generating">
-                {{ generating ? 'Generation en cours...' : 'Generer automatiquement' }}
-              </button>
-              <label class="fr-btn fr-btn--sm fr-btn--tertiary" style="cursor:pointer;">
-                Importer un fichier JSON
-                <input type="file" accept=".json" @change="importDataset" style="display:none;" />
-              </label>
-            </div>
-
-            <div v-if="generating" class="fr-mt-1w">
-              <p class="fr-text--xs" style="color:#666;">Le modèle lit la collection et propose des questions…</p>
-            </div>
-
-            <div v-if="generateError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w">
-              <p>{{ generateError }}</p>
-            </div>
-
-            <p v-if="datasetCount > 0" class="fr-text--sm fr-mt-1w" style="color:#18753c;">
-              {{ datasetCount }} questions chargees
-            </p>
-
-            <!-- Preview generated dataset -->
-            <div v-if="generatedDataset" class="fr-mt-2w">
-              <details open>
-                <summary class="fr-text--sm" style="cursor:pointer;font-weight:bold;">
-                  Questions generees ({{ generatedDataset.questions.length }})
-                </summary>
-                <div class="fr-mt-1w" style="max-height:300px;overflow-y:auto;">
-                  <div v-for="q in generatedDataset.questions" :key="q.id"
-                       class="fr-p-1w fr-mb-1w" style="border-radius:4px;font-size:0.8rem;"
-                       :style="q.out_of_scope ? 'background:#fff3cd;border-left:3px solid #b34000;' : 'background:#f6f6f6;'">
-                    <p>
-                      <strong>{{ q.id }}.</strong> {{ q.question }}
-                      <span v-if="q.out_of_scope" class="fr-badge fr-badge--sm fr-badge--warning" style="margin-left:0.5rem;">hors-sujet</span>
-                    </p>
-                    <p v-if="q.out_of_scope" style="color:#b34000;font-style:italic;">
-                      {{ q.note }}
-                    </p>
-                    <p v-else style="color:#666;">Reponse attendue : {{ q.expected_answer?.substring(0, 150) }}...</p>
-                  </div>
-                </div>
-                <div class="fr-btns-group fr-btns-group--inline fr-mt-1w">
-                  <button class="fr-btn fr-btn--sm" @click="downloadDataset">
-                    Telecharger le JSON
-                  </button>
-                  <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="runEval"
-                          :disabled="running || !generatedDataset?.questions?.length">
-                    {{ running ? `Test ${runProgress}/${generatedDataset.questions.length}...` : 'Lancer les tests' }}
-                  </button>
-                </div>
-              </details>
-            </div>
-
-            <!-- Eval results -->
-            <div v-if="evalResults.length" class="fr-mt-3w">
-              <h4 class="fr-h6">
-                Resultats — {{ evalScore }}/{{ evalResults.length }} reussis
-                ({{ Math.round(evalScore / evalResults.length * 100) }}%)
-              </h4>
-              <progress :value="evalScore" :max="evalResults.length" style="width:100%;height:8px;"></progress>
-
-              <div class="fr-mt-2w" style="max-height:400px;overflow-y:auto;">
-                <div v-for="r in evalResults" :key="r.id"
-                     class="fr-p-1w fr-mb-1w" style="border-radius:4px;font-size:0.8rem;"
-                     :style="resultStyle(r)">
-                  <p>
-                    <strong>{{ r.id }}.</strong> {{ r.question }}
-                    <span v-if="r.out_of_scope" class="fr-badge fr-badge--sm fr-badge--warning" style="margin-left:0.3rem;">hors-sujet</span>
-                    <span class="fr-badge fr-badge--sm" style="margin-left:0.3rem;"
-                          :class="r.pass ? 'fr-badge--success' : 'fr-badge--error'">
-                      {{ r.pass ? 'OK' : 'KO' }}
-                    </span>
-                  </p>
-                  <details>
-                    <summary class="fr-text--xs" style="cursor:pointer;color:#666;">Detail</summary>
-                    <div class="fr-mt-1v">
-                      <p class="fr-text--xs"><strong>Reponse RAG :</strong></p>
-                      <div class="fr-p-1v myrag-md-preview" style="max-height:150px;font-size:0.75rem;"
-                           v-html="renderMd(r.response)"></div>
-                      <p v-if="r.sources_found?.length" class="fr-text--xs fr-mt-1v" style="color:#666;">
-                        Sources : {{ r.sources_found.join(', ') }}
-                      </p>
-                      <p v-if="!r.out_of_scope && r.expected_answer" class="fr-text--xs fr-mt-1v" style="color:#666;">
-                        Attendu : {{ r.expected_answer.substring(0, 200) }}...
-                      </p>
-                      <p v-if="r.must_cite?.length" class="fr-text--xs fr-mt-1v">
-                        Mots-cles attendus :
-                        <span v-for="kw in r.must_cite" :key="kw" class="fr-badge fr-badge--sm fr-mr-1v"
-                              :class="r.keywords_found?.includes(kw) ? 'fr-badge--success' : 'fr-badge--error'">
-                          {{ kw }}
-                        </span>
-                      </p>
-                      <p v-if="r.out_of_scope" class="fr-text--xs fr-mt-1v"
-                         :style="r.pass ? 'color:#18753c;' : 'color:#b34000;'">
-                        {{ r.pass
-                          ? 'Le RAG a correctement refuse de repondre a cette question hors-sujet.'
-                          : 'Le RAG a fabrique une reponse a une question hors-sujet — a ameliorer.' }}
-                      </p>
-                      <div v-if="r.out_of_scope && !r.pass" class="fr-mt-1v">
-                        <p class="fr-text--xs" style="color:#666;">
-                          Le system prompt de la collection devrait indiquer au LLM de refuser les questions hors-sujet.
-                        </p>
-                        <button v-if="!promptPatched" class="fr-btn fr-btn--sm fr-btn--tertiary fr-mt-1v"
-                                @click="patchPromptGuardrail">
-                          Ajouter une regle de garde au system prompt
-                        </button>
-                        <p v-if="promptPatched" class="fr-text--xs fr-mt-1v" style="color:#18753c;">
-                          Regle ajoutee au system prompt. Relancez les tests pour verifier.
-                        </p>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div class="etape4">
       <div class="fr-callout fr-mb-4w">
-        <p class="fr-callout__text">
-          Cette etape est optionnelle. Vous pourrez evaluer la collection
-          a tout moment depuis la page Evaluation.
+        <h2 class="fr-callout__title fr-h6">Ce que vous faites ici</h2>
+        <p class="fr-callout__text fr-text--sm">
+          Vous constituez le <strong>jeu de questions</strong> de votre collection : celles que poseront vraiment les gens,
+          avec la bonne réponse. Il sert à <strong>mesurer la qualité</strong> aujourd'hui, puis à la suivre dans le temps et
+          à l'améliorer (redécouper les documents, préciser les consignes, marquer des réponses fiables). Vous le
+          retrouverez dans la page « Qualité » de la collection. Cette étape est facultative.
         </p>
       </div>
 
-      <!-- Navigation -->
+      <section class="fr-mb-6w" aria-labelledby="etape4-jeu">
+        <h2 id="etape4-jeu" class="fr-h5">1. Constituer le jeu de questions</h2>
+        <p class="fr-text--sm">
+          Faites rédiger des questions d'après les documents, ajoutez les vôtres ou importez un fichier. Relisez-les :
+          question et réponse se modifient en place, d'un clic. Seules les questions <strong>validées</strong> sont mesurées.
+        </p>
+        <QualiteJeuDeQuestions ref="jeu" :collection="collection" :filtre="filtre" @change="recharger" @ouvrir="i => ouvert = i" />
+      </section>
+
+      <section class="fr-mb-6w" aria-labelledby="etape4-mesure">
+        <h2 id="etape4-mesure" class="fr-h5">2. Mesurer la qualité maintenant</h2>
+        <p class="fr-text--sm">
+          Chaque question validée est posée à la collection ; un juge IA compare sa réponse à la vôtre et dit si elle est
+          conforme, partielle ou fausse — et pour une question hors sujet, si la collection a bien refusé.
+        </p>
+        <QualiteMesurer v-if="synthese" :collection="collection" :synthese="synthese" @fini="mesureFinie" />
+        <div v-if="synthese?.derniere_terminee" class="etape4__synthese fr-mt-3w">
+          <QualiteSynthese :synthese="synthese" titre="Synthèse de la dernière mesure" />
+          <div v-if="echecs" class="fr-mt-2w">
+            <p class="fr-text--sm fr-mb-1w">
+              <strong>À regarder :</strong> {{ echecs }} question{{ echecs > 1 ? 's' : '' }} mal répondue{{ echecs > 1 ? 's' : '' }}.
+              Ouvrez-en une : le volet montre la réponse obtenue, la raison du verdict et quoi faire.
+            </p>
+            <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" @click="voirEchecs">Afficher les plus graves dans le jeu</button>
+          </div>
+        </div>
+      </section>
+
+      <details class="fr-mb-6w etape4__libre">
+        <summary class="fr-h6 fr-mb-0">Poser une question libre à la collection</summary>
+        <div class="fr-mt-2w">
+          <div class="fr-input-group">
+            <label class="fr-label" for="etape4-question">Votre question</label>
+            <textarea id="etape4-question" v-model="question" class="fr-input" rows="2"
+                      @keydown.enter.exact.prevent="!enTest && question.trim() && tester()" />
+          </div>
+          <button type="button" class="fr-btn fr-btn--sm" :disabled="enTest || !question.trim()" @click="tester">
+            {{ enTest ? 'Question posée…' : 'Poser la question' }}
+          </button>
+          <div v-if="reponse" class="fr-mt-2w etape4__reponse" v-html="renderMarkdownSafe(reponse)" />
+          <p v-if="reponse" class="fr-text--xs fr-mt-1w etape4__discret">
+            {{ sources.length ? `Sources : ${sources.join(', ')}` : 'Aucun passage trouvé par la recherche.' }}
+          </p>
+        </div>
+      </details>
+
+      <section class="fr-callout fr-callout--green-emeraude fr-mb-4w" aria-labelledby="etape4-ensuite">
+        <h2 id="etape4-ensuite" class="fr-callout__title fr-h6">3. Et ensuite</h2>
+        <p class="fr-callout__text fr-text--sm">
+          Tout cela vous attend dans la page Qualité de la collection : mesurer à nouveau après chaque changement,
+          suivre la courbe, enrichir le jeu avec les avis des usagers, marquer des réponses fiables.
+        </p>
+        <NuxtLink :to="`/c/${collection}/qualite`" class="fr-link fr-mt-1w" target="_blank">Ouvrir la page Qualité (nouvel onglet)</NuxtLink>
+      </section>
+
       <div class="fr-btns-group fr-btns-group--inline">
-        <NuxtLink :to="`/admin/create/step-3?collection=${collection}`" class="fr-btn fr-btn--secondary">
-          ← Précédent
-        </NuxtLink>
-        <NuxtLink :to="`/admin/create/step-5?collection=${collection}`" class="fr-btn">
-          Suivant →
-        </NuxtLink>
+        <NuxtLink :to="`/admin/create/step-3?collection=${collection}`" class="fr-btn fr-btn--secondary">← Précédent</NuxtLink>
+        <NuxtLink :to="`/admin/create/step-5?collection=${collection}`" class="fr-btn">Suivant →</NuxtLink>
       </div>
     </div>
+
+    <QualiteVolet :collection="collection" :ident="ouvert" @fermer="ouvert = null" @change="questionChange" @levier="levier" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { renderMarkdownSafe } from '~/utils/sanitize'
+import { messageErreur } from '~/utils/collectif'
+
+/**
+ * Étape 4 de l'assistant : le début du jeu de questions de la collection, et une première mesure.
+ * Mêmes composants que la page Qualité (docs/qualite.md) : rien ne se perd en quittant l'étape.
+ */
 const route = useRoute()
 const collection = route.query.collection as string
-const { get, post, patch } = useApi()
-
-import { renderMarkdownSafe } from '~/utils/sanitize'
-
+const api = useQualite(collection)
+const { post } = useApi()
+const synthese = ref<any>(null)
+const ouvert = ref<string | null>(null)
+const filtre = ref<Record<string, string> | undefined>(undefined)
+const jeu = ref<any>(null)
 const question = ref('')
-const response = ref('')
-const sourceNames = ref<string[]>([])
-const testing = ref(false)
-const datasetCount = ref(0)
-const generating = ref(false)
-const generateError = ref('')
-const generatedDataset = ref<any>(null)
-const running = ref(false)
-const promptPatched = ref(false)
-const runProgress = ref(0)
-const evalResults = ref<any[]>([])
-const evalScore = computed(() => evalResults.value.filter(r => r.pass).length)
+const reponse = ref('')
+const sources = ref<string[]>([])
+const enTest = ref(false)
 
-const renderedResponse = computed(() => renderMarkdownSafe(response.value))
+const echecs = computed(() => {
+  const v = synthese.value?.derniere_terminee?.verdicts
+  return v ? v.non_conformes + v.partielles + v.refus_ko + v.sans_source : 0
+})
 
-async function test() {
-  testing.value = true
-  response.value = ''
-  sourceNames.value = []
+async function recharger() {
+  try { synthese.value = await api.synthese() } catch { /* la mesure reste masquée */ }
+}
+onMounted(recharger)
+
+function mesureFinie() {
+  recharger()
+  jeu.value?.charger()
+}
+function questionChange() {
+  recharger()
+  jeu.value?.charger()
+}
+function voirEchecs() {
+  // Le jeu filtre sur un verdict : le plus grave présent d'abord.
+  const v = synthese.value?.derniere_terminee?.verdicts || {}
+  const verdict = v.non_conformes ? 'non_conforme' : v.refus_ko ? 'refus_ko' : v.partielles ? 'partiel' : 'sans_source'
+  filtre.value = { verdict }
+  nextTick(() => document.getElementById('etape4-jeu')?.scrollIntoView({ behavior: 'smooth' }))
+}
+function levier(nom: 'decoupage' | 'consignes') {
+  window.open(`/c/${encodeURIComponent(collection)}/qualite?onglet=leviers#levier-${nom}`, '_blank', 'noopener')
+}
+
+async function tester() {
+  enTest.value = true
+  reponse.value = ''
+  sources.value = []
   try {
-    const data = await post(`/api/playground/${collection}/chat`, { question: question.value })
-    response.value = data.response || 'Pas de reponse'
-    sourceNames.value = data.source_names || []
-  } catch (e: any) { response.value = messageErreur(e) }
-  testing.value = false
-}
-
-async function generateDataset() {
-  generating.value = true
-  generateError.value = ''
-  generatedDataset.value = null
-  try {
-    const data = await post(`/api/playground/${collection}/generate-eval`, {})
-    if (data.questions && data.questions.length > 0) {
-      generatedDataset.value = data
-      datasetCount.value = data.questions.length
-    } else {
-      generateError.value = data.error || 'Aucune question generee. Reessayez.'
-    }
-  } catch (e: any) {
-    generateError.value = messageErreur(e)
-  }
-  generating.value = false
-}
-
-function downloadDataset() {
-  if (!generatedDataset.value) return
-  const blob = new Blob([JSON.stringify(generatedDataset.value, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${collection}-evaluation.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function renderMd(text: string): string {
-  return renderMarkdownSafe(text)
-}
-
-function resultStyle(r: any): string {
-  if (r.out_of_scope) return r.pass
-    ? 'background:#d4edda;border-left:3px solid #18753c;'
-    : 'background:#fff3cd;border-left:3px solid #b34000;'
-  return r.pass
-    ? 'background:#d4edda;border-left:3px solid #18753c;'
-    : 'background:#f8d7da;border-left:3px solid #ce0500;'
-}
-
-const GUARDRAIL_RULE = `
-
-## Regle de garde
-Si la question de l'utilisateur ne concerne pas le contenu de cette collection, reponds poliment que tu ne disposes pas d'informations sur ce sujet et invite l'utilisateur a reformuler sa question en lien avec le contenu de la collection.`
-
-async function patchPromptGuardrail() {
-  try {
-    let currentPrompt = ''
-    try {
-      const config = await get(`/api/collections/${collection}`)
-      currentPrompt = config?.system_prompt || ''
-    } catch { /* collection may not have a config yet */ }
-
-    if (currentPrompt.includes('Regle de garde')) {
-      promptPatched.value = true
-      return
-    }
-
-    await patch(`/api/collections/${collection}/system-prompt`, {
-      system_prompt: currentPrompt + GUARDRAIL_RULE,
-    })
-    promptPatched.value = true
-  } catch (e: any) {
-    generateError.value = `Les consignes n'ont pas pu être mises à jour : ${messageErreur(e)}`
-  }
-}
-
-async function runEval() {
-  if (!generatedDataset.value?.questions?.length) return
-  running.value = true
-  runProgress.value = 0
-  evalResults.value = []
-
-  for (const q of generatedDataset.value.questions) {
-    runProgress.value++
-    try {
-      const data = await post(`/api/playground/${collection}/chat`, { question: q.question })
-      const resp = (data.response || '').toLowerCase()
-      const sourcesFound = data.source_names || []
-
-      let pass = false
-      const keywordsFound: string[] = []
-
-      if (q.out_of_scope) {
-        // For out-of-scope: pass if the RAG says it can't answer / has no info
-        const refusalPatterns = [
-          'pas pu trouver', 'pas d\'information', 'ne dispose pas',
-          'pas de donnee', 'hors du champ', 'ne peux pas repondre',
-          'aucune information', 'pas en mesure', 'ne figure pas',
-          'ne concerne pas', 'n\'ai pas', 'ne sais pas',
-        ]
-        pass = refusalPatterns.some(p => resp.includes(p)) || sourcesFound.length === 0
-      } else {
-        // For normal questions: check keywords are cited in the response
-        if (q.must_cite?.length) {
-          for (const kw of q.must_cite) {
-            if (resp.includes(kw.toLowerCase())) {
-              keywordsFound.push(kw)
-            }
-          }
-          pass = keywordsFound.length >= Math.ceil(q.must_cite.length / 2)
-        } else {
-          // No must_cite: pass if we got sources
-          pass = sourcesFound.length > 0 && resp.length > 50
-        }
-      }
-
-      evalResults.value.push({
-        ...q,
-        response: data.response,
-        sources_found: sourcesFound,
-        keywords_found: keywordsFound,
-        pass,
-      })
-    } catch (e: any) {
-      evalResults.value.push({
-        ...q,
-        response: messageErreur(e),
-        sources_found: [],
-        keywords_found: [],
-        pass: false,
-      })
-    }
-  }
-
-  running.value = false
-}
-
-async function importDataset(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const text = await file.text()
-  try {
-    const data = JSON.parse(text)
-    generatedDataset.value = data
-    datasetCount.value = data.questions?.length || 0
-  } catch {
-    generateError.value = 'Fichier JSON invalide.'
+    const d = await post(`/api/playground/${encodeURIComponent(collection)}/chat`, { question: question.value })
+    reponse.value = d.response || 'Pas de réponse.'
+    sources.value = d.source_names || []
+  } catch (e) {
+    reponse.value = messageErreur(e)
+  } finally {
+    enTest.value = false
   }
 }
 </script>
 
 <style scoped>
-.myrag-md-preview {
-  background: #f6f6f6;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.myrag-md-preview :deep(h1),
-.myrag-md-preview :deep(h2),
-.myrag-md-preview :deep(h3) {
-  font-size: 1rem;
-  margin: 0.8rem 0 0.4rem;
-}
-
-.myrag-md-preview :deep(p) {
-  margin: 0.4rem 0;
-}
-
-.myrag-md-preview :deep(ul),
-.myrag-md-preview :deep(ol) {
-  padding-left: 1.5rem;
-  margin: 0.4rem 0;
-}
-
-.myrag-md-preview :deep(code) {
-  background: #e3e3e3;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  font-size: 0.8rem;
-}
-
-.myrag-md-preview :deep(pre) {
-  background: #e3e3e3;
-  padding: 0.8rem;
-  border-radius: 4px;
-  overflow-x: auto;
-}
-
-.myrag-md-preview :deep(pre code) {
-  background: none;
-  padding: 0;
-}
-
-.myrag-md-preview :deep(strong) {
-  font-weight: 700;
-}
-
-.myrag-md-preview :deep(blockquote) {
-  border-left: 3px solid #000091;
-  padding-left: 0.8rem;
-  margin: 0.4rem 0;
-  color: #555;
-}
+.etape4 { max-width: 64rem; }
+.etape4__synthese { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; }
+.etape4__libre summary { cursor: pointer; }
+.etape4__reponse { background: var(--background-alt-grey); padding: .75rem; font-size: .875rem; max-height: 24rem; overflow-y: auto; }
+.etape4__reponse :deep(p), .etape4__reponse :deep(ul), .etape4__reponse :deep(ol) { margin: 0 0 .5rem; }
+.etape4__discret { color: var(--text-mention-grey); }
 </style>

@@ -42,6 +42,7 @@ def capacite(nom: str):
     async def _dep() -> None:
         if (await capacites.lire_async()).get(nom) is not True:
             raise HTTPException(status_code=404, detail=f"Fonction désactivée : « {nom} » n'est pas déclarée dans capacites.json")
+
     return _dep
 
 
@@ -51,8 +52,7 @@ async def collection_lisible(name: str, moi: Identite = Depends(identite)) -> di
         f = await store.fiche(name)
     except store.Introuvable:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
-    if not access.can_read(name=name, scope=f["scope"], scope_groups=f["scope_groups"],
-                           created_by=f["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub):
+    if not access.can_read(name=name, scope=f["scope"], scope_groups=f["scope_groups"], created_by=f["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub):
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     return f
 

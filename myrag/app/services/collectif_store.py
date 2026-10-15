@@ -15,8 +15,15 @@ from sqlalchemy import delete, func, select
 from app.config import settings
 from app.database import async_session
 from app.models.db import (
-    Abonnement, Amorce, Collection, Demande, Evenement, GrilleControle, Proposition,
-    Signalement, Soutien, utcnow,
+    Abonnement,
+    Amorce,
+    Collection,
+    Demande,
+    GrilleControle,
+    Proposition,
+    Signalement,
+    Soutien,
+    utcnow,
 )
 from app.services import etats, journal, relais
 from app.services.pseudo import SelAbsent, condenser
@@ -36,6 +43,7 @@ class Interdit(PermissionError):
 
 # ─── Signature d'un geste ─────────────────────────────────────────────────────────
 
+
 def signature(sub: str | None) -> dict:
     """Les arguments de journal.ecrire pour une personne — ou, sans sel, pour le service."""
     if sub:
@@ -54,6 +62,7 @@ def _fusion_detail(sig: dict, detail: dict | None) -> dict:
 
 # ─── Demandes ─────────────────────────────────────────────────────────────────────
 
+
 async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> list[dict]:
     if not demandes:
         return []
@@ -64,11 +73,11 @@ async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> l
         par_demande.setdefault(s.demande_id, []).append(s)
     abonnes: set[str] = set()
     if sub_hash:
-        abonnes = set((await session.execute(
-            select(Abonnement.objet_id).where(
-                Abonnement.objet_type == "demande", Abonnement.objet_id.in_(ids), Abonnement.sub_hash == sub_hash
-            )
-        )).scalars().all())
+        abonnes = set(
+            (await session.execute(select(Abonnement.objet_id).where(Abonnement.objet_type == "demande", Abonnement.objet_id.in_(ids), Abonnement.sub_hash == sub_hash)))
+            .scalars()
+            .all()
+        )
     derniers = await journal.derniers_par_objet(session, "demande")
     maintenant = utcnow()
     delai = timedelta(days=settings.confirmation_jours)
@@ -76,33 +85,33 @@ async def _enrichir(session, demandes: list[Demande], sub_hash: str | None) -> l
     for d in demandes:
         mes = [s for s in par_demande.get(d.id, []) if sub_hash and s.sub_hash == sub_hash]
         liste = par_demande.get(d.id, [])
-        roles: dict[str, int] = {"demandeur": 1}   # l'auteur, toujours — il n'est pas compté dans les soutiens
+        roles: dict[str, int] = {"demandeur": 1}  # l'auteur, toujours — il n'est pas compté dans les soutiens
         for s in liste:
             roles[s.role] = roles.get(s.role, 0) + 1
         fiche = d.to_dict()
-        fiche.update({
-            "nb_soutiens": len({s.sub_hash for s in liste}),
-            "garant": any(s.role == "garant" for s in liste),
-            "roles": roles,
-            "temps_declare_min": sum(s.temps_declare_min or 0 for s in liste),
-            "soutenue_par_moi": bool(mes),
-            "mon_role": mes[0].role if mes else None,
-            "abonne": d.id in abonnes,
-            "sommeil": etats.en_sommeil(d.etat, derniers.get(d.id), maintenant, settings.sommeil_jours),
-            "seuil_atteint": len({s.sub_hash for s in liste}) >= d.seuil,
-            # L'auteur tient le rôle « demandeur » d'office : il n'est pas un soutien (le seuil compte
-            # les AUTRES), et il est celui qui dit, à la fin, si la collection répond au besoin.
-            "je_suis_demandeur": bool(sub_hash) and d.cree_par_hash == sub_hash,
-            "confirmation_avant": (d.confirmation_demandee_le + delai).isoformat()
-                                  if d.etat == "a_confirmer" and d.confirmation_demandee_le else None,
-        })
+        fiche.update(
+            {
+                "nb_soutiens": len({s.sub_hash for s in liste}),
+                "garant": any(s.role == "garant" for s in liste),
+                "roles": roles,
+                "temps_declare_min": sum(s.temps_declare_min or 0 for s in liste),
+                "soutenue_par_moi": bool(mes),
+                "mon_role": mes[0].role if mes else None,
+                "abonne": d.id in abonnes,
+                "sommeil": etats.en_sommeil(d.etat, derniers.get(d.id), maintenant, settings.sommeil_jours),
+                "seuil_atteint": len({s.sub_hash for s in liste}) >= d.seuil,
+                # L'auteur tient le rôle « demandeur » d'office : il n'est pas un soutien (le seuil compte
+                # les AUTRES), et il est celui qui dit, à la fin, si la collection répond au besoin.
+                "je_suis_demandeur": bool(sub_hash) and d.cree_par_hash == sub_hash,
+                "confirmation_avant": (d.confirmation_demandee_le + delai).isoformat() if d.etat == "a_confirmer" and d.confirmation_demandee_le else None,
+            }
+        )
         resultat.append(fiche)
     return resultat
 
 
 async def _abonnes_dans(session, objet_type: str, objet_id: str) -> list[str]:
-    return list((await session.execute(select(Abonnement.sub_hash).where(
-        Abonnement.objet_type == objet_type, Abonnement.objet_id == objet_id))).scalars().all())
+    return list((await session.execute(select(Abonnement.sub_hash).where(Abonnement.objet_type == objet_type, Abonnement.objet_id == objet_id))).scalars().all())
 
 
 async def _abonner_dans(session, objet_type: str, objet_id: str, sub_hash: str) -> None:
@@ -117,8 +126,7 @@ async def creer_demande(donnees: dict, sub_hash: str, seuil: int) -> dict:
         session.add(d)
         await session.flush()
         await _abonner_dans(session, "demande", d.id, sub_hash)
-        journal.ecrire(session, "demande", d.id, "demande.creee", auteur_hash=sub_hash,
-                       detail={"frequence": d.frequence, "seuil": seuil})
+        journal.ecrire(session, "demande", d.id, "demande.creee", auteur_hash=sub_hash, detail={"frequence": d.frequence, "seuil": seuil})
         await session.commit()
         return (await _enrichir(session, [d], sub_hash))[0]
 
@@ -129,14 +137,18 @@ async def _echeances(session) -> None:
     et l'état servi est toujours juste. Écrit et journalise ; ne fait rien s'il n'y a rien d'échu."""
     maintenant = utcnow()
     en_attente = (await session.execute(select(Demande).where(Demande.etat == "a_confirmer"))).scalars().all()
-    echues = [d for d in en_attente
-              if etats.confirmation_echue(d.etat, d.confirmation_demandee_le, maintenant, settings.confirmation_jours)]
+    echues = [d for d in en_attente if etats.confirmation_echue(d.etat, d.confirmation_demandee_le, maintenant, settings.confirmation_jours)]
     for d in echues:
-        journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur",
-                       detail={"de": "a_confirmer", "vers": "realisee", "satisfaction": "sans_reponse",
-                               "jours": settings.confirmation_jours})
+        journal.ecrire(
+            session,
+            "demande",
+            d.id,
+            "demande.etat",
+            robot="serveur",
+            detail={"de": "a_confirmer", "vers": "realisee", "satisfaction": "sans_reponse", "jours": settings.confirmation_jours},
+        )
         d.etat, d.satisfaction, d.maj_le = "realisee", "sans_reponse", maintenant
-        d.contact = None   # la demande est terminée : le courriel n'a plus de raison d'être gardé
+        d.contact = None  # la demande est terminée : le courriel n'a plus de raison d'être gardé
     if echues:
         await session.commit()
 
@@ -189,9 +201,14 @@ async def confirmer_satisfaction(ident: str, sub_hash: str, satisfait: bool, mot
         if d.etat != "a_confirmer":
             raise Conflit("cette demande n'attend pas de confirmation")
         vers = "realisee" if satisfait else "chantier"
-        journal.ecrire(session, "demande", ident, "demande.etat", auteur_hash=sub_hash,
-                       detail={"de": d.etat, "vers": vers, "satisfaction": "oui" if satisfait else "non",
-                               **({} if satisfait else {"motif": motif})})
+        journal.ecrire(
+            session,
+            "demande",
+            ident,
+            "demande.etat",
+            auteur_hash=sub_hash,
+            detail={"de": d.etat, "vers": vers, "satisfaction": "oui" if satisfait else "non", **({} if satisfait else {"motif": motif})},
+        )
         d.etat, d.maj_le = vers, utcnow()
         d.satisfaction = "oui" if satisfait else "non"
         d.motif_insatisfaction = None if satisfait else motif
@@ -199,12 +216,12 @@ async def confirmer_satisfaction(ident: str, sub_hash: str, satisfait: bool, mot
             d.contact = None
         else:
             d.confirmation_demandee_le = None
-        garants = [] if satisfait else list((await session.execute(select(Soutien.sub_hash).where(
-            Soutien.demande_id == ident, Soutien.role == "garant"))).scalars().all())
+        garants = [] if satisfait else list((await session.execute(select(Soutien.sub_hash).where(Soutien.demande_id == ident, Soutien.role == "garant"))).scalars().all())
         await session.commit()
         if garants:
-            relais.planifier(garants, f"« {d.titre} » : son auteur indique que la collection ne répond pas "
-                                      f"encore à son besoin — « {(motif or '')[:200]} ». La demande redevient un chantier.")
+            relais.planifier(
+                garants, f"« {d.titre} » : son auteur indique que la collection ne répond pas encore à son besoin — « {(motif or '')[:200]} ». La demande redevient un chantier."
+            )
         return (await _enrichir(session, [d], sub_hash))[0]
 
 
@@ -216,8 +233,7 @@ async def modifier_demande(ident: str, champs: dict, sub_hash: str) -> dict:
         for k, v in champs.items():
             setattr(d, k, v)
         d.maj_le = utcnow()
-        journal.ecrire(session, "demande", d.id, "demande.modifiee", auteur_hash=sub_hash,
-                       detail={"champs": sorted(champs)})
+        journal.ecrire(session, "demande", d.id, "demande.modifiee", auteur_hash=sub_hash, detail={"champs": sorted(champs)})
         await session.commit()
         return (await _enrichir(session, [d], sub_hash))[0]
 
@@ -230,10 +246,8 @@ async def _recalculer_etat(session, d: Demande, sub_hash: str) -> None:
     nb = len({s.sub_hash for s in lignes})
     a_garant = any(s.role == "garant" for s in lignes)
     if etats.demande_atteint_le_chantier(nb, a_garant, d.seuil):
-        journal.ecrire(session, "demande", d.id, "seuil.atteint", robot="serveur",
-                       detail={"soutiens": nb, "seuil": d.seuil, "garant": True})
-        journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur",
-                       detail={"de": d.etat, "vers": "chantier"})
+        journal.ecrire(session, "demande", d.id, "seuil.atteint", robot="serveur", detail={"soutiens": nb, "seuil": d.seuil, "garant": True})
+        journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur", detail={"de": d.etat, "vers": "chantier"})
         d.etat = "chantier"
         d.maj_le = utcnow()
 
@@ -246,9 +260,7 @@ async def soutenir(ident: str, sub_hash: str, role: str, temps: int | None) -> d
         if d.etat in ("realisee", "close"):
             raise Conflit("cette demande n'accepte plus de soutien")
         if role == "garant":
-            autre = (await session.execute(select(Soutien).where(
-                Soutien.demande_id == ident, Soutien.role == "garant", Soutien.sub_hash != sub_hash
-            ))).scalars().first()
+            autre = (await session.execute(select(Soutien).where(Soutien.demande_id == ident, Soutien.role == "garant", Soutien.sub_hash != sub_hash))).scalars().first()
             if autre:
                 raise Conflit("cette demande a déjà un garant")
         s = await session.get(Soutien, (ident, sub_hash))
@@ -258,11 +270,8 @@ async def soutenir(ident: str, sub_hash: str, role: str, temps: int | None) -> d
             session.add(Soutien(demande_id=ident, sub_hash=sub_hash, role=role, temps_declare_min=temps))
         await _abonner_dans(session, "demande", ident, sub_hash)
         await session.flush()
-        nb = (await session.execute(
-            select(func.count(func.distinct(Soutien.sub_hash))).where(Soutien.demande_id == ident)
-        )).scalar_one()
-        journal.ecrire(session, "demande", ident, "soutien.ajoute", auteur_hash=sub_hash,
-                       detail={"role": role, "temps_declare_min": temps, "nb_soutiens": int(nb)})
+        nb = (await session.execute(select(func.count(func.distinct(Soutien.sub_hash))).where(Soutien.demande_id == ident))).scalar_one()
+        journal.ecrire(session, "demande", ident, "soutien.ajoute", auteur_hash=sub_hash, detail={"role": role, "temps_declare_min": temps, "nb_soutiens": int(nb)})
         avant = d.etat
         await _recalculer_etat(session, d, sub_hash)
         abonnes = await _abonnes_dans(session, "demande", ident) if d.etat != avant else []
@@ -281,11 +290,8 @@ async def retirer_soutien(ident: str, sub_hash: str) -> dict:
         if s:
             await session.delete(s)
             await session.flush()
-            nb = (await session.execute(
-                select(func.count(func.distinct(Soutien.sub_hash))).where(Soutien.demande_id == ident)
-            )).scalar_one()
-            journal.ecrire(session, "demande", ident, "soutien.retire", auteur_hash=sub_hash,
-                           detail={"role": s.role, "nb_soutiens": int(nb)})
+            nb = (await session.execute(select(func.count(func.distinct(Soutien.sub_hash))).where(Soutien.demande_id == ident))).scalar_one()
+            journal.ecrire(session, "demande", ident, "soutien.retire", auteur_hash=sub_hash, detail={"role": s.role, "nb_soutiens": int(nb)})
         await session.commit()
         return (await _enrichir(session, [d], sub_hash))[0]
 
@@ -306,9 +312,7 @@ async def abonner(objet_type: str, objet_id: str, sub_hash: str, oui: bool) -> b
         if oui:
             await _abonner_dans(session, objet_type, objet_id, sub_hash)
         else:
-            await session.execute(delete(Abonnement).where(
-                Abonnement.objet_type == objet_type, Abonnement.objet_id == objet_id, Abonnement.sub_hash == sub_hash
-            ))
+            await session.execute(delete(Abonnement).where(Abonnement.objet_type == objet_type, Abonnement.objet_id == objet_id, Abonnement.sub_hash == sub_hash))
         await session.commit()
         return oui
 
@@ -320,10 +324,9 @@ async def clore_demande(ident: str, sub_hash: str, doublon_de: str | None, motif
             raise Introuvable(ident)
         if doublon_de and not await session.get(Demande, doublon_de):
             raise Introuvable(doublon_de)
-        journal.ecrire(session, "demande", ident, "demande.etat", auteur_hash=sub_hash,
-                       detail={"de": d.etat, "vers": "close", "doublon_de": doublon_de, "motif": motif})
+        journal.ecrire(session, "demande", ident, "demande.etat", auteur_hash=sub_hash, detail={"de": d.etat, "vers": "close", "doublon_de": doublon_de, "motif": motif})
         d.etat, d.doublon_de, d.motif_cloture, d.maj_le = "close", doublon_de, motif, utcnow()
-        d.contact = None   # la demande est terminée : le courriel n'a plus de raison d'être gardé
+        d.contact = None  # la demande est terminée : le courriel n'a plus de raison d'être gardé
         await session.commit()
         return (await _enrichir(session, [d], sub_hash))[0]
 
@@ -336,6 +339,7 @@ async def journal_de(objet_type: str, objet_id: str, limite: int, avant: datetim
 
 # ─── Collections : état, garant, grille ───────────────────────────────────────────
 
+
 async def fiche(name: str) -> dict:
     """La fiche brute d'une collection, garant compris (jamais servie telle quelle)."""
     async with async_session() as session:
@@ -343,15 +347,20 @@ async def fiche(name: str) -> dict:
         if not c:
             raise Introuvable(name)
         return {
-            "name": c.name, "etat_collab": c.etat_collab or "amorcee", "garant_hash": c.garant_hash,
-            "demande_id": c.demande_id, "scope": c.scope, "created_by": c.created_by,
-            "scope_groups": json.loads(c.scope_groups_json or "[]"), "archived_at": c.archived_at,
+            "name": c.name,
+            "etat_collab": c.etat_collab or "amorcee",
+            "garant_hash": c.garant_hash,
+            "demande_id": c.demande_id,
+            "scope": c.scope,
+            "created_by": c.created_by,
+            "scope_groups": json.loads(c.scope_groups_json or "[]"),
+            "archived_at": c.archived_at,
         }
 
 
-async def initialiser_collection(name: str, sub: str | None, *, demande_id: str | None = None,
-                                 garant_pressenti: str = "", grille: dict | None = None,
-                                 robot: str | None = None) -> None:
+async def initialiser_collection(
+    name: str, sub: str | None, *, demande_id: str | None = None, garant_pressenti: str = "", grille: dict | None = None, robot: str | None = None
+) -> None:
     """À la création : état amorcée, créateur garant, grille (pré-remplie ou vide), journal."""
     async with async_session() as session:
         c = await session.get(Collection, name)
@@ -372,8 +381,7 @@ async def initialiser_collection(name: str, sub: str | None, *, demande_id: str 
         for champ in ("source_licence", "donnees_perso", "fraicheur"):
             if (grille or {}).get(champ) and not getattr(g, champ):
                 setattr(g, champ, grille[champ])
-        journal.ecrire(session, "collection", name, "collection.creee", collection_name=name,
-                       **_fusion_detail(sig, {"etat": c.etat_collab}))
+        journal.ecrire(session, "collection", name, "collection.creee", collection_name=name, **_fusion_detail(sig, {"etat": c.etat_collab}))
         await session.commit()
 
 
@@ -387,9 +395,12 @@ async def lire_etat(name: str, sub_hash: str | None, superadmin: bool) -> dict:
         etat = c.etat_collab or "amorcee"
         je_suis_garant = bool(sub_hash) and c.garant_hash == sub_hash
         return {
-            "collection": name, "etat": etat, "etats": list(etats.ETATS_COLLECTION),
+            "collection": name,
+            "etat": etat,
+            "etats": list(etats.ETATS_COLLECTION),
             "mention": etats.mention_verification(etat),
-            "garant": bool(c.garant_hash), "garant_pressenti": c.garant_pressenti or "",
+            "garant": bool(c.garant_hash),
+            "garant_pressenti": c.garant_pressenti or "",
             "je_suis_garant": je_suis_garant,
             "transitions_possibles": etats.transitions_possibles(etat, grille) if (je_suis_garant or superadmin) else [],
             "grille_complete": etats.grille_complete(grille),
@@ -408,8 +419,7 @@ async def changer_etat(name: str, cible: str, sub_hash: str, *, forcer: bool, mo
         detail = {"de": de, "vers": vers}
         if forcer:
             detail.update({"force": True, "motif": motif})
-        journal.ecrire(session, "collection", name, "collection.etat", auteur_hash=sub_hash,
-                       collection_name=name, detail=detail)
+        journal.ecrire(session, "collection", name, "collection.etat", auteur_hash=sub_hash, collection_name=name, detail=detail)
         abonnes = await _abonnes_dans(session, "collection", name)
         if c.demande_id:
             abonnes += await _abonnes_dans(session, "demande", c.demande_id)
@@ -419,20 +429,20 @@ async def changer_etat(name: str, cible: str, sub_hash: str, *, forcer: bool, mo
             d = await session.get(Demande, c.demande_id)
             if d and d.etat in ("ouverte", "chantier"):
                 # Plus de passage direct à « réalisée » : l'auteur dit d'abord si la collection répond.
-                journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur",
-                               detail={"de": d.etat, "vers": "a_confirmer", "collection": name})
+                journal.ecrire(session, "demande", d.id, "demande.etat", robot="serveur", detail={"de": d.etat, "vers": "a_confirmer", "collection": name})
                 d.etat, d.collection_name, d.maj_le = "a_confirmer", name, utcnow()
                 d.confirmation_demandee_le = utcnow()
                 a_solliciter, titre_demande = [d.cree_par_hash], d.titre
         await session.commit()
     if a_solliciter:
-        relais.planifier(a_solliciter,
-                         f"Votre demande « {titre_demande} » a sa collection, publiée à tous. Répond-elle à votre "
-                         f"besoin ? Dites-le sur la page de la demande — sans réponse sous {settings.confirmation_jours} "
-                         f"jours, elle sera considérée comme réalisée.")
+        relais.planifier(
+            a_solliciter,
+            f"Votre demande « {titre_demande} » a sa collection, publiée à tous. Répond-elle à votre "
+            f"besoin ? Dites-le sur la page de la demande — sans réponse sous {settings.confirmation_jours} "
+            f"jours, elle sera considérée comme réalisée.",
+        )
     libelles = {"amorcee": "amorcée", "en_controle": "en contrôle", "publiee_groupe": "publiée au groupe", "publiee_tous": "publiée à tous"}
-    relais.planifier(abonnes, f"La collection « {name} » est désormais {libelles.get(vers, vers)}"
-                              + (" (forçage par l'administration)." if forcer else "."))
+    relais.planifier(abonnes, f"La collection « {name} » est désormais {libelles.get(vers, vers)}" + (" (forçage par l'administration)." if forcer else "."))
     return await lire_etat(name, sub_hash, True)
 
 
@@ -456,8 +466,7 @@ async def maj_grille(name: str, champs: dict, sub_hash: str) -> dict:
             else:
                 setattr(g, k, v)
         g.maj_par_hash, g.maj_le = sub_hash, utcnow()
-        journal.ecrire(session, "collection", name, "grille.maj", auteur_hash=sub_hash,
-                       collection_name=name, detail={"champs": sorted(champs)})
+        journal.ecrire(session, "collection", name, "grille.maj", auteur_hash=sub_hash, collection_name=name, detail={"champs": sorted(champs)})
         await session.commit()
     return await lire_grille(name)
 
@@ -472,8 +481,7 @@ async def poser_couverture(name: str, couverture: dict, robot: str) -> None:
             session.add(g)
         g.couverture_json = json.dumps(couverture, ensure_ascii=False, default=str)
         g.maj_le = utcnow()
-        journal.ecrire(session, "collection", name, "grille.maj", robot=robot, collection_name=name,
-                       detail={"champs": ["couverture"]})
+        journal.ecrire(session, "collection", name, "grille.maj", robot=robot, collection_name=name, detail={"champs": ["couverture"]})
         await session.commit()
 
 
@@ -489,23 +497,23 @@ async def relire(name: str, sub_hash: str) -> dict:
             g.relecteurs_json = json.dumps(relecteurs)
             g.relecture_n = len(relecteurs)
             g.maj_le = utcnow()
-            journal.ecrire(session, "collection", name, "grille.relue", auteur_hash=sub_hash,
-                           collection_name=name, detail={"relecture_n": g.relecture_n})
+            journal.ecrire(session, "collection", name, "grille.relue", auteur_hash=sub_hash, collection_name=name, detail={"relecture_n": g.relecture_n})
         await session.commit()
     return await lire_grille(name)
 
 
 # ─── Propositions ─────────────────────────────────────────────────────────────────
 
+
 async def creer_proposition(name: str, donnees: dict, sub_hash: str) -> dict:
     async with async_session() as session:
         p = Proposition(collection_name=name, auteur_hash=sub_hash, **donnees)
         session.add(p)
         await session.flush()
-        journal.ecrire(session, "proposition", p.id, "proposition.deposee", auteur_hash=sub_hash,
-                       collection_name=name, detail={"cible_type": p.cible_type, "cible_ref": p.cible_ref})
-        journal.ecrire(session, "collection", name, "proposition.deposee", auteur_hash=sub_hash,
-                       collection_name=name, detail={"proposition": p.id})
+        journal.ecrire(
+            session, "proposition", p.id, "proposition.deposee", auteur_hash=sub_hash, collection_name=name, detail={"cible_type": p.cible_type, "cible_ref": p.cible_ref}
+        )
+        journal.ecrire(session, "collection", name, "proposition.deposee", auteur_hash=sub_hash, collection_name=name, detail={"proposition": p.id})
         await session.commit()
         return p.to_dict()
 
@@ -546,26 +554,23 @@ async def decider_proposition(name: str, ident: str, decision: str, motif: str |
             detail["application"] = await appliquer_proposition(p)
         type_ = "proposition.publiee" if decision == "publiee" else "proposition.refusee"
         journal.ecrire(session, "proposition", ident, type_, auteur_hash=sub_hash, collection_name=name, detail=detail)
-        journal.ecrire(session, "collection", name, type_, auteur_hash=sub_hash, collection_name=name,
-                       detail={"proposition": ident, **detail})
+        journal.ecrire(session, "collection", name, type_, auteur_hash=sub_hash, collection_name=name, detail={"proposition": ident, **detail})
         destinataires = [p.auteur_hash] + await _abonnes_dans(session, "collection", name)
         await session.commit()
-        relais.planifier(destinataires, f"Proposition sur « {name} » {'publiée' if decision == 'publiee' else 'refusée'}"
-                                        + (f" — motif : {motif}" if motif else "") + ".")
+        relais.planifier(destinataires, f"Proposition sur « {name} » {'publiée' if decision == 'publiee' else 'refusée'}" + (f" — motif : {motif}" if motif else "") + ".")
         return p.to_dict()
 
 
 # ─── Signalements ─────────────────────────────────────────────────────────────────
+
 
 async def creer_signalement(name: str, donnees: dict, sub_hash: str) -> dict:
     async with async_session() as session:
         s = Signalement(collection_name=name, auteur_hash=sub_hash, **donnees)
         session.add(s)
         await session.flush()
-        journal.ecrire(session, "signalement", s.id, "signalement.depose", auteur_hash=sub_hash,
-                       collection_name=name, detail={"motif": s.motif, "fichier_id": s.fichier_id})
-        journal.ecrire(session, "collection", name, "signalement.depose", auteur_hash=sub_hash,
-                       collection_name=name, detail={"signalement": s.id, "motif": s.motif})
+        journal.ecrire(session, "signalement", s.id, "signalement.depose", auteur_hash=sub_hash, collection_name=name, detail={"motif": s.motif, "fichier_id": s.fichier_id})
+        journal.ecrire(session, "collection", name, "signalement.depose", auteur_hash=sub_hash, collection_name=name, detail={"signalement": s.id, "motif": s.motif})
         await session.commit()
         return s.to_dict()
 
@@ -585,10 +590,8 @@ async def traiter_signalement(name: str, ident: str, etat: str, sub_hash: str) -
             raise Introuvable(ident)
         de = s.etat
         s.etat, s.traite_par_hash, s.traite_le = etat, sub_hash, utcnow()
-        journal.ecrire(session, "signalement", ident, "signalement.traite", auteur_hash=sub_hash,
-                       collection_name=name, detail={"de": de, "vers": etat})
-        journal.ecrire(session, "collection", name, "signalement.traite", auteur_hash=sub_hash,
-                       collection_name=name, detail={"signalement": ident, "vers": etat})
+        journal.ecrire(session, "signalement", ident, "signalement.traite", auteur_hash=sub_hash, collection_name=name, detail={"de": de, "vers": etat})
+        journal.ecrire(session, "collection", name, "signalement.traite", auteur_hash=sub_hash, collection_name=name, detail={"signalement": ident, "vers": etat})
         auteur = s.auteur_hash
         await session.commit()
         relais.planifier([auteur], f"Votre signalement sur « {name} » est {'clos' if etat == 'clos' else 'pris en compte'}.")
@@ -597,13 +600,14 @@ async def traiter_signalement(name: str, ident: str, etat: str, sub_hash: str) -
 
 # ─── Journal depuis les routes historiques ────────────────────────────────────────
 
-async def consigner(objet_type: str, objet_id: str, type_: str, sub: str | None = None, *,
-                    robot: str | None = None, collection_name: str | None = None, detail: dict | None = None) -> None:
+
+async def consigner(
+    objet_type: str, objet_id: str, type_: str, sub: str | None = None, *, robot: str | None = None, collection_name: str | None = None, detail: dict | None = None
+) -> None:
     """Écrire un événement hors d'une transaction du collectif (routes historiques, jobs)."""
     sig = {"robot": robot} if robot else signature(sub)
     async with async_session() as session:
-        journal.ecrire(session, objet_type, objet_id, type_, collection_name=collection_name,
-                       **_fusion_detail(sig, detail))
+        journal.ecrire(session, objet_type, objet_id, type_, collection_name=collection_name, **_fusion_detail(sig, detail))
         await session.commit()
 
 
@@ -620,13 +624,13 @@ async def delier_collection(name: str) -> None:
 
 # ─── Amorces ──────────────────────────────────────────────────────────────────────
 
+
 async def etats_des_amorces() -> dict[str, dict]:
     async with async_session() as session:
         return {a.id: a.to_dict() for a in (await session.execute(select(Amorce))).scalars().all()}
 
 
-async def marquer_amorce(ident: str, etat_import: str, *, collection_name: str | None = None,
-                         detail: dict | None = None, erreur: str | None = None) -> dict:
+async def marquer_amorce(ident: str, etat_import: str, *, collection_name: str | None = None, detail: dict | None = None, erreur: str | None = None) -> dict:
     async with async_session() as session:
         a = await session.get(Amorce, ident)
         if not a:
@@ -646,50 +650,53 @@ async def marquer_amorce(ident: str, etat_import: str, *, collection_name: str |
 
 # ─── Ce que la cloche de la barre commune affiche (lot 4) ─────────────────────────
 
+
 async def suivi_pour(sub_hash: str) -> dict:
     """Les demandes que je soutiens ou que je suis, celles à un soutien du seuil, les
     collections que je suis — pour la cloche, en un appel."""
     async with async_session() as session:
         miennes = set((await session.execute(select(Soutien.demande_id).where(Soutien.sub_hash == sub_hash))).scalars().all())
-        miennes |= set((await session.execute(select(Abonnement.objet_id).where(
-            Abonnement.objet_type == "demande", Abonnement.sub_hash == sub_hash))).scalars().all())
+        miennes |= set((await session.execute(select(Abonnement.objet_id).where(Abonnement.objet_type == "demande", Abonnement.sub_hash == sub_hash))).scalars().all())
         await _echeances(session)
-        ouvertes = list((await session.execute(select(Demande).where(Demande.etat.in_(("ouverte", "chantier", "a_confirmer")))
-                                               .order_by(Demande.maj_le.desc()))).scalars().all())
+        ouvertes = list((await session.execute(select(Demande).where(Demande.etat.in_(("ouverte", "chantier", "a_confirmer"))).order_by(Demande.maj_le.desc()))).scalars().all())
         enrichies = await _enrichir(session, ouvertes, sub_hash)
         suivies = [d for d in enrichies if d["id"] in miennes]
-        presque = [d for d in enrichies if d["etat"] == "ouverte" and not d["soutenue_par_moi"]
-                   and d["nb_soutiens"] >= max(1, d["seuil"] - 1)][:5]
-        collections = list((await session.execute(select(Abonnement.objet_id).where(
-            Abonnement.objet_type == "collection", Abonnement.sub_hash == sub_hash))).scalars().all())
-        cles = ("id", "titre", "etat", "nb_soutiens", "seuil", "garant", "sommeil", "soutenue_par_moi", "mon_role", "collection_name",
-                "je_suis_demandeur", "confirmation_avant")
-        return {"demandes": [{k: d[k] for k in cles} for d in suivies],
-                "presque_au_seuil": [{k: d[k] for k in cles} for d in presque],
-                "collections": collections}
+        presque = [d for d in enrichies if d["etat"] == "ouverte" and not d["soutenue_par_moi"] and d["nb_soutiens"] >= max(1, d["seuil"] - 1)][:5]
+        collections = list((await session.execute(select(Abonnement.objet_id).where(Abonnement.objet_type == "collection", Abonnement.sub_hash == sub_hash))).scalars().all())
+        cles = ("id", "titre", "etat", "nb_soutiens", "seuil", "garant", "sommeil", "soutenue_par_moi", "mon_role", "collection_name", "je_suis_demandeur", "confirmation_avant")
+        return {"demandes": [{k: d[k] for k in cles} for d in suivies], "presque_au_seuil": [{k: d[k] for k in cles} for d in presque], "collections": collections}
 
 
 async def collections_publiees_a_tous() -> list[dict]:
     async with async_session() as session:
-        lignes = (await session.execute(select(Collection).where(
-            Collection.etat_collab == "publiee_tous", Collection.archived_at.is_(None)).order_by(Collection.name))).scalars().all()
+        lignes = (
+            (await session.execute(select(Collection).where(Collection.etat_collab == "publiee_tous", Collection.archived_at.is_(None)).order_by(Collection.name))).scalars().all()
+        )
         return [{"name": c.name, "description": c.description or ""} for c in lignes]
 
 
-async def deposer_version(name: str, document: str, nom_fichier: str, contenu: bytes, sub_hash: str,
-                          signalement_id: str) -> dict:
+async def deposer_version(name: str, document: str, nom_fichier: str, contenu: bytes, sub_hash: str, signalement_id: str) -> dict:
     """Une nouvelle version proposée pour un document cité : rangée à part, jamais
     servie, en attente de la décision du garant (proposition de type fichier)."""
     from pathlib import Path
-    from app.routers.ingest import safe_filename, ensure_within
+
+    from app.routers.ingest import ensure_within, safe_filename
+
     base = Path(settings.data_dir) / "_versions_proposees"
     dossier = ensure_within(base, base / safe_filename(name))
     dossier.mkdir(parents=True, exist_ok=True)
     nom_sur = f"{signalement_id[:8]}-{safe_filename(nom_fichier)}"
     chemin = ensure_within(dossier, dossier / nom_sur)
     chemin.write_bytes(contenu)
-    return await creer_proposition(name, {
-        "cible_type": "fichier", "cible_ref": document, "avant": document, "apres": str(chemin.name),
-        "justification": f"Nouvelle version déposée avec le signalement {signalement_id} (document obsolète).",
-        "source": None,
-    }, sub_hash)
+    return await creer_proposition(
+        name,
+        {
+            "cible_type": "fichier",
+            "cible_ref": document,
+            "avant": document,
+            "apres": str(chemin.name),
+            "justification": f"Nouvelle version déposée avec le signalement {signalement_id} (document obsolète).",
+            "source": None,
+        },
+        sub_hash,
+    )

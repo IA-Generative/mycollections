@@ -40,9 +40,7 @@ def grille_complete(grille: dict | None) -> bool:
     return int(grille.get("relecture_n") or 0) >= 1
 
 
-def transition_collection(
-    etat: str | None, cible: str, grille: dict | None, *, forcer: bool = False
-) -> str:
+def transition_collection(etat: str | None, cible: str, grille: dict | None, *, forcer: bool = False) -> str:
     """Rend l'état d'arrivée, ou lève RefusTransition.
 
     Sans forçage : la cible est l'étape suivante, ou le retour publiee_tous →
@@ -65,8 +63,7 @@ def transition_collection(
         )
     if cible == "publiee_tous" and not grille_complete(grille):
         raise RefusTransition(
-            "Publier à tous exige une grille de contrôle complète : source et licence, "
-            "données personnelles, fraîcheur, et au moins une relecture",
+            "Publier à tous exige une grille de contrôle complète : source et licence, données personnelles, fraîcheur, et au moins une relecture",
             422,
         )
     return cible
@@ -88,9 +85,7 @@ def demande_atteint_le_chantier(nb_soutiens_distincts: int, a_un_garant: bool, s
     return bool(a_un_garant) and int(nb_soutiens_distincts) >= int(seuil)
 
 
-def en_sommeil(
-    etat: str, dernier_evenement_le: datetime | None, maintenant: datetime | None = None, jours: int = 30
-) -> bool:
+def en_sommeil(etat: str, dernier_evenement_le: datetime | None, maintenant: datetime | None = None, jours: int = 30) -> bool:
     """Un chantier sans événement depuis `jours` jours. Jamais pour une demande ouverte."""
     if etat not in ETATS_DEMANDE_EN_SOMMEIL_POSSIBLE:
         return False
@@ -100,9 +95,7 @@ def en_sommeil(
     return (maintenant - dernier_evenement_le) > timedelta(days=jours)
 
 
-def confirmation_echue(
-    etat: str, demandee_le: datetime | None, maintenant: datetime | None = None, jours: int = 5
-) -> bool:
+def confirmation_echue(etat: str, demandee_le: datetime | None, maintenant: datetime | None = None, jours: int = 5) -> bool:
     """Une demande « à confirmer » dont l'auteur n'a pas répondu depuis `jours` jours."""
     if etat != "a_confirmer" or demandee_le is None:
         return False

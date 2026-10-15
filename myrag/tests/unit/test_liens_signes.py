@@ -24,6 +24,7 @@ def auth(monkeypatch):
     fait sans) et fait comme si la requête portait le jeton de `u` (None : aucun jeton)."""
     from app.config import settings
     from app.routers import _acces_navigateur as garde
+
     qui = {"u": None}
 
     async def _facultatif(credentials):
@@ -33,6 +34,7 @@ def auth(monkeypatch):
         monkeypatch.setattr(settings, "auth_enabled", True)
         monkeypatch.setattr(garde, "utilisateur_facultatif", _facultatif)
         qui["u"] = u
+
     return activer
 
 
@@ -44,12 +46,20 @@ def faux_openrag(monkeypatch):
 
     class FauxClient:
         partition = "x"
-        def __init__(self, *a, **k): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
         async def get(self, url, headers=None):
             corps = ('{"page_content": "texte", "metadata": {"partition": "%s"}}' % FauxClient.partition).encode()
             return _R(200, corps, {"content-type": "application/json"})
+
     monkeypatch.setattr(httpx, "AsyncClient", FauxClient)
     return FauxClient
 
@@ -103,16 +113,21 @@ def test_avec_un_jeton_on_lit_ce_qu_on_peut_lire(client, creer_collection, nom, 
 
 
 def test_une_collection_publiee_a_tous_reste_ouverte_a_l_outil_de_l_assistant(client, creer_collection, nom, auth):
-    import sqlite3, os
+    import os
+    import sqlite3
+
     creer_collection(nom)
     auth()
     chemin = os.environ["DATABASE_URL"].split("///")[-1]
     con = sqlite3.connect(chemin)
     try:
-        con.execute("INSERT OR REPLACE INTO publications (collection_name, state, alias_enabled, alias_name, "
-                    "alias_description, tool_enabled, embed_enabled, visibility, visibility_groups_json, "
-                    "widget_enabled, browser_enabled, published_by) "
-                    "VALUES (?, 'published', 1, '', '', 0, 0, 'all', '[]', 0, 0, '')", (nom,))
+        con.execute(
+            "INSERT OR REPLACE INTO publications (collection_name, state, alias_enabled, alias_name, "
+            "alias_description, tool_enabled, embed_enabled, visibility, visibility_groups_json, "
+            "widget_enabled, browser_enabled, published_by) "
+            "VALUES (?, 'published', 1, '', '', 0, 0, 'all', '[]', 0, 0, '')",
+            (nom,),
+        )
         con.commit()
     finally:
         con.close()
@@ -132,6 +147,7 @@ def test_la_fiche_obtient_l_adresse_signee_du_visualiseur(client, en_tant_que, c
 
 def test_un_morceau_du_repli_recoit_un_lien_signe_depuis_son_identifiant():
     from app.routers.playground import signer_les_liens_de_la_source
+
     s = signer_les_liens_de_la_source({"_id": 468450154026104240, "content": "x"})
     assert s["chunk_url"].startswith("/api/openrag/extract/468450154026104240?exp=")
     exp, sig = s["chunk_url"].split("exp=")[1].split("&sig=")

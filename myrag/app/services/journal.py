@@ -57,10 +57,7 @@ async def lire(
     """Les événements d'un objet, du plus récent au plus ancien, paginés par date."""
     limite = max(1, min(int(limite), LIMITE_MAX))
     stmt = (
-        select(Evenement)
-        .where(Evenement.objet_type == objet_type, Evenement.objet_id == str(objet_id))
-        .order_by(Evenement.cree_le.desc(), Evenement.id.desc())
-        .limit(limite + 1)
+        select(Evenement).where(Evenement.objet_type == objet_type, Evenement.objet_id == str(objet_id)).order_by(Evenement.cree_le.desc(), Evenement.id.desc()).limit(limite + 1)
     )
     if avant is not None:
         stmt = stmt.where(Evenement.cree_le < avant)
@@ -74,9 +71,5 @@ async def lire(
 
 async def derniers_par_objet(session: AsyncSession, objet_type: str) -> dict[str, datetime]:
     """Pour chaque objet du type, la date de son dernier événement (calcul du sommeil)."""
-    stmt = (
-        select(Evenement.objet_id, func.max(Evenement.cree_le))
-        .where(Evenement.objet_type == objet_type)
-        .group_by(Evenement.objet_id)
-    )
+    stmt = select(Evenement.objet_id, func.max(Evenement.cree_le)).where(Evenement.objet_type == objet_type).group_by(Evenement.objet_id)
     return {objet_id: date for objet_id, date in (await session.execute(stmt)).all()}

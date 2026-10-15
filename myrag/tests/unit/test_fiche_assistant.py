@@ -1,7 +1,6 @@
 """La fiche d'une collection dans l'assistant : nom = titre, étiquette = catégorie, et une
 resynchronisation qui ne peut être lancée que par l'administration."""
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,13 +10,16 @@ from app.services.owui_client import fusionner_fiche
 from tests.conftest import SUPERADMIN, personne
 
 
-@pytest.mark.parametrize("alias,attendu", [
-    ("", "Codes NATINF"),
-    ("📚 amorce-natinf", "Codes NATINF"),            # l'ancien défaut du wizard
-    ("MirAI amorce-natinf", "Codes NATINF"),          # l'ancien défaut de la page de publication
-    ("📚 Nomenclature NATINF", "Nomenclature NATINF"),  # un vrai nom saisi : gardé, sans pictogramme
-    ("Infractions — NATINF", "Infractions — NATINF"),
-])
+@pytest.mark.parametrize(
+    "alias,attendu",
+    [
+        ("", "Codes NATINF"),
+        ("📚 amorce-natinf", "Codes NATINF"),  # l'ancien défaut du wizard
+        ("MirAI amorce-natinf", "Codes NATINF"),  # l'ancien défaut de la page de publication
+        ("📚 Nomenclature NATINF", "Nomenclature NATINF"),  # un vrai nom saisi : gardé, sans pictogramme
+        ("Infractions — NATINF", "Infractions — NATINF"),
+    ],
+)
 def test_le_nom_de_la_fiche_est_le_titre_sauf_nom_saisi(alias, attendu):
     assert nom_de_fiche({"name": "amorce-natinf", "titre": "Codes NATINF"}, alias) == attendu
 
@@ -86,7 +88,7 @@ def test_resynchroniser_a_sec_n_ecrit_rien_et_dit_ce_qui_partirait(client, en_ta
 def test_un_nouveau_titre_atteint_la_fiche_a_la_resynchronisation(client, en_tant_que, creer_collection, nom):
     createur = personne("createur")
     creer_collection(nom, createur)
-    _publier(client, nom)                       # nom de fiche = titre déduit de l'identifiant
+    _publier(client, nom)  # nom de fiche = titre déduit de l'identifiant
     client.patch(f"/api/collections/{nom}", json={"titre": "Titre corrigé"})
     en_tant_que(SUPERADMIN)
     with patch("app.services.owui_client.OwuiClient") as cls:
@@ -100,14 +102,17 @@ def test_un_nouveau_titre_atteint_la_fiche_a_la_resynchronisation(client, en_tan
 def test_une_fiche_qui_echoue_n_arrete_pas_les_autres(client, en_tant_que, creer_collection, nom, purger):
     autre = nom[:34].rstrip("-") + "-bis"  # ≤ 40 caractères : un identifiant valide
     purger(autre)
-    creer_collection(nom); _publier(client, nom)
-    creer_collection(autre); _publier(client, autre)
+    creer_collection(nom)
+    _publier(client, nom)
+    creer_collection(autre)
+    _publier(client, autre)
     en_tant_que(SUPERADMIN)
 
     async def capricieux(**k):
         if k["model_id"] == f"openrag-{nom}":
             raise RuntimeError("socle indisponible")
         return {}
+
     with patch("app.services.owui_client.OwuiClient") as cls:
         cls.return_value.upsert_model = AsyncMock(side_effect=capricieux)
         bilan = client.post("/api/publications/resynchroniser").json()
@@ -130,17 +135,18 @@ def test_classer_conseille_de_resynchroniser(client, en_tant_que, creer_collecti
 # les aurait ouverts à tous.
 
 RESTREINTE = {
-    "params": {"system": "prompt"}, "access_control": None,
-    "access_grants": [{"id": "g1", "resource_type": "model", "resource_id": "openrag-x", "created_at": 1,
-                       "principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}],
+    "params": {"system": "prompt"},
+    "access_control": None,
+    "access_grants": [
+        {"id": "g1", "resource_type": "model", "resource_id": "openrag-x", "created_at": 1, "principal_type": "user", "principal_id": "ad49abb7", "permission": "read"}
+    ],
     "meta": {"tags": [{"name": "Corpus partagés"}]},
 }
 OUVERTE_A_TOUS = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
 
 
 def _voulue_ouverte():
-    return {"params": {}, "access_control": None, "access_grants": list(OUVERTE_A_TOUS),
-            "meta": {"tags": [{"name": "Droit des étrangers"}, {"name": "Mes collections"}]}}
+    return {"params": {}, "access_control": None, "access_grants": list(OUVERTE_A_TOUS), "meta": {"tags": [{"name": "Droit des étrangers"}, {"name": "Mes collections"}]}}
 
 
 def test_garder_les_droits_reconduit_la_portee_existante_sans_ses_champs_internes():

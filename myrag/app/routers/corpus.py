@@ -57,7 +57,7 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
         raise HTTPException(status_code=404, detail="Document introuvable dans cette collection")
 
     ids = corpus.identifiants_des_morceaux(detail)
-    a_lire = ids[:corpus.MORCEAUX_MAX]
+    a_lire = ids[: corpus.MORCEAUX_MAX]
     verrou = asyncio.Semaphore(_LECTURES_PARALLELES)
 
     async def lire(cid: str) -> dict | None:

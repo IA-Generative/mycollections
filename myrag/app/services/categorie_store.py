@@ -14,20 +14,13 @@ from app.services import journal
 
 #: Semées au premier démarrage (database._semer_categories) : clé, libellé, description.
 CATEGORIES_DE_DEPART = (
-    ("droit-etrangers", "Droit des étrangers",
-     "Séjour, asile, éloignement : textes, jurisprudence et doctrine."),
-    ("securite-delinquance", "Sécurité et délinquance",
-     "Infractions, statistiques de la délinquance, nomenclatures pénales."),
-    ("securite-civile-routiere", "Sécurité civile et routière",
-     "Secours, interventions, accidents de la circulation."),
-    ("elus-vie-publique", "Élus et vie publique",
-     "Élus, collectivités, vie démocratique locale."),
-    ("textes-reference", "Textes juridiques de référence",
-     "Codes et corpus officiels, toutes matières."),
-    ("ressources-internes", "Ressources internes",
-     "Règles de fonctionnement, achats, continuité, numérique."),
-    ("guides-demonstrations", "Guides et démonstrations",
-     "Modes d'emploi de Mes collections et corpus d'exemple."),
+    ("droit-etrangers", "Droit des étrangers", "Séjour, asile, éloignement : textes, jurisprudence et doctrine."),
+    ("securite-delinquance", "Sécurité et délinquance", "Infractions, statistiques de la délinquance, nomenclatures pénales."),
+    ("securite-civile-routiere", "Sécurité civile et routière", "Secours, interventions, accidents de la circulation."),
+    ("elus-vie-publique", "Élus et vie publique", "Élus, collectivités, vie démocratique locale."),
+    ("textes-reference", "Textes juridiques de référence", "Codes et corpus officiels, toutes matières."),
+    ("ressources-internes", "Ressources internes", "Règles de fonctionnement, achats, continuité, numérique."),
+    ("guides-demonstrations", "Guides et démonstrations", "Modes d'emploi de Mes collections et corpus d'exemple."),
 )
 
 
@@ -43,10 +36,7 @@ async def lister() -> list[dict]:
     """Les rubriques dans l'ordre d'affichage, avec le nombre de collections NON archivées."""
     async with async_session() as session:
         cats = (await session.execute(select(Categorie).order_by(Categorie.ordre, Categorie.libelle))).scalars().all()
-        comptes = dict((await session.execute(
-            select(Collection.categorie, func.count()).where(Collection.archived_at.is_(None))
-            .group_by(Collection.categorie)
-        )).all())
+        comptes = dict((await session.execute(select(Collection.categorie, func.count()).where(Collection.archived_at.is_(None)).group_by(Collection.categorie))).all())
         return [{**c.to_dict(), "nb_collections": comptes.get(c.cle, 0)} for c in cats]
 
 
@@ -121,8 +111,7 @@ async def affecter(affectations: dict[str, str | None], auteur_hash: str) -> dic
                 inchangees.append(name)
                 continue
             avant, col.categorie = col.categorie, cle
-            journal.ecrire(session, "collection", name, "categorie.changee", auteur_hash=auteur_hash,
-                           collection_name=name, detail={"avant": avant, "apres": cle})
+            journal.ecrire(session, "collection", name, "categorie.changee", auteur_hash=auteur_hash, collection_name=name, detail={"avant": avant, "apres": cle})
             changees.append(name)
         if absentes:
             await session.rollback()

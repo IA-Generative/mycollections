@@ -1,0 +1,25 @@
+{
+  "ragas_version": "0.4.3",
+  "original_hash": null,
+  "language": "french",
+  "instruction": "Extrayez les entités nommées du texte donné, en limitant la sortie aux principales entités. Assurez-vous que le nombre d'entités ne dépasse pas le maximum spécifié.",
+  "examples": [
+    {
+      "input": {
+        "text": "Elon Musk, le PDG de Tesla et SpaceX, a annoncé des plans pour étendre ses opérations à de nouveaux sites en Europe et en Asie.\n                Cette expansion devrait créer des milliers d'emplois, particulièrement dans des villes comme Berlin et Shanghai.",
+        "max_num": 10
+      },
+      "output": {
+        "entities": [
+          "Elon Musk",
+          "Tesla",
+          "SpaceX",
+          "Europe",
+          "Asie",
+          "Berlin",
+          "Shanghai"
+        ]
+      }
+    }
+  ]
+}

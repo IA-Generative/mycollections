@@ -1,0 +1,119 @@
+# Stack « comme en prod » pour tester l'authentification en local : Keycloak (realm
+# openwebui importé) + backend avec AUTH_ENABLED=true + frontend avec login OIDC réel.
+#
+#   docker compose -f docker-compose.auth.yaml up -d --build
+#   Front : http://localhost:8202  (admin-local / dev-admin-2026, superadmin)
+#                                 (lecteur-local / dev-lecteur-2026, simple lecteur)
+#
+# Réglages imposés par le code :
+# - le backend valide l'émetteur du jeton (app/auth.py : KEYCLOAK_URL/realms/<realm>).
+#   Le navigateur voit http://localhost:8082 ; le backend tourne donc en réseau hôte
+#   pour joindre ce MÊME localhost:8082 — d'où network_mode: host (Linux). Pas de
+#   section ports: dans ce mode : le port se règle dans la commande uvicorn.
+# - useAuth.ts retire :3000 et :8201 de l'origine : le frontend doit être servi sur
+#   un autre port (8202 ici), sinon le redirect_uri ne correspond plus.
+# - secrets « dev-… » : jeton de service et mots de passe de DÉVELOPPEMENT local,
+#   n'existent que dans ce realm d'essai — jamais ailleurs.
+#
+# Le backend pointe sur l'OpenRAG du poste (le mock :8180 ou le vrai) via
+# OPENRAG_URL ; redéfinissez-le dans un .env si besoin.
+
+name: myrag-auth
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm", "--hostname=http://localhost:8082"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: dev-admin
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./keycloak/realm-openwebui.json:/opt/keycloak/data/import/realm-openwebui.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /realms/openwebui HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && read -u 3 l && case $$l in *' 200'*) exit 0;; *) exit 1;; esac"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+
+  # Mock OpenRAG (Mockoon) — remplace le stack OpenRAG complet (Milvus, PostgreSQL,
+  # MinIO, embeddings) pour le développement : 19 routes fidèles + corpus de démonstration.
+  # Données et documentation des routes : ./mock/openrag-mockoon.json. Le mock répond
+  # aussi, en boîte, aux quatre appels de la génération (extraction, appariement
+  # thèmes/personas, question/réponse) — voir docs/generation.md.
+  # Le backend attend ce service au démarrage (depends_on) ; pour utiliser le vrai
+  # OpenRAG sur le même port : le stopper (docker compose -f docker-compose.auth.yaml
+  # stop openrag-mock) puis relancer le backend avec --no-deps, ou OPENRAG_URL sur un
+  # autre port (redémarrer alors le backend avec --no-deps aussi).
+  openrag-mock:
+    image: mockoon/cli:latest
+    container_name: openrag-mock
+    command: ["--data", "/data/openrag-mockoon.json", "--port", "8180"]
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./mock/openrag-mockoon.json:/data/openrag-mockoon.json:ro
+    healthcheck:
+      # /health_check est la seule route sans jeton du mock ; node est présent
+      # dans l'image (pas de curl/wget) : node -e + fetch (node 18+).
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8180/health_check').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    restart: unless-stopped
+
+  myrag:
+    build: .
+    network_mode: host
+    environment:
+      APP_TITLE: MyRAG (beta)
+      AUTH_ENABLED: "true"
+      KEYCLOAK_URL: http://localhost:8082
+      KEYCLOAK_REALM: openwebui
+      KEYCLOAK_CLIENT_ID: myrag-admin
+      KEYCLOAK_CLIENT_SECRET: dev-secret-myrag-admin-local
+      MYRAG_SUPERADMIN_GROUPES: /myrag/superadmin
+      MYRAG_PSEUDO_SEL: dev-sel
+      MYRAG_PUBLIC_URL: http://localhost:8200
+      CORS_ALLOW_ORIGINS: http://localhost:8202
+      OPENRAG_URL: ${OPENRAG_URL:-http://localhost:8180}
+      OPENRAG_ADMIN_TOKEN: ${OPENRAG_ADMIN_TOKEN:-dev-jeton-openrag-local}
+      # Génération de questions (docs/generation.md) : URL et clef vides (les deux) ⇒ repli sur
+      # le /v1 d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒
+      # 503. Un jeton PROPRE à Mes collections si vous passez par la passerelle MirAI.
+      MYCOLLECTIONS_GENERATION_LLM_URL: ${MYCOLLECTIONS_GENERATION_LLM_URL:-}
+      MYCOLLECTIONS_GENERATION_LLM_CLE: ${MYCOLLECTIONS_GENERATION_LLM_CLE:-}
+      MYCOLLECTIONS_GENERATION_LLM_MODELE: ${MYCOLLECTIONS_GENERATION_LLM_MODELE:-}
+      DATA_DIR: /app/data
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${MYRAG_PORT:-8200}"]
+    volumes:
+      - myrag-auth-data:/app/data
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      openrag-mock:
+        condition: service_healthy
+    restart: unless-stopped
+
+  myrag-frontend:
+    build:
+      context: ./frontend
+      args:
+        MYRAG_API_URL: ${MYRAG_API_URL:-http://localhost:8200}
+        AUTH_ENABLED: "true"
+        KEYCLOAK_URL: http://localhost:8082
+        KEYCLOAK_REALM: openwebui
+        KEYCLOAK_CLIENT_ID: myrag-front
+        APP_TITLE: ${APP_TITLE:-Mes collections (beta)}
+    ports:
+      - "8202:3000"
+    depends_on:
+      - myrag
+    restart: unless-stopped
+
+volumes:
+  myrag-auth-data:

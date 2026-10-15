@@ -6,12 +6,14 @@ sans écraser le graphe existant."""
 
 from unittest.mock import AsyncMock, patch
 
-from tests.unit.test_graph_import import SUPERADMIN, _as, _create  # noqa: F401
-from tests.unit.test_graph_import import app_client  # noqa: F401  (fixture)
+from tests.unit.test_graph_import import (  # noqa: F401
+    SUPERADMIN,
+    _as,
+    _create,
+    app_client,  # noqa: F401  (fixture)
+)
 
-FICHIERS = [{"file_id": "11", "filename": "Article-L423-3.md"},
-            {"file_id": "12", "original_filename": "Article-L423-1.md"},
-            {"file_id": "13", "filename": "section-preambule.md"}]
+FICHIERS = [{"file_id": "11", "filename": "Article-L423-3.md"}, {"file_id": "12", "original_filename": "Article-L423-1.md"}, {"file_id": "13", "filename": "section-preambule.md"}]
 CONTENUS = {"11": "Voir l'article L. 423-1.", "12": "Conjoint de Français.", "13": "Préambule."}
 
 

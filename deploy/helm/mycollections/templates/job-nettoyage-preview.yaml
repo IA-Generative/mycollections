@@ -1,0 +1,65 @@
+{{- if .Values.previewNettoyage.enabled }}
+{{- if not (index .Values.backend.config "MYCOLLECTIONS_PARTITION_PREFIXE") }}
+{{- fail "previewNettoyage exige backend.config.MYCOLLECTIONS_PARTITION_PREFIXE" }}
+{{- end }}
+# Fermeture d'une preview : ses partitions OpenRAG (et elles seules — préfixe imposé par le
+# code) sont supprimées avant que le namespace ne parte. Ne bloque jamais la suppression :
+# le module rend 0 même en cas d'erreur.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: myrag-nettoyage-preview
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: myrag-backend      # mêmes sorties réseau que le backend
+    spec:
+      restartPolicy: Never
+      enableServiceLinks: false
+      # Le volume (base SQLite de la preview) est à accès unique PAR NŒUD : le Job se pose
+      # sur le nœud du backend, sinon il resterait en « Multi-Attach ».
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "mycollections.selecteur" (dict "app" "myrag-backend") | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: nettoyage
+          image: {{ include "mycollections.image" (dict "image" .Values.images.backend "nom" "backend") }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: [/app/.venv/bin/python, -m, app.services.nettoyage_preview]
+          securityContext:
+            {{- include "mycollections.securiteConteneur" . | nindent 12 }}
+          envFrom:
+            {{- include "mycollections.envFrom" . | nindent 12 }}
+          volumeMounts:
+            - name: sources
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: sources
+          persistentVolumeClaim:
+            claimName: myrag-sources
+        - name: tmp
+          emptyDir: {}
+{{- end }}

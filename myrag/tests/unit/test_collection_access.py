@@ -1,9 +1,6 @@
 """Tests du contrôle d'accès par groupe (app.services.access)."""
 
-import pytest
-
 from app.services import access
-
 
 # Groupes typiques (chemins Keycloak)
 G_SUPER = "/g/administration-de-test"
@@ -133,6 +130,7 @@ class TestSuperadminParVariable:
 
     def test_une_liste_de_plusieurs_groupes(self, monkeypatch):
         from app.config import settings
+
         monkeypatch.setattr(settings, "myrag_superadmin_groupes", "/g/a , /g/b, nom-court")
         assert access.is_superadmin(["/g/b"]) is True
         assert access.is_superadmin(["/x/nom-court"]) is False
@@ -140,6 +138,7 @@ class TestSuperadminParVariable:
 
     def test_vide_personne_n_est_superadmin_sauf_le_developpeur_sans_authentification(self, monkeypatch):
         from app.config import settings
+
         monkeypatch.setattr(settings, "myrag_superadmin_groupes", "")
         assert access.is_superadmin([access.GROUPE_DEV]) is True  # AUTH_ENABLED=false dans les tests
         monkeypatch.setattr(settings, "auth_enabled", True)

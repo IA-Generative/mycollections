@@ -138,6 +138,37 @@ spec:
                   optional: true
             - name: DATA_DIR
               value: "/app/data"
+            # Génération de questions par persona (docs/generation.md) — absentes ⇒ 503 sur ces routes.
+            - name: MYCOLLECTIONS_GENERATION_LLM_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYCOLLECTIONS_GENERATION_LLM_URL
+                  optional: true
+            - name: MYCOLLECTIONS_GENERATION_LLM_MODELE
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYCOLLECTIONS_GENERATION_LLM_MODELE
+                  optional: true
+            - name: MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE
+                  optional: true
+            - name: MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE
+                  optional: true
+            - name: MYCOLLECTIONS_GENERATION_LLM_CLE
+              valueFrom:
+                secretKeyRef:
+                  name: myrag-secrets
+                  key: MYCOLLECTIONS_GENERATION_LLM_CLE
+                  optional: true
           volumeMounts:
             - name: data
               mountPath: /app/data
@@ -158,7 +189,8 @@ spec:
               memory: "256Mi"
               cpu: "100m"
             limits:
-              memory: "1Gi"
+              # 1,5 Gi : ragas et ses dépendances ajoutent environ 200 Mo pendant une génération.
+              memory: "1536Mi"
               cpu: "500m"
       volumes:
         - name: data

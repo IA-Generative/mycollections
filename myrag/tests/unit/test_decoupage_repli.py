@@ -7,8 +7,7 @@ import pytest
 
 from app.services.chunker import chunk_document
 
-TEXTE = ("Note de service.\n\nPremier paragraphe qui explique le contexte de la note et "
-         "son objet.\n\n## Modalités\n\nLe télétravail est ouvert deux jours par semaine.\n")
+TEXTE = "Note de service.\n\nPremier paragraphe qui explique le contexte de la note et son objet.\n\n## Modalités\n\nLe télétravail est ouvert deux jours par semaine.\n"
 
 
 @pytest.mark.parametrize("strategie", ["article", "qr"])

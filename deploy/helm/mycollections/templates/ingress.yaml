@@ -1,0 +1,43 @@
+{{- if .Values.ingress.enabled }}
+# Un seul hôte. Tout ce qui n'est pas rendu au backend part vers l'interface.
+# `/docs` (documentation interactive de FastAPI) n'est volontairement PAS routé ;
+# `/__version__` (ADR-0004, sans authentification) l'est en correspondance exacte.
+{{- $backend := dict "service" (dict "name" "myrag-backend" "port" (dict "number" 8200)) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mycollections
+  labels:
+    {{- include "mycollections.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Dépôt de documents : la limite par défaut (1 Mo) refuserait le premier PDF venu.
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # L'indexation d'un gros document tient la requête ouverte le temps du découpage.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.host }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.host }}
+      http:
+        paths:
+          {{- range list "/api" "/health" "/__version__" "/graph" "/articles" }}
+          - path: {{ . }}
+            pathType: {{ eq . "/__version__" | ternary "Exact" "Prefix" }}
+            backend: {{ toJson $backend }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend: {"service": {"name": "myrag-frontend", "port": {"number": 3000}}}
+{{- end }}

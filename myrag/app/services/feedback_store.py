@@ -3,24 +3,26 @@
 Replaces file-based FeedbackService.
 """
 
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import async_session
 from app.models.db import Feedback, utcnow
 
 
 async def ingest_feedback(
-    collection: str, question: str, response: str, rating: int,
-    reason: str = "", owui_chat_id: str = "", owui_message_id: str = "",
+    collection: str,
+    question: str,
+    response: str,
+    rating: int,
+    reason: str = "",
+    owui_chat_id: str = "",
+    owui_message_id: str = "",
 ) -> dict:
     """Ingest feedback. Idempotent on owui_message_id."""
     async with async_session() as session:
         # Deduplicate
         if owui_message_id:
-            result = await session.execute(
-                select(Feedback).where(Feedback.owui_message_id == owui_message_id)
-            )
+            result = await session.execute(select(Feedback).where(Feedback.owui_message_id == owui_message_id))
             existing = result.scalar_one_or_none()
             if existing:
                 existing.rating = rating
@@ -45,12 +47,12 @@ async def ingest_feedback(
 
 
 async def list_feedback(
-    collection: str, status: str | None = None, rating: int | None = None,
+    collection: str,
+    status: str | None = None,
+    rating: int | None = None,
 ) -> list[dict]:
     async with async_session() as session:
-        query = select(Feedback).where(
-            Feedback.collection_name == collection
-        ).order_by(Feedback.created_at.desc())
+        query = select(Feedback).where(Feedback.collection_name == collection).order_by(Feedback.created_at.desc())
         if status:
             query = query.where(Feedback.status == status)
         if rating is not None:

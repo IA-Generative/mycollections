@@ -3,32 +3,41 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from app.routers._droits import exiger_administration
 from pydantic import BaseModel
 
-from app.config import settings
 from app.auth import CurrentUser, current_user
-from app.services import access, nommage
-from app.services.keycloak_client import KeycloakClient
-from app.services.sync_service import SyncService
+from app.config import settings
 from app.models.collection import (
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TEMPLATE_KEY,
+    delete_custom_template,
     get_prompt_template,
     list_prompt_templates,
     save_custom_template,
-    delete_custom_template,
+)
+from app.routers._droits import exiger_administration
+from app.services import access, nommage
+from app.services.collection_store import (
+    create_collection as db_create_collection,
+)
+from app.services.collection_store import (
+    get_collection as db_get_collection,
 )
 from app.services.collection_store import (
     list_collections as db_list_collections,
-    get_collection as db_get_collection,
-    create_collection as db_create_collection,
-    update_collection as db_update_collection,
-    get_system_prompt as db_get_system_prompt,
-    update_system_prompt as db_update_system_prompt,
+)
+from app.services.collection_store import (
     purge_collection as db_purge_collection,
 )
+from app.services.collection_store import (
+    update_collection as db_update_collection,
+)
+from app.services.collection_store import (
+    update_system_prompt as db_update_system_prompt,
+)
+from app.services.keycloak_client import KeycloakClient
 from app.services.openrag_client import OpenRAGClient
+from app.services.sync_service import SyncService
 
 log = logging.getLogger("myrag.collections")
 
@@ -44,9 +53,7 @@ def _provisioning_enabled() -> bool:
     return bool(settings.keycloak_client_secret or settings.keycloak_admin_password)
 
 
-async def _provision_collection_access(
-    name: str, creator_sub: str | None, reader_group_paths: list[str], openrag_client: OpenRAGClient
-) -> None:
+async def _provision_collection_access(name: str, creator_sub: str | None, reader_group_paths: list[str], openrag_client: OpenRAGClient) -> None:
     """Best-effort : crée les 2 groupes Keycloak, fait du créateur un gestionnaire
     (groupe ``-admin`` → OpenRAG ``owner``) et provisionne les groupes lecteurs
     autorisés (→ OpenRAG ``editor``). Ne fait jamais échouer la création.
@@ -71,6 +78,7 @@ async def _provision_collection_access(
 
 
 # --- Request models ---
+
 
 class CreateCollectionRequest(BaseModel):
     name: str
@@ -104,6 +112,7 @@ class CreateTemplateRequest(BaseModel):
 # ============================================================
 # Prompt templates catalog (MUST be before /{name} routes)
 # ============================================================
+
 
 @router.get("/templates", tags=["Prompt Templates"])
 async def get_prompt_templates():
@@ -147,6 +156,7 @@ async def delete_prompt_template_endpoint(key: str):
 # Collection CRUD (backed by SQLite/PostgreSQL)
 # ============================================================
 
+
 async def _etats_de_partage(names: list[str]) -> dict[str, dict]:
     """État de partage par collection : où la collection est-elle servie ?
 
@@ -164,9 +174,7 @@ async def _etats_de_partage(names: list[str]) -> dict[str, dict]:
     if not names:
         return {}
     async with async_session() as session:
-        result = await session.execute(
-            select(Publication).where(Publication.collection_name.in_(names))
-        )
+        result = await session.execute(select(Publication).where(Publication.collection_name.in_(names)))
         etats: dict[str, dict] = {}
         for pub in result.scalars().all():
             servie = pub.state == "published" and pub.alias_enabled
@@ -175,10 +183,7 @@ async def _etats_de_partage(names: list[str]) -> dict[str, dict]:
                 "visibility": pub.visibility,
                 "alias_name": pub.alias_name,
                 "published_at": pub.published_at.isoformat() if pub.published_at else "",
-                "targets": (
-                    [{"app": "assistant", "model_id": f"openrag-{pub.collection_name}"}]
-                    if servie else []
-                ),
+                "targets": ([{"app": "assistant", "model_id": f"openrag-{pub.collection_name}"}] if servie else []),
             }
         return etats
 
@@ -200,10 +205,15 @@ async def list_collections_endpoint(
     # charge tout puis on filtre via access.can_read (plus un simple set de noms).
     all_cols = await db_list_collections(include_archived=include_archived)
     collections = [
-        c for c in all_cols
+        c
+        for c in all_cols
         if access.can_read(
-            name=c["name"], scope=c.get("scope"), scope_groups=c.get("scope_groups"),
-            created_by=c.get("created_by"), user_groups=user.groups, user_sub=user.sub,
+            name=c["name"],
+            scope=c.get("scope"),
+            scope_groups=c.get("scope_groups"),
+            created_by=c.get("created_by"),
+            user_groups=user.groups,
+            user_sub=user.sub,
         )
     ]
     # Fetch the full set of known names (incl. archived) so we do not
@@ -218,17 +228,15 @@ async def list_collections_endpoint(
         for m in models.get("data", []):
             model_id = m.get("id", "")
             if model_id.startswith("openrag-"):
-                name = model_id[len("openrag-"):]
-                if (name and name not in known_names and name not in ("all", "default")
-                        and (allowed is None or name in allowed)):
+                name = model_id[len("openrag-") :]
+                if name and name not in known_names and name not in ("all", "default") and (allowed is None or name in allowed):
                     # Orphan: a partition exists on OpenRAG but no MyRAG fiche
                     # was ever created for it. Flagged so the UI can surface
                     # "adoptable" cards without fabricating a description from
                     # raw filenames (which read as junk to end users).
-                    collections.append({"name": name, "titre": "", "categorie": None,
-                                        "description": "", "strategy": "auto",
-                                        "sensitivity": "public", "scope": "group",
-                                        "orphan": True})
+                    collections.append(
+                        {"name": name, "titre": "", "categorie": None, "description": "", "strategy": "auto", "sensitivity": "public", "scope": "group", "orphan": True}
+                    )
                     known_names.add(name)
 
         # Enrich with file counts
@@ -256,8 +264,7 @@ def _droits(collection: dict, user: CurrentUser, *, garant: bool = False) -> dic
     (diagnostic d'octobre 2026 : Archiver, Purger, Publier… étaient offerts à tout lecteur,
     et l'API les refusait ensuite). L'API reste seule juge."""
     superadmin = access.is_superadmin(user.groups)
-    ecrire = access.can_write(name=collection["name"], created_by=collection.get("created_by"),
-                              user_groups=user.groups, user_sub=user.sub)
+    ecrire = access.can_write(name=collection["name"], created_by=collection.get("created_by"), user_groups=user.groups, user_sub=user.sub)
     return {"lire": True, "ecrire": bool(ecrire), "garant": bool(garant or superadmin), "superadmin": superadmin}
 
 
@@ -265,6 +272,7 @@ async def _est_garant(name: str, user: CurrentUser) -> bool:
     try:
         from app.services import collectif_store
         from app.services.pseudo import condenser
+
         f = await collectif_store.fiche(name)
         return bool(f.get("garant_hash")) and f["garant_hash"] == condenser(user.sub)
     except Exception:  # noqa: BLE001 — sel absent, fiche absente : pas garant, jamais une panne
@@ -293,7 +301,8 @@ async def create_collection_endpoint(
     demande = req.name
     req.name = req.name.strip().lower()
     motif = nommage.motif_de_refus(req.name)
-    if motif and not await _partition_existe(demande):
+    # En preview, jamais d'adoption hors préfixe : ce serait rattacher une partition de la bêta.
+    if motif and (motif == "preview" or not await _partition_existe(demande)):
         raise HTTPException(status_code=422, detail={"reason": motif, "message": nommage.MOTIFS[motif]})
     if motif:
         req.name = demande  # adoption : le nom de la partition, tel quel
@@ -320,6 +329,7 @@ async def create_collection_endpoint(
     # Circuit collaboratif : la collection naît « amorcée », son créateur en est le
     # garant, sa grille de contrôle existe (vide), le journal commence.
     from app.services import collectif_store
+
     await collectif_store.initialiser_collection(req.name, user.sub)
     collection = await db_get_collection(req.name) or collection
 
@@ -355,7 +365,7 @@ async def check_name_endpoint(name: str, user: CurrentUser = Depends(current_use
         models = await OpenRAGClient(timeout=10.0).list_models()
         for m in models.get("data", []):
             mid = m.get("id", "")
-            if mid.startswith("openrag-") and mid[len("openrag-"):] == norm:
+            if mid.startswith("openrag-") and mid[len("openrag-") :] == norm:
                 return {"available": False, "reason": "partition", "message": nommage.MOTIFS["partition"]}
     except Exception:
         pass  # OpenRAG indisponible : on ne bloque pas sur ce critère
@@ -375,8 +385,7 @@ def acces_a_la_collection(collection: dict) -> dict | None:
     url = settings.openrag_public_url or (settings.openrag_url if settings.openrag_url.startswith("https://") else "")
     acces = {"assistant": {"model_id": modele}, "api": None}
     if url:
-        acces["api"] = {"url": url.rstrip("/"), "model": modele,
-                        "chat": f"{url.rstrip('/')}/v1/chat/completions", "search": f"{url.rstrip('/')}/search"}
+        acces["api"] = {"url": url.rstrip("/"), "model": modele, "chat": f"{url.rstrip('/')}/v1/chat/completions", "search": f"{url.rstrip('/')}/search"}
     return acces
 
 
@@ -385,28 +394,30 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
     collection = await db_get_collection(name)
     # 404 (pas 403) si absent ou non lisible : ne pas divulguer l'existence.
     if not collection or not access.can_read(
-        name=name, scope=collection.get("scope"), scope_groups=collection.get("scope_groups"),
-        created_by=collection.get("created_by"), user_groups=user.groups, user_sub=user.sub,
+        name=name,
+        scope=collection.get("scope"),
+        scope_groups=collection.get("scope_groups"),
+        created_by=collection.get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
-    collection["publication"] = (
-        (await _etats_de_partage([name])).get(name) or {"state": "draft", "targets": []}
-    )
+    collection["publication"] = (await _etats_de_partage([name])).get(name) or {"state": "draft", "targets": []}
     collection["acces"] = acces_a_la_collection(collection)
     collection["mes_droits"] = _droits(collection, user, garant=await _est_garant(name, user))
     return collection
 
 
 @router.patch("/{name}")
-async def update_collection_endpoint(
-    name: str, updates: dict, user: CurrentUser = Depends(current_user)
-):
+async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
     if not existing:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     if not access.can_write(
-        name=name, created_by=existing.get("created_by"),
-        user_groups=user.groups, user_sub=user.sub,
+        name=name,
+        created_by=existing.get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     collection = await db_update_collection(name, updates)
@@ -424,8 +435,10 @@ async def purge_collection_endpoint(name: str, user: CurrentUser = Depends(curre
     if not existing:
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     if not access.can_write(
-        name=name, created_by=existing.get("created_by"),
-        user_groups=user.groups, user_sub=user.sub,
+        name=name,
+        created_by=existing.get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     result = await db_purge_collection(name)
@@ -440,6 +453,7 @@ async def purge_collection_endpoint(name: str, user: CurrentUser = Depends(curre
     # L'alias publié dans le socle survivait à la suppression : les utilisateurs
     # continuaient de le voir offert, pointant une collection qui n'existe plus.
     from app.routers.publication import _retirer_du_socle
+
     erreur = await _retirer_du_socle(name)
     if erreur:
         log.warning("purge de '%s' : %s", name, erreur)
@@ -449,6 +463,7 @@ async def purge_collection_endpoint(name: str, user: CurrentUser = Depends(curre
 
 # --- System prompt ---
 
+
 @router.get("/{name}/system-prompt")
 async def get_system_prompt_endpoint(name: str, user: CurrentUser = Depends(current_user)):
     collection = await db_get_collection(name)
@@ -456,11 +471,14 @@ async def get_system_prompt_endpoint(name: str, user: CurrentUser = Depends(curr
         # Pas de fiche : on retombe sur le contrôle par groupe (orphelin/défaut).
         if not access.can_read_collection(name, user.groups):
             raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
-        return {"collection": name, "system_prompt": DEFAULT_SYSTEM_PROMPT,
-                "source": "default", "template": DEFAULT_TEMPLATE_KEY}
+        return {"collection": name, "system_prompt": DEFAULT_SYSTEM_PROMPT, "source": "default", "template": DEFAULT_TEMPLATE_KEY}
     if not access.can_read(
-        name=name, scope=collection.get("scope"), scope_groups=collection.get("scope_groups"),
-        created_by=collection.get("created_by"), user_groups=user.groups, user_sub=user.sub,
+        name=name,
+        scope=collection.get("scope"),
+        scope_groups=collection.get("scope_groups"),
+        created_by=collection.get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=404, detail=f"Collection '{name}' not found")
     return {
@@ -472,13 +490,13 @@ async def get_system_prompt_endpoint(name: str, user: CurrentUser = Depends(curr
 
 
 @router.patch("/{name}/system-prompt")
-async def update_system_prompt_endpoint(
-    name: str, req: UpdateSystemPromptRequest, user: CurrentUser = Depends(current_user)
-):
+async def update_system_prompt_endpoint(name: str, req: UpdateSystemPromptRequest, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
     if not access.can_write(
-        name=name, created_by=(existing or {}).get("created_by"),
-        user_groups=user.groups, user_sub=user.sub,
+        name=name,
+        created_by=(existing or {}).get("created_by"),
+        user_groups=user.groups,
+        user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     result = await db_update_system_prompt(name, req.system_prompt)

@@ -8,6 +8,18 @@ en pointant sur un OpenRAG joignable en HTTPS (ici, à titre d'exemple, `api.ope
 > les valeurs de votre environnement. Les commandes `scw` valent pour un registre Scaleway ;
 > adaptez-les à votre fournisseur.
 
+## Le chemin recommandé : le chart Helm
+
+`deploy/helm/mycollections/` (valeurs neutres dans `values.yaml`) déploie l'API, l'interface,
+leur configuration, le volume des sources et l'Ingress ; les images sont publiées par la CI
+(`ghcr.io/ia-generative/mycollections/{backend,frontend}`, étiquettes `X.Y.Z`, `beta-<sha8>`,
+`pr-<n>`). Les adresses réelles et les secrets d'un environnement restent dans son dépôt de
+déploiement. Les sections qui suivent décrivent l'ancien déploiement manifeste par manifeste.
+
+Environnement d'essai partageant l'OpenRAG d'un autre : `MYCOLLECTIONS_PARTITION_PREFIXE`
+(ex. `pr-12-`) cloisonne les partitions — l'API refuse toute partition hors préfixe avant
+d'appeler OpenRAG — et `previewNettoyage.enabled` les efface à la suppression (hook Argo CD).
+
 ## Topologie cible
 
 ```
@@ -57,7 +69,12 @@ docker buildx build --platform linux/amd64 --push \
   myrag/frontend/
 ```
 
-Les build args du Dockerfile frontend baken les URLs publiques (`MYRAG_API_URL=/api`, `KEYCLOAK_URL=https://mysso.fake-domain.name`, `AUTH_ENABLED=true`). Pour une autre cible (staging), re-builder avec `--build-arg MYRAG_API_URL=... --build-arg KEYCLOAK_URL=...`.
+Les adresses du SSO et de l'API ne sont plus à cuire dans l'image : l'interface lit `/config.json`
+au démarrage (`frontend/utils/configExecution.ts` ; clés `myragApiUrl`, `keycloakUrl`,
+`keycloakRealm`, `keycloakClientId`, `authEnabled`, `appTitle`). Montez ce fichier dans
+`/usr/share/nginx/html/config.json` (le chart `deploy/helm/mycollections` le fait depuis
+`frontend.config`). Sans lui, l'interface garde les valeurs de construction (build args, utiles en
+développement local seulement).
 
 ## 1.5. Provisionner le user bot Drive (source "drive" uniquement)
 

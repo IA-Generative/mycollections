@@ -62,7 +62,7 @@ def chercher_et_paginer(fichiers: list[dict], q: str = "", page: int = 1, par_pa
     pages = max(1, -(-total // par_page))
     page = max(1, min(int(page or 1), pages))
     debut = (page - 1) * par_page
-    return {"total": total, "page": page, "pages": pages, "par_page": par_page, "documents": docs[debut:debut + par_page]}
+    return {"total": total, "page": page, "pages": pages, "par_page": par_page, "documents": docs[debut : debut + par_page]}
 
 
 def identifiants_des_morceaux(detail: dict) -> list[str]:

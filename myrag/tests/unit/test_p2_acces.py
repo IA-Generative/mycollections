@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.auth import CurrentUser
-from tests.conftest import SUPERADMIN, personne
+from tests.conftest import personne
 
 ETRANGER = CurrentUser(sub="etranger", username="e", groups=["/g/rien-a-voir"])
 LECTEUR = personne("simple-lecteur")
@@ -25,19 +25,16 @@ def privee(creer_collection, nom):
 
 LECTURES = [
     ("get", "/api/playground/{n}/bank", None),
-    ("get", "/api/qr-cache/{n}", None),
-    ("get", "/api/eval/{n}/datasets", None),
     ("get", "/api/sources/legifrance/status/{n}", None),
     ("get", "/api/sources/drive/status/{n}", None),
     ("get", "/api/ingest/{n}/sources", None),
 ]
 
 ECRITURES = [
-    ("post", "/api/qr-cache/{n}", {"question": "Q ?", "answer": "R."}),
-    ("delete", "/api/qr-cache/{n}/x", None),
-    ("post", "/api/eval/{n}/datasets", {"name": "jeu", "questions": []}),
-    ("delete", "/api/eval/{n}/datasets/1", None),
-    ("post", "/api/playground/{n}/generate-eval", {}),
+    # Le jeu de questions de référence (remplace /api/qr-cache et /api/eval) : réservé à qui gère.
+    ("get", "/api/collections/{n}/qualite/questions", None),
+    ("post", "/api/collections/{n}/qualite/questions", {"question": "Quel délai ?", "reponse": "R."}),
+    ("post", "/api/collections/{n}/qualite/questions/import", {"questions": [{"question": "Quel délai ?"}]}),
     ("post", "/api/sources/legifrance/add", {"collection": "{n}", "legifrance_id": "LEGITEXT000006070158", "type": "code"}),
     ("post", "/api/sources/drive/sync/{n}", None),
 ]
@@ -69,10 +66,12 @@ def test_qui_lit_la_collection_lit_ses_donnees(client, en_tant_que, privee, meth
     assert _appel(client, methode, chemin, corps, privee).status_code == 200
 
 
-def test_le_gestionnaire_ecrit_dans_le_cache_et_les_jeux(client, en_tant_que, privee):
+def test_le_gestionnaire_ecrit_dans_le_jeu_de_questions(client, en_tant_que, privee):
     en_tant_que(personne("createur"))
-    assert client.post(f"/api/qr-cache/{privee}", json={"question": "Q ?", "answer": "R."}).status_code == 200
-    assert client.post(f"/api/eval/{privee}/datasets", json={"name": "jeu", "questions": []}).status_code == 200
+    assert client.post(f"/api/collections/{privee}/qualite/questions", json={"question": "Q ?", "reponse": "R."}).status_code == 201
+    # Les anciennes routes disent où aller, pour tout le monde (rien à divulguer : elles ne lisent plus rien).
+    assert client.post(f"/api/qr-cache/{privee}", json={"question": "Q ?", "answer": "R."}).status_code == 410
+    assert client.get(f"/api/eval/{privee}/datasets").status_code == 410
 
 
 def test_les_travaux_d_indexation_ne_se_lisent_que_pour_ses_collections(client, en_tant_que, privee):
@@ -88,9 +87,9 @@ def test_les_travaux_d_indexation_ne_se_lisent_que_pour_ses_collections(client, 
     assert client.get(f"/api/ingest/jobs/{job}").status_code == 200
 
 
-@pytest.mark.parametrize("methode,chemin", [("post", "/api/collections/templates"),
-                                            ("put", "/api/collections/templates/essai-p2"),
-                                            ("delete", "/api/collections/templates/essai-p2")])
+@pytest.mark.parametrize(
+    "methode,chemin", [("post", "/api/collections/templates"), ("put", "/api/collections/templates/essai-p2"), ("delete", "/api/collections/templates/essai-p2")]
+)
 def test_les_modeles_de_consignes_se_reglent_par_l_administration(client, en_tant_que, methode, chemin):
     en_tant_que(personne("quelqu-un"))
     corps = {"key": "essai-p2", "name": "Essai", "prompt": "Tu es…", "description": ""}

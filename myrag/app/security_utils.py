@@ -91,6 +91,7 @@ def reject_path_traversal(value: str, *, field: str = "identifiant") -> str:
 
 # --- Anti-SSRF -------------------------------------------------------------
 
+
 def assert_public_http_url(url: str) -> str:
     """Valide une URL fournie par l'utilisateur avant un fetch côté serveur.
 
@@ -119,14 +120,7 @@ def assert_public_http_url(url: str) -> str:
             ip = ipaddress.ip_address(ip_str)
         except ValueError:
             continue
-        if (
-            ip.is_loopback
-            or ip.is_private
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
             raise HTTPException(status_code=400, detail="Cible d'URL non autorisée (adresse interne)")
     return url
 

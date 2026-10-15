@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -35,6 +35,7 @@ class FeedbackService:
 
     def __init__(self, data_dir: str | None = None):
         from app.config import settings
+
         self.data_dir = data_dir or settings.data_dir
 
     def _path(self, collection: str) -> Path:
@@ -51,9 +52,7 @@ class FeedbackService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps([f.to_dict() for f in items], indent=2, ensure_ascii=False))
 
-    def ingest(self, collection: str, question: str, response: str,
-               rating: int, reason: str = "", user_id: str = "",
-               owui_chat_id: str = "", owui_message_id: str = ""):
+    def ingest(self, collection: str, question: str, response: str, rating: int, reason: str = "", user_id: str = "", owui_chat_id: str = "", owui_message_id: str = ""):
         """Ingest a feedback item. Idempotent on owui_message_id."""
         items = self._load(collection)
 
@@ -81,8 +80,7 @@ class FeedbackService:
         self._save(collection, items)
         return fb
 
-    def list(self, collection: str, status: str | None = None,
-             rating: int | None = None) -> list[Feedback]:
+    def list(self, collection: str, status: str | None = None, rating: int | None = None) -> list[Feedback]:
         items = self._load(collection)
         if status:
             items = [f for f in items if f.status == status]
@@ -96,8 +94,7 @@ class FeedbackService:
                 return f
         return None
 
-    def review(self, feedback_id: str, collection: str,
-               status: str = "reviewed", reviewed_by: str = ""):
+    def review(self, feedback_id: str, collection: str, status: str = "reviewed", reviewed_by: str = ""):
         items = self._load(collection)
         for f in items:
             if f.id == feedback_id:
@@ -107,8 +104,7 @@ class FeedbackService:
                 break
         self._save(collection, items)
 
-    def promote(self, feedback_id: str, collection: str,
-                promote_to: str = "qr"):
+    def promote(self, feedback_id: str, collection: str, promote_to: str = "qr"):
         """Promote a feedback to Q&R cache or eval dataset."""
         items = self._load(collection)
         for f in items:

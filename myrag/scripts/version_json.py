@@ -47,7 +47,7 @@ def sections(changelog: str) -> list[dict]:
                 courante["changes"] = _nettoyer(courante["changes"])
                 resultat.append(courante)
             m = TITRE.match(ligne)
-            d = DATE.search(ligne[m.end():]) if m else None
+            d = DATE.search(ligne[m.end() :]) if m else None
             courante = {"version": m.group("version"), "date": d.group(0) if d else "", "changes": []} if m else None
             continue
         if courante is not None:

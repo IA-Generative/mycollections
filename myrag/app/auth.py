@@ -52,8 +52,14 @@ def _issuer() -> str:
     return f"{settings.keycloak_url.rstrip('/')}/realms/{settings.keycloak_realm}"
 
 
+def _realm_serveur() -> str:
+    """Le realm vu du serveur : l'adresse interne si elle est posée, sinon l'émetteur public."""
+    interne = (settings.keycloak_internal_url or "").rstrip("/")
+    return f"{interne}/realms/{settings.keycloak_realm}" if interne else _issuer()
+
+
 def _jwks_uri() -> str:
-    return f"{_issuer()}/protocol/openid-connect/certs"
+    return f"{_realm_serveur()}/protocol/openid-connect/certs"
 
 
 def _get_jwks_client() -> "jwt.PyJWKClient":
@@ -198,7 +204,7 @@ async def _sub_depuis_userinfo(jeton: str) -> str | None:
     if connu and connu[1] > maintenant:
         return connu[0]
 
-    url = f"{_issuer()}/protocol/openid-connect/userinfo"
+    url = f"{_realm_serveur()}/protocol/openid-connect/userinfo"
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {jeton}"})
@@ -242,6 +248,7 @@ async def current_user(
     """
     if not settings.auth_enabled:
         from app.services.access import GROUPE_DEV
+
         return CurrentUser(sub="dev", username="dev", groups=[GROUPE_DEV])
 
     groups = claims.get("groups") or []

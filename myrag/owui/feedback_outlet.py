@@ -57,20 +57,22 @@ class Pipe:
             # Fire-and-forget — don't block the response
             threading.Thread(
                 target=self._send_feedback,
-                args=(collection, question, msg.get("content", ""),
-                      1 if rating > 0 else -1,
-                      annotation.get("reason", ""),
-                      __user__.get("id", ""),
-                      body.get("chat_id", ""),
-                      msg.get("id", "")),
+                args=(
+                    collection,
+                    question,
+                    msg.get("content", ""),
+                    1 if rating > 0 else -1,
+                    annotation.get("reason", ""),
+                    __user__.get("id", ""),
+                    body.get("chat_id", ""),
+                    msg.get("id", ""),
+                ),
                 daemon=True,
             ).start()
 
         return body
 
-    def _send_feedback(self, collection: str, question: str, response: str,
-                       rating: int, reason: str, user_id: str,
-                       chat_id: str, message_id: str):
+    def _send_feedback(self, collection: str, question: str, response: str, rating: int, reason: str, user_id: str, chat_id: str, message_id: str):
         """Send feedback to MyRAG API (runs in background thread)."""
         if not collection:
             return

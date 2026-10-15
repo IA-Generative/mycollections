@@ -16,6 +16,7 @@ ENTETE = {"X-Bus-Secret": SECRET}
 @pytest.fixture
 def bus(monkeypatch):
     from app.config import settings
+
     monkeypatch.setattr(settings, "bus_secret", SECRET)
     monkeypatch.setattr(settings, "bus_url", "http://bus.test")
     envois: list[tuple[list[str], str]] = []
@@ -23,12 +24,14 @@ def bus(monkeypatch):
     async def faux_envoyer(destinataires, corps, app="mescollections"):
         envois.append((list(destinataires), corps))
         return True
+
     monkeypatch.setattr(relais, "envoyer", faux_envoyer)
     return envois
 
 
 def test_sans_secret_configure_le_bus_est_refuse_en_503(client, monkeypatch):
     from app.config import settings
+
     monkeypatch.setattr(settings, "bus_secret", "")
     assert client.get("/api/bus/demandes?visiteur=x", headers=ENTETE).status_code == 503
 
@@ -77,6 +80,7 @@ def test_le_seuil_atteint_est_relaye_aux_abonnes(client, bus, en_tant_que):
     assert bus, "un relais est parti"
     destinataires, corps = bus[-1]
     from app.services.pseudo import condenser
+
     assert condenser("auteur") in destinataires and condenser("s0") in destinataires and "chantier" in corps
     assert "auteur" not in " ".join(destinataires), "des condensés, jamais le visiteur"
 
@@ -85,12 +89,16 @@ def test_le_signalement_d_un_document_avec_version(client, bus, en_tant_que, cre
     creer_collection(nom, personne("garant"))
     en_tant_que(personne("garant"))
     assert client.post(f"/api/collections/{nom}/etat", json={"cible": "en_controle"}).status_code == 200
-    corps = {"visiteur": "lectrice", "collection": nom, "document": "CAA-24LY00001-2024-01-10.md",
-             "texte": "Annulé par le CE le 2 juin 2025.", "version": {"nom": "arret-v2.md", "contenu_base64": base64.b64encode(b"# v2").decode()}}
+    corps = {
+        "visiteur": "lectrice",
+        "collection": nom,
+        "document": "CAA-24LY00001-2024-01-10.md",
+        "texte": "Annulé par le CE le 2 juin 2025.",
+        "version": {"nom": "arret-v2.md", "contenu_base64": base64.b64encode(b"# v2").decode()},
+    }
     assert client.post("/api/bus/signalements", json=corps, headers=ENTETE).status_code == 404, "non publiée à tous : on ne dit rien"
-    from app.services import collectif_store as store
-    import asyncio
     from tests.conftest import SUPERADMIN
+
     en_tant_que(SUPERADMIN)
     assert client.post(f"/api/collections/{nom}/etat", json={"cible": "publiee_tous", "forcer": True, "motif": "test"}).status_code == 200
     r = client.post("/api/bus/signalements", json=corps, headers=ENTETE)

@@ -5,7 +5,6 @@ Couvre app.services.access.can_read / can_write / groups_match.
 
 from app.services import access
 
-
 SUPERADMIN = ["/g/administration-de-test"]
 CREATOR_SUB = "u-creator"
 
@@ -60,8 +59,7 @@ class TestCanWrite:
 
 class TestCanRead:
     def _r(self, **kw):
-        base = dict(name="victor", scope="group", scope_groups=[],
-                    created_by="", user_groups=[], user_sub="x")
+        base = dict(name="victor", scope="group", scope_groups=[], created_by="", user_groups=[], user_sub="x")
         base.update(kw)
         return access.can_read(**base)
 
@@ -88,12 +86,10 @@ class TestCanRead:
         assert self._r(scope="group", user_groups=["/myrag/victor"])
 
     def test_group_groupe_autorise(self):
-        assert self._r(scope="group", scope_groups=["/dir/juridique"],
-                       user_groups=["/dir/juridique"])
+        assert self._r(scope="group", scope_groups=["/dir/juridique"], user_groups=["/dir/juridique"])
 
     def test_group_tiers_refuse(self):
-        assert not self._r(scope="group", scope_groups=["/dir/juridique"],
-                           user_groups=["/dir/rh"])
+        assert not self._r(scope="group", scope_groups=["/dir/juridique"], user_groups=["/dir/rh"])
 
 
 class TestFormeDeLaBeta:
@@ -102,8 +98,7 @@ class TestFormeDeLaBeta:
     def test_superadmin_en_nom_court_ne_donne_ni_ecriture_ni_lecture(self):
         groups = ["mirai-beta-testeurs", "superadmin", "/g/administration-de-test"]
         assert not access.can_write(name="victor", created_by="", user_groups=groups, user_sub="x")
-        assert not access.can_read(name="victor", scope="private", scope_groups=[],
-                                   created_by="", user_groups=groups, user_sub="x")
+        assert not access.can_read(name="victor", scope="private", scope_groups=[], created_by="", user_groups=groups, user_sub="x")
 
     def test_createur_garde_ses_droits(self):
         # Le créateur est reconnu par son `sub`, pas par ses groupes.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.eval_service import EvalService, EvalQuestion, EvalRun
+from app.services.eval_service import EvalService
 
 
 @pytest.fixture

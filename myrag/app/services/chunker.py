@@ -5,9 +5,7 @@ from typing import Literal
 
 # --- Regex patterns ---
 
-ARTICLE_HEADER_RE = re.compile(
-    r"^Article\s+([LRD]\d+(?:-\d+)*)\s*$", re.MULTILINE
-)
+ARTICLE_HEADER_RE = re.compile(r"^Article\s+([LRD]\d+(?:-\d+)*)\s*$", re.MULTILINE)
 ARTICLE_REF_RE = re.compile(
     r"\b[Ll](?:'article|'article)\s+([LRD])\.\s?(\d+(?:-\d+)*)\b"
     r"|\b([LRD])\.\s?(\d+(?:-\d+)*)\b"
@@ -28,11 +26,11 @@ Strategy = Literal["article", "section", "qr", "length", "auto"]
 Sensitivity = Literal["public", "internal", "restricted", "confidential", "secret"]
 
 SENSITIVITY_LEVELS = {
-    "public": 0,       # Accessible a tous (ex: textes de loi publies au JO)
-    "internal": 1,     # Usage interne organisation (ex: notes de service)
-    "restricted": 2,   # Diffusion restreinte (ex: procedures internes)
-    "confidential": 3, # Confidentiel (ex: donnees personnelles, avis juridiques)
-    "secret": 4,       # Secret (ex: defense nationale — hors scope plateforme)
+    "public": 0,  # Accessible a tous (ex: textes de loi publies au JO)
+    "internal": 1,  # Usage interne organisation (ex: notes de service)
+    "restricted": 2,  # Diffusion restreinte (ex: procedures internes)
+    "confidential": 3,  # Confidentiel (ex: donnees personnelles, avis juridiques)
+    "secret": 4,  # Secret (ex: defense nationale — hors scope plateforme)
 }
 
 
@@ -99,7 +97,7 @@ def chunk_by_article(text: str, sensitivity: Sensitivity = "public") -> list[dic
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
 
         raw_content = text[start:end].strip()
-        text_before = text[:match.start()]
+        text_before = text[: match.start()]
         hierarchy = _track_hierarchy(text_before)
         references = _extract_references(raw_content)
 
@@ -120,30 +118,34 @@ def chunk_by_article(text: str, sensitivity: Sensitivity = "public") -> list[dic
 
         # Build parent path for hierarchy navigation
         parent_path = "/".join(
-            p for p in [
+            p
+            for p in [
                 f"Livre-{hierarchy['livre']}" if hierarchy["livre"] else "",
                 f"Titre-{hierarchy['titre']}" if hierarchy["titre"] else "",
                 f"Chapitre-{hierarchy['chapitre']}" if hierarchy["chapitre"] else "",
-            ] if p
+            ]
+            if p
         )
 
-        chunks.append({
-            "content": content,
-            "filename": f"Article-{article_id}.md",
-            "metadata": {
-                "article": article_id,
-                "page": i + 1,
-                "livre": hierarchy["livre"],
-                "titre": hierarchy["titre"],
-                "chapitre": hierarchy["chapitre"],
-                "section": hierarchy["section"],
-                "parent_path": parent_path,
-                "references": references,
-                "referenced_by": [],  # populated in post-processing (graph build)
-                "graph_ready": False,  # set to True after graph build
-                "sensitivity": sensitivity,
-            },
-        })
+        chunks.append(
+            {
+                "content": content,
+                "filename": f"Article-{article_id}.md",
+                "metadata": {
+                    "article": article_id,
+                    "page": i + 1,
+                    "livre": hierarchy["livre"],
+                    "titre": hierarchy["titre"],
+                    "chapitre": hierarchy["chapitre"],
+                    "section": hierarchy["section"],
+                    "parent_path": parent_path,
+                    "references": references,
+                    "referenced_by": [],  # populated in post-processing (graph build)
+                    "graph_ready": False,  # set to True after graph build
+                    "sensitivity": sensitivity,
+                },
+            }
+        )
 
     return chunks
 
@@ -155,8 +157,7 @@ def chunk_by_section(text: str, sensitivity: Sensitivity = "internal") -> list[d
 
     matches = list(SECTION_HEADER_RE.finditer(text))
     if not matches:
-        return [{"content": text.strip(), "filename": "section-1.md",
-                 "metadata": {"section_title": "", "level": 1, "page": 1, "sensitivity": sensitivity}}]
+        return [{"content": text.strip(), "filename": "section-1.md", "metadata": {"section_title": "", "level": 1, "page": 1, "sensitivity": sensitivity}}]
 
     chunks = []
     for i, match in enumerate(matches):
@@ -170,16 +171,18 @@ def chunk_by_section(text: str, sensitivity: Sensitivity = "internal") -> list[d
             continue
 
         slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:50]
-        chunks.append({
-            "content": content,
-            "filename": f"section-{slug}.md",
-            "metadata": {
-                "section_title": title,
-                "level": level,
-                "page": i + 1,
-                "sensitivity": sensitivity,
-            },
-        })
+        chunks.append(
+            {
+                "content": content,
+                "filename": f"section-{slug}.md",
+                "metadata": {
+                    "section_title": title,
+                    "level": level,
+                    "page": i + 1,
+                    "sensitivity": sensitivity,
+                },
+            }
+        )
 
     return chunks
 
@@ -202,15 +205,17 @@ def chunk_by_qr(text: str, sensitivity: Sensitivity = "public") -> list[dict]:
         answer = text[start:end].strip()
         slug = re.sub(r"[^a-z0-9]+", "-", question.lower())[:40].strip("-")
 
-        chunks.append({
-            "content": answer,
-            "filename": f"QR-{i + 1}-{slug}.md",
-            "metadata": {
-                "question": question,
-                "page": i + 1,
-                "sensitivity": sensitivity,
-            },
-        })
+        chunks.append(
+            {
+                "content": answer,
+                "filename": f"QR-{i + 1}-{slug}.md",
+                "metadata": {
+                    "question": question,
+                    "page": i + 1,
+                    "sensitivity": sensitivity,
+                },
+            }
+        )
 
     return chunks
 
@@ -237,11 +242,13 @@ def chunk_by_length(text: str, max_chars: int = 512, overlap: int = 50, sensitiv
 
         chunk_text = text[pos:end].strip()
         if chunk_text:
-            chunks.append({
-                "content": chunk_text,
-                "filename": f"chunk-{page}.md",
-                "metadata": {"page": page, "sensitivity": sensitivity},
-            })
+            chunks.append(
+                {
+                    "content": chunk_text,
+                    "filename": f"chunk-{page}.md",
+                    "metadata": {"page": page, "sensitivity": sensitivity},
+                }
+            )
             page += 1
 
         # Sortie par le HAUT de la boucle une fois le texte épuisé. Sans cela, la

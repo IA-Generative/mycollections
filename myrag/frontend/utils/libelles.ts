@@ -61,6 +61,6 @@ export const libelleActionPublication = (v?: string | null) => libelle(LIBELLES_
 export const LIBELLES_STATUT_AVIS: Record<string, string> = {
   pending: 'à relire',
   reviewed: 'relu',
-  promoted: 'réponse validée',
+  promoted: 'devenu question de référence',
 }
 export const libelleStatutAvis = (v?: string | null) => libelle(LIBELLES_STATUT_AVIS, v)
