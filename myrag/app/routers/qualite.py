@@ -133,10 +133,25 @@ async def exporter(collection: str, format: str = Query("json", pattern="^(json|
 
 @router.get("/questions/{ident}")
 async def lire(collection: str, ident: str, user: CurrentUser = Depends(gerer_la_collection)):
+    from app.services import mesure_store
+
     try:
-        return {"question": await store.lire_question(collection, ident)}
+        q = await store.lire_question(collection, ident)
     except Introuvable as e:
         _traduire(e)
+    return {"question": q, "dernier_resultat": await mesure_store.resultat_de(collection, q.get("derniere_mesure_id"), ident)}
+
+
+@router.post("/questions/{ident}/tester")
+async def tester(collection: str, ident: str, user: CurrentUser = Depends(gerer_la_collection)):
+    """Poser cette question à la collection et juger la réponse, tout de suite ; rien n'est enregistré."""
+    from app.services.mesure import execution
+
+    try:
+        q = await store.lire_question(collection, ident)
+    except Introuvable as e:
+        _traduire(e)
+    return await execution.tester_une(collection, q)
 
 
 @router.patch("/questions/{ident}")

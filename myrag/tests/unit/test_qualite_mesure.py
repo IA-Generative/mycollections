@@ -125,3 +125,16 @@ def test_actions_suggerees():
     derniere = {"etat": "termine", "cree_le": "2026-10-15T10:00:00", "nb_traitees": 10, "verdicts": {"non_conformes": 1, "partielles": 1, "sans_source": 3, "refus_ko": 0}}
     codes = [a["code"] for a in actions_suggerees({"total": 10, "par_relecture": {"valide": 10}}, derniere, {})]
     assert codes == ["corriger_echecs", "redecouper"]
+
+
+def test_volet_dernier_resultat_et_retester(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    _jeu(client, nom)
+    _mesurer(client, nom)
+    qid = next(q["id"] for q in client.get(URL.format(nom) + "/questions", params={"par_page": 50}).json()["questions"] if q["question"] == "Quelles pièces ?")
+    d = client.get(URL.format(nom) + f"/questions/{qid}").json()
+    assert d["dernier_resultat"]["verdict"] == "non_conforme" and d["dernier_resultat"]["reponse_obtenue"] == "Un passeport."
+    with patch.object(execution, "repondre", new=_repondre), patch.object(execution.juge_mod, "juger", new=_juger):
+        r = client.post(URL.format(nom) + f"/questions/{qid}/tester").json()
+    assert r["verdict"] == "non_conforme" and r["reponse_obtenue"] == "Un passeport." and r["sources"] == [{"fichier": "b.md"}]

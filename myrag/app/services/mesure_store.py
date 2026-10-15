@@ -119,3 +119,18 @@ async def marquer_interrompues() -> int:
             m.erreur = "Interrompue par un redémarrage du service : relancez la mesure."
         await s.commit()
         return len(orphelines)
+
+
+async def resultat_de(name: str, mesure_id: str | None, question_id: str) -> dict | None:
+    """Le résultat d'une question dans une mesure (sa dernière, pour le volet)."""
+    if not mesure_id:
+        return None
+    async with async_session() as s:
+        r = await s.execute(select(MesureResultat).where(MesureResultat.collection_name == name, MesureResultat.mesure_id == mesure_id, MesureResultat.question_id == question_id))
+        x = r.scalars().first()
+        if not x:
+            return None
+        d = x.to_dict()
+        m = await s.get(Mesure, mesure_id)
+        d["mesure_le"] = m.cree_le.isoformat() if m and m.cree_le else None
+        return d

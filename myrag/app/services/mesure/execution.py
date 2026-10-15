@@ -55,7 +55,8 @@ class _Etat:
         self.jugements = 0
 
 
-async def mesurer_une(name: str, mesure_id: str, q: dict, *, client, compteurs: Compteurs, etat: _Etat, debit) -> str:
+async def evaluer(name: str, q: dict, *, client, compteurs: Compteurs, etat: _Etat, debit) -> dict:
+    """Poser une question à la collection et juger la réponse ; rend le résultat (sans l'écrire)."""
     debut = time.monotonic()
     resultat = {
         "question_id": q["id"],
@@ -99,6 +100,11 @@ async def mesurer_une(name: str, mesure_id: str, q: dict, *, client, compteurs: 
     except Exception as e:  # noqa: BLE001 — une question en échec n'arrête pas la mesure
         resultat.update(verdict="erreur", justification=message_sur(e), score=None, methode="judge")
     resultat["duree_s"] = round(time.monotonic() - debut, 2)
+    return resultat
+
+
+async def mesurer_une(name: str, mesure_id: str, q: dict, *, client, compteurs: Compteurs, etat: _Etat, debit) -> str:
+    resultat = await evaluer(name, q, client=client, compteurs=compteurs, etat=etat, debit=debit)
     await store.enregistrer_resultat(mesure_id, name, **resultat)
     if resultat["verdict"] != "erreur" and q.get("id"):
         await questions_store.noter_verdict(q["id"], resultat["verdict"], mesure_id)
@@ -220,3 +226,19 @@ def lancer(mesure: dict, name: str, questions: list[dict]) -> asyncio.Task:
     _taches[mesure["id"]] = tache
     tache.add_done_callback(lambda _t: _taches.pop(mesure["id"], None))
     return tache
+
+
+async def tester_une(name: str, q: dict) -> dict:
+    """Re-tester une seule question, tout de suite (volet d'une question) : rien n'est enregistré."""
+    from app.services.debit import partage
+
+    client = OpenRAGClient(timeout=float(settings.mesure_delai_appel_s))
+    r = await evaluer(name, q, client=client, compteurs=Compteurs(), etat=_Etat(), debit=partage())
+    return {
+        "verdict": r["verdict"],
+        "justification": r["justification"],
+        "reponse_obtenue": r.get("reponse_obtenue", ""),
+        "sources": json.loads(r.get("sources_json") or "[]"),
+        "repli": r.get("repli", "aucun"),
+        "methode": r.get("methode"),
+    }
