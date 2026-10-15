@@ -206,17 +206,19 @@ def normaliser_import(item: dict) -> dict | None:
     if not question:
         return None
     reponse = str(item.get("reponse") or item.get("expected_answer") or item.get("answer") or item.get("reference") or "").strip()
+    hors_sujet = bool(item.get("out_of_scope") or item.get("hors_sujet"))
     relecture = item.get("relecture") or meta.get("relecture")
+    # Une question hors sujet est complète sans réponse : l'attendu est un refus.
     if relecture not in RELECTURES_PAIRE:
-        relecture = "valide" if reponse else "brut"
-    if relecture == "valide" and not reponse and not (item.get("out_of_scope") or item.get("hors_sujet")):
+        relecture = "valide" if (reponse or hors_sujet) else "brut"
+    if relecture == "valide" and not reponse and not hors_sujet:
         relecture = "brut"
     return {
         "question": question[:QUESTION_MAX],
         "reponse": reponse[:REPONSE_MAX],
         "must_cite": item.get("must_cite") or meta.get("must_cite") or [],
         "tags": item.get("tags") or meta.get("tags") or [],
-        "hors_sujet": bool(item.get("out_of_scope") or item.get("hors_sujet")),
+        "hors_sujet": hors_sujet,
         "persona": item.get("persona") or item.get("persona_name") or "",
         "commentaire": item.get("note") or item.get("commentaire") or meta.get("commentaire") or "",
         "relecture": relecture,

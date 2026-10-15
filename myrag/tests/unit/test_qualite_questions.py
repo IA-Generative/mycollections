@@ -95,7 +95,8 @@ def test_import_deux_formats_et_doublons(client, en_tant_que, creer_collection, 
     assert r.json()["crees"] == 1
     toutes = {q["question"]: q for q in client.get(URL.format(nom), params={"par_page": 50}).json()["questions"]}
     assert toutes["Où déposer le dossier ?"]["relecture"] == "valide" and toutes["Où déposer le dossier ?"]["must_cite"] == ["guichet"]
-    assert toutes["Quelle est la capitale de la Mongolie ?"]["hors_sujet"] is True
+    # Hors sujet : complète sans réponse (l'attendu est un refus), donc validée.
+    assert toutes["Quelle est la capitale de la Mongolie ?"]["hors_sujet"] is True and toutes["Quelle est la capitale de la Mongolie ?"]["relecture"] == "valide"
     assert toutes["Faut-il un rendez-vous ?"]["persona"] == "Usager" and toutes["Faut-il un rendez-vous ?"]["relecture"] == "brut"
     assert client.post(URL.format(nom) + "/import", json={}).status_code == 422
 
