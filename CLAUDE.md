@@ -271,8 +271,13 @@ se renomment dans la console du realm, puis dans les arguments de construction d
 
 ## Regles de travail
 
-- **`main` est protegee** : tout passe par une branche et une pull request. La construction des
-  images lit `main` — un correctif qui n'y est pas fusionne n'est pas livre, meme s'il marche en local.
+- **`beta` est la branche par defaut** : toute PR la vise. Chaque fusion dans `beta` construit les
+  images `beta-<sha8>` et Argo CD les deploie seul sur la beta. Une PR `beta` → `main` publie
+  ensuite une version (release-please ouvre la PR « release X.Y.Z », dont la fusion construit les
+  images `X.Y.Z`) ; apres la publication, une PR `main` → `beta` realigne `beta`.
+- **`main` est protegee** : une PR approuvee par une autre personne et la CI verte (« All jobs
+  passed ») ; ni force-push ni suppression. Un correctif qui n'est pas dans `beta` n'est pas deploye,
+  meme s'il marche en local.
 - **Le depot est public** : ni nom de personne, ni chemin de poste, ni identifiant d'infrastructure
   (registre, cluster, namespace), ni jeton — meme d'exemple — dans le code ou la documentation.
   Les adresses d'exemple sont en `fake-domain.name` ; les ecrans de documentation utilisent des
