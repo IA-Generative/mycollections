@@ -10,10 +10,10 @@ sable de l'afficher, pas à la mesure de la juger.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 
 from app.security_utils import neutralize_for_prompt, sanitize_oneline, wrap_untrusted
+from app.services.sources_openrag import sources_de
 
 
 class ErreurReponse(RuntimeError):
@@ -85,13 +85,8 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
     if "choices" in result and result["choices"]:
         content = result["choices"][0].get("message", {}).get("content", "")
 
-    extra_str = result.get("extra", "")
-    if extra_str:
-        try:
-            extra = json.loads(extra_str) if isinstance(extra_str, str) else extra_str
-            sources = extra.get("sources", [])
-        except (json.JSONDecodeError, AttributeError):
-            pass
+    # `extra` : chaîne (OpenRAG 2.2.1) ou objet (2.3.1) ; sources ramenées à plat (2.3.1 : sous `chunk`).
+    sources = sources_de(result.get("extra"))
 
     # Étape 2a : aucune source ? On cherche nous-mêmes avant d'abandonner.
     #
