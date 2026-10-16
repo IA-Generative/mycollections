@@ -6,7 +6,12 @@
       "package-name": "mycollections",
       "include-component-in-tag": false,
       "skip-changelog": true,
-      "extra-files": ["deploy/helm/mycollections/Chart.yaml"]
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "deploy/helm/mycollections/Chart.yaml"
+        }
+      ]
     }
   }
 }

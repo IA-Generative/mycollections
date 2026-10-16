@@ -2,5 +2,7 @@ apiVersion: v2
 name: mycollections
 description: Mes collections (MirAI) — API (myrag-backend) et interface (myrag-frontend)
 type: application
-version: 0.4.0
-appVersion: 0.3.25
+# La version du chart suit celle de l'application (release-please la tient à jour : mise à jour
+# « generic » sur les marqueurs ci-dessous, voir release-please-config.json).
+version: 0.4.0 # x-release-please-version
+appVersion: "0.4.0" # x-release-please-version
