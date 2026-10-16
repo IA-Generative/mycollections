@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
+
+#: Le corps rendu par `POST /api/playground/<collection>/chat` pour la question du module.
+_REPONSE_API: dict = {}
 
 
 @pytest.fixture(scope="module")
@@ -14,7 +18,12 @@ def reponse_obtenue(session_testeur, collection_publiee, captures):
     page.locator("#question").wait_for(state="visible", timeout=30_000)
     captures.prendre(page, "04-bac-a-sable-vide")
     page.locator("#question").fill(collection_publiee["question"])
-    page.get_by_role("button", name="Envoyer").click()
+    with page.expect_response(lambda r: "/api/playground/" in r.url and r.url.endswith("/chat") and r.request.method == "POST", timeout=180_000) as appel:
+        page.get_by_role("button", name="Envoyer").click()
+    try:
+        _REPONSE_API.update(appel.value.json() or {})
+    except Exception:  # noqa: BLE001 — un corps illisible est jugé par les tests, pas ici
+        pass
     page.locator(".myrag-msg--assistant").first.wait_for(state="visible", timeout=180_000)
     page.wait_for_timeout(800)
     captures.prendre(page, "04-bac-a-sable-reponse")
@@ -30,6 +39,24 @@ def test_la_question_recoit_une_reponse_sans_erreur(reponse_obtenue):
 def test_la_reponse_cite_ses_sources(reponse_obtenue):
     puces = reponse_obtenue.locator(".myrag-msg--assistant .myrag-source-chip-wrap")
     assert puces.count() >= 1, "aucune source citée pour une question du jeu d'évaluation de la collection"
+
+
+def test_une_puce_par_fichier_cite(reponse_obtenue):
+    """Autant de puces que de fichiers distincts cités par l'API. Des sources mal lues (forme
+    d'OpenRAG 2.3, métadonnées sous `chunk`) perdent leur nom et fusionnent toutes en UNE puce,
+    ce que `>= 1` laisse passer."""
+    sources = [s for s in (_REPONSE_API.get("sources") or []) if isinstance(s, dict)]
+    assert sources, "la réponse de l'API n'a pas été lue, ou ne cite aucune source"
+    documents = [s for s in sources if s.get("source_type") != "web"]
+    assert not any("chunk" in s for s in documents), "des sources arrivent au front sans être aplaties (forme OpenRAG 2.3)"
+    sans_nom = [s for s in documents if not (s.get("original_filename") or s.get("filename"))]
+    assert not sans_nom, f"{len(sans_nom)} source(s) documentaire(s) sans nom de fichier : leurs puces fusionneraient"
+    fichiers = {s.get("original_filename") or s.get("filename") for s in documents}
+    assert fichiers == set(_REPONSE_API.get("source_names") or []), "les puces et la liste des noms ne parlent pas des mêmes fichiers"
+    # La clé de dédoublonnage de ChatMessage.vue : le nom, à défaut le début du JSON (sources web).
+    cles = {s.get("original_filename") or s.get("filename") or json.dumps(s, ensure_ascii=False, separators=(",", ":"))[:40] for s in sources}
+    puces = reponse_obtenue.locator(".myrag-msg--assistant .myrag-source-chip-wrap")
+    assert puces.count() == len(cles), f"{puces.count()} puce(s) pour {len(fichiers)} fichier(s) cité(s)"
 
 
 def test_la_source_se_lit_au_survol_puis_en_fenetre(reponse_obtenue, captures):
