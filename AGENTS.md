@@ -1,0 +1,311 @@
+# CLAUDE.md
+
+## Project Overview
+
+**Mes collections (beta)** — Front augmente DSFR pour OpenRAG. Module independant qui s'intercale entre l'utilisateur et OpenRAG pour offrir un decoupage intelligent de documents, un graph de references croisees, une administration des collections en DSFR, et une integration riche dans Open WebUI.
+
+## Dependencies — services requis
+
+Mes collections ne fonctionne PAS en standalone. Il depend de plusieurs services externes qui doivent etre demarres avant. **Avant toute operation (dev, test, debug), verifier que les services requis sont actifs.**
+
+### Carte des dependances
+
+```
+                        [Mes collections]
+                         MyRAG :8200
+                         Frontend :8201
+                              |
+         ┌────────────────────┼────────────────────┐
+         |                    |                    |
+     [OpenRAG]           [Keycloak]          [API de modeles]
+      :8080               :8082              (LLM + embeddings)
+         |                    |
+    ┌────┼────┐          [owuicore-main]
+    |    |    |           Open WebUI :3000
+  Milvus rdb etcd         Pipelines :9099
+         MinIO             Tika :9998
+```
+
+### Services requis et ou les trouver
+
+| Service | Port | Depot | Indispensable | Verification |
+|---------|------|------------|:-------------:|-------------|
+| **OpenRAG** | 8080 (interne) ; hote : `APP_PORT` | `../openrag` (compose : `infra/compose/`) | oui | `curl http://localhost:8080/health_check` (port hote = `APP_PORT` du `.env` OpenRAG ; 8180 dans l'integration locale) |
+| **Keycloak** | 8082 | `../owuicore-main` (compose) | oui | `curl http://localhost:8082/realms/openwebui` |
+| **Open WebUI** | 3000 | `../owuicore-main` | non (publication) | `curl http://localhost:3000` |
+| **Milvus** | — | Demarre par le compose OpenRAG | oui (via OpenRAG) | Inclus dans `docker compose up` OpenRAG |
+| **PostgreSQL (rdb)** | — | Demarre par le compose OpenRAG | oui (via OpenRAG) | Inclus dans `docker compose up` OpenRAG |
+| **API de modeles** (LLM + embeddings) | — | Service externe, compatible OpenAI | oui | Clefs dans le `.env` d'OpenRAG |
+
+### Depots lies (ecosysteme Mirai)
+
+Les chemins sont donnes **relativement a ce depot** : les depots se clonent cote a cote.
+
+| Depot | Chemin | Role |
+|-------|--------|------|
+| `openrag` | `../openrag` | Backend RAG (indexation, search, chat) |
+| `owuicore-main` | `../owuicore-main` | Open WebUI + Keycloak + Pipelines + Tika |
+| `keycloak-comu` | `../keycloak-comu` | Self-service groupes Keycloak (gestion membres) |
+| `keycloak-utils` | `../keycloak-utils` | Utilitaires admin Keycloak |
+| `owuitools-legifrance` | `../owuitools-legifrance` | MCP Legifrance (API PISTE) |
+| `owuipipe-grafragexp` | `../owuipipe-grafragexp` | Viewer graph Cytoscape.js (source du viewer) |
+| `AssistantMiraiLibreOffice` | `../AssistantMiraiLibreOffice` | Extension LibreOffice (integration future) |
+| `mirai-assistant-navigateur` | `../mirai-assistant-navigateur` | Extension navigateur (integration future) |
+| `mirai-infra` | `../mirai-infra` | Infrastructure Kubernetes |
+| `mirai-values` | `../mirai-values` | Helm values pour le deploiement |
+
+### Demarrage du stack complet (Docker local)
+
+```bash
+# 1. Demarrer owuicore-main (Keycloak + Open WebUI + Pipelines + Tika)
+cd ../owuicore-main
+docker compose up -d
+
+# 2. Demarrer OpenRAG (+ Milvus + PostgreSQL + MinIO)
+#    Le compose vit dans infra/compose/ (y poser le .env d'OpenRAG).
+#    -p openrag fixe les noms utilises a l'etape 3 (reseau openrag_default,
+#    container openrag-openrag-cpu-1).
+cd ../openrag/infra/compose
+docker compose -p openrag --profile cpu up -d
+
+# 3. Demarrer MyRAG (backend)
+cd ../mycollections
+docker build -t myrag:beta myrag/ && docker run -d --name myrag-test \
+  -p 8200:8200 --dns 8.8.8.8 --dns 8.8.4.4 \
+  --add-host=host.docker.internal:host-gateway \
+  -v myrag-data:/app/data \
+  -e OPENRAG_URL=http://openrag-openrag-cpu-1:8080 \
+  -e OPENRAG_ADMIN_TOKEN=<jeton-admin-openrag> \
+  -e KEYCLOAK_URL=http://host.docker.internal:8082 \
+  -e KEYCLOAK_REALM=openwebui \
+  -e KEYCLOAK_ADMIN_PASSWORD=<mot-de-passe-admin-keycloak> \
+  -e MYRAG_PSEUDO_SEL=dev-sel \
+  --network openrag_default myrag:beta
+
+# 4. Demarrer le frontend (dev mode)
+cd myrag/frontend
+npm install && npx nuxt dev --port 8201
+```
+
+### Deploiement (Kubernetes)
+
+Les manifestes sont dans `myrag/k8s/` ; la procedure est dans le README (section
+« Deploiement sur Kubernetes ») et dans `myrag/DEPLOYMENT.md`. Registre d'images, namespace et
+adresses dependent de l'environnement.
+
+```bash
+# Variables d'environnement du backend, en cluster (exemples de forme, pas de valeurs reelles) :
+#   DATABASE_URL=postgresql+asyncpg://<user>:<mot-de-passe>@<hote-postgres>:5432/myrag
+#   OPENRAG_URL=http://<service-openrag>:8080
+#   KEYCLOAK_URL=https://<votre-sso>
+```
+
+Les adresses du SSO et de l'API sont des valeurs de construction du frontend (Nuxt statique),
+mais le frontend les **relit au demarrage** dans `/config.json` monte par le deploiement
+(`plugins/00.config-execution.client.ts`, `utils/configExecution.ts`) : la meme image sert la
+beta et chaque preview. Sans `/config.json` (dev, compose), ce sont les valeurs de construction
+qui s'appliquent.
+
+### Verification rapide de sante
+
+```bash
+# Tous les services en une commande
+echo "OpenRAG:" && curl -s http://localhost:${APP_PORT:-8080}/health_check | head -1   # APP_PORT du .env OpenRAG (8180 en integration locale)
+echo "Keycloak:" && curl -s http://localhost:8082/realms/openwebui | python3 -c "import sys,json; print(json.load(sys.stdin).get('realm','KO'))" 2>/dev/null
+echo "MyRAG:" && curl -s http://localhost:8200/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','KO'))" 2>/dev/null
+echo "Open WebUI:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
+```
+
+## Architecture interne
+
+```
+[Frontend Nuxt 4 + DSFR — port 8201]
+     |
+[MyRAG FastAPI — port 8200]
+     |
+     ├── /api/ingest/{collection}        → decoupage + upload vers OpenRAG
+     ├── /api/collections                → CRUD collections (SQLAlchemy DB)
+     ├── /api/collections/{n}/publish    → publication dans OWUI
+     ├── /api/feedback                   → feedback OWUI
+     ├── /api/collections/{n}/qualite    → jeu de questions de reference, mesures (juge IA), synthese
+     ├── /api/playground/{n}/chat        → test RAG avec debug
+     ├── /api/openrag/extract/{id}       → morceau relu dans OpenRAG : page HTML lisible, ou JSON brut avec ?raw=1
+     ├── /api/openrag/static/{path}      → document complet (repli sur le morceau ; propage ?raw=1)
+     ├── /api/sources/check-url          → verification URL distante
+     ├── /api/sync                       → sync Keycloak ↔ OpenRAG
+     ├── /api/collections/{n}/generation → paires question/réponse par persona (ragas)
+     ├── /api/v1/search[/scopes]         → recherche de Mon portail (contrat de recherche MirAI, sans LLM)
+     ├── /api/demandes                    → demandes du collectif : soutiens, garant, journal (routers/demandes.py, collectif.py)
+     ├── /api/collections/{n}/documents   → corpus d'une collection (documents sources)
+     ├── /api/amorces, /api/categories    → catalogue des amorces ; categories
+     ├── /api/guide, /api/accueil/*       → guide en six etapes ; exemple de question, bilan de l'accueil
+     ├── /api/eval, /api/qr-cache         → jeux d'evaluation ; cache question/reponse du playground
+     ├── /api/bus                         → relais du fil vers la cloche du menu commun (503 si non configure)
+     ├── /api/moi, /api/config, /health   → identite courante ; configuration publique ; sante
+     ├── /graph                          → viewer Cytoscape.js
+     └── /articles/{collection}/{id}     → vue article HTML DSFR
+```
+
+## Stack Technique
+
+- **Backend** : Python 3.12, FastAPI, SQLAlchemy async (SQLite dev / PostgreSQL prod), httpx, NetworkX
+- **Frontend** : Nuxt 4, @gouvfr/dsfr, oidc-client-ts
+- **Outillage** : mise (uv + node 22) ; dependances Python via `uv` (`myrag/pyproject.toml` + `uv.lock`, pas de `requirements.txt`)
+- **Auth** : Keycloak OIDC PKCE (realm openwebui, client myrag-front)
+- **Tests** : pytest (backend), vitest (frontend), TDD
+- **Docker** : `myrag/docker-compose.yaml` (backend + frontend ; requiert le reseau externe `owui-net`) + manifestes Kubernetes (`myrag/k8s/`)
+
+## Key Files
+
+| Fichier | Description |
+|---------|-------------|
+| `myrag/app/main.py` | FastAPI app + lifespan (init DB) |
+| `myrag/app/database.py` | SQLAlchemy engine (SQLite/PostgreSQL) |
+| `myrag/app/models/db.py` | 23 tables : 8 historiques, 8 du collectif (demande, soutien, abonnement, proposition, signalement, grille_controle, evenement, amorce) et 7 catalogue/generation/qualite (categories, usage_question, persona, generation, paire_qa, mesure, mesure_resultat) |
+| `myrag/app/services/etats.py` | Machine à états du collectif — module pur (docs/collectif.md, ADR-0001) |
+| `myrag/app/services/collectif_store.py` | Écritures du collectif + journal (fil d'avancement) |
+| `myrag/app/routers/demandes.py`, `collectif.py`, `amorces.py` | Routes du collectif |
+| `myrag/app/amorces/catalogue.json`, `myrag/app/services/amorces/` | Les amorces : six du lot 0 + guide (7 entrees au catalogue) ; catalogue, connecteurs, ingestion idempotente, banque de questions, CLI |
+| `myrag/tests/conftest.py` | Base SQLite isolée par session, identités de test, capacités |
+| `myrag/app/services/collection_store.py` | CRUD collections (DB) |
+| `myrag/app/services/job_store.py` | CRUD ingestion jobs (DB) |
+| `myrag/app/services/feedback_store.py` | CRUD feedback (DB) |
+| `myrag/app/services/openrag_client.py` | Client API OpenRAG |
+| `myrag/app/services/chunker.py` | 4 strategies de decoupage |
+| `myrag/app/services/graph_builder.py` | Graph NetworkX + Cytoscape.js |
+| `myrag/app/routers/ingest.py` | Upload + from-url + reindex |
+| `myrag/app/routers/playground.py` | Chat RAG avec fallback |
+| `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |
+| `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
+| `myrag/frontend/utils/extrait.ts` | `decouperMorceau` (retire les balises OpenRAG), exports ; pendant backend : `_decouper_morceau` dans `app/main.py` |
+| `myrag/frontend/pages/index.vue`, `myrag/frontend/utils/accueil.ts` | Accueil : decouvrir, explorer, creer ; ce que l'accueil raconte est en fonctions pures testees |
+| `myrag/app/generation/`, `myrag/app/routers/generation.py` | Génération de paires question/réponse par persona (ragas, extra optionnel) : lecture des passages, moteur, exécution en fil ; `docs/generation.md` |
+| `myrag/app/routers/accueil.py`, `categories.py`, `guide.py` | Exemple de question et bilan de l'accueil ; categories du catalogue ; guide en six etapes (`myrag/app/guide/*.md`) |
+| `myrag/app/routers/qualite.py`, `app/services/questions_store.py`, `app/services/mesure/` | Page Qualite : jeu de questions unifie, mesure (verdicts, juge, execution), synthese (docs/qualite.md) |
+| `myrag/frontend/pages/c/[id]/qualite.vue`, `components/qualite/`, `utils/qualite.ts` | Page Qualite et etape 4 de l'assistant (memes composants) |
+| `myrag/frontend/pages/admin/create/` | Wizard 5 etapes |
+| `myrag/frontend/composables/useApi.ts` | Client API centralise |
+
+## Database
+
+SQLite pour le dev (`/app/data/myrag.db`), PostgreSQL pour la prod via `DATABASE_URL` :
+```
+DATABASE_URL=sqlite+aiosqlite:////app/data/myrag.db        # dev
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/myrag  # prod
+```
+
+## Testing
+
+```bash
+cd myrag && uv run pytest tests/unit/ -v      # backend (via le venv uv)
+cd myrag/frontend && npx vitest run          # frontend
+```
+
+Le comportement d'un survol, d'un focus ou d'un defilement ne se prouve pas par un test
+unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite+aiosqlite:////app/data/myrag.db` | Base de donnees |
+| `DEBUG` | `false` | Mode debug : active `/docs`, `/redoc`, `/openapi.json` et l'echo SQL |
+| `OPENRAG_URL` | `http://openrag:8080` | URL du service OpenRAG |
+| `OPENRAG_ADMIN_TOKEN` | `` | Token admin OpenRAG |
+| `OPENRAG_PUBLIC_URL` | `` | Adresse publique d'OpenRAG (bloc « Où interroger ») ; vide => reprend `openrag_url` si https |
+| `KEYCLOAK_URL` | `http://keycloak:8080` | URL Keycloak |
+| `KEYCLOAK_REALM` | `openwebui` | Realm Keycloak |
+| `KEYCLOAK_ADMIN_USER` | `admin` | Utilisateur admin Keycloak |
+| `KEYCLOAK_ADMIN_PASSWORD` | `` | Mot de passe admin Keycloak (fallback si pas de client_secret) |
+| `KEYCLOAK_CLIENT_ID` | `myrag-admin` | Client Keycloak pour l'API admin |
+| `KEYCLOAK_CLIENT_SECRET` | `` | Secret du client (si service account) |
+| `MYCOLLECTIONS_KEYCLOAK_INTERNAL_URL` | `` | Adresse par laquelle le SERVEUR joint Keycloak (cles de signature, /userinfo) quand elle differe de l'adresse publique ; vide ⇒ `keycloak_url` |
+| `LEGIFRANCE_CLIENT_ID` | `` | Client ID API PISTE Legifrance |
+| `LEGIFRANCE_CLIENT_SECRET` | `` | Secret API PISTE Legifrance |
+| `MYRAG_API_URL` | `http://localhost:8200` | URL publique MyRAG (pour le frontend) |
+| `AUTH_ENABLED` | `false` (backend) ; `true` dans l'image du frontend | Garde JWT Keycloak sur les routes XHR du backend ; false en dev |
+| `MYCOLLECTIONS_REPRISE_AU_DEMARRAGE` | `true` | Reprendre au demarrage les indexations coupees par l'arret precedent |
+| `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
+| `MYRAG_SUPERADMIN_GROUPES` | `` | Groupes administrateurs de Mes collections, en chemins complets séparés par des virgules (ex. `/g/mirai-beta-testeurs-admin`). Vide ⇒ personne (hors développement sans authentification). Remplace `/myrag/superadmin` |
+| `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes de droits (`<root>/superadmin`, `<root>/<collection>[-admin]`) |
+| `GRAPHRAG_VIEWER_URL` | `` | URL du viewer graph (Cytoscape), exposee via `/api/config` ; non consommee a ce jour — le viewer local `/graph` est toujours servi |
+| `MYRAG_PREFIXES_BANNIS` | `demo-,amorce-,rag-,test-` | Prefixes refuses a la creation d'une collection |
+| `MYCOLLECTIONS_PARTITION_PREFIXE` | `` | Cloisonnement des partitions (previews partageant l'OpenRAG de la beta) : ne creer, lire ou interroger que les collections prefixees ; vide ⇒ aucun cloisonnement |
+| `MYRAG_PUBLIC_URL` | `http://localhost:8200` | URL publique (liens iframe) |
+| `CORS_ALLOW_ORIGINS` | `` | Origines autorisees (CSV). Vide => `*` sans credentials |
+| `MYCOLLECTIONS_RECHERCHE_ORIGINES` | `` | Origines (CSV) autorisees a appeler `/api/v1/search*` depuis un navigateur (Mon portail) ; GET + `Authorization`, sans credentials. Vide => aucune |
+| `MYCOLLECTIONS_RECHERCHE_AUDIENCE` | `mycollections-front` | Audience(s) acceptee(s) sur `/api/v1/search*` : dans `aud`, ou egale a `azp` (jetons du front) |
+| `MYCOLLECTIONS_RECHERCHE_CLIENTS_AUDIENCE` | `mysearch` | Clients (CSV) dont le jeton doit porter l'audience dans `aud` (sinon 403 `audience_mismatch`) |
+| `MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE` | `` | Origine publique devant les liens signes de la recherche ; vide => `MYCOLLECTIONS_PUBLIC_URL` |
+| `MYCOLLECTIONS_RECHERCHE_DELAI_S` | `6` | Delai accorde a OpenRAG pour une recherche (au-dela : 503 `search_unavailable`) |
+| `MYCOLLECTIONS_RECHERCHE_PAR_MINUTE` | `60` | Recherches par personne et par minute, par processus (au-dela : 429) ; 0 = sans limite |
+| `DATA_DIR` | `/app/data` | Repertoire de donnees (fichiers sources, sqlite) |
+| `MYRAG_PSEUDO_SEL` | `` | Sel HMAC des identités du collectif (le même que `obs-pseudo-salt` du bus) ; vide ⇒ routes du collectif en 503. En dev : `dev-sel` |
+| `MYRAG_LIENS_SEL` | `` | Clé des liens signés (sources, graphe, articles ouverts sans jeton) ; vide ⇒ dérivée du sel des identités |
+| `CAPACITES_URL` | `` | capacites.json du menu commun (service interne) ; vide ⇒ drapeaux à false |
+| `SEUIL_CHANTIER_DEFAUT` | `5` | Seuil de soutiens si le menu ne répond pas |
+| `SOMMEIL_JOURS` | `30` | Un chantier muet plus longtemps est « en sommeil » |
+| `CONFIRMATION_JOURS` | `5` | Une demande sans reponse passe « réalisée » au bout de ce nombre de jours |
+| `BUS_URL` / `BUS_SECRET` | `` | Relais du fil vers la cloche du menu commun ; vides ⇒ `/api/bus` en 503 |
+| `OWUI_URL` / `OWUI_ADMIN_API_KEY` | `http://openwebui...` / `` | Open WebUI (creation des alias de modeles a la publication) |
+| `OWUI_PUBLIC_URL` | `` | Adresse publique de l'assistant (ouverte par le navigateur) |
+| `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
+| `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
+| `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
+| `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |
+| `MYCOLLECTIONS_MESURE_JUGE_MODELE` / `_PARALLELISME` / `_QUESTIONS_MAX` / `_DUREE_MAX_S` / `_DELAI_APPEL_S` | `` / `2` / `200` / `1800` / `120` | Mesure de la qualite (docs/qualite.md) : modele du juge (vide ⇒ celui de la generation), questions en parallele, plafond, duree max, delai par appel |
+| `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
+
+## Groupes et droits
+
+Les droits viennent du claim `groups` du jeton (`app/services/access.py`, miroir dans
+`frontend/utils/groupes.ts`) : `/myrag/superadmin`, `/myrag/<collection>`, `/myrag/<collection>-admin`.
+
+- **Seuls des chemins complets donnent des droits** : le mapper `groups` du client doit etre en
+  `full.path=true` (mode d'emploi : `setup-keycloak.sh`, ecrit pour le realm openrag d'OpenRAG ;
+  les clients `myrag-front`/`myrag-admin` du realm openwebui se configurent pareil, dans la
+  console du realm ou l'export `myrag/keycloak/`). Un nom court n'est pas unique dans un
+  realm, et la ou les utilisateurs creent leurs groupes (keycloak-comu, sous `/g`) il est a la
+  portee de tous — `superadmin`, ou meme un groupe NOMME `/myrag/superadmin` (Keycloak accepte
+  « / » dans un nom).
+- **Un claim en noms courts ne donne aucun droit** : une seule valeur sans `/` initial suffit a
+  l'ecarter en bloc (`chemins()`), sans quoi on ne distingue pas un nom qui imite un chemin d'un
+  vrai chemin. Consequence : avec un mapper `full.path=false`, ni superadmin ni groupe de
+  collection ne fonctionnent — seul le createur (reconnu par `sub`) gere sa collection.
+  L'avertissement « Claim `groups` en noms courts » dans les journaux le signale.
+- Les groupes `/myrag/...` se creent a la racine du realm, ou seul un administrateur du realm peut
+  creer un groupe.
+- `scope_groups` d'une fiche : compare en chemins ; un nom court enregistre avant la bascule du
+  mapper ne designe plus rien (il faut le remplacer par le chemin).
+- Basculer un mapper de noms courts vers chemins sans couper l'entree :
+  `MYRAG_GROUPE_EXIGE=<nom>,/<chemin>` le temps de la bascule, puis `/<chemin>` seul.
+
+### Noms des variables
+
+L'application s'appelle Mes collections (« mycollections ») : chaque variable `MYRAG_*` se lit aussi
+sous le nom `MYCOLLECTIONS_*` (`MYCOLLECTIONS_SUPERADMIN_GROUPES`, `MYCOLLECTIONS_GROUPE_EXIGE`…),
+qui est la forme à privilégier ; si les deux sont posées, `MYCOLLECTIONS_*` l'emporte. Côté frontend,
+`MYCOLLECTIONS_API_URL` remplace `MYRAG_API_URL`. Les clients Keycloak (`myrag-front`, `myrag-admin`)
+se renomment dans la console du realm, puis dans les arguments de construction de l'image.
+
+## Regles de travail
+
+- **`beta` est la branche par defaut** : toute PR la vise. Chaque fusion dans `beta` construit les
+  images `beta-<sha8>` et Argo CD les deploie seul sur la beta. Une PR `beta` → `main` publie
+  ensuite une version (release-please ouvre la PR « release X.Y.Z », dont la fusion construit les
+  images `X.Y.Z`) ; apres la publication, une PR `main` → `beta` realigne `beta`.
+- **`main` est protegee** : une PR approuvee par une autre personne et la CI verte (« All jobs
+  passed ») ; ni force-push ni suppression. Un correctif qui n'est pas dans `beta` n'est pas deploye,
+  meme s'il marche en local.
+- **Le depot est public** : ni nom de personne, ni chemin de poste, ni identifiant d'infrastructure
+  (registre, cluster, namespace), ni jeton — meme d'exemple — dans le code ou la documentation.
+  Les adresses d'exemple sont en `fake-domain.name` ; les ecrans de documentation utilisent des
+  donnees d'exemple, jamais celles d'un environnement reel.
+
+## Problemes connus
+
+- **DNS dans les containers Docker** : le `docker-compose.yaml` de `myrag/` fixe `dns: 8.8.8.8, 8.8.4.4` ; en `docker run` manuel, ajouter `--dns 8.8.8.8 --dns 8.8.4.4`
+- **OIDC issuer mismatch** : utiliser `host.docker.internal:8082` (pas `localhost`) pour Keycloak depuis un container
+- **PDF sur Mac ARM64** : bug pypdfium2 (dependance d'OpenRAG, qui parse les PDF), utiliser TXT/MD a la place
+- **Le token admin OpenRAG est ecrase au restart** : definir `AUTH_TOKEN` dans le `.env` d'OpenRAG

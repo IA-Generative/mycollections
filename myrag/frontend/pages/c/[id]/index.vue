@@ -68,8 +68,8 @@
           <!-- Dans un groupe DSFR, la position de l'icône se déclare sur le GROUPE : sans
                `fr-btns-group--icon-left`, il réduit chaque bouton à son icône, libellé masqué. -->
           <div class="fr-btns-group fr-btns-group--inline fr-btns-group--icon-left fr-mb-4w">
-            <NuxtLink v-for="a in actions" :key="a.vers" :to="a.vers" class="fr-btn fr-btn--icon-left"
-                      :class="[a.icone, a.rang]" :title="a.aide">
+            <NuxtLink v-for="a in actions" :key="a.vers" :to="a.disabled ? undefined : a.vers" class="fr-btn fr-btn--icon-left"
+                      :class="[a.icone, a.rang]" :disabled="a.disabled" :aria-disabled="a.disabled" :title="a.aide">
               {{ a.libelle }}
             </NuxtLink>
           </div>
@@ -302,6 +302,7 @@ const actionsToutes = computed(() => [
   { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
     aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
   { vers: `/c/${id}/graph`, libelle: 'Voir les liens entre documents', icone: 'fr-icon-links-line', rang: 'fr-btn--secondary',
+    disabled: !collection.value?.graph_enabled,
     aide: "La carte des renvois entre documents : quel article cite quel autre. Disponible quand les liens entre documents sont activés pour la collection." },
   { vers: `/c/${id}/upload`, libelle: 'Ajouter des documents', icone: 'fr-icon-file-add-line', rang: 'fr-btn--secondary',
     aide: "Ajouter des documents à la collection : fichiers de votre poste, adresse web, dossier Drive." },
