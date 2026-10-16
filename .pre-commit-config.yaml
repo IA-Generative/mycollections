@@ -14,6 +14,9 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: trailing-whitespace
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.0
     hooks:
@@ -25,7 +28,26 @@ repos:
       - id: ty
         name: ty (advisoire)
         language: system
-        entry: uvx ty@0.0.87 check --project myrag --exit-zero --output-format concise
+        entry: bash -c 'uvx ty@0.0.87 check --project myrag --exit-zero --output-format concise'
         pass_filenames: false
         types_or: [python, pyi]
         verbose: true
+  - repo: local
+    hooks:
+      - id: client-format
+        name: Client format (npm, advisoire)
+        entry: bash -c 'if [ "$#" -eq 0 ]; then exit 0; fi; cd myrag/frontend && npx eslint --fix "${@#myrag/frontend/}" || true; git add "${@#myrag/frontend/}"'
+        language: system
+        types_or: [javascript, ts, tsx, vue]
+        files: ^myrag/frontend/
+        exclude: ^myrag/frontend/(\.nuxt|\.output|dist|node_modules)/
+  - repo: local
+    hooks:
+      - id: client-type-check
+        name: Client type check (npm, advisoire)
+        entry: bash -c 'cd myrag/frontend && npm run type-check || true'
+        language: system
+        types_or: [javascript, ts, tsx, vue]
+        files: ^myrag/frontend/
+        exclude: ^myrag/frontend/(\.nuxt|\.output|dist|node_modules)/
+        pass_filenames: false
