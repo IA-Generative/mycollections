@@ -72,7 +72,10 @@ def test_le_testeur_voit_la_collection_dans_l_assistant_et_elle_repond(session_t
         pytest.skip("E2E_ASSISTANT_URL absent : la preuve dans l'assistant n'est pas jouée")
     page = session_testeur.contexte.new_page()
     try:
-        page.goto(cible["assistant"] + "/", wait_until="networkidle", timeout=60_000)
+        # « load », pas « networkidle » : Open WebUI 0.12 garde une requête ouverte après le chargement
+        # (POST /api/v1/auths/update/timezone vue sans fin côté navigateur, 200 côté serveur) et le
+        # réseau n'est jamais au repos. La pause qui suit laisse l'application se monter.
+        page.goto(cible["assistant"] + "/", wait_until="load", timeout=60_000)
         page.wait_for_timeout(4_000)
         assert not chez_le_sso(page.url, cible["sso"]), "l'assistant n'a pas ouvert la session du testeur"
         captures.prendre(page, "07-assistant", mobile=False)
@@ -98,7 +101,10 @@ def test_depublier_retire_la_collection_de_l_assistant(session_testeur, collecti
         return
     page = session_testeur.contexte.new_page()
     try:
-        page.goto(cible["assistant"] + "/", wait_until="networkidle", timeout=60_000)
+        # « load », pas « networkidle » : Open WebUI 0.12 garde une requête ouverte après le chargement
+        # (POST /api/v1/auths/update/timezone vue sans fin côté navigateur, 200 côté serveur) et le
+        # réseau n'est jamais au repos. La pause qui suit laisse l'application se monter.
+        page.goto(cible["assistant"] + "/", wait_until="load", timeout=60_000)
         modeles = page.request.get(cible["assistant"] + "/api/models")
         vus = [m.get("id") for m in (modeles.json() or {}).get("data", [])]
         assert f"openrag-{collection_essai}" not in vus, "toujours offerte après dépublication"

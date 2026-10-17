@@ -93,14 +93,38 @@ def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_
     captures.prendre(page, "05-creation-6-fiche-creee")
 
 
-def test_un_pdf_est_refuse_avec_une_explication(session_testeur, collection_essai):
-    """Le découpage lit du texte : un PDF partait indexé illisible, sans un mot."""
+def _pdf_minimal(texte: str) -> bytes:
+    """Une page, une ligne, police standard : le plus petit PDF qu'un extracteur lise."""
+    flux = f"BT /F1 12 Tf 72 720 Td ({texte}) Tj ET".encode("ascii")
+    objets = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(flux) + flux + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    positions = []
+    for i, o in enumerate(objets, 1):
+        positions.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objets) + 1)
+    out += b"".join(b"%010d 00000 n \n" % p for p in positions)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objets) + 1, xref)
+    return bytes(out)
+
+
+def test_un_pdf_est_accepte_et_confie_a_openrag(session_testeur, collection_essai):
+    """Depuis la 0.4.0 (PR #61), un document (PDF, Word…) est gardé comme source puis confié tel quel
+    à OpenRAG, qui l'extrait lui-même : il n'est plus refusé en 415. Un vrai PDF, pour qu'OpenRAG
+    (qui vérifie le contenu contre l'extension depuis la 2.3) l'accepte aussi."""
     r = session_testeur.page.request.post(
         f"{session_testeur.base}/api/ingest/{collection_essai}",
         headers={"Authorization": f"Bearer {session_testeur.jeton}"},
-        multipart={"file": {"name": "a.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.7 binaire"}},
+        multipart={"file": {"name": "essai.pdf", "mimeType": "application/pdf", "buffer": _pdf_minimal("Essai de bout en bout")}},
     )
-    assert r.status == 415 and "texte" in r.text()
+    assert r.status == 200, f"{r.status} : {r.text()[:200]}"
 
 
 def test_un_lien_de_graphe_d_une_collection_non_publique_est_ferme_sans_signature(cible, collection_essai, session_testeur):
