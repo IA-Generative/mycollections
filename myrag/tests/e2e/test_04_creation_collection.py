@@ -96,14 +96,18 @@ def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_
 def _pdf_minimal(texte: str) -> bytes:
     """Une page, une ligne, police standard : le plus petit PDF qu'un extracteur lise."""
     flux = f"BT /F1 12 Tf 72 720 Td ({texte}) Tj ET".encode("ascii")
-    objets = [b"<< /Type /Catalog /Pages 2 0 R >>",
-              b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-              b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-              b"<< /Length %d >>\nstream\n" % len(flux) + flux + b"\nendstream",
-              b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
-    out = bytearray(b"%PDF-1.4\n"); positions = []
+    objets = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(flux) + flux + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    positions = []
     for i, o in enumerate(objets, 1):
-        positions.append(len(out)); out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+        positions.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
     xref = len(out)
     out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objets) + 1)
     out += b"".join(b"%010d 00000 n \n" % p for p in positions)
