@@ -107,8 +107,8 @@ async def create_collection(data: dict) -> dict:
 
 
 async def update_collection(name: str, updates: dict) -> dict | None:
-    # `categorie` n'y est pas, exprès : le classement est un geste d'administration
-    # (PUT /api/categories/affectations), pas un réglage du propriétaire.
+    # `categorie` n'y est pas, exprès : elle se valide contre le catalogue et s'écrit au journal
+    # (app.services.categorie_store.classer / affecter), jamais en champ libre.
     allowed = {
         "titre",
         "description",

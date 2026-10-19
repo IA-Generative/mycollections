@@ -100,6 +100,17 @@ class CreateCollectionRequest(BaseModel):
     scope_groups: list[str] = []
     contact_name: str = ""
     contact_email: str = ""
+    #: Clé d'une catégorie existante (étape 2 de l'assistant de création) ; absente = « Non classées ».
+    categorie: str | None = None
+
+
+async def _exiger_categorie(cle: str | None) -> None:
+    """Une catégorie se CHOISIT parmi celles du catalogue : une clé inconnue est refusée (422).
+    Les créer reste un geste d'administration (/api/categories)."""
+    from app.services import categorie_store
+
+    if cle is not None and not await categorie_store.existe(cle):
+        raise HTTPException(status_code=422, detail={"reason": "categorie", "message": f"Catégorie inconnue : {cle}"})
 
 
 class UpdateSystemPromptRequest(BaseModel):
@@ -321,6 +332,7 @@ async def create_collection_endpoint(
     existing = await db_get_collection(req.name)
     if existing:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
+    await _exiger_categorie(req.categorie)
 
     system_prompt = req.system_prompt
     if not system_prompt:
@@ -443,6 +455,21 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
         user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
+    if "categorie" in updates:
+        # Qui gère la collection la range lui-même parmi les catégories existantes ; le changement
+        # s'écrit au journal comme un reclassement de l'administration.
+        from app.services import categorie_store
+        from app.services.pseudo import condenser
+
+        cle = updates["categorie"]
+        if cle is not None and not isinstance(cle, str):
+            raise HTTPException(status_code=422, detail={"reason": "categorie", "message": "Catégorie invalide"})
+        await _exiger_categorie(cle)
+        try:
+            auteur = condenser(user.sub)
+        except Exception:  # noqa: BLE001 — sel absent : le journal n'attribue pas, le classement passe
+            auteur = None
+        await categorie_store.classer(name, cle, auteur)
     collection = await db_update_collection(name, updates)
     return collection
 

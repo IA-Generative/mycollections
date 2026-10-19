@@ -65,3 +65,50 @@ def test_les_regles_sont_servies_au_formulaire(client, en_tant_que):
     en_tant_que(personne(1))
     r = client.get("/api/collections/regles-nommage").json()
     assert r["max"] == 40 and "demo-" in r["prefixes_bannis"] and r["motifs"]["prefixe"]
+
+
+# --- La catégorie choisie à la création (étape 2 de l'assistant) ---
+
+
+def test_une_categorie_connue_est_acceptee(client, en_tant_que, nom):
+    en_tant_que(personne(1))
+    r = _creer(client, nom, categorie="textes-reference")
+    assert r.status_code == 200, r.text
+    assert r.json()["collection"]["categorie"] == "textes-reference"
+
+
+def test_une_categorie_inconnue_est_refusee(client, en_tant_que, nom):
+    en_tant_que(personne(1))
+    r = _creer(client, nom, categorie="rubrique-inventee")
+    assert r.status_code == 422 and r.json()["detail"]["reason"] == "categorie"
+    en_tant_que(personne(1))
+    assert client.get(f"/api/collections/{nom}").status_code == 404, "rien n'est créé"
+
+
+def test_sans_categorie_la_collection_est_non_classee(client, en_tant_que, nom):
+    en_tant_que(personne(1))
+    r = _creer(client, nom)
+    assert r.status_code == 200 and r.json()["collection"]["categorie"] is None
+
+
+def test_qui_gere_reclasse_dans_les_reglages_un_lecteur_non(client, en_tant_que, nom):
+    createur = personne("createur-classement")
+    en_tant_que(createur)
+    assert _creer(client, nom, categorie="textes-reference").status_code == 200
+    r = client.patch(f"/api/collections/{nom}", json={"categorie": "ressources-internes"})
+    assert r.status_code == 200 and r.json()["categorie"] == "ressources-internes"
+    assert client.patch(f"/api/collections/{nom}", json={"categorie": "rubrique-inventee"}).status_code == 422
+    assert client.patch(f"/api/collections/{nom}", json={"categorie": None}).json()["categorie"] is None
+    en_tant_que(personne("simple-lecteur-classement"))
+    assert client.patch(f"/api/collections/{nom}", json={"categorie": "textes-reference"}).status_code == 403
+
+
+def test_l_administration_reclasse_toujours(client, en_tant_que, nom):
+    from tests.conftest import SUPERADMIN
+
+    en_tant_que(personne(1))
+    assert _creer(client, nom, categorie="textes-reference").status_code == 200
+    en_tant_que(SUPERADMIN)
+    r = client.put("/api/categories/affectations", json={"affectations": {nom: "guides-demonstrations"}})
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/collections/{nom}").json()["categorie"] == "guides-demonstrations"
