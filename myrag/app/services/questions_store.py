@@ -201,7 +201,8 @@ def normaliser_import(item: dict) -> dict | None:
     eval-rag (`question`, `answer`, `persona_name`, `metadata`). None si inexploitable."""
     if not isinstance(item, dict):
         return None
-    meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    brut_meta = item.get("metadata")
+    meta = brut_meta if isinstance(brut_meta, dict) else {}
     question = str(item.get("question") or item.get("user_input") or "").strip()
     if not question:
         return None
@@ -316,8 +317,9 @@ async def depuis_avis(name: str, feedback_id: int, reponse: str | None, sub: str
     q = await creer_question(name, champs, sub, origine="avis", source_ref=f"feedback:{feedback_id}", feedback_id=feedback_id)
     async with async_session() as s:
         fb = await s.get(Feedback, feedback_id)
-        fb.status, fb.promoted_to, fb.reviewed_at = "promoted", "questions", utcnow()
-        await s.commit()
+        if fb is not None:
+            fb.status, fb.promoted_to, fb.reviewed_at = "promoted", "questions", utcnow()
+            await s.commit()
     return q
 
 

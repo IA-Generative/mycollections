@@ -7,8 +7,10 @@ qu'en condensé (`signature`), jamais en clair.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from math import ceil
 
+from pydantic import BaseModel
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -17,6 +19,28 @@ from app.models.db import Generation, PaireQA, Persona, utcnow
 from app.services.collectif_store import Conflit, Introuvable, signature
 
 ACTIFS = ("en_attente", "en_cours")
+
+
+class AvancementRun(BaseModel):
+    """Ce qui change d'un run pendant son exécution : seuls les champs posés sont écrits en base."""
+
+    etat: str | None = None
+    phase: str | None = None
+    demarre_le: datetime | None = None
+    fichiers_collection: int | None = None
+    morceaux_envoyes: int | None = None
+    noeuds_avec_proprietes: int | None = None
+    paires_obtenues: int | None = None
+    paires_echouees: int | None = None
+    appels_llm: int | None = None
+    tokens_entree: int | None = None
+    tokens_sortie: int | None = None
+    reparations_json: int | None = None
+    inachevees: int | None = None
+    erreurs_llm: int | None = None
+    refus_debit: int | None = None
+    appels_embeddings: int | None = None
+    duree_s: float | None = None
 
 
 def condense(sub: str | None) -> str | None:
@@ -122,25 +146,25 @@ async def lire_run(name: str, ident: str) -> dict:
         return g.to_dict()
 
 
-async def maj_run(ident: str, **champs) -> None:
+async def maj_run(ident: str, avancement: AvancementRun) -> None:
     async with async_session() as s:
         g = await s.get(Generation, ident)
         if not g:
             return
-        for k, v in champs.items():
-            if hasattr(g, k):
-                setattr(g, k, v)
+        for k, v in avancement.model_dump(exclude_unset=True).items():
+            setattr(g, k, v)
         await s.commit()
 
 
-async def terminer_run(ident: str, etat: str, *, erreur: str | None = None, **champs) -> dict | None:
+async def terminer_run(ident: str, etat: str, *, erreur: str | None = None, avancement: AvancementRun | None = None) -> dict | None:
     async with async_session() as s:
         g = await s.get(Generation, ident)
         if not g:
             return None
-        for k, v in champs.items():
-            if hasattr(g, k) and v is not None:
-                setattr(g, k, v)
+        if avancement is not None:
+            for k, v in avancement.model_dump(exclude_unset=True).items():
+                if v is not None:
+                    setattr(g, k, v)
         g.etat, g.phase, g.termine_le = etat, "fini", utcnow()
         g.erreur = erreur if etat == "erreur" else None
         if etat == "erreur" and not g.erreur:

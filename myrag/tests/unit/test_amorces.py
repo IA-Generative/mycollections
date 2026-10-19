@@ -138,7 +138,9 @@ def test_les_reponses_attendues_de_natinf_collent_a_la_source():
     dit « achat en connaissance de cause de produits de la pêche maritime »."""
     from app.amorces import entree
 
-    questions = {q["question"]: q["expected_answer"] for q in entree("natinf")["questions"]}
+    e = entree("natinf")
+    assert e is not None
+    questions = {q["question"]: q["expected_answer"] for q in e["questions"]}
     assert "PECHE MARITIME" in questions["Quel est le libellé de l'infraction NATINF 7987 ?"]
     assert "conduite sans permis" not in " ".join(questions.values())
     assert "6047" not in " ".join(questions.values()), "ce code n'existe pas dans la nomenclature importée"

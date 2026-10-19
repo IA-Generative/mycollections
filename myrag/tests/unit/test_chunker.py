@@ -1,6 +1,7 @@
 """Tests for MyRAG chunker strategies (TDD - written before implementation)."""
 
 from app.services.chunker import (
+    Strategy,
     chunk_by_article,
     chunk_by_length,
     chunk_by_qr,
@@ -266,17 +267,17 @@ class TestChunkByLength:
 
 class TestChunkDocument:
     def test_auto_detects_and_chunks_legal(self):
-        chunks = chunk_document(CESEDA_SAMPLE, strategy="auto")
+        chunks = chunk_document(CESEDA_SAMPLE, strategy=Strategy.AUTO)
         articles = [c["metadata"].get("article") for c in chunks if c["metadata"].get("article")]
         assert "L110-1" in articles
 
     def test_forced_strategy(self):
-        chunks = chunk_document(CESEDA_SAMPLE, strategy="length", max_chars=200)
+        chunks = chunk_document(CESEDA_SAMPLE, strategy=Strategy.LENGTH, max_chars=200)
         # Should not extract articles, just length-based chunks
         assert all("article" not in c["metadata"] for c in chunks)
 
     def test_returns_list(self):
-        chunks = chunk_document(FAQ_SAMPLE, strategy="auto")
+        chunks = chunk_document(FAQ_SAMPLE, strategy=Strategy.AUTO)
         assert isinstance(chunks, list)
         assert len(chunks) > 0
 

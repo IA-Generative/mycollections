@@ -2,12 +2,23 @@
 
 import logging
 import time
+from typing import Any
 
 import httpx
+from pydantic import BaseModel
 
 from app.config import settings
 
 logger = logging.getLogger("myrag.keycloak")
+
+
+class GroupesCollection(BaseModel):
+    """Les 2 groupes d'une collection dans Keycloak : identifiants (None si la création a échoué) et chemins."""
+
+    user_group_id: str | None = None
+    admin_group_id: str | None = None
+    user_group_path: str
+    admin_group_path: str
 
 
 # Module-level cache of service-account tokens, keyed by client_id.
@@ -135,7 +146,7 @@ class KeycloakClient:
 
     # --- Low-level HTTP ---
 
-    async def _admin_get(self, path: str, params: dict | None = None) -> list | dict:
+    async def _admin_get(self, path: str, params: dict | None = None) -> Any:
         headers = await self._admin_headers()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.get(
@@ -259,9 +270,11 @@ class KeycloakClient:
         if not root_id:
             await self.create_group(root_name)
             root_id = await self._find_group_id(root_name)
+        if root_id is None:
+            raise LookupError(f"le groupe racine {root_name} n'a pas pu être créé dans Keycloak")
         return root_id
 
-    async def create_collection_groups(self, collection_name: str) -> dict:
+    async def create_collection_groups(self, collection_name: str) -> GroupesCollection:
         """Create the 2 groups for a collection: {collection} and {collection}-admin."""
         root_id = await self._ensure_root_group()
 
@@ -274,12 +287,12 @@ class KeycloakClient:
         await self.create_group(admin_name, parent_id=root_id)
         admin_group_id = await self._find_group_id(admin_name, parent_id=root_id)
 
-        return {
-            "user_group_id": user_group_id,
-            "admin_group_id": admin_group_id,
-            "user_group_path": f"{self.group_root}/{collection_name}",
-            "admin_group_path": f"{self.group_root}/{admin_name}",
-        }
+        return GroupesCollection(
+            user_group_id=user_group_id,
+            admin_group_id=admin_group_id,
+            user_group_path=f"{self.group_root}/{collection_name}",
+            admin_group_path=f"{self.group_root}/{admin_name}",
+        )
 
     async def delete_collection_groups(self, collection_name: str):
         """Delete the 2 groups for a collection."""

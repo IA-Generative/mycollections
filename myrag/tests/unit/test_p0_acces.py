@@ -10,6 +10,7 @@
 from unittest.mock import AsyncMock, patch
 
 from app.auth import CurrentUser
+from app.services.openrag_client import ListeModeles
 from tests.conftest import SUPERADMIN, personne
 
 ETRANGER = CurrentUser(sub="etranger", username="e", groups=["/g/rien-a-voir"])
@@ -89,7 +90,7 @@ def test_la_fiche_dit_a_l_appelant_ce_qu_il_peut_faire(client, en_tant_que, cree
     d = client.get(f"/api/collections/{nom}").json()["mes_droits"]
     assert d["ecrire"] is False and d["garant"] is False
     with patch("app.routers.collections.OpenRAGClient") as cls:
-        cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[]))
         cls.return_value.list_files = AsyncMock(return_value=[])
         liste = client.get("/api/collections").json()["collections"]
     assert next(c for c in liste if c["name"] == nom)["mes_droits"]["ecrire"] is False

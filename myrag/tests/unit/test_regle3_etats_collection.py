@@ -12,6 +12,7 @@ from app.services.etats import (
     mention_verification,
     transition_collection,
 )
+from app.services.openrag_client import ReponseChat
 from tests.conftest import SUPERADMIN, personne
 
 GRILLE_OK = {"source_licence": "LO 2.0", "donnees_perso": "aucune", "fraicheur": "mensuelle", "relecture_n": 1}
@@ -113,7 +114,7 @@ class TestSurLesRoutes:
         creer_collection(nom, GARANT)
         with patch("app.routers.playground.OpenRAGClient") as cls:
             cls.return_value.health_check = AsyncMock(return_value=True)
-            cls.return_value.chat = AsyncMock(return_value={"choices": [{"message": {"content": "Réponse."}}], "extra": ""})
+            cls.return_value.chat = AsyncMock(return_value=ReponseChat.model_validate({"choices": [{"message": {"content": "Réponse."}}], "extra": ""}))
             r = client.post(f"/api/playground/{nom}/chat", json={"question": "?"})
         assert r.status_code == 200, r.text
         assert r.json()["mention"] == MENTION_VERIFICATION
@@ -147,7 +148,7 @@ class TestSurLesRoutes:
                 await conn.execute(text("UPDATE collections SET etat_collab = NULL WHERE name LIKE 'retro-%'"))
                 await _retro_remplir_etat_collab(conn)
                 lignes = await conn.execute(text("SELECT name, etat_collab FROM collections WHERE name LIKE 'retro-%'"))
-                resultat = dict(lignes.all())
+                resultat = {nom: etat for nom, etat in lignes.all()}
             await moteur.dispose()
             return resultat
 

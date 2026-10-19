@@ -29,7 +29,7 @@ class SyncService:
     async def sync_collection(
         self,
         collection: str,
-        user_group_id: str,
+        user_group_id: str | None = None,
         admin_group_id: str | None = None,
         reader_group_paths: list[str] | None = None,
     ) -> dict:
@@ -118,7 +118,8 @@ class SyncService:
                     _fail(f"ajout de {username} ({role}) à la partition échoué: {e}")
 
         # Membres du groupe lecteur /myrag/<name> → editor
-        await _provision_members(user_group_id, "editor", create_if_missing=True)
+        if user_group_id:
+            await _provision_members(user_group_id, "editor", create_if_missing=True)
 
         # Membres du groupe gestionnaire /myrag/<name>-admin → owner
         if admin_group_id:

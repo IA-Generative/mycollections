@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from ragas.dataset_schema import SingleTurnSample
+from ragas.executor import Executor
 from ragas.run_config import RunConfig
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
@@ -208,6 +209,8 @@ def generer(
             raise_exceptions=False,
             return_executor=True,
         )
+        if not isinstance(executeur, Executor):
+            raise TypeError("ragas n'a pas rendu l'exécuteur des paires (return_executor=True ignoré ?)")
         bruts = executeur.results()
         produits = {k: v for s, _ in dist for k, v in s.produits.items()}
         resultat.paires, resultat.paires_echouees = paires_depuis_resultats(bruts, morceaux, produits)

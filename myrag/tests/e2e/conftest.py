@@ -19,6 +19,7 @@ import pathlib
 import re
 import tempfile
 import time
+from collections.abc import Iterator
 
 import pytest
 
@@ -65,7 +66,7 @@ def cible() -> dict:
 
 @pytest.fixture(scope="session")
 def navigateur():
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright  # ty: ignore[unresolved-import]
 
     with sync_playwright() as p:
         nav = p.chromium.launch(headless=_env("E2E_HEADED") != "1")
@@ -159,7 +160,7 @@ def _ouvrir(navigateur, cible, prefixe: str, obligatoire: bool, chemin: str = "/
 
 
 @pytest.fixture(scope="session")
-def session_testeur(navigateur, cible) -> Session:
+def session_testeur(navigateur, cible) -> Iterator[Session]:
     """Le compte membre du groupe requis. Toute la séquence d'usage se joue avec lui."""
     issue, detail, contexte = _ouvrir(navigateur, cible, "E2E_TESTEUR", obligatoire=True)
     if issue != "entre":
@@ -170,7 +171,7 @@ def session_testeur(navigateur, cible) -> Session:
 
 
 @pytest.fixture(scope="session")
-def session_admin(navigateur, cible) -> Session:
+def session_admin(navigateur, cible) -> Iterator[Session]:
     """Un compte superadmin ; les tests qui le demandent sont ignorés s'il n'est pas fourni."""
     issue, detail, contexte = _ouvrir(navigateur, cible, "E2E_ADMIN", obligatoire=False)
     if issue != "entre":
@@ -216,7 +217,7 @@ def _menage(session: Session, nom: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def collection_essai(session_testeur) -> str:
+def collection_essai(session_testeur) -> Iterator[str]:
     """Le nom de la collection que la séquence crée. Les orphelines `e2e-*` d'une campagne
     interrompue sont purgées d'abord ; la collection l'est à la fin, même en cas d'échec."""
     nom = "e2e-" + _dt.date.today().strftime("%Y%m%d")

@@ -52,15 +52,13 @@ async def test_un_nom_un_chemin_ou_un_identifiant_designent_le_meme_groupe(monke
 
 @pytest.mark.asyncio
 async def test_la_fiche_vise_l_identifiant_du_groupe_ou_ne_part_pas(monkeypatch):
-    voulue = {
-        "model_id": "openrag-x",
-        "name": "X",
-        "tags": [],
-        "access_control": None,
-        "access_grants": [{"principal_type": "group", "principal_id": "/g/mirai-beta-testeurs-admin"}],
-        "groupes_saisis": ["/g/mirai-beta-testeurs-admin"],
-    }
-    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: dict(voulue)))
+    fiche = fiche_assistant.FicheVoulue(
+        model_id="openrag-x",
+        name="X",
+        access_grants=[{"principal_type": "group", "principal_id": "/g/mirai-beta-testeurs-admin"}],
+        groupes_saisis=["/g/mirai-beta-testeurs-admin"],
+    )
+    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: fiche))
     client = AsyncMock()
     client.ids_de_groupes = AsyncMock(return_value=(["b39ff556-0000"], []))
     await fiche_assistant.synchroniser_fiche("x", client=client)
@@ -77,8 +75,8 @@ async def test_la_fiche_vise_l_identifiant_du_groupe_ou_ne_part_pas(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_la_resynchronisation_ne_touche_pas_aux_droits(monkeypatch):
-    voulue = {"model_id": "openrag-x", "name": "X", "tags": [], "access_control": None, "access_grants": [], "groupes_saisis": ["/g/quelque-chose"]}
-    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: dict(voulue)))
+    fiche = fiche_assistant.FicheVoulue(model_id="openrag-x", name="X", groupes_saisis=["/g/quelque-chose"])
+    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: fiche))
     client = AsyncMock()
     await fiche_assistant.synchroniser_fiche("x", client=client, garder_les_droits=True)
     client.ids_de_groupes.assert_not_awaited()

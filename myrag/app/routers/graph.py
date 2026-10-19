@@ -231,9 +231,9 @@ async def build_graph(
 
     articles = []
     for f in fichiers:
-        nom = str(f.get("original_filename") or f.get("filename") or "")
-        if nom.startswith(("Article-", "Article_")) and f.get("file_id"):
-            articles.append((nom, str(f["file_id"]), f))
+        nom = str(f.original_filename or f.filename or "")
+        if nom.startswith(("Article-", "Article_")) and f.file_id:
+            articles.append((nom, str(f.file_id), f))
     if not articles:
         # Rien à construire : surtout ne pas écraser un graphe existant par un graphe vide.
         raise HTTPException(
@@ -250,7 +250,7 @@ async def build_graph(
 
     limite = asyncio.Semaphore(8)
 
-    async def lire(nom: str, file_id: str, meta: dict) -> dict:
+    async def lire(nom: str, file_id: str, meta) -> dict:
         async with limite:
             contenu = await client.get_file_content(collection, file_id)
         article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
@@ -260,11 +260,11 @@ async def build_graph(
             "filename": nom,
             "metadata": {
                 "article": article,
-                "livre": meta.get("livre", ""),
-                "titre": meta.get("titre", ""),
-                "chapitre": meta.get("chapitre", ""),
+                "livre": getattr(meta, "livre", ""),
+                "titre": getattr(meta, "titre", ""),
+                "chapitre": getattr(meta, "chapitre", ""),
                 "references": references,
-                "parent_path": meta.get("parent_path", ""),
+                "parent_path": getattr(meta, "parent_path", ""),
             },
         }
 
@@ -317,10 +317,10 @@ async def summarize_articles(
     client = OpenRAGClient()
     chunks = []
     for f in await client.list_files(collection):
-        nom = str(f.get("original_filename") or f.get("filename") or "")
+        nom = str(f.original_filename or f.filename or "")
         article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
-        if article in long_articles and f.get("file_id"):
-            chunks.append({"content": await client.get_file_content(collection, str(f["file_id"])), "metadata": {"article": article}})
+        if article in long_articles and f.file_id:
+            chunks.append({"content": await client.get_file_content(collection, str(f.file_id)), "metadata": {"article": article}})
 
     result = await _builder.summarize_long_articles(collection=collection, chunks=chunks, threshold=effective_threshold)
     return {

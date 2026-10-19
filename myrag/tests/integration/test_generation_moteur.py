@@ -77,7 +77,7 @@ class ChatSimule(BaseChatModel):
 
     def _generate(self, messages, stop=None, run_manager=None, **kw) -> ChatResult:
         texte = messages[-1].content
-        with self._verrou:
+        with self._verrou:  # ty: ignore[unresolved-attribute]
             self.appels += 1
         sortie = self._repondre(texte)
         return ChatResult(
@@ -90,7 +90,7 @@ class ChatSimule(BaseChatModel):
             origine = _entree(texte)["prompt_value"]
             return json.dumps({"text": self._repondre(origine, reparation=True)})
         if '"entities"' in texte:
-            with self._verrou:
+            with self._verrou:  # ty: ignore[unresolved-attribute]
                 panne = self.pannes_ner > 0 and not reparation
                 if panne:
                     self.pannes_ner -= 1

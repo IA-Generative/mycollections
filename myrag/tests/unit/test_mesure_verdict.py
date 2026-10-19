@@ -13,7 +13,7 @@ def test_hors_sujet_refus_explicite_seulement_sans_repli_fichiers():
 def test_mots_attendus_plafonnent_a_partiel():
     assert v.plafonner("conforme", "Article L313-1 du CESEDA", ["L313-1", "CESEDA"]) == ("conforme", None)
     verdict, raison = v.plafonner("conforme", "Selon le code…", ["L313-1", "CESEDA", "titre"])
-    assert verdict == "partiel" and "L313-1" in raison
+    assert verdict == "partiel" and raison is not None and "L313-1" in raison
     assert v.plafonner("non_conforme", "", ["x"])[0] == "non_conforme"
 
 

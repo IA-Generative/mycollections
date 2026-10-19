@@ -64,7 +64,7 @@ class QRCache:
         self._save(collection, entries)
         return entry
 
-    def list(self, collection: str) -> list[QREntry]:
+    def lister(self, collection: str) -> list[QREntry]:
         return self._load(collection)
 
     def delete(self, collection: str, entry_id: str):

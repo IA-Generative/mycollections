@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services.openrag_client import ListeModeles, ResultatPartition
+
 
 @pytest.fixture
 def client():
@@ -78,7 +80,7 @@ class TestArchiveUnarchive:
     @patch("app.routers.collections.OpenRAGClient")
     def test_archived_hidden_from_default_list(self, mock_client_cls, client, collection_name):
         mock_client_cls.return_value.create_partition = AsyncMock()
-        mock_client_cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        mock_client_cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[]))
         mock_client_cls.return_value.list_files = AsyncMock(return_value=[])
         client.post("/api/collections", json={"name": collection_name})
         client.post(f"/api/collections/{collection_name}/archive")
@@ -90,7 +92,7 @@ class TestArchiveUnarchive:
     @patch("app.routers.collections.OpenRAGClient")
     def test_archived_visible_with_include_archived(self, mock_client_cls, client, collection_name):
         mock_client_cls.return_value.create_partition = AsyncMock()
-        mock_client_cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        mock_client_cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[]))
         mock_client_cls.return_value.list_files = AsyncMock(return_value=[])
         client.post("/api/collections", json={"name": collection_name})
         client.post(f"/api/collections/{collection_name}/archive")
@@ -124,7 +126,7 @@ class TestPurge:
     @patch("app.routers.collections.OpenRAGClient")
     def test_purge_cascades_all_tables(self, mock_router_client_cls, mock_delete_partition, client, collection_name):
         mock_router_client_cls.return_value.create_partition = AsyncMock()
-        mock_delete_partition.return_value = {"status": "ok"}
+        mock_delete_partition.return_value = ResultatPartition(status="ok")
         client.post("/api/collections", json={"name": collection_name})
         client.post(f"/api/collections/{collection_name}/archive")
 

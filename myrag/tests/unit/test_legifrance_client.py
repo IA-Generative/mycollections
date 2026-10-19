@@ -13,23 +13,27 @@ from app.services.legifrance_client import (
 class TestParseUrl:
     def test_parse_code(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158")
-        assert result["type"] == "code"
-        assert result["id"] == "LEGITEXT000006070158"
+        assert result is not None
+        assert result.type == "code"
+        assert result.id == "LEGITEXT000006070158"
 
     def test_parse_article(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824")
-        assert result["type"] == "article"
-        assert result["id"] == "LEGIARTI000049803824"
+        assert result is not None
+        assert result.type == "article"
+        assert result.id == "LEGIARTI000049803824"
 
     def test_parse_loi(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000886460")
-        assert result["type"] == "loi"
-        assert result["id"] == "JORFTEXT000000886460"
+        assert result is not None
+        assert result.type == "loi"
+        assert result.id == "JORFTEXT000000886460"
 
     def test_parse_jo(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000000886460")
-        assert result["type"] == "jo"
-        assert result["id"] == "JORFTEXT000000886460"
+        assert result is not None
+        assert result.type == "jo"
+        assert result.id == "JORFTEXT000000886460"
 
     def test_parse_unknown(self):
         result = parse_legifrance_url("https://example.com/page")
@@ -37,13 +41,15 @@ class TestParseUrl:
 
     def test_parse_with_trailing_slash(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006070158/")
-        assert result["type"] == "code"
-        assert result["id"] == "LEGITEXT000006070158"
+        assert result is not None
+        assert result.type == "code"
+        assert result.id == "LEGITEXT000006070158"
 
     def test_parse_with_params(self):
         result = parse_legifrance_url("https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049803824?dateVersion=20260101")
-        assert result["type"] == "article"
-        assert result["id"] == "LEGIARTI000049803824"
+        assert result is not None
+        assert result.type == "article"
+        assert result.id == "LEGIARTI000049803824"
 
 
 @pytest.fixture

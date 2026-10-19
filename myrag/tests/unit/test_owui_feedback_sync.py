@@ -27,7 +27,7 @@ class TestCollectionFromModel:
 
     def test_empty_returns_none(self):
         assert _collection_from_model("") is None
-        assert _collection_from_model(None) is None  # type: ignore[arg-type]
+        assert _collection_from_model(None) is None
 
 
 class TestExtractQA:

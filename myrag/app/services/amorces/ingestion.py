@@ -24,11 +24,13 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 
 from app.database import async_session
 from app.models.db import SourceFile, utcnow
-from app.services.chunker import chunk_document
+from app.services.chunker import Sensitivity, Strategy, chunk_document
 from app.services.openrag_client import OpenRAGClient
 
 logger = logging.getLogger("myrag.amorces")
@@ -43,6 +45,22 @@ class Document:
     nom: str  # nom de fichier stable (clé d'idempotence)
     texte: str
     metadonnees: dict = field(default_factory=dict)
+
+
+class Bilan(BaseModel):
+    """Ce qu'un import a fait : documents envoyés, ignorés (déjà là), morceaux, échecs, versions."""
+
+    documents: int = 0
+    ignores: int = 0
+    morceaux: int = 0
+    echecs: int = 0
+    versions: int = 0
+
+
+class BilanPurge(BaseModel):
+    """Ce qu'une purge a oublié : les documents connus repartent pour réindexation."""
+
+    documents_oublies: int = 0
 
 
 def _sauver(collection: str, nom: str, contenu: bytes) -> str:
@@ -84,25 +102,23 @@ def _etiquette(strategie: str) -> str:
     return f"{strategie}-v{VERSION_DECOUPAGE}"
 
 
-async def purger(collection: str) -> dict:
+async def purger(collection: str) -> BilanPurge:
     """Vider la partition OpenRAG et oublier les documents connus : le prochain
     import réindexe tout, proprement. Les fichiers sources sur disque restent."""
-    from sqlalchemy import delete
-
     client = OpenRAGClient(timeout=120.0)
     await client.delete_partition(collection)
     await client.create_partition(collection)
     async with async_session() as session:
         r = await session.execute(delete(SourceFile).where(SourceFile.collection_name == collection))
         await session.commit()
-    oublies = int(r.rowcount or 0)
+    oublies = r.rowcount if isinstance(r, CursorResult) else 0
     logger.info("amorce %s : partition purgée, %d documents oubliés", collection, oublies)
-    return {"documents_oublies": oublies}
+    return BilanPurge(documents_oublies=oublies)
 
 
-async def ingerer(collection: str, documents: list[Document], *, strategie: str = "section", max_documents: int | None = None) -> dict:
+async def ingerer(collection: str, documents: list[Document], *, strategie: Strategy = Strategy.SECTION, max_documents: int | None = None) -> Bilan:
     """Rend un bilan chiffré : documents envoyés, ignorés (déjà là), morceaux, échecs."""
-    bilan = {"documents": 0, "ignores": 0, "morceaux": 0, "echecs": 0, "versions": 0}
+    bilan = Bilan()
     client = OpenRAGClient(timeout=120.0)
     try:
         await client.create_partition(collection)
@@ -111,18 +127,18 @@ async def ingerer(collection: str, documents: list[Document], *, strategie: str 
 
     async with async_session() as session:
         lignes = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()
-        connus = {sf.filename: sf for sf in lignes}
+        connus: dict[str, SourceFile | None] = {sf.filename: sf for sf in lignes}
 
         for doc in documents:
-            if max_documents is not None and bilan["documents"] >= max_documents:
+            if max_documents is not None and bilan.documents >= max_documents:
                 break
             contenu = doc.texte.encode("utf-8")
             empreinte = hashlib.sha256(contenu).hexdigest()
             existant = connus.get(doc.nom)
             if existant and existant.checksum == empreinte and existant.strategy_used == _etiquette(strategie):
-                bilan["ignores"] += 1
+                bilan.ignores += 1
                 continue
-            morceaux = situer(doc, chunk_document(doc.texte, strategy=strategie, sensitivity="public"))
+            morceaux = situer(doc, chunk_document(doc.texte, strategy=strategie, sensitivity=Sensitivity.PUBLIC))
             if not morceaux:
                 continue
             chemin = _sauver(collection, doc.nom, contenu)
@@ -137,7 +153,7 @@ async def ingerer(collection: str, documents: list[Document], *, strategie: str 
                 existant.checksum, existant.storage_path = empreinte, chemin
                 existant.file_size, existant.chunks_produced = len(contenu), len(morceaux)
                 existant.strategy_used, existant.last_indexed_at = _etiquette(strategie), utcnow()
-                bilan["versions"] += 1
+                bilan.versions += 1
             else:
                 session.add(
                     SourceFile(
@@ -153,9 +169,9 @@ async def ingerer(collection: str, documents: list[Document], *, strategie: str 
                         last_indexed_at=utcnow(),
                     )
                 )
-                connus[doc.nom] = None  # type: ignore[assignment]
-            bilan["documents"] += 1
-            bilan["morceaux"] += len(morceaux)
-            bilan["echecs"] += echecs
+                connus[doc.nom] = None
+            bilan.documents += 1
+            bilan.morceaux += len(morceaux)
+            bilan.echecs += echecs
         await session.commit()
     return bilan

@@ -27,7 +27,7 @@ import re
 import time
 import unicodedata
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -43,7 +43,7 @@ from app.services import access, liens
 from app.services.collection_store import list_collections
 from app.services.morceau import decouper_morceau
 from app.services.nommage import titre_de
-from app.services.openrag_client import OpenRAGClient
+from app.services.openrag_client import DocumentRecherche, OpenRAGClient
 
 logger = logging.getLogger("myrag.recherche")
 
@@ -338,17 +338,16 @@ class _MoteurIndisponible(Exception):
     pass
 
 
-async def _interroger(partitions: list[str], q: str, top_k: int) -> list[dict]:
+async def _interroger(partitions: list[str], q: str, top_k: int) -> list[DocumentRecherche]:
     """Les morceaux qu'OpenRAG rend pour ces partitions (jamais une liste vide : OpenRAG la
     lirait comme « toutes »). Un seul appel ; s'il est refusé (une partition absente du
     moteur, par exemple), un appel par partition, en parallèle, les refus écartés."""
     delai = settings.recherche_delai_s
     client = OpenRAGClient(timeout=delai)
 
-    async def un_appel(cibles: list[str]) -> list[dict]:
+    async def un_appel(cibles: list[str]) -> list[DocumentRecherche]:
         rendu = await asyncio.wait_for(client.search(cibles, q, top_k=top_k), timeout=delai)
-        docs = (rendu or {}).get("documents") if isinstance(rendu, dict) else None
-        return [d for d in docs or [] if isinstance(d, dict)]
+        return rendu.documents
 
     try:
         return await un_appel(partitions)
@@ -366,7 +365,7 @@ async def _interroger(partitions: list[str], q: str, top_k: int) -> list[dict]:
     if not reussis and pannes:
         raise _MoteurIndisponible
     # Entrelacés rang par rang : aucune collection ne passe devant les autres d'office.
-    fusion: list[dict] = []
+    fusion: list[DocumentRecherche] = []
     for rang in range(max((len(r) for r in reussis), default=0)):
         fusion.extend(r[rang] for r in reussis if rang < len(r))
     return fusion
@@ -401,10 +400,10 @@ def _date(meta: dict) -> datetime | None:
     return None
 
 
-def _ident_morceau(doc: dict, meta: dict) -> str | None:
+def _ident_morceau(doc: DocumentRecherche, meta: dict) -> str | None:
     ident = meta.get("_id")
     if ident is None:
-        m = _ID_LIEN.search(str(doc.get("link") or ""))
+        m = _ID_LIEN.search(str(doc.link or ""))
         ident = m.group(1) if m else None
     ident = str(ident) if ident is not None else ""
     return ident if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", ident) else None
@@ -434,17 +433,30 @@ def _page(meta: dict) -> int | None:
     return p if isinstance(p, int) and not isinstance(p, bool) and p > 0 else None
 
 
-def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser, motif: re.Pattern | None, depuis, jusqu) -> list[dict]:
+class _Resultat(TypedDict):
+    id: str
+    title: str
+    date: str | None
+    url: str | None
+    score: float | None
+    hits: list[dict[str, Any]]
+    context: dict[str, Any]
+    _quand: NotRequired[datetime | None]
+
+
+def _construire(docs: list[DocumentRecherche], fiches: dict[str, dict], user: CurrentUser, motif: re.Pattern | None, depuis, jusqu) -> list[_Resultat]:
     """Les morceaux groupés par document (rang d'OpenRAG conservé), au plus trois passages."""
-    resultats: dict[tuple[str, str], dict] = {}
+    resultats: dict[tuple[str, str], _Resultat] = {}
     for doc in docs:
-        meta = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        meta = doc.metadata if isinstance(doc.metadata, dict) else {}
         partition = meta.get("partition")
-        fiche = fiches.get(partition) if isinstance(partition, str) else None
+        if not isinstance(partition, str):
+            continue
+        fiche = fiches.get(partition)
         if fiche is None:
             continue  # hors des collections lisibles demandées : jamais rendu, jamais signé
         ident = _ident_morceau(doc, meta)
-        brut = doc.get("content") if isinstance(doc.get("content"), str) else ""
+        brut = doc.content
         _, fichier, _ = decouper_morceau(brut)
         texte = _texte_brut(brut)
         if not texte:
@@ -455,21 +467,23 @@ def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser, mo
             quand = _date(meta)
             right, _ = _droit(fiche, user)
             titre = _titre_du_document(meta, fichier) or titre_de(fiche)
-            r = resultats[cle] = {
-                "id": f"{partition}:{cle[1]}",
-                "title": titre,
-                "date": quand.isoformat() if quand else None,
-                "url": _lien(ident),
-                "score": _score(meta),
-                "hits": [],
-                "context": {"collection": {"id": partition, "title": titre_de(fiche)}, "right": right},
-                "_quand": quand,
-            }
+            r = resultats[cle] = _Resultat(
+                id=f"{partition}:{cle[1]}",
+                title=titre,
+                date=quand.isoformat() if quand else None,
+                url=_lien(ident),
+                score=_score(meta),
+                hits=[],
+                context={"collection": {"id": partition, "title": titre_de(fiche)}, "right": right},
+                _quand=quand,
+            )
         if len(r["hits"]) >= PASSAGES_MAX:
             continue
         s = _score(meta)
-        if s is not None and (r["score"] is None or s > r["score"]):
-            r["score"] = s
+        if s is not None:
+            actuel = r["score"]
+            if actuel is None or s > actuel:
+                r["score"] = s
         extrait = _extrait(texte, motif)
         r["hits"].append(
             {
@@ -481,7 +495,7 @@ def _construire(docs: list[dict], fiches: dict[str, dict], user: CurrentUser, mo
                 "url": _lien(ident) or r["url"],
             }
         )
-    sortie = []
+    sortie: list[_Resultat] = []
     for r in resultats.values():
         if not _dans_les_bornes(r.pop("_quand"), depuis, jusqu):
             continue

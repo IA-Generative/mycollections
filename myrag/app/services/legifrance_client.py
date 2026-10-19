@@ -4,8 +4,18 @@ import re
 import time
 
 import httpx
+from pydantic import BaseModel
 
 from app.config import settings
+
+
+class TexteLegifrance(BaseModel):
+    """Ce qu'on extrait d'une URL Legifrance : le type de texte, son identifiant, l'URL d'origine."""
+
+    type: str
+    id: str
+    url: str
+
 
 # URL patterns for parsing Legifrance URLs
 _URL_PATTERNS = [
@@ -16,12 +26,12 @@ _URL_PATTERNS = [
 ]
 
 
-def parse_legifrance_url(url: str) -> dict | None:
+def parse_legifrance_url(url: str) -> TexteLegifrance | None:
     """Parse a Legifrance URL and extract type + ID."""
     for pattern, doc_type in _URL_PATTERNS:
         match = pattern.search(url)
         if match:
-            return {"type": doc_type, "id": match.group(1), "url": url}
+            return TexteLegifrance(type=doc_type, id=match.group(1), url=url)
     return None
 
 

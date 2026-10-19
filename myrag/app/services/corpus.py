@@ -18,12 +18,14 @@ import re
 import time
 import unicodedata
 
+from app.services.openrag_client import FichierOpenRAG, FileDetail
+
 PAR_PAGE_DEFAUT = 50
 PAR_PAGE_MAX = 200
 MORCEAUX_MAX = 60  # au-delà, le document est rendu tronqué — et le dit
 DUREE_CACHE = 60.0
 
-_cache: dict[str, tuple[float, list[dict]]] = {}
+_cache: dict[str, tuple[float, list[FichierOpenRAG]]] = {}
 
 
 def plier(s: str) -> str:
@@ -36,24 +38,24 @@ def _cle_naturelle(s: str) -> list:
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", plier(s))]
 
 
-def resumer_fichier(f: dict) -> dict:
+def resumer_fichier(f: FichierOpenRAG) -> dict:
     """Ce qu'on montre d'un fichier d'OpenRAG — rien d'interne (ni `source`, ni condensé, ni vecteur)."""
-    fichier = str(f.get("original_filename") or f.get("filename") or "")
-    url = str(f.get("url") or "")
+    fichier = str(f.original_filename or f.filename or "")
+    url = str(f.url or "")
     return {
-        "file_id": str(f.get("file_id") or ""),
-        "titre": str(f.get("title") or fichier or f.get("file_id") or "Document"),
+        "file_id": str(f.file_id or ""),
+        "titre": str(f.title or fichier or f.file_id or "Document"),
         "fichier": fichier,
-        "type": str(f.get("mimetype") or ""),
-        "taille": str(f.get("file_size") or ""),
+        "type": str(f.mimetype or ""),
+        "taille": str(f.file_size or ""),
         "url_source": url if url.startswith(("https://", "http://")) else "",
     }
 
 
-def chercher_et_paginer(fichiers: list[dict], q: str = "", page: int = 1, par_page: int = PAR_PAGE_DEFAUT) -> dict:
+def chercher_et_paginer(fichiers: list[FichierOpenRAG], q: str = "", page: int = 1, par_page: int = PAR_PAGE_DEFAUT) -> dict:
     """Résume, filtre (tous les mots de `q`, sans accents ni casse), trie, et rend UNE page."""
     par_page = max(1, min(int(par_page or PAR_PAGE_DEFAUT), PAR_PAGE_MAX))
-    docs = [d for d in (resumer_fichier(f) for f in fichiers if isinstance(f, dict)) if d["file_id"]]
+    docs = [d for d in (resumer_fichier(f) for f in fichiers) if d["file_id"]]
     mots = plier(q).split()
     if mots:
         docs = [d for d in docs if all(m in plier(f"{d['titre']} {d['fichier']} {d['file_id']}") for m in mots)]
@@ -65,17 +67,19 @@ def chercher_et_paginer(fichiers: list[dict], q: str = "", page: int = 1, par_pa
     return {"total": total, "page": page, "pages": pages, "par_page": par_page, "documents": docs[debut : debut + par_page]}
 
 
-def identifiants_des_morceaux(detail: dict) -> list[str]:
+def identifiants_des_morceaux(detail: FileDetail | None) -> list[str]:
     """Les identifiants de morceaux d'un fichier, dans l'ordre, lus dans ses liens `/extract/<id>`."""
+    if detail is None:
+        return []
     ids: list[str] = []
-    for d in (detail or {}).get("documents") or []:
-        m = re.search(r"/extract/([^/?#]+)", str((d or {}).get("link") or "")) if isinstance(d, dict) else None
+    for d in detail.documents or []:
+        m = re.search(r"/extract/([^/?#]+)", d.link or "")
         if m and m.group(1) not in ids:
             ids.append(m.group(1))
     return ids
 
 
-async def fichiers_de(client, partition: str) -> list[dict]:
+async def fichiers_de(client, partition: str) -> list[FichierOpenRAG]:
     """La liste des fichiers d'une partition, gardée une minute : feuilleter ne la redemande pas."""
     vu = _cache.get(partition)
     if vu and time.monotonic() - vu[0] < DUREE_CACHE:

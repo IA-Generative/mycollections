@@ -6,6 +6,7 @@ un stockage abandonné depuis le passage à la base ; elle ne pouvait plus réus
 
 from unittest.mock import AsyncMock, patch
 
+from app.services.openrag_client import ListeModeles
 from tests.conftest import SUPERADMIN, personne
 
 
@@ -22,7 +23,7 @@ def test_la_liste_contient_la_collection_creee(client, en_tant_que, creer_collec
     creer_collection(nom)
     en_tant_que(personne("lecteur"))
     with patch("app.routers.collections.OpenRAGClient") as cls:
-        cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[]))
         cls.return_value.list_files = AsyncMock(return_value=[])
         r = client.get("/api/collections")
     assert r.status_code == 200

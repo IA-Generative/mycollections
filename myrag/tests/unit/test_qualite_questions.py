@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
+from app.services.openrag_client import ResultatPartition
 from tests.conftest import personne
 
 URL = "/api/collections/{}/qualite/questions"
@@ -181,7 +182,7 @@ def test_la_purge_efface_le_jeu_de_questions(client, en_tant_que, creer_collecti
     con.execute("UPDATE collections SET archived_at = CURRENT_TIMESTAMP WHERE name = ?", (nom,))
     con.commit()
     con.close()
-    with patch("app.services.openrag_client.OpenRAGClient.delete_partition", new=AsyncMock(return_value={"status": "ok"})):
+    with patch("app.services.openrag_client.OpenRAGClient.delete_partition", new=AsyncMock(return_value=ResultatPartition(status="ok"))):
         rapport = asyncio.run(collection_store.purge_collection(nom))
     assert "paire_qa" in str(rapport)
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])

@@ -5,12 +5,12 @@ se replie sur un découpage par sections ou par longueur, sans rien perdre du te
 
 import pytest
 
-from app.services.chunker import chunk_document
+from app.services.chunker import Strategy, chunk_document
 
 TEXTE = "Note de service.\n\nPremier paragraphe qui explique le contexte de la note et son objet.\n\n## Modalités\n\nLe télétravail est ouvert deux jours par semaine.\n"
 
 
-@pytest.mark.parametrize("strategie", ["article", "qr"])
+@pytest.mark.parametrize("strategie", [Strategy.ARTICLE, Strategy.QR])
 def test_un_decoupage_sans_ses_marqueurs_se_replie(strategie):
     morceaux = chunk_document(TEXTE, strategy=strategie)
     assert morceaux, f"« {strategie} » sans marqueurs ne doit pas rendre zéro passage"
@@ -20,5 +20,5 @@ def test_un_decoupage_sans_ses_marqueurs_se_replie(strategie):
 
 def test_un_vrai_code_reste_decoupe_par_article():
     code = "Article L1\n\nPremier article.\n\nArticle L2\n\nSecond article.\n"
-    morceaux = chunk_document(code, strategy="article")
+    morceaux = chunk_document(code, strategy=Strategy.ARTICLE)
     assert len(morceaux) == 2

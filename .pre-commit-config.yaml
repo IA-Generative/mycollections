@@ -28,7 +28,7 @@ repos:
       - id: ty
         name: ty (advisoire)
         language: system
-        entry: bash -c 'uvx ty@0.0.87 check --project myrag --exit-zero --output-format concise'
+        entry: bash -c 'cd myrag && uv run ty check --exit-zero --output-format concise'
         pass_filenames: false
         types_or: [python, pyi]
         verbose: true

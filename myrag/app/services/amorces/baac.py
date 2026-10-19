@@ -6,11 +6,21 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from pydantic import BaseModel
+
 from app.services.amorces import reseau
 from app.services.amorces.ingestion import Document
 from app.services.amorces.tabulaire import colonne, fmt, lire_csv
 
 GRAVITE = {"2": "tues", "3": "blesses_hospitalises", "4": "blesses_legers", "1": "indemnes"}
+
+
+class Couverture(BaseModel):
+    """Ce que l'import a couvert : années traitées, accidents lus, départements touchés."""
+
+    annees: list[str] = []
+    accidents: int = 0
+    departements: int = 0
 
 
 def documents_depuis(annee: str, caract: list[dict], usagers: list[dict], communes_max: int = 15) -> tuple[list[Document], dict]:
@@ -59,15 +69,15 @@ async def importer(collection: str, entree: dict) -> dict:
     from app.services.amorces.ingestion import ingerer
 
     p = entree.get("parametres", {})
-    docs, couverture = [], {"annees": [], "accidents": 0, "departements": 0}
+    docs, couverture = [], Couverture()
     for f in p["millesimes"]:
         caract = lire_csv(await reseau.telecharger(f["caracteristiques"]))
         usagers = lire_csv(await reseau.telecharger(f["usagers"])) if f.get("usagers") else []
         d, c = documents_depuis(str(f["annee"]), caract, usagers, p.get("communes_max", 15))
         docs += d
-        couverture["annees"].append(str(f["annee"]))
-        couverture["accidents"] += c["accidents"]
-        couverture["departements"] = max(couverture["departements"], c["departements"])
-    couverture["annees"] = [min(couverture["annees"]), max(couverture["annees"])] if couverture["annees"] else []
+        couverture.annees.append(str(f["annee"]))
+        couverture.accidents += int(c["accidents"])
+        couverture.departements = max(couverture.departements, int(c["departements"]))
+    couverture.annees = [min(couverture.annees), max(couverture.annees)] if couverture.annees else []
     bilan = await ingerer(collection, docs, max_documents=p.get("max_documents"))
-    return {**bilan, "couverture": couverture, "lignes_importees": couverture["accidents"]}
+    return {**bilan.model_dump(), "couverture": couverture.model_dump(), "lignes_importees": couverture.accidents}

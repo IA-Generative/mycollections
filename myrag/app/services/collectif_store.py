@@ -379,8 +379,9 @@ async def initialiser_collection(
             g = GrilleControle(collection_name=name)
             session.add(g)
         for champ in ("source_licence", "donnees_perso", "fraicheur"):
-            if (grille or {}).get(champ) and not getattr(g, champ):
-                setattr(g, champ, grille[champ])
+            valeur = (grille or {}).get(champ)
+            if valeur and not getattr(g, champ):
+                setattr(g, champ, valeur)
         journal.ecrire(session, "collection", name, "collection.creee", collection_name=name, **_fusion_detail(sig, {"etat": c.etat_collab}))
         await session.commit()
 
@@ -549,7 +550,7 @@ async def decider_proposition(name: str, ident: str, decision: str, motif: str |
         if p.etat != "proposee":
             raise Conflit(f"la proposition est déjà « {p.etat} »")
         p.etat, p.motif_refus, p.decide_par_hash, p.decide_le = decision, motif, sub_hash, utcnow()
-        detail = {"motif": motif} if motif else {}
+        detail: dict = {"motif": motif} if motif else {}
         if decision == "publiee":
             detail["application"] = await appliquer_proposition(p)
         type_ = "proposition.publiee" if decision == "publiee" else "proposition.refusee"

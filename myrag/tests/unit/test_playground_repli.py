@@ -11,18 +11,19 @@ from __future__ import annotations
 import asyncio
 
 from app.routers.playground import _morceaux_par_recherche
+from app.services.openrag_client import OpenRAGClient, ResultatRecherche
 
 
-class FauxClient:
+class FauxClient(OpenRAGClient):
     def __init__(self, documents):
         self.documents = documents
         self.appels = []
 
-    async def search(self, collection, question, top_k=5):
-        self.appels.append((collection, question, top_k))
+    async def search(self, partition: str | list[str], query: str, top_k: int = 5) -> ResultatRecherche:
+        self.appels.append((partition, query, top_k))
         if self.documents is None:
             raise RuntimeError("OpenRAG muet")
-        return {"documents": self.documents}
+        return ResultatRecherche.model_validate({"documents": self.documents})
 
 
 def test_les_morceaux_gardent_leur_identite_de_source():

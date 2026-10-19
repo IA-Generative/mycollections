@@ -79,7 +79,9 @@ def list_keycloak_users(client: httpx.Client, token: str) -> list[dict]:
     page_size = 100
     while True:
         url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
-        resp = client.get(url, headers=headers, params={"first": first, "max": page_size})
+        resp = client.get(
+            url, headers=headers, params={"first": first, "max": page_size}
+        )
         resp.raise_for_status()
         page = resp.json()
         if not page:
@@ -110,7 +112,7 @@ def parse_partition_roles(groups: list[str]) -> dict[str, str]:
         g = group.lstrip("/")
         for prefix, role in GROUP_PREFIX_ROLE_MAP:
             if g.startswith(prefix):
-                partition = g[len(prefix):]
+                partition = g[len(prefix) :]
                 if not partition:
                     continue
                 existing = partition_roles.get(partition)
@@ -137,7 +139,9 @@ def create_openrag_user(
 ) -> dict | None:
     """Create a user in OpenRAG. Returns the created user dict."""
     if dry_run:
-        log.info("  [DRY-RUN] Would create user: %s (%s)", display_name, external_user_id)
+        log.info(
+            "  [DRY-RUN] Would create user: %s (%s)", display_name, external_user_id
+        )
         return None
     headers = {
         "Authorization": f"Bearer {OPENRAG_ADMIN_TOKEN}",
@@ -157,11 +161,18 @@ def create_openrag_user(
         return None
     resp.raise_for_status()
     user = resp.json()
-    log.info("  Created user: %s (id=%s, token=%s)", display_name, user["id"], user.get("token", "N/A"))
+    log.info(
+        "  Created user: %s (id=%s, token=%s)",
+        display_name,
+        user["id"],
+        user.get("token", "N/A"),
+    )
     return user
 
 
-def ensure_partition(client: httpx.Client, partition: str, dry_run: bool = False) -> None:
+def ensure_partition(
+    client: httpx.Client, partition: str, dry_run: bool = False
+) -> None:
     """Create partition if it doesn't exist."""
     if dry_run:
         log.info("  [DRY-RUN] Would ensure partition: %s", partition)
@@ -183,7 +194,12 @@ def add_partition_member(
 ) -> None:
     """Add or update a user's membership in a partition."""
     if dry_run:
-        log.info("  [DRY-RUN] Would add user %d to partition %s as %s", user_id, partition, role)
+        log.info(
+            "  [DRY-RUN] Would add user %d to partition %s as %s",
+            user_id,
+            partition,
+            role,
+        )
         return
     headers = {"Authorization": f"Bearer {OPENRAG_ADMIN_TOKEN}"}
     resp = client.post(
@@ -208,7 +224,11 @@ def sync(dry_run: bool = False) -> None:
     """Main sync logic."""
     with httpx.Client(timeout=30) as client:
         # 1. Get Keycloak admin token
-        log.info("Authenticating to Keycloak at %s (realm: %s)...", KEYCLOAK_URL, KEYCLOAK_REALM)
+        log.info(
+            "Authenticating to Keycloak at %s (realm: %s)...",
+            KEYCLOAK_URL,
+            KEYCLOAK_REALM,
+        )
         kc_token = get_keycloak_token(client)
 
         # 2. List Keycloak users
@@ -217,7 +237,9 @@ def sync(dry_run: bool = False) -> None:
 
         # 3. List existing OpenRAG users (index by external_user_id)
         or_users = list_openrag_users(client)
-        or_by_ext_id = {u.get("external_user_id"): u for u in or_users if u.get("external_user_id")}
+        or_by_ext_id = {
+            u.get("external_user_id"): u for u in or_users if u.get("external_user_id")
+        }
         log.info("Found %d existing users in OpenRAG", len(or_users))
 
         created = 0
@@ -230,7 +252,7 @@ def sync(dry_run: bool = False) -> None:
                 f"{kc_user.get('firstName', '')} {kc_user.get('lastName', '')}".strip()
                 or username
             )
-            email = kc_user.get("email", "")
+            # email = kc_user.get("email", "")
 
             # Skip service accounts
             if username.startswith("service-account-"):
@@ -276,7 +298,11 @@ def sync(dry_run: bool = False) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Sync Keycloak users to OpenRAG")
-    parser.add_argument("--dry-run", action="store_true", default=os.getenv("DRY_RUN", "").lower() == "true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=os.getenv("DRY_RUN", "").lower() == "true",
+    )
     args = parser.parse_args()
 
     if not KEYCLOAK_CLIENT_SECRET:

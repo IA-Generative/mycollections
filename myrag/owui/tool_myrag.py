@@ -81,7 +81,7 @@ class Tools:
         """Extract article IDs from response text."""
         return re.findall(r"\b([LRD]\d+(?:-\d+)*)\b", text)
 
-    def _render_sources_html(self, docs: list[dict], graph_edges: list[dict] = None, collection: str = "") -> str:
+    def _render_sources_html(self, docs: list[dict], graph_edges: list[dict] | None = None, collection: str = "") -> str:
         """Render sources + mini graph as HTML for iframe."""
         myrag = self.valves.myrag_url
 

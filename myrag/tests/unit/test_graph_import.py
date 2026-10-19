@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import CurrentUser, current_user
 from app.services.graph_builder import GraphBuilder, GraphImportError, graph_from_import
+from app.services.openrag_client import FichierOpenRAG
 
 GESTIONNAIRE = CurrentUser(sub="g1", username="gest", groups=["/myrag/grimp-ceseda-admin"])
 LECTEUR = CurrentUser(sub="l1", username="lecteur", groups=["/myrag/grimp-autre-admin"])
@@ -57,7 +58,9 @@ class TestGraphFromImport:
         GraphBuilder(data_dir=str(tmp_path)).import_graph("ceseda", GRAPHE, imported_by="g1")
         reloaded = GraphBuilder(data_dir=str(tmp_path))
         assert reloaded.is_imported("ceseda")
-        assert reloaded.get("ceseda").graph["imported_by"] == "g1"
+        g = reloaded.get("ceseda")
+        assert g is not None
+        assert g.graph["imported_by"] == "g1"
         assert json.loads((tmp_path / "ceseda" / "graph.json").read_text())["meta"]["origin"] == "import"
 
 
@@ -163,7 +166,7 @@ class TestBuildAndSummarizeAreReservedToManagers:
         fichiers = [{"file_id": "1", "filename": "Article-L423-3.md"}, {"file_id": "2", "filename": "Article-L423-1.md"}]
         contenus = {"1": "Voir l'article L. 423-1.", "2": "Conjoint de Français."}
         with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            mock_cls.return_value.list_files = AsyncMock(return_value=fichiers)
+            mock_cls.return_value.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers])
             mock_cls.return_value.get_file_content = AsyncMock(side_effect=lambda p, f: contenus[f])
             r = client.post("/graph/grimp-ceseda/build", params={"force": "true"})
         assert r.status_code == 200, r.text

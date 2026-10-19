@@ -5,13 +5,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.services.openrag_client import ListeModeles, ModeleOpenRAG
 from tests.conftest import GROUPE_TESTEURS, personne
 
 
 def _creer(client, name, partitions=(), **champs):
     with patch("app.routers.collections.OpenRAGClient") as cls:
         cls.return_value.create_partition = AsyncMock(return_value={})
-        cls.return_value.list_models = AsyncMock(return_value={"data": [{"id": f"openrag-{p}"} for p in partitions]})
+        cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[ModeleOpenRAG(id=f"openrag-{p}") for p in partitions]))
         return client.post("/api/collections", json={"name": name, "scope": "group", "scope_groups": [GROUPE_TESTEURS], **champs})
 
 
@@ -53,7 +54,7 @@ def test_rattacher_une_partition_existante_reste_possible_quel_que_soit_son_nom(
 def test_check_name_dit_pourquoi(client, en_tant_que):
     en_tant_que(personne(1))
     with patch("app.routers.collections.OpenRAGClient") as cls:
-        cls.return_value.list_models = AsyncMock(return_value={"data": []})
+        cls.return_value.list_models = AsyncMock(return_value=ListeModeles(data=[]))
         r = client.get("/api/collections/check-name", params={"name": "demo-x"}).json()
         libre = client.get("/api/collections/check-name", params={"name": "codes-jamais-pris"}).json()
     assert (r["available"], r["reason"]) == (False, "prefixe") and "contenu" in r["message"]

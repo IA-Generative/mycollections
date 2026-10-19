@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from typing import Any, Callable
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -12,11 +13,16 @@ from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.routers._droits import gerer_la_collection, lire_la_collection
 from app.security_utils import assert_public_http_url, ssrf_request_guard
+from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
 
 # Hook anti-SSRF appliqué à tous les fetch d'URL fournies par l'utilisateur.
-_SSRF_HOOKS = {"request": [ssrf_request_guard]}
+_SSRF_HOOKS: dict[str, list[Callable[..., Any]]] = {"request": [ssrf_request_guard]}
+
+# Références fortes des tâches d'ingestion Drive « fire-and-forget » : sans elles,
+# asyncio ne garde qu'une référence faible et la tâche peut disparaître en vol.
+_TACHES_DRIVE: set[asyncio.Task[list[str]]] = set()
 
 # Safety caps for the synchronous fetch in /drive/add — protect against both
 # ingress timeouts and OOM. If a user really needs more, they can fractionner.
@@ -132,7 +138,7 @@ async def parse_url(req: AddSourceByUrlRequest):
     if not result:
         raise HTTPException(status_code=400, detail="URL not recognized as a Legifrance URL")
     return {
-        **result,
+        **result.model_dump(),
         "collection": req.collection,
         "refresh_mode": req.refresh_mode,
     }
@@ -348,8 +354,8 @@ async def _ingest_downloaded_files(collection: str, files: list[tuple[bytes, str
                 collection=collection,
                 filename=filename,
                 content=content,
-                strategy="auto",
-                sensitivity="public",
+                strategy=Strategy.AUTO,
+                sensitivity=Sensitivity.PUBLIC,
                 source_path=src_url,
             )
             if "job_id" in result:
@@ -450,8 +456,8 @@ async def add_drive_source(
     # Fire-and-forget async ingest from bytes already in memory — no Drive
     # calls from here on, so the user's token can expire without impact.
     task = asyncio.create_task(_ingest_downloaded_files(req.collection, downloaded))
-    loop = asyncio.get_running_loop()
-    loop._drive_import_tasks = getattr(loop, "_drive_import_tasks", []) + [task]
+    _TACHES_DRIVE.add(task)
+    task.add_done_callback(_TACHES_DRIVE.discard)
     await consigner(
         "synchronisation",
         req.collection,
@@ -508,8 +514,8 @@ async def sync_drive_source(
                 collection=collection,
                 filename=filename,
                 content=content,
-                strategy="auto",
-                sensitivity="public",
+                strategy=Strategy.AUTO,
+                sensitivity=Sensitivity.PUBLIC,
                 source_path=doc.url,
             )
             if "job_id" in result:

@@ -46,7 +46,7 @@ from app.services.openrag_client import OpenRAGClient
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Import models so tables are registered
-    import app.models.db  # noqa: F401
+    from app.models import db as _db  # noqa: F401
 
     await init_db()
     # Les anciens magasins de questions (jeux de test, réponses validées, avis promus) versés
@@ -297,7 +297,8 @@ def _extract_render_html(payload: dict | None, chunk_id: str, raw: bytes, status
     else:
         content = payload.get("page_content") or payload.get("content") or payload.get("text") or ""
         contexte, fichier, corps = _decouper_morceau(str(content))
-        source = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        meta = payload.get("metadata")
+        source = meta if isinstance(meta, dict) else {}
         lire = lambda k: payload.get(k) or source.get(k)  # noqa: E731
         fichier = str(lire("original_filename") or lire("filename") or fichier or "")
         meta_parts = []

@@ -7,14 +7,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.openrag_client import FichierOpenRAG, ReponseChat, ResultatRecherche
 from app.services.reponse import ErreurReponse, repondre
 
 
 def _client(chat_reponses, recherche=None, fichiers=None):
+    """Le faux OpenRAG : les réponses du chat et de la recherche, dict de test → modèle."""
     c = MagicMock()
-    c.chat = AsyncMock(side_effect=chat_reponses)
-    c.search = AsyncMock(return_value={"documents": recherche or []})
-    c.list_files = AsyncMock(return_value=fichiers or [])
+    c.chat = AsyncMock(side_effect=[r if isinstance(r, Exception) else ReponseChat.model_validate(r) for r in chat_reponses])
+    c.search = AsyncMock(return_value=ResultatRecherche.model_validate({"documents": recherche or []}))
+    c.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers or []])
     return c
 
 

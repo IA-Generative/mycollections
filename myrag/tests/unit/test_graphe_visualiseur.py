@@ -22,7 +22,9 @@ def _config(client, nom):
     import re
 
     page = client.get("/graph", params={"corpus_id": nom}).text
-    return json.loads(re.search(r"window\.GRAPH_VIEWER_CONFIG = (\{.*?\});</script>", page).group(1))
+    m = re.search(r"window\.GRAPH_VIEWER_CONFIG = (\{.*?\});</script>", page)
+    assert m is not None
+    return json.loads(m.group(1))
 
 
 def test_sans_adresse_publique_de_l_assistant_rien_n_est_offert(client, monkeypatch, nom):
@@ -94,7 +96,10 @@ def _code():
 def _reponse(monkeypatch, graphe, **params):
     b = GraphBuilder()
     monkeypatch.setattr(b, "get", lambda collection: graphe)
-    return b.to_graph_data_response(collection="c", **{"query": "", "max_nodes": 80, "min_weight": 0.0, **params})
+    params.setdefault("query", "")
+    params.setdefault("max_nodes", 80)
+    params.setdefault("min_weight", 0.0)
+    return b.to_graph_data_response(collection="c", **params)
 
 
 def test_le_selecteur_recoit_des_options_lisibles_en_ordre_romain(monkeypatch):

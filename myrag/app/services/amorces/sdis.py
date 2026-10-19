@@ -58,4 +58,4 @@ async def importer(collection: str, entree: dict) -> dict:
         par_annee[str(f["annee"])] = lire_csv(await reseau.telecharger(f["url"]))
     docs, couverture = documents_depuis(par_annee)
     bilan = await ingerer(collection, docs, max_documents=p.get("max_documents"))
-    return {**bilan, "couverture": couverture, "lignes_importees": couverture["lignes_lues"]}
+    return {**bilan.model_dump(), "couverture": couverture, "lignes_importees": couverture["lignes_lues"]}

@@ -16,7 +16,7 @@ from app.routers._collectif_commun import collection_lisible
 from app.security_utils import reject_path_traversal
 from app.services import corpus
 from app.services.morceau import decouper_morceau
-from app.services.openrag_client import OpenRAGClient
+from app.services.openrag_client import ExtraitOpenRAG, FichierOpenRAG, OpenRAGClient
 
 router = APIRouter(prefix="/api/collections", tags=["Corpus"])
 
@@ -51,7 +51,8 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
     if detail is None:
         raise HTTPException(status_code=404, detail="Document introuvable dans cette collection")
 
-    meta = detail.get("metadata") if isinstance(detail.get("metadata"), dict) else {}
+    brut_meta = detail.metadata
+    meta = brut_meta or {}
     # La partition lue doit être celle de la collection autorisée — jamais celle d'à côté.
     if meta.get("partition") not in (None, name):
         raise HTTPException(status_code=404, detail="Document introuvable dans cette collection")
@@ -60,7 +61,7 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
     a_lire = ids[: corpus.MORCEAUX_MAX]
     verrou = asyncio.Semaphore(_LECTURES_PARALLELES)
 
-    async def lire(cid: str) -> dict | None:
+    async def lire(cid: str) -> ExtraitOpenRAG | None:
         async with verrou:
             try:
                 return await client.extract(cid)
@@ -72,14 +73,14 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
     for cid, brut in zip(a_lire, lus):
         if not brut:
             continue
-        ctx, _fichier, corps = decouper_morceau(str(brut.get("page_content") or brut.get("content") or brut.get("text") or ""))
+        ctx, _fichier, corps = decouper_morceau(brut.page_content or "")
         contexte = contexte or ctx
-        source = brut.get("metadata") if isinstance(brut.get("metadata"), dict) else {}
-        page = brut.get("page", source.get("page"))
+        source = brut.metadata if isinstance(brut.metadata, dict) else {}
+        page = source.get("page")
         if corps:
             morceaux.append({"id": cid, "texte": corps, "page": page if page not in ("", None) else None})
 
-    resume = corpus.resumer_fichier({**meta, "file_id": file_id})
+    resume = corpus.resumer_fichier(FichierOpenRAG.model_validate({**meta, "file_id": file_id}))
     return {
         **resume,
         "contexte": contexte,

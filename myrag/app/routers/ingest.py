@@ -14,7 +14,7 @@ from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
 from app.services import formats
-from app.services.chunker import Sensitivity, Strategy, chunk_document
+from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
 from app.services.openrag_client import OpenRAGClient
 
@@ -86,9 +86,9 @@ async def _indexer_document_background(job_id: str, collection: str, filename: s
     erreur = None
     try:
         envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename})
-        tache, debut = envoi.get("task_id"), time.monotonic()
+        tache, debut = envoi.task_id, time.monotonic()
         while tache:
-            etat = str((await client.task_state(tache)).get("task_state") or "").upper()
+            etat = str((await client.task_state(tache)).task_state or "").upper()
             if etat in _ETATS_REUSSIS:
                 break
             if etat in _ETATS_ECHOUES:
@@ -142,7 +142,11 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
             continue
         try:
             texte = texte_ou_refus(chemin.read_bytes(), filename)
-            morceaux = chunk_document(texte, strategy=strategy or "auto", max_chars=512, overlap=50, sensitivity=sensitivity or "public")
+            strategie_valide = valider_strategy(strategy or "auto")
+            sensibilite_valide = valider_sensibilite(sensitivity or "public")
+            if strategie_valide is None or sensibilite_valide is None:
+                raise ValueError(f"stratégie « {strategy} » ou sensibilité « {sensitivity} » inconnue")
+            morceaux = chunk_document(texte, strategy=strategie_valide, max_chars=512, overlap=50, sensitivity=sensibilite_valide)
         except Exception as e:  # noqa: BLE001
             await update_job(job_id, status="interrupted", error=f"Reprise impossible : {e}")
             continue
@@ -184,8 +188,8 @@ async def _ingest_content(
     collection: str,
     filename: str,
     content: bytes,
-    strategy: str,
-    sensitivity: str,
+    strategy: Strategy,
+    sensitivity: Sensitivity,
     source_path: str = "",
 ) -> dict:
     """Common ingest logic for file upload and URL fetch."""
@@ -284,7 +288,7 @@ async def _enregistrer_source(collection: str, filename: str, content: bytes, st
     return saved_path
 
 
-async def _ingest_document(collection: str, filename: str, content: bytes, sensitivity: str, source_path: str = "") -> dict:
+async def _ingest_document(collection: str, filename: str, content: bytes, sensitivity: Sensitivity, source_path: str = "") -> dict:
     """Un document (PDF, Word…) : gardé comme source, puis confié tel quel à OpenRAG."""
     if len(content) > DOCUMENT_MAX_OCTETS:
         raise HTTPException(status_code=413, detail=f"« {filename} » dépasse {DOCUMENT_MAX_OCTETS // 1024 // 1024} Mo.")
@@ -314,8 +318,8 @@ async def _ingest_document(collection: str, filename: str, content: bytes, sensi
 async def ingest_file(
     collection: str,
     file: UploadFile = File(...),
-    strategy: Strategy = Form("auto"),
-    sensitivity: Sensitivity = Form("public"),
+    strategy: Strategy = Form(Strategy.AUTO),
+    sensitivity: Sensitivity = Form(Sensitivity.PUBLIC),
     max_chars: int = Form(512),
     overlap: int = Form(50),
     user: CurrentUser = Depends(current_user),
@@ -334,8 +338,8 @@ async def ingest_file(
 
 class IngestFromUrlRequest(BaseModel):
     url: str
-    strategy: Strategy = "auto"
-    sensitivity: Sensitivity = "public"
+    strategy: Strategy = Strategy.AUTO
+    sensitivity: Sensitivity = Sensitivity.PUBLIC
 
 
 @router.post("/{collection}/from-url")
@@ -371,7 +375,7 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
 
 
 @router.post("/{collection}/reindex")
-async def reindex_collection(collection: str, strategy: Strategy = "auto", sensitivity: Sensitivity = "public", user: CurrentUser = Depends(current_user)):
+async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO, sensitivity: Sensitivity = Sensitivity.PUBLIC, user: CurrentUser = Depends(current_user)):
     """Re-index all source files of a collection with a new strategy.
 
     Uses source files saved by R7 to re-chunk and re-index without re-upload.

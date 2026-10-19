@@ -92,6 +92,6 @@ def test_un_evenement_a_un_auteur_ou_un_robot(client):
     from app.services.journal import ecrire
 
     with pytest.raises(ValueError):
-        ecrire(None, "demande", "x", "demande.creee")
+        ecrire(None, "demande", "x", "demande.creee")  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError):
-        ecrire(None, "demande", "x", "demande.creee", auteur_hash="h", robot="r")
+        ecrire(None, "demande", "x", "demande.creee", auteur_hash="h", robot="r")  # ty: ignore[invalid-argument-type]

@@ -5,11 +5,13 @@ author: OpenRAG
 version: 0.1.0
 """
 
-import json
+import logging
 import threading
 
 import requests
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("openrag.feedback_forwarder")
 
 
 class Pipe:
@@ -32,7 +34,7 @@ class Pipe:
     def __init__(self):
         self.valves = self.Valves()
 
-    def outlet(self, body: dict, __user__: dict = None, **kwargs) -> dict:
+    def outlet(self, body: dict, __user__: dict | None = None, **kwargs) -> dict:
         """Called after each model response. Checks for feedback annotations.
 
         Open WebUI stores feedback as an 'annotation' field on messages:
@@ -81,7 +83,8 @@ class Pipe:
                     "response": msg.get("content", ""),
                     "model": body.get("model", ""),
                     "rating": normalized_rating,
-                    "reason": annotation.get("reason", "") or annotation.get("comment", ""),
+                    "reason": annotation.get("reason", "")
+                    or annotation.get("comment", ""),
                     "owui_chat_id": body.get("chat_id", ""),
                     "owui_message_id": msg.get("id", ""),
                 }
@@ -95,8 +98,8 @@ class Pipe:
                     daemon=True,
                 ).start()
 
-        except Exception:
-            pass  # Never block the response
+        except Exception as e:  # noqa: BLE001 — a forwarding failure must never block the response
+            logger.warning("feedback not forwarded: %s", e)
 
         return body
 
@@ -108,7 +111,9 @@ class Pipe:
             if self.valves.service_key:
                 headers["X-Service-Key"] = self.valves.service_key
 
-            resp = requests.post(url, json={"feedbacks": feedbacks}, headers=headers, timeout=10)
+            resp = requests.post(
+                url, json={"feedbacks": feedbacks}, headers=headers, timeout=10
+            )
             resp.raise_for_status()
-        except Exception:
-            pass  # Best-effort
+        except Exception as e:  # noqa: BLE001 — best-effort delivery: log and drop
+            logger.warning("feedbacks not delivered to OpenRAG: %s", e)

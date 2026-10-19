@@ -319,7 +319,7 @@ class GraphBuilder:
                     temperature=0.1,
                     max_tokens=300,
                 )
-                return r["choices"][0]["message"]["content"]
+                return r.texte()
 
         texte_par_article = {}
         for chunk in chunks:
