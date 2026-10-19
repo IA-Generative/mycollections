@@ -38,8 +38,9 @@ class Collection(Base):
     name: Mapped[str] = mapped_column(String(255), primary_key=True)
     # Ce que lit une personne : « Codes NATINF ». `name` reste l'identifiant technique
     # (partition OpenRAG, modèle `openrag-<name>`, URL). Vide = repli sur le nom
-    # (app.services.nommage.titre_de). La catégorie ne se pose que par
-    # PUT /api/categories/affectations (superadmin) ; NULL = « Non classées ».
+    # (app.services.nommage.titre_de). La catégorie se choisit parmi celles qui existent : à la
+    # création et dans les réglages par qui gère, ou par PUT /api/categories/affectations
+    # (superadmin) ; NULL = « Non classées ».
     titre: Mapped[str] = mapped_column(String(255), default="", server_default="")
     categorie: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     description: Mapped[str] = mapped_column(Text, default="")
