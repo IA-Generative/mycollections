@@ -129,3 +129,47 @@ export function bilan (etats: EtatDepot[]): string {
   }
   return parts.join(', ')
 }
+
+/** L'état d'un document déposé tel qu'on le dit à l'étape « Documents » de l'assistant. */
+export type EtatAffiche = 'pret' | 'decoupage' | 'attente' | 'echec'
+
+const LIBELLES_ETAT_AFFICHE: Record<EtatAffiche, string> = {
+  pret: 'prêt',
+  decoupage: 'découpage en cours',
+  attente: 'en attente',
+  echec: 'en échec',
+}
+
+/**
+ * L'état d'un travail d'ingestion (`/api/ingest/jobs/<id>`) : pas encore de travail = en attente ;
+ *  découpage puis envoi au moteur = découpage en cours ; terminé = prêt (en échec si rien n'est passé).
+ */
+export function etatDepot (job: { status: string, failed_chunks?: number, total_chunks?: number } | null | undefined): EtatAffiche {
+  if (!job) {
+    return 'attente'
+  }
+  if (job.status === 'done') {
+    return 'pret'
+  }
+  if (job.status === 'done_with_errors') {
+    return (job.failed_chunks || 0) >= (job.total_chunks || 1) ? 'echec' : 'pret'
+  }
+  if (job.status === 'interrupted' || job.status === 'failed') {
+    return 'echec'
+  }
+  return 'decoupage'
+}
+
+export function libelleEtatDepot (e: EtatAffiche): string {
+  return LIBELLES_ETAT_AFFICHE[e]
+}
+
+/** L'état affiché d'un dépôt suivi par la zone de dépôt (`EtatDepot`). */
+export function etatAfficheDepuis (e: EtatDepot): EtatAffiche {
+  return ({ attente: 'attente', envoi: 'decoupage', indexation: 'decoupage', indexe: 'pret', echec: 'echec' } as const)[e]
+}
+
+/** « 312 passages », seulement quand le nombre est connu. */
+export function passages (n: number | null | undefined): string | null {
+  return typeof n === 'number' && n > 0 ? `${n} passage${n > 1 ? 's' : ''}` : null
+}

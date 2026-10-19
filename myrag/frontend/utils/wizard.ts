@@ -1,0 +1,128 @@
+/**
+ * L'assistant de création d'une collection (refonte du 2026-10-19) : ses étapes, ses sources,
+ * les réglages avancés de l'étape 2 et l'identifiant proposé. Fonctions pures, testées dans
+ * tests/unit/wizard.test.ts.
+ */
+import type { ReglesNommage } from './collectionName'
+import { deriverIdentifiant, motifRefus, REGLES_PAR_DEFAUT } from './collectionName'
+
+/** Les cinq étapes, dans l'ordre. « Partage » est aussi le libellé de l'accueil et de /admin. */
+export const ETAPES_ASSISTANT = ['Source', 'Identification', 'Documents', 'Vérifier les réponses', 'Partage'] as const
+
+/** Le libellé de l'étape qui suit l'étape `n` (numérotée de 1 à 5), ou null après la dernière. */
+export function etapeSuivante (n: number): string | null {
+  return ETAPES_ASSISTANT[n] ?? null
+}
+
+/** « source, identification, documents, vérifier les réponses, partage ». */
+export function etapesEnPhrase (): string {
+  return ETAPES_ASSISTANT.map(e => e.toLowerCase()).join(', ')
+}
+
+export interface Source {
+  cle: string
+  nom: string
+  /** Le nom dans la ligne « Bientôt : … ». */
+  court: string
+  description: string
+  icone: string
+  /** Vrai seulement si le code sait traiter cette source de bout en bout. */
+  disponible: boolean
+  miseAJourAuto?: boolean
+}
+
+/** Les sources, dans l'ordre d'affichage. Une source devient une carte quand elle est branchée. */
+export const SOURCES: readonly Source[] = [
+  { cle: 'file', nom: 'Un fichier', court: 'un fichier', icone: 'fr-icon-file-line', disponible: true, description: 'PDF, Word, texte, Markdown… depuis votre poste, ou l\'adresse web d\'un fichier. D\'autres s\'ajoutent ensuite depuis la fiche.' },
+  { cle: 'directory', nom: 'Un dossier de votre poste', court: 'un dossier', icone: 'fr-icon-folder-2-line', disponible: true, description: 'Tout un dossier, sous-dossiers compris. Chaque fichier est suivi jusqu\'à ce qu\'il soit prêt.' },
+  { cle: 'legifrance', nom: 'Légifrance', court: 'Légifrance', icone: 'fr-icon-scales-3-line', disponible: false, miseAJourAuto: true, description: 'Un code ou une loi, découpé par article.' },
+  { cle: 'drive', nom: 'Un dossier Drive', court: 'Drive', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier de la Suite numérique, réindexé quand son contenu change.' },
+  { cle: 'nextcloud', nom: 'Nextcloud', court: 'Nextcloud', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier Nextcloud, réindexé quand il change.' },
+  { cle: 'resana', nom: 'Resana', court: 'Resana', icone: 'fr-icon-team-line', disponible: false, miseAJourAuto: true, description: 'Un espace Resana.' },
+  { cle: 'website', nom: 'Une page ou un site', court: 'un site web', icone: 'fr-icon-global-line', disponible: false, miseAJourAuto: true, description: 'Une adresse web, relue et découpée page par page.' },
+  { cle: 'mcp', nom: 'Un outil MCP', court: 'un outil MCP', icone: 'fr-icon-links-line', disponible: false, description: 'Les ressources d\'un serveur MCP, comme documents.' },
+]
+
+/** Les sources que l'on peut choisir : une carte chacune. */
+export function cartesDeSource (sources: readonly Source[] = SOURCES): Source[] {
+  return sources.filter(s => s.disponible)
+}
+
+/** « Bientôt : Légifrance, Drive, … » — les autres sources, sans promesse de date. Vide s'il n'y en a pas. */
+export function ligneBientot (sources: readonly Source[] = SOURCES): string {
+  const autres = sources.filter(s => !s.disponible).map(s => s.court)
+  return autres.length ? `Bientôt : ${autres.join(', ')}.` : ''
+}
+
+/**
+ * Les réglages avancés de l'étape 2 et leur valeur par défaut. Le type de collection (profil)
+ *  dépend de la source : un dossier est d'emblée un corpus de plusieurs documents.
+ */
+export interface ReglagesAvances {
+  profil: string
+  sensitivity: string
+  graph_enabled: boolean
+  ai_summary_enabled: boolean
+  /** L'identifiant a été modifié à la main (il ne suit plus le titre). */
+  identifiant_manuel: boolean
+}
+
+export const REGLAGES_AVANCES_DEFAUT: ReglagesAvances = {
+  profil: 'generique',
+  sensitivity: 'public',
+  graph_enabled: false,
+  ai_summary_enabled: false,
+  identifiant_manuel: false,
+}
+
+const TIRETS_FINAUX = /-+$/
+const PROFIL_PAR_SOURCE: Record<string, string> = { directory: 'corpus', drive: 'corpus', nextcloud: 'corpus', resana: 'corpus', legifrance: 'juridique' }
+
+export function reglagesAvancesDefaut (source: string): ReglagesAvances {
+  return { ...REGLAGES_AVANCES_DEFAUT, profil: PROFIL_PAR_SOURCE[source] || REGLAGES_AVANCES_DEFAUT.profil }
+}
+
+/** Les champs du formulaire rangés dans le repli « Réglages avancés ». */
+export const CHAMPS_AVANCES = ['profil', 'sensitivity', 'graph_enabled', 'ai_summary_enabled', 'name'] as const
+
+/**
+ * Le repli « Réglages avancés (facultatif) » reste-t-il replié ? Oui aux valeurs par défaut ; non
+ * dès qu'une valeur en diffère (on ne cache pas un choix fait), ou qu'un de ses champs porte une
+ * erreur (on ne cache pas ce qui bloque).
+ */
+export function replierReglagesAvances (
+  form: Partial<ReglagesAvances>,
+  erreurs: Partial<Record<string, string | null | undefined>>,
+  defaut: ReglagesAvances = REGLAGES_AVANCES_DEFAUT,
+): boolean {
+  if (CHAMPS_AVANCES.some(c => !!erreurs[c])) {
+    return false
+  }
+  return (Object.keys(defaut) as (keyof ReglagesAvances)[]).every(k => form[k] === undefined || form[k] === defaut[k])
+}
+
+/**
+ * L'identifiant proposé d'après le titre ; s'il est pris, le premier suffixe libre (« -2 », « -3 »…),
+ * en raccourcissant la base pour rester dans la longueur permise. Rend '' si le titre ne donne rien
+ * d'acceptable.
+ */
+export function identifiantPropose (titre: string, pris: ReadonlySet<string> | readonly string[], regles: ReglesNommage = REGLES_PAR_DEFAUT): string {
+  const dejaPris = pris instanceof Set ? pris : new Set(pris as readonly string[])
+  const base = deriverIdentifiant(titre, regles.max, regles.prefixe_impose || '')
+  if (!base) {
+    return ''
+  }
+  const acceptable = (x: string) => !motifRefus(x, regles) && !dejaPris.has(x)
+  if (acceptable(base)) {
+    return base
+  }
+  for (let n = 2; n < 100; n++) {
+    const suffixe = `-${n}`
+    const racine = base.slice(0, regles.max - suffixe.length).replace(TIRETS_FINAUX, '')
+    const candidat = `${racine}${suffixe}`
+    if (acceptable(candidat)) {
+      return candidat
+    }
+  }
+  return ''
+}
