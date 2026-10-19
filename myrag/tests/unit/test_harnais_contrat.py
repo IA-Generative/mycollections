@@ -239,7 +239,9 @@ def test_la_projection_rend_la_forme_exacte_de_la_recherche_v1():
         "partagee": {"name": "partagee", "titre": "Méthodes de l'équipe", "scope": "group", "scope_groups": ["/g/mirai-beta-testeurs"], "created_by": "bob"},
         "mienne": {"name": "mienne", "titre": "Mes notes", "scope": "private", "scope_groups": [], "created_by": "alice"},
     }
-    docs = [
+    from app.services.openrag_client import DocumentRecherche
+
+    bruts = [
         _doc(
             "partagee",
             "methodes-2024",
@@ -253,13 +255,14 @@ def test_la_projection_rend_la_forme_exacte_de_la_recherche_v1():
         _doc("mienne", "notes-budget", 201, "Notes : budget prévisionnel, puis budget réalisé.", relevance_score=0.75, page=2),
         *[_doc("mienne", "long", 300 + i, f"passage {i} sur le budget", relevance_score=0.5 - i / 100) for i in range(5)],
     ]
+    docs = [DocumentRecherche.model_validate(d) for d in bruts]
     motif = recherche._motif("budget")
     attendu = recherche._construire(docs, fiches, user, motif, None, None)
 
     passages = []
     for i, d in enumerate(docs, start=1):
-        meta = d["metadata"]
-        _, fichier, _ = decouper_morceau(d["content"])
+        meta = d.metadata
+        _, fichier, _ = decouper_morceau(d.content)
         ident = recherche._ident_morceau(d, meta)
         passages.append(
             Passage(
@@ -272,7 +275,7 @@ def test_la_projection_rend_la_forme_exacte_de_la_recherche_v1():
                 titre=recherche._titre_du_document(meta, fichier),
                 date=recherche._date(meta),
                 page=recherche._page(meta),
-                texte=recherche._texte_brut(d["content"]),
+                texte=recherche._texte_brut(d.content),
                 url=recherche._lien(ident),
             )
         )

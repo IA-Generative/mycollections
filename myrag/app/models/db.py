@@ -757,6 +757,7 @@ class MesureResultat(Base):
     duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+
 # ─── Les assistants de recherche (ADR-0003) ──────────────────────────────────────
 # Une fiche d'assistant est une DONNÉE (app/harnais/contrat.py) : `assistants` porte le
 # brouillon éditable et `consignes` ses consignes, une ligne chacune ; chaque publication fige
