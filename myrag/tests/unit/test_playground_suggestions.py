@@ -20,7 +20,7 @@ def _suggestions(client, nom, fichiers=(), panne=False, passages=()):
             cls.return_value.partition_chunks = AsyncMock(side_effect=RuntimeError("OpenRAG absent"))
         else:
             cls.return_value.list_files = AsyncMock(return_value=list(fichiers))
-            cls.return_value.partition_chunks = AsyncMock(return_value=[MorceauOpenRAG(content=c) for c in passages])
+            cls.return_value.partition_chunks = AsyncMock(return_value=[MorceauOpenRAG(content=c, metadata=m) for c, m in passages])
         return client.get(f"/api/playground/{nom}/suggestions")
 
 
@@ -82,12 +82,18 @@ def test_lecture_requise(client, en_tant_que, creer_collection, nom):
 
 
 def test_un_intertitre_donne_une_question_lisible():
-    contenus = ["# Code de contrôle\n\nLe code est…", "Texte sans titre.", "## **Délais** :\nDeux mois.", "# Code de contrôle\nDoublon."]
-    assert questions_depuis_intertitres(contenus) == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le texte sur « Délais » ?"]
+    passages = [("# Code de contrôle\n\nLe code est…", None), ("Texte sans titre.", {}), ("## **Délais** :\nDeux mois.", None), ("# Code de contrôle\nDoublon.", None)]
+    assert questions_depuis_intertitres(passages) == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le texte sur « Délais » ?"]
+
+
+def test_le_titre_garde_par_le_decoupage_passe_d_abord():
+    """Le découpage par section range le titre en métadonnée ; le texte du passage ne le porte plus."""
+    passages = [("Le code est QUETZAL.", {"section_title": "Le code de contrôle"}), ("# Autre\nTexte", {"section_title": ""})]
+    assert questions_depuis_intertitres(passages) == ["Que dit le texte sur « Le code de contrôle » ?", "Que dit le texte sur « Autre » ?"]
 
 
 def test_les_intertitres_passent_avant_les_noms_de_fichiers(client, en_tant_que, creer_collection, nom):
     creer_collection(nom)
     en_tant_que(personne(3))
-    r = _suggestions(client, nom, _fichiers("section-le-code-de-contr-le.md"), passages=["## Code de contrôle\nLe code…"])
+    r = _suggestions(client, nom, _fichiers("section-le-code-de-contr-le.md"), passages=[("Le code…", {"section_title": "Code de contrôle"})])
     assert r.json()["questions"] == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le document « section le code de contr le » ?"]

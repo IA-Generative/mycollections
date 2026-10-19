@@ -240,16 +240,23 @@ _INTERTITRE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 _EMPHASE = re.compile(r"[*_`]+")
 
 
-def questions_depuis_intertitres(contenus: list[str], n: int = NB_SUGGESTIONS) -> list[str]:
-    """Une question par intertitre de passage (« ## Code de contrôle ») : le texte lui-même dit de
-    quoi il parle, mieux qu'un nom de fichier fabriqué par le découpage."""
+def _intertitre(contenu: str, metadonnees: dict | None) -> str:
+    """Le titre de section d'un passage : celui que le découpage a gardé en métadonnée
+    (`section_title`), sinon le premier intertitre Markdown du texte."""
+    titre = str((metadonnees or {}).get("section_title") or "")
+    if not titre:
+        m = _INTERTITRE.search(contenu or "")
+        titre = m.group(1) if m else ""
+    return " ".join(_EMPHASE.sub("", titre).split()).strip(" :.-")
+
+
+def questions_depuis_intertitres(passages: list[tuple[str, dict | None]], n: int = NB_SUGGESTIONS) -> list[str]:
+    """Une question par titre de section : le passage dit de quoi il parle, mieux qu'un nom de
+    fichier fabriqué par le découpage (qui perd les accents : « contr-le »)."""
     vus: set[str] = set()
     questions: list[str] = []
-    for contenu in contenus:
-        m = _INTERTITRE.search(contenu or "")
-        if not m:
-            continue
-        intertitre = " ".join(_EMPHASE.sub("", m.group(1)).split()).strip(" :.-")
+    for contenu, metadonnees in passages:
+        intertitre = _intertitre(contenu, metadonnees)
         if not 3 <= len(intertitre) <= 100 or intertitre.lower() in vus:
             continue
         vus.add(intertitre.lower())
@@ -313,7 +320,7 @@ async def suggestions(collection: str, user: CurrentUser = Depends(current_user)
             morceaux = await client.partition_chunks(collection, limit=50) or []
         except Exception:  # noqa: BLE001 — sans passages, on passe aux titres
             morceaux = []
-        completer(questions_depuis_intertitres([m.content for m in morceaux]))
+        completer(questions_depuis_intertitres([(m.content, m.metadata) for m in morceaux]))
     if len(questions) < NB_SUGGESTIONS:
         try:
             fichiers = await client.list_files(collection)
