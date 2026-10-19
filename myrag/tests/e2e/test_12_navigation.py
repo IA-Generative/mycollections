@@ -1,6 +1,7 @@
-"""La navigation sous drapeaux (ADR-0003, lot 0) : le menu affiché est celui que les capacités
-du serveur annoncent — drapeaux faux, exactement le menu d'avant le chantier ; une page sous
-drapeau faux est une 404 en français ; drapeau vrai, ses pages et son sous-menu existent.
+"""La navigation sous drapeaux (ADR-0003, amendée le 2026-10-19) : le menu affiché est celui que
+les capacités du serveur annoncent (Accueil · Catalogue · Mes collections[ & assistants] ·
+Entraide · Administration) ; une page sous drapeau faux est une 404 en français ; drapeau vrai,
+ses pages et son sous-menu existent.
 
 La règle attendue est recopiée de `frontend/utils/navigation.ts` (testée par Vitest) : la changer
 là, c'est la changer ici."""
@@ -11,15 +12,10 @@ import re
 
 
 def _attendues(capacites: dict, admin: bool) -> list[str]:
-    entrees = ["Accueil"]
-    if capacites.get("assistants") is True:
-        entrees.append("Assistants")
-    entrees.append("Catalogue")
-    if capacites.get("entraide") is True:
-        entrees.append("Réseau d'entraide")
-    elif capacites.get("demandes") is True:
-        entrees.append("Demandes de la communauté")
-    entrees.append("Soyez acteurs vous-mêmes")
+    entrees = ["Accueil", "Catalogue"]
+    entrees.append("Mes collections & assistants" if capacites.get("assistants") is True else "Mes collections")
+    if capacites.get("entraide") is True or capacites.get("demandes") is True:
+        entrees.append("Entraide")
     if admin:
         entrees.append("Administration")
     return entrees
@@ -36,8 +32,15 @@ def test_le_menu_est_celui_que_les_capacites_annoncent(session_testeur, captures
     page = session_testeur.aller("/")
     page.locator("nav.fr-nav .fr-nav__link").first.wait_for(state="visible", timeout=15_000)
     page.wait_for_timeout(1_000)
-    liens = [t.strip() for t in page.locator("nav.fr-nav > ul > li > a.fr-nav__link").all_inner_texts()]
+    # Le volet « Mes collections » est un bouton : son libellé, sans le compteur qui le suit.
+    liens = [re.sub(r"\s*\d+$", "", t.strip()) for t in page.locator("nav.fr-nav > ul > li > .fr-nav__link").all_inner_texts()]
     assert liens == _attendues(capacites, session_testeur.superadmin()), liens
+    entraide = page.locator("nav.fr-nav a.fr-nav__link", has_text="Entraide")
+    if entraide.count():
+        attendu = "/entraide" if capacites.get("entraide") is True else "/demandes"
+        assert entraide.first.get_attribute("href") == attendu
+        assert entraide.first.locator(".fr-icon-team-line").count() == 1
+    assert page.locator("footer a", has_text="Soyez acteurs vous-mêmes").count() == 1, "le guide est au pied de page"
     assert page.locator("nav.fr-nav a[aria-current=page]").all_inner_texts() == ["Accueil"]
     captures.prendre(page, "12-menu", mobile=False)
 
