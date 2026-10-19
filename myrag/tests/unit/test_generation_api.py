@@ -143,6 +143,39 @@ def test_run_complet_paires_compteurs_journal(client, collection):
     assert "generation.lancee" in types and "generation.terminee" in types
 
 
+def test_le_suivi_en_direct_ecrit_phase_et_compteurs(client, collection):
+    """Non-régression : le tick périodique (_suivre → maj_run) posait NULL sur des colonnes
+    non nulles (paires_obtenues… explicitement None dans _avancement) et échouait en silence :
+    phase et compteurs restaient figés jusqu'à la fin du run."""
+    pid = _persona(client, collection)
+    resultat = ResultatGeneration(etat="termine", paires=_paires(), morceaux_envoyes=3, noeuds_avec_proprietes=3)
+
+    def moteur_lent(morceaux, personas, taille, distribution, compteurs):
+        compteurs.poser_phase("generation")
+        compteurs.observer("x", None, 0.1)
+        time.sleep(2.0)
+        return resultat
+
+    with (
+        patch("app.routers.generation.corpus.fichiers_de", new=AsyncMock(return_value=[{"file_id": "f0"}])),
+        patch("app.generation.execution.lire_echantillon", new=AsyncMock(return_value=(_morceaux(), 3))),
+        patch("app.generation.execution.generer_dans_le_fil", new=moteur_lent),
+    ):
+        r = client.post(URL.format(collection) + "/runs", json={"personas": [pid], "taille": 3})
+        assert r.status_code == 202, r.text
+        run_id = r.json()["run"]["id"]
+        vus = None
+        for _ in range(150):
+            run = client.get(URL.format(collection) + f"/runs/{run_id}").json()["run"]
+            if run["actif"] and run["phase"] == "generation" and run["compteurs"]["appels_llm"] >= 1:
+                vus = run
+                break
+            if not run["actif"]:
+                break
+            time.sleep(0.02)
+        assert vus is not None, "la phase et les compteurs n'ont jamais été écrits pendant le run"
+
+
 def test_relecture(client, collection):
     run = _lancer(client, collection, [_persona(client, collection)])
     pid = client.get(URL.format(collection) + f"/runs/{run['id']}/paires").json()["paires"][1]["id"]

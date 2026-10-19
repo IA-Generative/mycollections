@@ -153,7 +153,7 @@ async def maj_run(ident: str, avancement: AvancementRun) -> None:
         g = await s.get(Generation, ident)
         if not g:
             return
-        for k, v in avancement.model_dump(exclude_unset=True).items():
+        for k, v in avancement.model_dump(exclude_unset=True, exclude_none=True).items():
             setattr(g, k, v)
         await s.commit()
 
