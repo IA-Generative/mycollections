@@ -79,7 +79,7 @@ def sans_reseau(monkeypatch):
     monkeypatch.setattr(reseau, "telecharger", _tele)
     with patch("app.services.amorces.ingestion.OpenRAGClient") as cls:
         cls.return_value.create_partition = AsyncMock(return_value={})
-        cls.return_value.upload_chunk = AsyncMock(return_value={"ok": True})
+        cls.return_value.upload_document = AsyncMock(return_value={"ok": True})
         fichiers["_client"] = cls.return_value  # type: ignore[assignment]
         yield fichiers
 
@@ -171,7 +171,10 @@ async def test_l_ingestion_est_idempotente(sans_reseau, creer_collection, nom):
     creer_collection(nom)
     docs = [ingestion.Document("a.md", "# A\n\ntexte a"), ingestion.Document("b.md", "# B\n\ntexte b")]
     b1 = await ingestion.ingerer(nom, docs)
-    assert b1.documents == 2 and b1.ignores == 0 and b1.morceaux >= 2
+    assert b1.documents == 2 and b1.ignores == 0 and b1.echecs == 0
+    # Chaque document part ENTIER vers OpenRAG, qui le découpe (ADR-0005).
+    envois = sans_reseau["_client"].upload_document.await_args_list
+    assert len(envois) == 2 and envois[0].args == (nom, "a.md", "# A\n\ntexte a".encode(), "text/markdown")
     b2 = await ingestion.ingerer(nom, docs)
     assert b2.documents == 0 and b2.ignores == 2
     b3 = await ingestion.ingerer(nom, [ingestion.Document("a.md", "# A\n\ntexte a modifié")])
@@ -190,51 +193,14 @@ async def test_le_connecteur_ssmsi_de_bout_en_bout(sans_reseau, creer_collection
     sans_reseau["https://x/dep.csv"] = SSMSI
     r = await ssmsi.importer(nom, {"parametres": {"url_departemental": "https://x/dep.csv"}})
     assert r["documents"] == 2 and r["lignes_importees"] == 4 and r["couverture"]["departements"] == 2
-    assert sans_reseau["_client"].upload_chunk.await_count >= 2
-
-
-# ─── Les morceaux sont situés (version 2 du découpage) ───────────────────────
-
-SSMSI_69 = "# Délinquance — département 69\n\nSource : SSMSI.\n\n## Cambriolages (unité : infraction) — département 69\n\n| année | nombre |\n|---|---|\n| 2024 | 1234 |"
-SSMSI_75 = SSMSI_69.replace("69", "75").replace("1234", "9876")
-
-
-class TestSituer:
-    def _morceaux(self, nom, texte):
-        from app.services.chunker import Sensitivity, Strategy, chunk_document
-
-        doc = ingestion.Document(nom, texte)
-        return ingestion.situer(doc, chunk_document(texte, strategy=Strategy.SECTION, sensitivity=Sensitivity.PUBLIC))
-
-    def test_le_texte_commence_par_le_titre_du_document_et_de_la_section(self):
-        m = self._morceaux("ssmsi-departement-69.md", SSMSI_69)
-        cambriolages = next(x for x in m if "1234" in x["content"])
-        assert cambriolages["content"].startswith("# Délinquance — département 69\n## Cambriolages (unité : infraction) — département 69\n\n| année")
-        entete = next(x for x in m if "Source : SSMSI." in x["content"])
-        assert entete["content"].startswith("# Délinquance — département 69\n\nSource"), "le titre n'est pas répété en section"
-
-    def test_deux_departements_ne_donnent_jamais_le_meme_morceau(self):
-        a = self._morceaux("ssmsi-departement-69.md", SSMSI_69)
-        b = self._morceaux("ssmsi-departement-75.md", SSMSI_75)
-        assert {x["filename"] for x in a}.isdisjoint({x["filename"] for x in b})
-        assert {x["content"] for x in a}.isdisjoint({x["content"] for x in b}), "plus de 409 de déduplication"
-        assert all(x["filename"].startswith("ssmsi-departement-69--") for x in a), "le nom du document n'est jamais tronqué"
-
-    def test_deux_sections_de_meme_titre_restent_distinctes(self):
-        texte = "# Guide\n\n## Le geste\n\nun\n\n## Le geste\n\ndeux"
-        m = self._morceaux("page.md", texte)
-        noms = [x["filename"] for x in m if "geste" in x["filename"]]
-        assert len(noms) == 2 and len(set(noms)) == 2
-
-    def test_sans_titre_de_document_le_nom_de_fichier_sert_de_titre(self):
-        m = self._morceaux("note.md", "Un texte sans en-tête.")
-        assert m[0]["content"].startswith("# note.md\n\n")
+    assert sans_reseau["_client"].upload_document.await_count >= 2
 
 
 @pytest.mark.asyncio
 async def test_un_ancien_decoupage_repasse_en_nouvelle_version(sans_reseau, creer_collection, nom):
-    """Les documents indexés avant la version 2 (strategy_used = « section ») se
-    réindexent au prochain import sans qu'on touche à leur texte."""
+    """Les documents indexés avant la délégation du découpage à OpenRAG (ADR-0005,
+    strategy_used = « section-v2 ») se réindexent au prochain import sans qu'on touche
+    à leur texte."""
     creer_collection(nom)
     docs = [ingestion.Document("a.md", "# A\n\ntexte a")]
     await ingestion.ingerer(nom, docs)
@@ -242,8 +208,8 @@ async def test_un_ancien_decoupage_repasse_en_nouvelle_version(sans_reseau, cree
     import sqlite3
 
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
-    assert con.execute("SELECT strategy_used FROM source_files WHERE collection_name=?", (nom,)).fetchone()[0] == "section-v2"
-    con.execute("UPDATE source_files SET strategy_used='section' WHERE collection_name=?", (nom,))
+    assert con.execute("SELECT strategy_used FROM source_files WHERE collection_name=?", (nom,)).fetchone()[0] == "openrag-v1"
+    con.execute("UPDATE source_files SET strategy_used='section-v2' WHERE collection_name=?", (nom,))
     con.commit()
     con.close()
     b = await ingestion.ingerer(nom, docs)

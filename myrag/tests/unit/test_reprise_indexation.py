@@ -1,9 +1,11 @@
 """Diagnostic d'octobre 2026, P2 : une indexation en cours était perdue au redémarrage du
 backend — la tâche de fond disparaissait, le travail restait « uploading » pour toujours.
-Écrit avant le correctif : au démarrage, les travaux interrompus reprennent depuis le fichier
-source conservé ; sans fichier, ils sont marqués « interrompu » avec ce qu'il faut faire. Un
-morceau déjà indexé à l'identique (OpenRAG répond 409) compte comme réussi."""
+Écrit avant le correctif : au démarrage, les travaux interrompus reprennent depuis le
+fichier source conservé, renvoyé entier à OpenRAG qui le découpe (ADR-0005) ; sans fichier,
+ils sont marqués « interrompu » avec ce qu'il faut faire. Un document déjà indexé
+(OpenRAG répond 409) compte comme réussi."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -23,15 +25,17 @@ async def test_un_travail_interrompu_reprend_au_demarrage(client, en_tant_que, c
 
     creer_collection(nom)
     en_tant_que(personne("createur"))
-    # Le dépôt s'arrête avant l'envoi des morceaux : la tâche de fond ne tourne pas (comme un pod
-    # arrêté juste après le découpage), et ne peut donc pas finir le travail en concurrence du test.
-    with patch("app.routers.ingest.OpenRAGClient") as cls, patch("app.routers.ingest._upload_chunks_background", new=AsyncMock(return_value=None)):
+    # Le dépôt s'arrête avant l'envoi à OpenRAG : la tâche de fond ne tourne pas (comme un pod
+    # arrêté juste après l'enregistrement de la source), et ne peut donc pas finir le travail
+    # en concurrence du test.
+    with patch("app.routers.ingest.OpenRAGClient") as cls, patch("app.routers.ingest._indexer_document_background", new=AsyncMock(return_value=None)):
         cls.return_value.create_partition = AsyncMock(return_value={})
         job_id = _deposer(client, nom).json()["job_id"]
     await update_job(job_id, status="uploading", uploaded_chunks=0, failed_chunks=0)  # comme après un arrêt
 
     with patch("app.routers.ingest.OpenRAGClient") as cls:
-        cls.return_value.upload_chunk = AsyncMock(return_value={})
+        cls.return_value.upload_document = AsyncMock(return_value=SimpleNamespace(task_id="t1"))
+        cls.return_value.task_state = AsyncMock(return_value=SimpleNamespace(task_state="COMPLETED"))
         repris = await ingest.reprendre_les_travaux_interrompus()
     assert job_id in repris
     job = await get_job(job_id)
@@ -45,7 +49,7 @@ async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant
     from app.services.job_store import create_job, get_job, update_job
 
     creer_collection(nom)
-    job = await create_job(nom, "disparu.md", "auto", "public")
+    job = await create_job(nom, "disparu.md", "openrag", "public")
     await update_job(job["job_id"], status="uploading")
     await ingest.reprendre_les_travaux_interrompus()
     apres = await get_job(job["job_id"])
@@ -54,15 +58,15 @@ async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant
 
 
 @pytest.mark.asyncio
-async def test_un_morceau_deja_indexe_compte_comme_reussi(client, en_tant_que, creer_collection, nom):
+async def test_un_document_deja_indexe_compte_comme_reussi(client, en_tant_que, creer_collection, nom):
     from app.routers import ingest
     from app.services.job_store import create_job, get_job
 
     creer_collection(nom)
-    job = await create_job(nom, "x.md", "auto", "public")
+    job = await create_job(nom, "x.md", "openrag", "public")
     deja = httpx.HTTPStatusError("409", request=httpx.Request("POST", "http://o"), response=httpx.Response(409))
     with patch("app.routers.ingest.OpenRAGClient") as cls:
-        cls.return_value.upload_chunk = AsyncMock(side_effect=deja)
-        await ingest._upload_chunks_background(job["job_id"], nom, [{"content": "a"}, {"content": "b"}])
+        cls.return_value.upload_document = AsyncMock(side_effect=deja)
+        await ingest._indexer_document_background(job["job_id"], nom, "x.md", b"texte entier", "public")
     j = await get_job(job["job_id"])
     assert j is not None and j["status"] == "done"

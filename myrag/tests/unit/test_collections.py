@@ -11,8 +11,9 @@ from tests.conftest import SUPERADMIN, personne
 
 
 def test_creer_puis_relire_une_collection(client, en_tant_que, creer_collection, nom):
-    cree = creer_collection(nom, description="Essai", strategy="auto", sensitivity="public")
+    cree = creer_collection(nom, description="Essai", sensitivity="public")
     assert cree["name"] == nom
+    assert cree["strategy"] == "openrag", "le découpage appartient à OpenRAG (ADR-0005)"
     assert cree["system_prompt"], "la création doit poser des consignes par défaut"
     en_tant_que(personne("createur"))
     r = client.get(f"/api/collections/{nom}")

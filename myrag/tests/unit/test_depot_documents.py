@@ -1,5 +1,6 @@
-"""PDF, Word, PowerPoint… : confiés tels quels à OpenRAG, qui les lit et les découpe ; le travail
-suit la tâche d'OpenRAG jusqu'au bout et dit vrai (réussi, ou en échec avec la raison)."""
+"""PDF, Word, PowerPoint… et le texte aussi : confiés tels quels à OpenRAG, qui les lit et
+les découpe (ADR-0005) ; le travail suit la tâche d'OpenRAG jusqu'au bout et dit vrai
+(réussi, ou en échec avec la raison)."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -19,8 +20,10 @@ DOCX = b"PK\x03\x04" + b"\x00" * 40
 @pytest.mark.parametrize(
     "nom,contenu,attendu",
     [
-        ("note.md", b"# Titre\n\nTexte.", "texte"),
+        ("note.md", b"# Titre\n\nTexte.", "document"),
+        ("note.txt", b"du texte", "document"),
         ("tableau.csv", b"a;b\n1;2", "texte"),
+        ("note.markdown", b"# Titre", "texte"),
         ("sans-extension", b"du texte", "texte"),
         ("rapport.PDF", PDF, "document"),
         ("note.docx", DOCX, "document"),
@@ -38,6 +41,8 @@ def test_nature_d_un_fichier(nom, contenu, attendu):
 
 def test_types_mime_annonces_a_openrag():
     assert formats.type_mime("a.pdf") == "application/pdf"
+    assert formats.type_mime("a.txt") == "text/plain"
+    assert formats.type_mime("dossier/b.MD") == "text/markdown"
     assert formats.type_mime("dossier/b.PPTX").endswith("presentationml.presentation")
 
 
@@ -62,7 +67,7 @@ def test_un_pdf_part_tel_quel_et_le_travail_suit_la_tache(client, en_tant_que, c
         cls.return_value = _client()
         r = client.post(f"/api/ingest/{nom}", files={"file": ("rapport.pdf", PDF, "application/pdf")})
         assert r.status_code == 200, r.text
-        assert r.json()["nature"] == "document" and r.json()["strategy"] == "openrag"
+        assert r.json()["strategy"] == "openrag" and r.json()["total_chunks"] is None
         import time
 
         for _ in range(100):
@@ -74,14 +79,38 @@ def test_un_pdf_part_tel_quel_et_le_travail_suit_la_tache(client, en_tant_que, c
     envoi.assert_awaited_once()
     partition, fichier, contenu, mime = envoi.await_args.args
     assert (partition, fichier, contenu, mime) == (nom, "rapport.pdf", PDF, "application/pdf")
+    assert envoi.await_args.kwargs["metadata"]["sensitivity"] == "public"  # ADR-0005 — transmise à OpenRAG
     assert job["status"] == "done" and job["uploaded_chunks"] == 1 and job["failed_chunks"] == 0
+
+
+def test_un_texte_part_entier_aussi_et_sa_sensibilite_voyage(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    with patch("app.routers.ingest.OpenRAGClient") as cls:
+        cls.return_value = _client()
+        r = client.post(
+            f"/api/ingest/{nom}",
+            data={"sensitivity": "internal"},
+            files={"file": ("note.md", b"# Titre\n\nTexte.", "text/markdown")},
+        )
+        assert r.status_code == 200, r.text
+        import time
+
+        for _ in range(100):
+            if cls.return_value.upload_document.await_count >= 1:
+                break
+            time.sleep(0.02)
+    envoi = cls.return_value.upload_document
+    assert envoi.await_args.args == (nom, "note.md", b"# Titre\n\nTexte.", "text/markdown")
+    assert envoi.await_args.kwargs["metadata"] == {"title": "note.md", "sensitivity": "internal"}
+    assert cls.return_value.upload_chunk.await_count == 0  # plus de découpage maison (ADR-0005)
 
 
 @pytest.mark.asyncio
 async def test_une_tache_en_echec_rend_le_travail_en_echec_avec_la_raison():
     job = await create_job("x", "a.pdf", "openrag", "public")
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(("RUNNING", "FAILED"), erreur="PDF chiffré")):
-        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
+        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF, "public")
     j = await get_job(job["job_id"])
     assert j is not None
     assert j["status"] == "done_with_errors" and "PDF chiffré" in j["error"]
@@ -93,7 +122,7 @@ async def test_un_document_deja_present_compte_comme_reussi():
     reponse = httpx.Response(409, request=httpx.Request("POST", "http://o"))
     envoi = AsyncMock(side_effect=httpx.HTTPStatusError("conflit", request=reponse.request, response=reponse))
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(envoi=envoi)):
-        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
+        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF, "public")
     j = await get_job(job["job_id"])
     assert j is not None and j["status"] == "done"
 
@@ -104,7 +133,7 @@ async def test_un_format_refuse_par_openrag_est_dit():
     reponse = httpx.Response(415, request=httpx.Request("POST", "http://o"))
     envoi = AsyncMock(side_effect=httpx.HTTPStatusError("refus", request=reponse.request, response=reponse))
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(envoi=envoi)):
-        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
+        await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF, "public")
     j = await get_job(job["job_id"])
     assert j is not None
     assert j["status"] == "done_with_errors" and "format ou taille" in j["error"]
@@ -118,26 +147,39 @@ def test_trop_gros(client, en_tant_que, creer_collection, nom, monkeypatch):
     assert r.status_code == 413
 
 
-def test_reindexer_une_collection_mixte(client, en_tant_que, creer_collection, nom):
+def test_reindexer_une_collection(client, en_tant_que, creer_collection, nom):
+    """Réindexer = maintenance (ADR-0005) : partition vidée, sources renvoyées telles
+    quelles, sensibilité reprise par fichier — sans paramètre de découpage."""
     creer_collection(nom)
     en_tant_que(personne("createur"))
     with patch("app.routers.ingest.OpenRAGClient") as cls:
         cls.return_value = _client(etats=["COMPLETED"] * 4)
-        cls.return_value.upload_chunk = AsyncMock(return_value={})
         cls.return_value.delete_partition = AsyncMock(return_value={})
         assert client.post(f"/api/ingest/{nom}", files={"file": ("a.pdf", PDF, "application/pdf")}).status_code == 200
-        assert client.post(f"/api/ingest/{nom}", files={"file": ("b.md", b"# B\n\nTexte.", "text/markdown")}).status_code == 200
-        r = client.post(f"/api/ingest/{nom}/reindex", params={"strategy": "section"})
+        assert (
+            client.post(
+                f"/api/ingest/{nom}",
+                data={"sensitivity": "internal"},
+                files={"file": ("b.md", b"# B\n\nTexte.", "text/markdown")},
+            ).status_code
+            == 200
+        )
+        r = client.post(f"/api/ingest/{nom}/reindex")
         assert r.status_code == 200, r.text
-        assert r.json()["files_reindexed"] == 2
+        assert r.json()["files_reindexed"] == 2 and "strategy" not in r.json()
         # Les envois partent en tâche de fond : on les attend tant que le faux client est en place.
         import time
 
         for _ in range(100):
-            if cls.return_value.upload_document.await_count >= 2:
+            if cls.return_value.upload_document.await_count >= 4:
                 break
             time.sleep(0.02)
-    assert cls.return_value.upload_document.await_count == 2  # le PDF, à chaque fois tel quel
+    assert cls.return_value.upload_document.await_count == 4  # chaque fichier, au dépôt puis à la réindexation
+    # Les tâches de fond ne garantissent pas l'ordre des envois : on vérifie l'appariement
+    # fichier ↔ sensibilité, qui doit être le même au dépôt et à la réindexation.
+    envois = {(a.args[1], str(a.kwargs["metadata"]["sensitivity"])) for a in cls.return_value.upload_document.await_args_list}
+    assert envois == {("a.pdf", "public"), ("b.md", "internal")}  # reprise par fichier à la réindexation
+    cls.return_value.delete_partition.assert_awaited_once()
 
 
 @pytest.mark.asyncio

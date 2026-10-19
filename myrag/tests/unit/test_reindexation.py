@@ -22,10 +22,10 @@ def test_redeposer_ou_reindexer_ne_duplique_ni_les_sources_ni_le_corpus(client, 
         cls.return_value.upload_chunk = AsyncMock(return_value={})
         assert _deposer(client, nom).status_code == 200
         assert _deposer(client, nom).status_code == 200
-        r = client.post(f"/api/ingest/{nom}/reindex?strategy=length")
+        r = client.post(f"/api/ingest/{nom}/reindex")
         assert r.status_code == 200, r.text
         assert r.json()["files_reindexed"] == 1
-        r = client.post(f"/api/ingest/{nom}/reindex?strategy=section")
+        r = client.post(f"/api/ingest/{nom}/reindex")
         assert r.status_code == 200
         cls.return_value.delete_partition.assert_awaited_with(nom)
     sources = _sources(client, nom)
@@ -48,6 +48,6 @@ def test_une_source_disparue_est_refusee_sans_rien_effacer(client, en_tant_que, 
 
         for f in (pathlib.Path(settings.data_dir) / "_sources" / nom).glob("*"):
             os.remove(f)
-        r = client.post(f"/api/ingest/{nom}/reindex?strategy=article")
+        r = client.post(f"/api/ingest/{nom}/reindex")
         assert r.status_code == 409
         cls.return_value.delete_partition.assert_not_awaited()

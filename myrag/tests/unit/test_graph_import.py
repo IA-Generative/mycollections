@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from app.auth import CurrentUser, current_user
 from app.services.graph_builder import GraphBuilder, GraphImportError, graph_from_import
-from app.services.openrag_client import FichierOpenRAG
 
 GESTIONNAIRE = CurrentUser(sub="g1", username="gest", groups=["/myrag/grimp-ceseda-admin"])
 LECTEUR = CurrentUser(sub="l1", username="lecteur", groups=["/myrag/grimp-autre-admin"])
@@ -91,6 +90,20 @@ def _create(app, client, name: str):
     assert r.status_code in (200, 409), r.text
 
 
+#: Deux articles dont l'un cite l'autre : de quoi construire un graphe (ADR-0005 — le
+#: découpage de structuration lit ce texte dans les sources conservées).
+CESEDA = "Article L423-1\n\nConjoint de Français.\n\nArticle L423-3\n\nVoir l'article L. 423-1."
+
+
+def _deposer(client, collection: str, filename: str, texte: str):
+    """Dépose une source locale (l'envoi à OpenRAG est neutralisé : le graphe ne lit que
+    les sources conservées, ADR-0005)."""
+    with patch("app.routers.ingest.OpenRAGClient") as cls, patch("app.routers.ingest._indexer_document_background", new=AsyncMock(return_value=None)):
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        r = client.post(f"/api/ingest/{collection}", files={"file": (filename, texte.encode(), "text/markdown")})
+    assert r.status_code == 200, r.text
+
+
 class TestImportEndpoint:
     def test_manager_imports_and_viewer_reads_it(self, app_client):
         app, client = app_client
@@ -143,10 +156,8 @@ class TestBuildAndSummarizeAreReservedToManagers:
         app, client = app_client
         _create(app, client, "grimp-ceseda")
         _as(app, LECTEUR)
-        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            r = client.post("/graph/grimp-ceseda/build")
+        r = client.post("/graph/grimp-ceseda/build")
         assert r.status_code == 403
-        mock_cls.assert_not_called()
 
     def test_non_manager_cannot_force_over_an_imported_graph(self, app_client, tmp_path):
         app, client = app_client
@@ -163,21 +174,15 @@ class TestBuildAndSummarizeAreReservedToManagers:
         _create(app, client, "grimp-ceseda")
         _as(app, GESTIONNAIRE)
         client.put("/graph/grimp-ceseda", json=GRAPHE)
-        fichiers = [{"file_id": "1", "filename": "Article-L423-3.md"}, {"file_id": "2", "filename": "Article-L423-1.md"}]
-        contenus = {"1": "Voir l'article L. 423-1.", "2": "Conjoint de Français."}
-        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            mock_cls.return_value.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers])
-            mock_cls.return_value.get_file_content = AsyncMock(side_effect=lambda p, f: contenus[f])
-            r = client.post("/graph/grimp-ceseda/build", params={"force": "true"})
+        _deposer(client, "grimp-ceseda", "ceseda.md", CESEDA)
+        r = client.post("/graph/grimp-ceseda/build", params={"force": "true"})
         assert r.status_code == 200, r.text
         assert r.json()["nodes"] == 2
 
     def test_superadmin_can_rebuild_a_partition_without_a_fiche(self, app_client):
         app, client = app_client
         _as(app, SUPERADMIN)
-        with patch("app.services.openrag_client.OpenRAGClient") as mock_cls:
-            mock_cls.return_value.list_files = AsyncMock(return_value=[])
-            r = client.post("/graph/grimp-sans-fiche/build")
+        r = client.post("/graph/grimp-sans-fiche/build")
         assert r.status_code == 422 and "Aucun article" in r.json()["detail"]
 
     def test_non_manager_cannot_summarize(self, app_client):
