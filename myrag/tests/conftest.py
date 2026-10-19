@@ -103,7 +103,7 @@ def capacites(monkeypatch):
     from app.services import capacites as module
 
     def _poser(**drapeaux):
-        valeur = {"demandes": True, "signalements": True, "seuil_chantier": 5, **drapeaux}
+        valeur = {"demandes": True, "signalements": True, "assistants": True, "entraide": True, "seuil_chantier": 5, **drapeaux}
         monkeypatch.setattr(module, "lire", lambda: dict(valeur))
         return valeur
 

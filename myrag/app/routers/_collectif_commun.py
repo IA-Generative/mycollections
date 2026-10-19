@@ -1,5 +1,5 @@
-"""Ce que partagent les routeurs du collectif : identité condensée, capacités,
-collection lisible, garant."""
+"""Ce que partagent les routeurs du collectif : collection lisible, garant, pagination. L'identité,
+l'administration et les capacités viennent de `_commun` (ré-exportées ici)."""
 
 from __future__ import annotations
 
@@ -7,44 +7,12 @@ from datetime import datetime
 
 from fastapi import Depends, HTTPException, Query
 
-from app.auth import CurrentUser, current_user
 from app.models.collectif import FicheCollection
-from app.services import access, capacites
+from app.routers._commun import Identite, capacite, exiger_superadmin, identite
+from app.services import access
 from app.services import collectif_store as store
-from app.services.pseudo import SelAbsent, condenser
 
-
-class Identite:
-    __slots__ = ("user", "hash", "superadmin")
-
-    def __init__(self, user: CurrentUser, hash_: str):
-        self.user = user
-        self.hash = hash_
-        self.superadmin = access.is_superadmin(user.groups)
-
-
-async def identite(user: CurrentUser = Depends(current_user)) -> Identite:
-    try:
-        return Identite(user, condenser(user.sub))
-    except SelAbsent:
-        raise HTTPException(status_code=503, detail="Le service n'est pas configuré pour le collectif (sel des identités absent)")
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Jeton sans identité exploitable")
-
-
-async def exiger_superadmin(moi: Identite = Depends(identite)) -> Identite:
-    """Dépendance des gestes d'administration : 403 pour tout autre que `/myrag/superadmin`."""
-    if not moi.superadmin:
-        raise HTTPException(status_code=403, detail="Geste réservé à l'administration")
-    return moi
-
-
-def capacite(nom: str):
-    async def _dep() -> None:
-        if (await capacites.lire_async()).get(nom) is not True:
-            raise HTTPException(status_code=404, detail=f"Fonction désactivée : « {nom} » n'est pas déclarée dans capacites.json")
-
-    return _dep
+__all__ = ["Identite", "capacite", "collection_lisible", "date_avant", "est_garant", "exiger_garant", "exiger_superadmin", "identite", "limite"]
 
 
 async def collection_lisible(name: str, moi: Identite = Depends(identite)) -> FicheCollection:

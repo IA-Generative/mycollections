@@ -3,8 +3,9 @@ import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
 
 describe('normaliserCapacites', () => {
   it('seul `true` active un drapeau, jamais une valeur « vraie »', () => {
-    expect(normaliserCapacites({ demandes: 'oui', signalements: 1, seuil_chantier: 3 })).toEqual({ demandes: false, signalements: false, seuil_chantier: 3 })
-    expect(normaliserCapacites({ demandes: true, signalements: true })).toEqual({ demandes: true, signalements: true, seuil_chantier: 5 })
+    expect(normaliserCapacites({ demandes: 'oui', signalements: 1, assistants: 'true', seuil_chantier: 3 })).toEqual({ ...CAPACITES_DEFAUT, seuil_chantier: 3 })
+    expect(normaliserCapacites({ demandes: true, signalements: true })).toEqual({ ...CAPACITES_DEFAUT, demandes: true, signalements: true })
+    expect(normaliserCapacites({ assistants: true, entraide: true })).toEqual({ ...CAPACITES_DEFAUT, assistants: true, entraide: true })
   })
   it('un seuil hors bornes ou non entier garde le défaut', () => {
     expect(normaliserCapacites({ seuil_chantier: 0 }).seuil_chantier).toBe(5)
@@ -18,7 +19,7 @@ describe('normaliserCapacites', () => {
     expect(normaliserCapacites(undefined)).toEqual(CAPACITES_DEFAUT)
   })
   it('un drapeau inconnu est ignoré', () => {
-    expect(normaliserCapacites({ assistants: true })).toEqual(CAPACITES_DEFAUT)
+    expect(normaliserCapacites({ inconnu: true })).toEqual(CAPACITES_DEFAUT)
   })
   it('ne modifie pas le repli reçu', () => {
     const repli = { ...CAPACITES_DEFAUT }

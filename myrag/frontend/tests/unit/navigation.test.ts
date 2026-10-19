@@ -29,7 +29,7 @@ describe('entreesPrincipales', () => {
     expect(entreesPrincipales(AVEC_DEMANDES, true).at(-1)).toEqual({ libelle: 'Administration', vers: '/admin' })
   })
   it('un drapeau inconnu ne change rien', () => {
-    expect(entreesPrincipales({ ...RIEN, assistants: true } as never, false)).toEqual(entreesPrincipales(RIEN, false))
+    expect(entreesPrincipales({ ...RIEN, inconnu: true } as never, false)).toEqual(entreesPrincipales(RIEN, false))
   })
 })
 
