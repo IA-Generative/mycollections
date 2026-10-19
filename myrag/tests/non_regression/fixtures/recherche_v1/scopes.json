@@ -1,0 +1,22 @@
+{
+  "scopes": [
+    {
+      "id": "{mienne}",
+      "title": "Mes notes",
+      "group": "mine",
+      "right": "owner"
+    },
+    {
+      "id": "{partagee}",
+      "title": "Méthodes de l'équipe",
+      "group": "shared",
+      "right": "reader"
+    },
+    {
+      "id": "{ouverte}",
+      "title": "Textes ouverts",
+      "group": "public",
+      "right": "public"
+    }
+  ]
+}

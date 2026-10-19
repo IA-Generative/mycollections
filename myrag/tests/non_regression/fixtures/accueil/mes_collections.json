@@ -1,0 +1,20 @@
+{
+  "actives": "int",
+  "collections": [
+    {
+      "categorie": "null",
+      "categorie_libelle": "null",
+      "etat_collab": "str",
+      "name": "str",
+      "publiee": "bool",
+      "questions": "int",
+      "signalements_ouverts": "int",
+      "titre": "str"
+    }
+  ],
+  "fenetre_jours": "int",
+  "mes_essais": "int",
+  "personnes": "null",
+  "questions": "int",
+  "signalements_ouverts": "int"
+}
