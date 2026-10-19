@@ -253,6 +253,8 @@ onMounted(async () => {
 .etape4-essai__resultat { margin-top: .5rem; display: flex; flex-direction: column; gap: .25rem; }
 .etape4-reponse { background: var(--background-alt-grey); padding: .75rem; font-size: .875rem; max-height: 16rem; overflow-y: auto; }
 .etape4-reponse :deep(p), .etape4-reponse :deep(ul), .etape4-reponse :deep(ol) { margin: 0 0 .5rem; }
+/* Les intertitres d'une réponse restent du texte de réponse, pas des titres de page. */
+.etape4-reponse :deep(h1), .etape4-reponse :deep(h2), .etape4-reponse :deep(h3), .etape4-reponse :deep(h4), .etape4-reponse :deep(h5), .etape4-reponse :deep(h6) { font-size: 1rem; line-height: 1.5rem; margin: .5rem 0 .25rem; }
 .etape4-bilan { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; margin-top: 1rem; }
 .etape4-discret { color: var(--text-mention-grey); }
 </style>

@@ -4,8 +4,8 @@ collection ou des titres de ses documents — jamais d'une question posée par u
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from app.routers.playground import questions_depuis_documents, titre_lisible
-from app.services.openrag_client import FichierOpenRAG
+from app.routers.playground import questions_depuis_documents, questions_depuis_intertitres, titre_lisible
+from app.services.openrag_client import FichierOpenRAG, MorceauOpenRAG
 from tests.conftest import personne
 
 
@@ -13,12 +13,14 @@ def _fichiers(*noms):
     return [FichierOpenRAG(file_id=f"f{i}", filename=n) for i, n in enumerate(noms)]
 
 
-def _suggestions(client, nom, fichiers=(), panne=False):
+def _suggestions(client, nom, fichiers=(), panne=False, passages=()):
     with patch("app.routers.playground.OpenRAGClient") as cls:
         if panne:
             cls.return_value.list_files = AsyncMock(side_effect=RuntimeError("OpenRAG absent"))
+            cls.return_value.partition_chunks = AsyncMock(side_effect=RuntimeError("OpenRAG absent"))
         else:
             cls.return_value.list_files = AsyncMock(return_value=list(fichiers))
+            cls.return_value.partition_chunks = AsyncMock(return_value=[MorceauOpenRAG(content=c) for c in passages])
         return client.get(f"/api/playground/{nom}/suggestions")
 
 
@@ -77,3 +79,15 @@ def test_lecture_requise(client, en_tant_que, creer_collection, nom):
     creer_collection(nom)
     en_tant_que(CurrentUser(sub="etranger-suggestions", username="e", groups=["/g/ailleurs"]))
     assert _suggestions(client, nom).status_code == 404
+
+
+def test_un_intertitre_donne_une_question_lisible():
+    contenus = ["# Code de contrôle\n\nLe code est…", "Texte sans titre.", "## **Délais** :\nDeux mois.", "# Code de contrôle\nDoublon."]
+    assert questions_depuis_intertitres(contenus) == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le texte sur « Délais » ?"]
+
+
+def test_les_intertitres_passent_avant_les_noms_de_fichiers(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne(3))
+    r = _suggestions(client, nom, _fichiers("section-le-code-de-contr-le.md"), passages=["## Code de contrôle\nLe code…"])
+    assert r.json()["questions"] == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le document « section le code de contr le » ?"]
