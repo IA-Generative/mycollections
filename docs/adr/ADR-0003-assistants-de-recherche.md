@@ -64,10 +64,16 @@ Faits du code qui ont pesé :
 - **Vocabulaire** : « assistant » = assistant de recherche ; « le socle » = Open WebUI
   (`fiche_socle.py`) ; « agent » reste le mot du contrat Mes agents. « Harnais » ne paraît
   jamais dans l'interface.
-- **Architecture d'information cible** : menu Accueil · Collections · Assistants · Réseau
-  d'entraide · Catalogue · Guide ; collection : Vue d'ensemble · Documents · Qualité ·
-  Publication ; assistant : Sources · Consignes · Réponses fiables · Qualité · Publication · Bac
-  à sable. Le lot 0 pose les entrées sous drapeau ; le lot D applique le reste.
+- **Architecture d'information cible** (amendée le 2026-10-19, refonte ergonomique) : menu
+  Accueil · Catalogue · Mes collections & assistants · Entraide · Administration (pour qui en a
+  le droit). « Mes collections & assistants » est un volet (celles que je gère, Créer, Tout voir) ;
+  « & assistants » ne paraît que si le drapeau `assistants` est vrai. « Entraide » (icône
+  `fr-icon-team-line`) mène au réseau d'entraide si `entraide` est vrai, sinon aux demandes de la
+  communauté si `demandes` l'est, sinon n'existe pas. « Soyez acteurs vous-mêmes » (le guide) passe
+  en pied de page. Collection : Vue d'ensemble · Documents · Qualité · Publication ; assistant :
+  Sources · Consignes · Réponses fiables · Qualité · Publication · Bac à sable. Le lot 0 pose les
+  entrées sous drapeau ; le lot D applique le reste. *Remplace* : Accueil · Collections ·
+  Assistants · Réseau d'entraide · Catalogue · Guide.
 
 Lots : 0 socle ; A harnais (exécution, banc, règles, fiables, LLM, éligibilité, MCP et OpenAI) ;
 B interface des assistants ; C socle et fenêtre embarquée ; D accueil et menus ; E étape 4 de
