@@ -11,11 +11,6 @@ import re
 from tests.e2e.conftest import DOCUMENT_TEMOIN, QUESTION_TEMOIN, TEMOIN, attendre
 
 
-def _suivant(page):
-    """Le bouton « Suivant → » des étapes 4 et 5 (contenu inchangé par la refonte)."""
-    page.get_by_text(re.compile(r"^\s*Suivant\s*→\s*$")).last.click()
-
-
 def _etape_suivante(page):
     page.locator(".etape__actions").get_by_role("button", name="Étape suivante").click()
 
@@ -85,9 +80,12 @@ def test_etape_3_deposer_sans_attendre_l_indexation(session_testeur, collection_
     page.wait_for_url(re.compile(r"/admin/create/step-4"), timeout=30_000)
 
 
-def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, collection_essai, captures):
+def test_etape_4_test_technique(session_testeur, collection_essai, captures):
+    """L'étape 4 est un test technique (lot E) : une question, sa réponse et ses passages, un verdict
+    simple ; la question entre au jeu « à relire » ; l'étape tient dans un écran de portable."""
     page = session_testeur.page
     assert "Étape 4 sur 5" in _stepper(page)
+    assert page.locator("h1").first.inner_text().strip() == "Vérifiez que la collection répond"
 
     def indexation_terminee():
         reponse = session_testeur.get(f"/api/ingest/jobs?collection={collection_essai}")
@@ -96,22 +94,33 @@ def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, collection_
 
     travail = attendre(indexation_terminee, delai=180, motif="indexation terminée")
     assert not travail.get("failed_chunks"), f"morceaux refusés : {travail}"
-    # Le jeu de questions : une question saisie, avec sa réponse de référence, entre validée.
-    page.get_by_role("button", name="Ajouter une question").click()
-    champs = page.locator(".jeu__panneau textarea")
-    champs.nth(0).fill(QUESTION_TEMOIN)
-    champs.nth(1).fill(TEMOIN)
-    page.get_by_role("button", name=re.compile(r"Ajouter au jeu")).click()
-    attendre(lambda: "Question ajoutée au jeu" in session_testeur.texte(), delai=30, motif="la question ajoutée au jeu")
-    assert "Mesurer avec 1 question validée" in session_testeur.texte(), "la question saisie doit être mesurable"
-    captures.prendre(page, "05-creation-4-jeu", mobile=False)
-    # Une question libre, posée tout de suite à la collection.
-    page.get_by_text("Poser une question libre à la collection").click()
-    page.locator("#etape4-question").fill(QUESTION_TEMOIN)
-    page.get_by_role("button", name=re.compile(r"^\s*Poser la question\s*$")).click()
-    attendre(lambda: TEMOIN in page.locator(".etape4__reponse").inner_text(), delai=180, motif=f"le témoin « {TEMOIN} » dans la réponse de l'étape 4")
-    captures.prendre(page, "05-creation-4-reponse", mobile=False)
-    _suivant(page)
+
+    # Du stepper au bouton « Continuer », l'étape tient dans un écran de portable (en-tête passé).
+    taille = page.viewport_size
+    page.set_viewport_size({"width": 1280, "height": 800})
+    try:
+        haut = page.locator(".fr-stepper").bounding_box()
+        bas = page.get_by_role("link", name="Continuer vers la publication").bounding_box()
+        assert haut and bas and bas["y"] + bas["height"] - haut["y"] <= 800, (haut, bas)
+    finally:
+        page.set_viewport_size(taille)
+
+    page.locator("#etape4-q0").fill(QUESTION_TEMOIN)
+    page.locator(".etape4-essai").first.get_by_role("button", name="Poser").click()
+    verdict = page.locator(".etape4-essai").first.locator(".fr-badge")
+    verdict.wait_for(state="visible", timeout=180_000)
+    assert verdict.inner_text().strip().lower() == "la collection répond", verdict.inner_text()
+    page.locator(".etape4-essai").first.get_by_text("Voir la réponse et ses passages").click()
+    attendre(lambda: TEMOIN in page.locator(".etape4-reponse").first.inner_text(), delai=30, motif=f"le témoin « {TEMOIN} » dans la réponse")
+    captures.prendre(page, "05-creation-4-test-technique", mobile=False)
+
+    # La question posée est au jeu, « à relire ».
+    def au_jeu():
+        r = session_testeur.get(f"/api/collections/{collection_essai}/qualite/questions?relecture=brut")
+        return any(q.get("question") == QUESTION_TEMOIN for q in (r.json() or {}).get("questions", [])) if r.status == 200 else False
+
+    attendre(au_jeu, delai=30, motif="la question du test au jeu, à relire")
+    page.get_by_role("link", name="Continuer vers la publication").click()
     page.wait_for_url(re.compile(r"/admin/create/step-5"), timeout=30_000)
 
 
