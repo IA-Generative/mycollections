@@ -126,3 +126,48 @@ export function identifiantPropose (titre: string, pris: ReadonlySet<string> | r
   }
   return ''
 }
+
+// ─── Étape 4 : le test technique ────────────────────────────────────────────
+
+/** Trois questions au plus : au-delà, c'est le travail de la page Qualité. */
+export const NB_QUESTIONS_TEST = 3
+
+/** Les questions proposées par le serveur, nettoyées : sans vide ni doublon, trois au plus. */
+export function questionsSuggerees (brut: unknown): string[] {
+  const liste = Array.isArray((brut as { questions?: unknown })?.questions) ? (brut as { questions: unknown[] }).questions : []
+  const propres = liste.filter((q): q is string => typeof q === 'string').map(q => q.trim()).filter(q => q.length >= 3)
+  return [...new Set(propres)].slice(0, NB_QUESTIONS_TEST)
+}
+
+export type CleVerdict = 'repond' | 'ne_repond_pas'
+
+export interface VerdictTechnique { cle: CleVerdict, libelle: string, aide?: string }
+
+const REFUS = /je ne (?:sais|trouve|dispose)|aucune information|pas d'information|ne contiennent? pas|ne (?:me )?permet(?:tent)? pas de r[ée]pondre/i
+
+/**
+ * Le verdict simple de l'étape 4 : la collection « répond » si elle rend un texte, appuyé sur au
+ * moins un passage, qui n'est pas un refus. Pas de juge, pas de note : c'est un test technique
+ * (le document est-il lu, découpé, retrouvé ?) ; la qualité se mesure ensuite dans la page Qualité.
+ */
+export function verdictTechnique (r: { response?: string, source_names?: string[], sources?: unknown[] } | null | undefined): VerdictTechnique {
+  const texte = (r?.response || '').trim()
+  const passages = r?.source_names?.length || r?.sources?.length || 0
+  if (texte && passages > 0 && !REFUS.test(texte)) {
+    return { cle: 'repond', libelle: 'La collection répond' }
+  }
+  return {
+    cle: 'ne_repond_pas',
+    libelle: 'La collection ne répond pas',
+    aide: passages ? 'Elle a trouvé des passages sans pouvoir répondre : la question sort peut-être de son contenu.' : 'Aucun passage trouvé : l\'indexation est peut-être encore en cours, réessayez dans une minute.',
+  }
+}
+
+/**
+ * Le corps qui fait entrer une question posée au test dans le jeu de questions, « à relire » :
+ *  sans réponse de référence (celle de la collection n'en est pas une). Rien si elle est trop courte.
+ */
+export function chargeAuJeu (question: string): { question: string, relecture: 'brut' } | null {
+  const q = (question || '').trim()
+  return q.length >= 3 ? { question: q, relecture: 'brut' } : null
+}
