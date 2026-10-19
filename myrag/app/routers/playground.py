@@ -205,3 +205,85 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest, user: Cur
         "fallback_used": rep.fallback_used,
         "repli_recherche": rep.repli == "recherche",
     }
+
+
+# ─── Étape 4 de l'assistant de création : le test technique ──────────────────────────────────
+
+#: Trois questions suffisent à voir si la collection répond ; au-delà, c'est la page Qualité.
+NB_SUGGESTIONS = 3
+_EXTENSION = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_SEPARATEURS = re.compile(r"[-_]+")
+
+
+def titre_lisible(titre: str) -> str:
+    """« circulaire-peines_2026.pdf » → « circulaire peines 2026 » : un nom de fichier qui se lit."""
+    t = _SEPARATEURS.sub(" ", _EXTENSION.sub("", (titre or "").strip())).strip()
+    return " ".join(t.split())
+
+
+def questions_depuis_documents(titres: list[str], n: int = NB_SUGGESTIONS) -> list[str]:
+    """Des questions qui ne supposent rien du contenu : une par document, d'après son titre."""
+    vues: set[str] = set()
+    questions: list[str] = []
+    for brut in titres:
+        t = titre_lisible(brut)
+        if len(t) < 3 or t.lower() in vues:
+            continue
+        vues.add(t.lower())
+        questions.append(f"Que dit le document « {t[:100]} » ?")
+        if len(questions) >= n:
+            break
+    return questions
+
+
+async def _questions_du_jeu(collection: str, n: int) -> list[str]:
+    """Les questions du jeu de la collection — jamais celles d'un usager (origine « avis »)."""
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.db import PaireQA
+
+    async with async_session() as session:
+        lignes = (
+            (
+                await session.execute(
+                    select(PaireQA.question)
+                    .where(
+                        PaireQA.collection_name == collection,
+                        PaireQA.origine != "avis",
+                        PaireQA.hors_sujet.is_(False),
+                        PaireQA.relecture != "rejete",
+                    )
+                    .limit(50)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    propres = [q.strip() for q in lignes if q and 3 <= len(q.strip()) <= 160]
+    return list(dict.fromkeys(propres))[:n]
+
+
+@router.get("/{collection}/suggestions")
+async def suggestions(collection: str, user: CurrentUser = Depends(current_user)):
+    """Trois questions pour le test technique de l'étape 4 : d'abord celles du jeu de la collection
+    (hors questions d'usagers), puis, à défaut, une par document d'après son titre. Lecture requise.
+    OpenRAG injoignable : on rend ce qu'on a, la personne tape sa question."""
+    from app.routers.publication import _fiche_pour
+    from app.services import corpus
+
+    await _fiche_pour(collection, user, ecrire=False)
+    questions = await _questions_du_jeu(collection, NB_SUGGESTIONS)
+    origine = "jeu" if questions else "documents"
+    if len(questions) < NB_SUGGESTIONS:
+        try:
+            fichiers = await OpenRAGClient(timeout=10.0).list_files(collection)
+        except Exception:  # noqa: BLE001 — sans liste de documents, pas de suggestion de plus
+            fichiers = []
+        titres = [corpus.resumer_fichier(f)["titre"] for f in fichiers]
+        for q in questions_depuis_documents(titres, NB_SUGGESTIONS):
+            if len(questions) >= NB_SUGGESTIONS:
+                break
+            if q not in questions:
+                questions.append(q)
+    return {"questions": questions, "origine": origine if questions else None}
