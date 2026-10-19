@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
 
 def test_l_accueil_dit_quoi_faire(session_testeur, captures):
     page = session_testeur.aller("/")
@@ -33,7 +31,7 @@ def test_l_exemple_de_l_accueil_ouvre_le_bac_a_sable_prerempli(session_testeur, 
 
 def test_le_catalogue_liste_les_collections(session_testeur, collection_publiee, captures):
     page = session_testeur.aller("/admin/catalog")
-    assert "Catalogue des collections existantes" in page.locator("h1").first.inner_text()
+    assert page.locator("h1").first.inner_text().strip() == "Catalogue des collections"
     lignes = page.locator("tbody tr")
     lignes.first.wait_for(state="visible", timeout=30_000)
     assert lignes.count() >= 1
@@ -57,16 +55,48 @@ def test_la_recherche_du_catalogue_filtre(session_testeur, collection_publiee):
     assert "Aucune collection" in session_testeur.texte() or page.locator("tbody tr").count() == 0
 
 
-def test_un_lecteur_ne_voit_pas_les_gestes_d_administration_du_catalogue(session_testeur):
-    """Archiver et Purger sont des gestes de gestion : un simple lecteur ne doit pas les voir."""
-    if session_testeur.superadmin():
-        pytest.skip("le compte testeur est superadmin : le constat ne se joue qu'avec un lecteur")
+COLONNES = ["Collection", "État", "Créée le", "Mise à jour", "Avis des usagers", "Responsable"]
+
+
+def test_les_colonnes_du_catalogue_sont_celles_de_la_maquette(session_testeur, collection_publiee):
+    page = session_testeur.aller("/admin/catalog")
+    page.locator("thead th").first.wait_for(state="visible", timeout=30_000)
+    assert [t.strip() for t in page.locator("thead th").all_inner_texts()] == COLONNES
+    assert re.search(r"\d+ collections? · \d+ catégories?", session_testeur.texte())
+    assert "Une collection manque ? Contactez d'abord son responsable" in session_testeur.texte()
+
+
+def _taux_par_groupe(page) -> list[list[int | None]]:
+    groupes = []
+    for i in range(page.locator("tbody").count()):
+        lignes = page.locator("tbody").nth(i).locator("tr:has(td)")
+        taux = []
+        for j in range(lignes.count()):
+            cellule = lignes.nth(j).locator("td").nth(4).inner_text()
+            m = re.search(r"(\d+) %", cellule)
+            taux.append(int(m.group(1)) if m else None)
+        groupes.append(taux)
+    return groupes
+
+
+def test_le_tri_par_satisfaction_reordonne_chaque_categorie(session_testeur, collection_publiee):
     page = session_testeur.aller("/admin/catalog")
     page.locator("tbody tr").first.wait_for(state="visible", timeout=30_000)
-    archiver = page.get_by_role("button", name=re.compile(r"^(Archiver|Purger|Désarchiver)$")).count()
-    if archiver:
-        pytest.xfail("P0 ergonomie : « Archiver / Purger » sont offerts à tout lecteur du catalogue (catalog.vue) ; l'API refuse ensuite, mais le bouton promet")
-    assert archiver == 0
+    page.get_by_role("button", name="Tout déplier").click()
+    page.select_option("#tri", "satisfaction")
+    page.wait_for_timeout(500)
+    for taux in _taux_par_groupe(page):
+        notes = [t for t in taux if t is not None]
+        assert notes == sorted(notes, reverse=True), taux
+        assert taux == notes + [None] * (len(taux) - len(notes)), f"les collections sans avis passent en dernier : {taux}"
+
+
+def test_le_catalogue_n_offre_ni_archiver_ni_purger(session_testeur):
+    """Archiver et Purger vivent dans les Réglages d'une collection (refonte du 2026-10-19)."""
+    page = session_testeur.aller("/admin/catalog")
+    page.locator("tbody tr").first.wait_for(state="visible", timeout=30_000)
+    assert page.get_by_role("button", name=re.compile(r"^(Archiver|Purger|Désarchiver)$")).count() == 0
+    assert page.get_by_role("link", name=re.compile("Créer une nouvelle collection", re.I)).count() == 0
 
 
 def test_la_fiche_d_une_collection_se_lit(session_testeur, collection_publiee, captures):
