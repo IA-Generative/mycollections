@@ -102,6 +102,7 @@ const sources = [
     refresh: true,
     strategy: 'auto',
     prompt_template: 'multi_thematique',
+    soon: true,
   },
   {
     key: 'nextcloud',

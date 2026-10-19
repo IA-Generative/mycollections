@@ -45,7 +45,7 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
 - **Le collectif** : quand une donnée manque, on la **demande** ; une demande qui rassemble assez de collègues et un garant devient un chantier, amorcé depuis ce qui existe (open data, Légifrance, fichiers du service), vérifié, puis publié. Modèle, états et routes → [docs/collectif.md](docs/collectif.md) ; le guide en six étapes est servi par l'application (`/guide`, sources dans [myrag/app/guide/](myrag/app/guide/)).
 - **Wizard 5 étapes** de création d'une collection : source, métadonnées, ingestion, évaluation, publication.
 - **Connecteurs de source** : fichiers locaux (PDF/MD/DOCX…), URL distante, Légifrance (API PISTE), **Drive (Suite Numérique)** — indexation à la demande d'un dossier Drive partagé.
-- **Chunking intelligent** (4 stratégies : auto, article, chunk, directory) avec stockage du fichier source sur PVC pour permettre la réindexation.
+- **Chunking intelligent** (4 stratégies : article, section, qr, longueur — et `auto` qui détecte) avec stockage du fichier source sur PVC pour permettre la réindexation.
 - **Archivage / purge réversible** d'une collection : archiver = dépublier OWUI + cacher du catalog (data conservée). Purger = hard-delete (OpenRAG partition + fichiers + DB en cascade). Modale de confirmation stricte avec re-saisie du nom.
 - **Publication vers Open WebUI** : la collection devient un modèle `openrag-<nom>` utilisable comme outil ou alias dans OWUI, avec visibilité par groupe Keycloak.
 - **Feedback OWUI** : ingestion des retours utilisateurs (👍/👎) via `POST /api/feedback/ingest`, review/promote vers `QRCache` (réponses curées servies directement) ou vers un `EvalDataset`. Un service de **pull automatique** depuis la DB OWUI ([myrag/app/services/owui_feedback_sync.py](myrag/app/services/owui_feedback_sync.py), CronJob K8s toutes les 15 min) mirror les feedbacks sur modèles `openrag-*` côté MyRAG, idempotent sur `owui_message_id`.
@@ -180,7 +180,10 @@ Prérequis : Docker, [mise](https://mise.jdx.dev/) (pour uv + node). Pour le **s
 mise install     # uv + node 22
 # 1. Démarrer les dépendances
 cd ../owuicore-main      && docker compose up -d   # Keycloak + OWUI + Pipelines + Tika
-cd ../openrag            && docker compose --profile cpu up -d
+# OpenRAG : le compose vit dans infra/compose/ (y poser le .env d'OpenRAG).
+# -p openrag fixe les noms utilisés à l'étape 2 (réseau openrag_default,
+# container openrag-openrag-cpu-1).
+cd ../openrag/infra/compose && docker compose -p openrag --profile cpu up -d
 
 # 2. Démarrer MyRAG backend (image Docker locale)
 cd ../mycollections
@@ -215,16 +218,19 @@ n'ont pas de valeur par défaut ici : le **registre** d'images (`<REGISTRE>`), l
 (`<NAMESPACE>`) et les **adresses** publiques. OpenRAG peut tourner ailleurs que dans le
 cluster ; la base PostgreSQL `myrag` doit exister avant le premier démarrage.
 
-> **Les adresses du SSO sont cuites dans l'image du frontend** : Nuxt en mode statique lit
-> `KEYCLOAK_URL`, `KEYCLOAK_REALM` et `KEYCLOAK_CLIENT_ID` à la construction, pas au démarrage.
-> Les changer impose de reconstruire l'image — modifier un ConfigMap n'y fait rien.
+> **Les adresses du SSO et de l'API ne sont plus à cuire dans l'image** : l'interface lit
+> `/config.json` **au démarrage** (`frontend/utils/configExecution.ts` ; clés `myragApiUrl`,
+> `keycloakUrl`, `keycloakRealm`, `keycloakClientId`, `authEnabled`, `appTitle`). Montez ce
+> fichier dans `/usr/share/nginx/html/config.json` (le chart `deploy/helm/mycollections` le fait
+> depuis `frontend.config`) : la même image sert alors tous les environnements. Sans lui,
+> l'interface garde les valeurs de construction (build args, utiles en développement local
+> seulement).
 
 ```bash
 # Construire et pousser (TOUJOURS linux/amd64 : un Mac ARM64 produit sinon « exec format error »)
 TAG=$(git rev-parse --short HEAD)
 docker buildx build --platform linux/amd64 --push -t <REGISTRE>/myrag-backend:$TAG  myrag/
-docker buildx build --platform linux/amd64 --push -t <REGISTRE>/myrag-frontend:$TAG \
-  --build-arg KEYCLOAK_URL=https://<votre-sso> myrag/frontend/
+docker buildx build --platform linux/amd64 --push -t <REGISTRE>/myrag-frontend:$TAG myrag/frontend/
 
 # Appliquer (secret.yaml se remplit localement depuis secret.yaml.template, et ne se commite pas)
 cp myrag/k8s/secret.yaml.template myrag/k8s/secret.yaml  # puis éditer
