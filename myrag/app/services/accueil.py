@@ -29,6 +29,12 @@ FENETRE_JOURS = 30
 SEUIL_PERSONNES = 3
 
 
+def personnes_publiables(n: int) -> int | None:
+    """Le nombre de personnes, ou None sous le seuil : la règle de l'accueil ET de la fiche
+    d'une collection, écrite une fois."""
+    return n if n >= SEUIL_PERSONNES else None
+
+
 class _LigneAccueil(BaseModel):
     name: str
     titre: str
@@ -117,9 +123,33 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
         "actives": sum(1 for ligne in lignes if ligne.publiee),
         "questions": sum(ligne.questions for ligne in lignes),
         "mes_essais": les_miennes,
-        "personnes": personnes if personnes >= SEUIL_PERSONNES else None,
+        "personnes": personnes_publiables(personnes),
         "signalements_ouverts": sum(ligne.signalements_ouverts for ligne in lignes),
     }
+
+
+async def usage_collection(name: str) -> dict:
+    """Ce que les collègues ont fait d'UNE collection sur la fenêtre : nombre de questions, et de
+    personnes (sous le seuil : None). Les essais de son créateur et de son garant ne comptent
+    pas — le chiffre est le même quel que soit le lecteur. Jamais le texte d'une question."""
+    depuis = utcnow() - timedelta(days=FENETRE_JOURS)
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        exclus: set[str] = set()
+        if c is not None:
+            if c.garant_hash:
+                exclus.add(c.garant_hash)
+            if c.created_by:
+                try:
+                    exclus.add(condenser(c.created_by))
+                except Exception:  # noqa: BLE001 — sel absent : on ne sait pas exclure, on compte tout
+                    pass
+        filtre = [UsageQuestion.collection_name == name, UsageQuestion.cree_le >= depuis]
+        if exclus:
+            filtre.append(UsageQuestion.auteur_hash.is_(None) | UsageQuestion.auteur_hash.not_in(exclus))
+        questions = (await session.execute(select(func.count()).select_from(UsageQuestion).where(*filtre))).scalar() or 0
+        personnes = (await session.execute(select(func.count(func.distinct(UsageQuestion.auteur_hash))).where(*filtre, UsageQuestion.auteur_hash.is_not(None)))).scalar() or 0
+    return {"fenetre_jours": FENETRE_JOURS, "questions": questions, "personnes": personnes_publiables(personnes)}
 
 
 async def exemple(user_groups: list[str], user_sub: str, sauf: str | None = None) -> dict | None:

@@ -408,6 +408,17 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
     return collection
 
 
+@router.get("/{name}/usage")
+async def usage_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
+    """Ce que les collègues ont fait de la collection en `fenetre_jours` jours (fiche d'une
+    collection) : questions, personnes (None sous le seuil). Lecture requise, sinon 404."""
+    from app.routers.publication import _fiche_pour
+    from app.services import accueil
+
+    await _fiche_pour(name, user, ecrire=False)
+    return await accueil.usage_collection(name)
+
+
 @router.patch("/{name}")
 async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
