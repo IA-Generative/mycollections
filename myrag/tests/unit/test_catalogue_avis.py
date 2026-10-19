@@ -94,7 +94,7 @@ def test_un_depot_fait_avancer_la_mise_a_jour(client, en_tant_que, creer_collect
     avant = datetime.fromisoformat(_catalogue(client, personne(3), en_tant_que)[nom]["derniere_mise_a_jour"])
     assert utcnow() - avant > timedelta(days=9)
     _sql(
-        "INSERT INTO source_files (collection_name, filename, original_url, storage_path, file_size, content_type, checksum, strategy_used, chunks_produced, created_at) VALUES (?, 'note.md', '', '/x', 1, 'text/markdown', '', 'auto', 0, datetime('now'))",
+        "INSERT INTO source_files (collection_name, filename, original_url, storage_path, file_size, content_type, checksum, strategy_used, chunks_produced, sensitivity, created_at) VALUES (?, 'note.md', '', '/x', 1, 'text/markdown', '', 'openrag', 0, 'public', datetime('now'))",
         (nom,),
     )
     apres = datetime.fromisoformat(_catalogue(client, personne(3), en_tant_que)[nom]["derniere_mise_a_jour"])

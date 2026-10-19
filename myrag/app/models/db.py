@@ -44,7 +44,7 @@ class Collection(Base):
     titre: Mapped[str] = mapped_column(String(255), default="", server_default="")
     categorie: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     description: Mapped[str] = mapped_column(Text, default="")
-    strategy: Mapped[str] = mapped_column(String(50), default="auto")
+    strategy: Mapped[str] = mapped_column(String(50), default="openrag")
     sensitivity: Mapped[str] = mapped_column(String(50), default="public")
     prompt_template: Mapped[str] = mapped_column(String(100), default="generic")
     system_prompt: Mapped[str] = mapped_column(Text, default="")
@@ -180,7 +180,7 @@ class IngestJob(Base):
     collection_name: Mapped[str] = mapped_column(String(255), index=True)
     filename: Mapped[str] = mapped_column(String(500), default="")
     source_path: Mapped[str] = mapped_column(Text, default="")
-    strategy: Mapped[str] = mapped_column(String(50), default="auto")
+    strategy: Mapped[str] = mapped_column(String(50), default="openrag")
     sensitivity: Mapped[str] = mapped_column(String(50), default="public")
     status: Mapped[str] = mapped_column(String(50), default="pending")
     total_chunks: Mapped[int] = mapped_column(Integer, default=0)
@@ -303,6 +303,7 @@ class SourceFile(Base):
     checksum: Mapped[str] = mapped_column(String(64), default="")  # SHA-256
     strategy_used: Mapped[str] = mapped_column(String(50), default="auto")
     chunks_produced: Mapped[int] = mapped_column(Integer, default=0)
+    sensitivity: Mapped[str] = mapped_column(String(20), default="public")  # ADR-0005 — reprise à la réindexation
     last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -316,6 +317,7 @@ class SourceFile(Base):
             "content_type": self.content_type,
             "strategy_used": self.strategy_used,
             "chunks_produced": self.chunks_produced,
+            "sensitivity": self.sensitivity,
             "last_indexed_at": self.last_indexed_at.isoformat() if self.last_indexed_at else "",
             "created_at": self.created_at.isoformat() if self.created_at else "",
         }

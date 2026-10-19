@@ -13,7 +13,7 @@ from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.routers._droits import gerer_la_collection, lire_la_collection
 from app.security_utils import assert_public_http_url, ssrf_request_guard
-from app.services.chunker import Sensitivity, Strategy
+from app.services.chunker import Sensitivity
 from app.services.collectif_store import consigner
 from app.services.legifrance_client import LegifranceClient, parse_legifrance_url
 
@@ -345,16 +345,15 @@ async def _ingest_downloaded_files(collection: str, files: list[tuple[bytes, str
 
     ``files`` is a list of ``(content, filename, source_url)`` tuples.
     """
-    from app.routers.ingest import _ingest_content
+    from app.routers.ingest import _ingest_document
 
     job_ids: list[str] = []
     for content, filename, src_url in files:
         try:
-            result = await _ingest_content(
+            result = await _ingest_document(
                 collection=collection,
                 filename=filename,
                 content=content,
-                strategy=Strategy.AUTO,
                 sensitivity=Sensitivity.PUBLIC,
                 source_path=src_url,
             )
@@ -487,7 +486,7 @@ async def sync_drive_source(
     caller's user token for impersonation (same ACL as /drive/add)."""
     await gerer_la_collection(collection, user)
     from app.models.db import utcnow
-    from app.routers.ingest import _ingest_content
+    from app.routers.ingest import _ingest_document
     from app.services.collection_store import get_collection, update_collection
     from app.services.connectors.drive import DriveConnector
 
@@ -509,11 +508,10 @@ async def sync_drive_source(
         job_ids: list[str] = []
         for doc in updated:
             content, filename = await connector.fetch_document(doc.id)
-            result = await _ingest_content(
+            result = await _ingest_document(
                 collection=collection,
                 filename=filename,
                 content=content,
-                strategy=Strategy.AUTO,
                 sensitivity=Sensitivity.PUBLIC,
                 source_path=doc.url,
             )

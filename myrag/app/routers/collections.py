@@ -16,6 +16,7 @@ from app.models.collection import (
     save_custom_template,
 )
 from app.routers._droits import exiger_administration
+from app.routers.ingest import STRATEGIE_DOCUMENT
 from app.services import access, nommage
 from app.services.collection_store import (
     create_collection as db_create_collection,
@@ -89,7 +90,6 @@ class CreateCollectionRequest(BaseModel):
     name: str
     titre: str = ""
     description: str = ""
-    strategy: str = "auto"
     sensitivity: str = "public"
     prompt_template: str = DEFAULT_TEMPLATE_KEY
     system_prompt: str | None = None
@@ -251,7 +251,7 @@ async def list_collections_endpoint(
                     # "adoptable" cards without fabricating a description from
                     # raw filenames (which read as junk to end users).
                     collections.append(
-                        {"name": name, "titre": "", "categorie": None, "description": "", "strategy": "auto", "sensitivity": "public", "scope": "group", "orphan": True}
+                        {"name": name, "titre": "", "categorie": None, "description": "", "strategy": "openrag", "sensitivity": "public", "scope": "group", "orphan": True}
                     )
                     known_names.add(name)
 
@@ -347,6 +347,7 @@ async def create_collection_endpoint(
         pass  # OpenRAG may not be reachable
 
     data = req.model_dump()
+    data["strategy"] = STRATEGIE_DOCUMENT  # ADR-0005 — le découpage appartient à OpenRAG
     data["system_prompt"] = system_prompt
     data["created_by"] = user.sub  # garantit l'accès du créateur à sa collection
     collection = await db_create_collection(data)

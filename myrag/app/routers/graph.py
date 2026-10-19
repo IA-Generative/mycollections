@@ -198,19 +198,57 @@ async def import_graph(collection: str, req: GraphImportRequest, user: CurrentUs
     }
 
 
+async def _chunks_des_sources(collection: str) -> list[dict]:
+    """Les sources conservées, découpées en articles — de quoi construire le graphe et
+    résumer ses articles longs (ADR-0005 : le découpage de structuration lit les fichiers
+    sources sur le disque, plus les morceaux d'OpenRAG ; rien n'est indexé à cette occasion).
+
+    Une ligne par fichier (d'anciennes lignes en double ne comptent qu'une fois) ; seuls
+    les textes se lisent — un PDF ne se découpe pas en articles."""
+    from pathlib import Path
+
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.db import SourceFile
+    from app.services import formats
+    from app.services.chunker import Sensitivity, Strategy, chunk_document
+
+    async with async_session() as session:
+        lignes = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()
+    uniques: dict[str, SourceFile] = {}
+    for sf in lignes:
+        uniques.setdefault(sf.filename, sf)
+    morceaux: list[dict] = []
+    for sf in uniques.values():
+        chemin = Path(sf.storage_path)
+        if formats.extension(sf.filename) not in formats.FORMATS_TEXTE or not chemin.exists():
+            continue
+        contenu = chemin.read_bytes()
+        try:
+            texte = contenu.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                texte = contenu.decode("cp1252")  # un .txt enregistré sous Windows
+            except UnicodeDecodeError:
+                continue
+        morceaux.extend(chunk_document(texte, strategy=Strategy.ARTICLE, sensitivity=Sensitivity.PUBLIC))
+    return morceaux
+
+
 @router.post("/{collection}/build")
 async def build_graph(
     collection: str,
     force: bool = Query(False, description="Écraser un graphe importé"),
     user: CurrentUser = Depends(current_user),
 ):
-    """Build or rebuild the graph for a collection from its indexed chunks.
+    """Construit ou reconstruit le graphe d'une collection depuis ses sources conservées.
 
-    Réservé aux gestionnaires : la reconstruction remplace le graphe sur disque, et
-    ``force=true`` écrase même un graphe importé.
+    Le découpage de structuration (par article) lit les fichiers sources sur le disque :
+    rien n'est indexé, rien ne dépend des morceaux d'OpenRAG (ADR-0005). Réservé aux
+    gestionnaires : la reconstruction remplace le graphe sur disque, et ``force=true``
+    écrase même un graphe importé.
     """
-    from app.services.openrag_client import OpenRAGClient
-
     await _exiger_gestionnaire(collection, user)
 
     if _builder.is_imported(collection) and not force:
@@ -219,59 +257,19 @@ async def build_graph(
             detail=f"Le graphe de '{collection}' a été importé ; force=true pour le reconstruire.",
         )
 
-    client = OpenRAGClient()
-
-    # Les morceaux se LISTENT, ils ne se cherchent pas : une recherche sémantique « * » est
-    # vidée par le seuil de pertinence d'OpenRAG (d'où l'ancien 404 « No documents » après une
-    # indexation réussie). Chaque article est déposé comme un fichier « Article-<id>.md ».
-    try:
-        fichiers = await client.list_files(collection)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"OpenRAG n'a pas répondu à la liste des documents : {e}")
-
-    articles = []
-    for f in fichiers:
-        nom = str(f.original_filename or f.filename or "")
-        if nom.startswith(("Article-", "Article_")) and f.file_id:
-            articles.append((nom, str(f.file_id), f))
-    if not articles:
+    morceaux = await _chunks_des_sources(collection)
+    if not any((m.get("metadata") or {}).get("article") for m in morceaux):
         # Rien à construire : surtout ne pas écraser un graphe existant par un graphe vide.
         raise HTTPException(
             status_code=422,
             detail=(
-                "Aucun article dans cette collection : le graphe relie des articles de code découpés "
-                "un par un (« Article L… »). Choisissez le découpage par article, ou importez un graphe."
+                "Aucun article détecté dans les sources conservées : le graphe relie des articles "
+                "de code (« Article L… ») découpés un par un. Déposez un texte qui en contient, ou importez un graphe."
             ),
         )
 
-    import asyncio
-
-    from app.services.graph_builder import extract_references
-
-    limite = asyncio.Semaphore(8)
-
-    async def lire(nom: str, file_id: str, meta) -> dict:
-        async with limite:
-            contenu = await client.get_file_content(collection, file_id)
-        article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
-        references = [r for r in extract_references(contenu or "") if r != article]
-        return {
-            "content": contenu or "",
-            "filename": nom,
-            "metadata": {
-                "article": article,
-                "livre": getattr(meta, "livre", ""),
-                "titre": getattr(meta, "titre", ""),
-                "chapitre": getattr(meta, "chapitre", ""),
-                "references": references,
-                "parent_path": getattr(meta, "parent_path", ""),
-            },
-        }
-
-    chunks = await asyncio.gather(*(lire(n, i, m) for n, i, m in articles))
-
     # Build and save graph
-    graph = _builder.build(collection, chunks)
+    graph = _builder.build(collection, morceaux)
     _builder.save(collection)
 
     return {
@@ -310,17 +308,10 @@ async def summarize_articles(
     if not long_articles:
         return {"status": "nothing_to_summarize", "threshold": effective_threshold}
 
-    # Le texte complet des articles : relu dans OpenRAG, comme à la construction (avant : cherché
-    # sous data_dir/<collection>/*.md, où rien n'est jamais écrit).
-    from app.services.openrag_client import OpenRAGClient
-
-    client = OpenRAGClient()
-    chunks = []
-    for f in await client.list_files(collection):
-        nom = str(f.original_filename or f.filename or "")
-        article = nom.replace("Article-", "").replace("Article_", "").removesuffix(".md")
-        if article in long_articles and f.file_id:
-            chunks.append({"content": await client.get_file_content(collection, str(f.file_id)), "metadata": {"article": article}})
+    # Le texte complet des articles : relu dans les sources conservées, comme à la
+    # construction (ADR-0005) — plus dans OpenRAG, qui ne connaît plus de fichiers
+    # « Article-<id>.md ».
+    chunks = await _chunks_des_sources(collection)
 
     result = await _builder.summarize_long_articles(collection=collection, chunks=chunks, threshold=effective_threshold)
     return {

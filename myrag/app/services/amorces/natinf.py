@@ -81,7 +81,6 @@ async def enrichir(numeros: list[str], base_url: str, maximum: int) -> dict[str,
 
 async def importer(collection: str, entree: dict) -> dict:
     from app.services.amorces.ingestion import ingerer
-    from app.services.chunker import Strategy
 
     p = entree.get("parametres", {})
     lignes = lire_csv(await reseau.telecharger(p["url_liste"]))
@@ -93,5 +92,5 @@ async def importer(collection: str, entree: dict) -> dict:
         except httpx.HTTPError:
             enrichis = {}
     docs, couverture = documents_depuis(lignes, enrichis)
-    bilan = await ingerer(collection, docs, strategie=Strategy.SECTION, max_documents=p.get("max_documents"))
+    bilan = await ingerer(collection, docs, max_documents=p.get("max_documents"))
     return {**bilan.model_dump(), "couverture": couverture, "lignes_importees": couverture["codes"]}

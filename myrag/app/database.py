@@ -8,6 +8,7 @@ Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL:
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -65,6 +66,13 @@ async def init_db():
             await _migrate_add_column(conn, col, lite, pg, table="paire_qa")
         await _rendre_run_id_facultatif(conn)
         await _creer_index_questions(conn)
+        # Découpage d'indexation délégué à OpenRAG (ADR-0005) : la sensibilité se garde
+        # par fichier source — la réindexation la reprend au lieu d'un paramètre global.
+        # `DEFAULT 'public'` est côté SQL, exprès : les lignes existantes le reçoivent.
+        await _migrate_add_column(conn, "sensitivity", "VARCHAR(20) DEFAULT 'public'", "VARCHAR(20) DEFAULT 'public'", table="source_files")
+        # ADR-0005 : la colonne strategy ne dit plus un réglage, elle dit un fait —
+        # c'est OpenRAG qui découpe. Les anciennes valeurs ne désignent plus rien.
+        await conn.execute(text("UPDATE collections SET strategy = 'openrag' WHERE strategy IS NULL OR strategy != 'openrag'"))
 
 
 #: (colonne, type SQLite, type PostgreSQL) ajoutées à paire_qa pour le jeu de questions.

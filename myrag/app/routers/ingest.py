@@ -1,4 +1,4 @@
-"""Ingest router — async upload + intelligent chunking + OpenRAG indexing."""
+"""Ingest router — envoi des fichiers entiers à OpenRAG, qui les découpe (ADR-0005)."""
 
 import asyncio
 import hashlib
@@ -14,7 +14,7 @@ from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
 from app.services import formats
-from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
+from app.services.chunker import Sensitivity, valider_sensibilite
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
 from app.services.openrag_client import OpenRAGClient
 
@@ -23,6 +23,8 @@ logger = logging.getLogger("myrag.ingest")
 
 # R7 — Source file storage directory
 SOURCES_DIR = Path(settings.data_dir) / "_sources"
+
+MESSAGE_FORMAT = formats.MESSAGE_FORMAT
 
 
 def _save_source_file(collection: str, filename: str, content: bytes) -> str:
@@ -40,35 +42,6 @@ def _save_source_file(collection: str, filename: str, content: bytes) -> str:
     return str(path)
 
 
-async def _upload_chunks_background(job_id: str, collection: str, chunks: list[dict]):
-    """Background task: upload chunks to OpenRAG, updating job progress in DB."""
-    client = OpenRAGClient(timeout=120.0)
-
-    await update_job(job_id, status="uploading")
-
-    for i, chunk in enumerate(chunks):
-        success = True
-        try:
-            await client.upload_chunk(collection, chunk)
-        except httpx.HTTPStatusError as e:
-            # 409 : OpenRAG a déjà ce morceau, à l'identique (dépôt répété, reprise après arrêt).
-            if e.response is None or e.response.status_code != 409:
-                success = False
-                logger.warning(f"Job {job_id} chunk {i + 1}/{len(chunks)} failed: {e}")
-        except Exception as e:
-            success = False
-            logger.warning(f"Job {job_id} chunk {i + 1}/{len(chunks)} failed: {e}")
-
-        await increment_job_progress(job_id, success=success)
-
-        if (i + 1) % 100 == 0:
-            logger.info(f"Job {job_id}: {i + 1}/{len(chunks)} uploaded")
-
-    await complete_job(job_id)
-    job = await get_job(job_id)
-    logger.info(f"Job {job_id} finished: {job}")
-
-
 #: Suivi d'une indexation confiée à OpenRAG : toutes les quelques secondes, et pas indéfiniment.
 SUIVI_DOCUMENT_S = 3.0
 SUIVI_DOCUMENT_MAX_S = 1800.0
@@ -76,16 +49,17 @@ _ETATS_REUSSIS = ("COMPLETED", "SUCCESS")
 _ETATS_ECHOUES = ("FAILED", "CANCELLED")
 
 
-async def _indexer_document_background(job_id: str, collection: str, filename: str, content: bytes) -> None:
-    """Un document entier part vers OpenRAG, qui le lit et le découpe ; on suit sa tâche jusqu'au
-    bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG)."""
+async def _indexer_document_background(job_id: str, collection: str, filename: str, content: bytes, sensitivity: str) -> None:
+    """Le fichier part entier vers OpenRAG, qui le lit et le découpe ; on suit sa tâche jusqu'au
+    bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG). La
+    sensibilité voyage en métadonnée — elle n'était jamais transmise du temps des morceaux."""
     import time
 
     client = OpenRAGClient(timeout=300.0)
     await update_job(job_id, status="uploading")
     erreur = None
     try:
-        envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename})
+        envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename, "sensitivity": sensitivity})
         tache, debut = envoi.task_id, time.monotonic()
         while tache:
             etat = str((await client.task_state(tache)).task_state or "").upper()
@@ -117,63 +91,31 @@ ETATS_EN_COURS = ("chunking", "chunking_done", "pending", "uploading")
 
 async def reprendre_les_travaux_interrompus() -> list[str]:
     """Au démarrage : les indexations qu'un arrêt du backend a coupées reprennent depuis le
-    fichier source conservé (redéposer le même morceau est sans effet : OpenRAG répond 409, compté
-    comme réussi). Sans fichier source, le travail est marqué « interrupted » et dit quoi faire.
-    Avant : la tâche de fond disparaissait avec le processus, le travail restait « uploading »."""
+    fichier source conservé, renvoyé entier (redéposer le même document est sans effet :
+    OpenRAG répond 409, compté comme réussi). Sans fichier source, le travail est marqué
+    « interrupted » et dit quoi faire. Les travaux antérieurs à la délégation du découpage
+    (ADR-0005) basculent ici dans le nouveau régime : leur source part entière."""
     from app.database import async_session
     from app.models.db import IngestJob, SourceFile
 
     async with async_session() as session:
         travaux = (await session.execute(select(IngestJob).where(IngestJob.status.in_(ETATS_EN_COURS)))).scalars().all()
-        travaux = [(t.job_id, t.collection_name, t.filename, t.strategy, t.sensitivity) for t in travaux]
+        travaux = [(t.job_id, t.collection_name, t.filename, t.sensitivity) for t in travaux]
 
     repris = []
-    for job_id, collection, filename, strategy, sensitivity in travaux:
+    for job_id, collection, filename, sensitivity in travaux:
         async with async_session() as session:
             sf = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
             chemin = Path(sf.storage_path) if sf and sf.storage_path else None
         if not chemin or not chemin.exists():
             await update_job(job_id, status="interrupted", error="Indexation interrompue par un redémarrage du service, et le fichier n'est plus conservé : redéposez-le.")
             continue
-        if strategy == STRATEGIE_DOCUMENT:
-            await update_job(job_id, status="uploading", total_chunks=1, uploaded_chunks=0, failed_chunks=0, error="Repris après un redémarrage du service.")
-            await _indexer_document_background(job_id, collection, filename, chemin.read_bytes())
-            repris.append(job_id)
-            continue
-        try:
-            texte = texte_ou_refus(chemin.read_bytes(), filename)
-            strategie_valide = valider_strategy(strategy or "auto")
-            sensibilite_valide = valider_sensibilite(sensitivity or "public")
-            if strategie_valide is None or sensibilite_valide is None:
-                raise ValueError(f"stratégie « {strategy} » ou sensibilité « {sensitivity} » inconnue")
-            morceaux = chunk_document(texte, strategy=strategie_valide, max_chars=512, overlap=50, sensitivity=sensibilite_valide)
-        except Exception as e:  # noqa: BLE001
-            await update_job(job_id, status="interrupted", error=f"Reprise impossible : {e}")
-            continue
-        await update_job(job_id, status="uploading", total_chunks=len(morceaux), uploaded_chunks=0, failed_chunks=0, error="Repris après un redémarrage du service.")
-        await _upload_chunks_background(job_id, collection, morceaux)
+        await update_job(job_id, status="uploading", total_chunks=1, uploaded_chunks=0, failed_chunks=0, error="Repris après un redémarrage du service.")
+        await _indexer_document_background(job_id, collection, filename, chemin.read_bytes(), sensitivity or Sensitivity.PUBLIC)
         repris.append(job_id)
     if travaux:
         logger.info("Reprise au démarrage : %d travail(aux) interrompu(s), %d repris", len(travaux), len(repris))
     return repris
-
-
-MESSAGE_FORMAT = formats.MESSAGE_FORMAT
-
-
-def texte_ou_refus(content: bytes, filename: str) -> str:
-    """Le texte du fichier, ou 415. Le découpage maison ne lit que du texte ; un document (PDF,
-    Word…) passe par `_ingest_document`, un binaire inconnu est refusé — il partait autrefois
-    décodé « avec remplacement », en caractères illisibles (diagnostic d'octobre 2026)."""
-    if formats.nature(filename, content) is formats.Nature.TEXTE:
-        try:
-            return content.decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                return content.decode("cp1252")  # un .txt enregistré sous Windows
-            except UnicodeDecodeError:
-                pass
-    raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
 
 
 async def _exiger_gestion(collection: str, user: CurrentUser) -> None:
@@ -187,9 +129,8 @@ async def _exiger_gestion(collection: str, user: CurrentUser) -> None:
 class DepotResultat(BaseModel):
     """Réponse d'un dépôt accepté : le travail créé et où le suivre.
 
-    « nature » vaut « document » quand le fichier part entier et qu'OpenRAG le découpe
-    lui-même ; « total_chunks » vaut alors None — OpenRAG ne compte les passages qu'en
-    les lisant."""
+    Le découpage est celui d'OpenRAG (ADR-0005) : « total_chunks » vaut None —
+    OpenRAG ne compte les passages qu'en les lisant."""
 
     job_id: str
     collection: str
@@ -199,93 +140,16 @@ class DepotResultat(BaseModel):
     total_chunks: int | None = None
     status: str
     track_url: str
-    nature: str | None = None
 
 
-async def _ingest_content(
-    collection: str,
-    filename: str,
-    content: bytes,
-    strategy: Strategy,
-    sensitivity: Sensitivity,
-    source_path: str = "",
-) -> DepotResultat:
-    """Common ingest logic for file upload and URL fetch."""
-    nature = formats.nature(filename, content)
-    if nature is None:
-        raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
-    if nature is formats.Nature.DOCUMENT:
-        return await _ingest_document(collection, filename, content, sensitivity, source_path)
-    text = texte_ou_refus(content, filename)
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="Fichier vide")
-
-    chunks = chunk_document(text, strategy=strategy, max_chars=512, overlap=50, sensitivity=sensitivity)
-    if not chunks:
-        raise HTTPException(status_code=400, detail="Aucun chunk produit")
-
-    # Create partition in OpenRAG (best-effort)
-    client = OpenRAGClient()
-    try:
-        await client.create_partition(collection)
-    except Exception:
-        pass
-
-    # R7 — Save source file
-    saved_path = _save_source_file(collection, filename, content)
-
-    # Record source file in DB
-    from app.database import async_session
-    from app.models.db import SourceFile
-
-    checksum = hashlib.sha256(content).hexdigest()
-    async with async_session() as session:
-        # Une ligne par (collection, fichier) : redéposer ou réindexer met la ligne à jour au lieu
-        # d'en ajouter une (avant : N lignes, puis 2N, puis 4N à chaque réindexation).
-        sf = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection, SourceFile.filename == filename))).scalars().first()
-        if sf is None:
-            sf = SourceFile(collection_name=collection, filename=filename)
-            session.add(sf)
-        if source_path.startswith("http") or not sf.original_url:
-            sf.original_url = source_path if source_path.startswith("http") else ""
-        sf.storage_path = saved_path
-        sf.file_size = len(content)
-        sf.checksum = checksum
-        sf.strategy_used = strategy
-        sf.chunks_produced = len(chunks)
-        await session.commit()
-
-    # Create job in DB and start background upload
-    job = await create_job(
-        collection=collection,
-        filename=filename,
-        strategy=strategy,
-        sensitivity=sensitivity,
-        source_path=saved_path,
-    )
-    await update_job(job["job_id"], total_chunks=len(chunks))
-
-    asyncio.create_task(_upload_chunks_background(job["job_id"], collection, chunks))
-
-    return DepotResultat(
-        job_id=job["job_id"],
-        collection=collection,
-        filename=filename,
-        strategy=strategy,
-        sensitivity=sensitivity,
-        total_chunks=len(chunks),
-        status="chunking_done",
-        track_url=f"/api/ingest/jobs/{job['job_id']}",
-    )
-
-
-#: La « stratégie » d'un document : c'est OpenRAG qui le découpe.
+#: La « stratégie » d'un dépôt : c'est OpenRAG qui découpe (ADR-0005).
 STRATEGIE_DOCUMENT = "openrag"
 DOCUMENT_MAX_OCTETS = 50 * 1024 * 1024
 
 
-async def _enregistrer_source(collection: str, filename: str, content: bytes, strategy: str, chunks: int, source_path: str) -> str:
-    """Le fichier source gardé sur le disque (réindexation, reprise) et sa ligne en base."""
+async def _enregistrer_source(collection: str, filename: str, content: bytes, chunks: int, source_path: str, sensitivity: str) -> str:
+    """Le fichier source gardé sur le disque (réindexation, reprise) et sa ligne en base —
+    avec sa sensibilité, reprise telle quelle à la réindexation."""
     saved_path = _save_source_file(collection, filename, content)
     from app.database import async_session
     from app.models.db import SourceFile
@@ -300,14 +164,20 @@ async def _enregistrer_source(collection: str, filename: str, content: bytes, st
         sf.storage_path = saved_path
         sf.file_size = len(content)
         sf.checksum = hashlib.sha256(content).hexdigest()
-        sf.strategy_used = strategy
+        sf.strategy_used = STRATEGIE_DOCUMENT
         sf.chunks_produced = chunks
+        sf.sensitivity = sensitivity
         await session.commit()
     return saved_path
 
 
 async def _ingest_document(collection: str, filename: str, content: bytes, sensitivity: Sensitivity, source_path: str = "") -> DepotResultat:
-    """Un document (PDF, Word…) : gardé comme source, puis confié tel quel à OpenRAG."""
+    """Tout fichier (texte compris) : gardé comme source, puis confié entier à OpenRAG,
+    qui le découpe (ADR-0005)."""
+    if not content:
+        raise HTTPException(status_code=400, detail="Fichier vide")
+    if formats.nature(filename, content) is not formats.Nature.DOCUMENT:
+        raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
     if len(content) > DOCUMENT_MAX_OCTETS:
         raise HTTPException(status_code=413, detail=f"« {filename} » dépasse {DOCUMENT_MAX_OCTETS // 1024 // 1024} Mo.")
     client = OpenRAGClient()
@@ -315,10 +185,10 @@ async def _ingest_document(collection: str, filename: str, content: bytes, sensi
         await client.create_partition(collection)
     except Exception:
         pass
-    saved_path = await _enregistrer_source(collection, filename, content, STRATEGIE_DOCUMENT, 0, source_path)
+    saved_path = await _enregistrer_source(collection, filename, content, 0, source_path, sensitivity)
     job = await create_job(collection=collection, filename=filename, strategy=STRATEGIE_DOCUMENT, sensitivity=sensitivity, source_path=saved_path)
     await update_job(job["job_id"], total_chunks=1)
-    asyncio.create_task(_indexer_document_background(job["job_id"], collection, filename, content))
+    asyncio.create_task(_indexer_document_background(job["job_id"], collection, filename, content, sensitivity))
     return DepotResultat(
         job_id=job["job_id"],
         collection=collection,
@@ -328,7 +198,6 @@ async def _ingest_document(collection: str, filename: str, content: bytes, sensi
         total_chunks=None,
         status="uploading",
         track_url=f"/api/ingest/jobs/{job['job_id']}",
-        nature="document",
     )
 
 
@@ -336,33 +205,28 @@ async def _ingest_document(collection: str, filename: str, content: bytes, sensi
 async def ingest_file(
     collection: str,
     file: UploadFile = File(...),
-    strategy: Strategy = Form(Strategy.AUTO),
     sensitivity: Sensitivity = Form(Sensitivity.PUBLIC),
-    max_chars: int = Form(512),
-    overlap: int = Form(50),
     user: CurrentUser = Depends(current_user),
 ) -> DepotResultat:
-    """Upload a file, chunk it intelligently, and index in OpenRAG."""
+    """Upload a file and hand it to OpenRAG, which chunks it (ADR-0005)."""
     await _exiger_gestion(collection, user)
     content = await file.read()
-    return await _ingest_content(
+    return await _ingest_document(
         collection=collection,
         filename=file.filename or "unknown",
         content=content,
-        strategy=strategy,
         sensitivity=sensitivity,
     )
 
 
 class IngestFromUrlRequest(BaseModel):
     url: str
-    strategy: Strategy = Strategy.AUTO
     sensitivity: Sensitivity = Sensitivity.PUBLIC
 
 
 @router.post("/{collection}/from-url")
 async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: CurrentUser = Depends(current_user)) -> DepotResultat:
-    """Download a remote file by URL, chunk it, and index in OpenRAG."""
+    """Download a remote file by URL and hand it to OpenRAG, which chunks it (ADR-0005)."""
     await _exiger_gestion(collection, user)
     assert_public_http_url(req.url)
     try:
@@ -382,22 +246,21 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
 
     filename = req.url.rstrip("/").split("/")[-1] or "remote-file"
 
-    return await _ingest_content(
+    return await _ingest_document(
         collection=collection,
         filename=filename,
         content=content,
-        strategy=req.strategy,
         sensitivity=req.sensitivity,
         source_path=req.url,
     )
 
 
 @router.post("/{collection}/reindex")
-async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO, sensitivity: Sensitivity = Sensitivity.PUBLIC, user: CurrentUser = Depends(current_user)):
-    """Re-index all source files of a collection with a new strategy.
-
-    Uses source files saved by R7 to re-chunk and re-index without re-upload.
-    """
+async def reindex_collection(collection: str, user: CurrentUser = Depends(current_user)):
+    """Réindexer une collection : vider sa partition OpenRAG et renvoyer chaque fichier
+    source tel quel. Action de maintenance (partition perdue, conversion d'une collection
+    indexée avant la délégation du découpage — ADR-0005) ; le découpage est toujours celui
+    d'OpenRAG, la sensibilité celle enregistrée par fichier au dépôt."""
     await _exiger_gestion(collection, user)
     from app.database import async_session as db_session
     from app.models.db import SourceFile
@@ -410,8 +273,8 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
     if not source_files:
         raise HTTPException(status_code=400, detail="Aucun fichier source enregistre pour cette collection. Re-uploadez vos documents.")
 
-    # Tout vérifier AVANT d'effacer : chaque source est présente, lisible et produit des
-    # morceaux avec la nouvelle stratégie. Sinon on refuse, et la collection reste intacte.
+    # Tout vérifier AVANT d'effacer : chaque source est présente, lisible et acceptable par
+    # OpenRAG. Sinon on refuse, et la collection reste intacte.
     uniques: dict[str, SourceFile] = {}
     for sf in source_files:
         uniques.setdefault(sf.filename, sf)  # d'anciennes lignes en double : une seule par fichier
@@ -421,11 +284,12 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
         if not path.exists():
             raise HTTPException(status_code=409, detail=f"Le fichier source « {sf.filename} » n'est plus conservé : redéposez-le avant de réindexer.")
         content = path.read_bytes()
-        if formats.nature(sf.filename, content) is formats.Nature.DOCUMENT:
-            contenus.append((sf, content))
-            continue
-        if not chunk_document(texte_ou_refus(content, sf.filename), strategy=strategy, max_chars=512, overlap=50, sensitivity=sensitivity):
-            raise HTTPException(status_code=422, detail=f"Avec ce découpage, « {sf.filename} » ne produirait aucun passage : choisissez un autre découpage.")
+        if not content:
+            raise HTTPException(status_code=400, detail=f"Le fichier source « {sf.filename} » est vide : redéposez-le avant de réindexer.")
+        if formats.nature(sf.filename, content) is not formats.Nature.DOCUMENT:
+            raise HTTPException(
+                status_code=415, detail=f"Le fichier source « {sf.filename} » n'est plus accepté (CSV, par exemple) : convertissez-le en .txt ou .md avant de réindexer."
+            )
         contenus.append((sf, content))
 
     # Vider la partition puis la recréer : avant, les anciens morceaux restaient à côté des
@@ -436,12 +300,11 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
 
     total_jobs = []
     for sf, content in contenus:
-        result = await _ingest_content(
+        result = await _ingest_document(
             collection=collection,
             filename=sf.filename,
             content=content,
-            strategy=strategy,
-            sensitivity=sensitivity,
+            sensitivity=valider_sensibilite(sf.sensitivity or "public") or Sensitivity.PUBLIC,
             source_path=sf.storage_path,
         )
         total_jobs.append(result)
@@ -449,7 +312,6 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
     return {
         "status": "reindexing",
         "collection": collection,
-        "strategy": strategy,
         "files_reindexed": len(total_jobs),
         "jobs": [j.job_id for j in total_jobs],
     }

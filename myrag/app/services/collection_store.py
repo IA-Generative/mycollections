@@ -112,7 +112,6 @@ async def update_collection(name: str, updates: dict) -> dict | None:
     allowed = {
         "titre",
         "description",
-        "strategy",
         "sensitivity",
         "scope",
         "graph_enabled",

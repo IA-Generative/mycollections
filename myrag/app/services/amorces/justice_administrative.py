@@ -111,7 +111,6 @@ def decisions_du_zip(octets: bytes) -> list[dict]:
 async def importer(collection: str, entree: dict, *, deja_importes: list[str] | None = None) -> dict:
     """Importe les mois manquants, dans l'ordre, jusqu'à `max_mois_par_run`."""
     from app.services.amorces.ingestion import ingerer
-    from app.services.chunker import Strategy
 
     p = entree.get("parametres", {})
     fonds = p.get("fonds", ["DCA", "DTA"])
@@ -139,7 +138,7 @@ async def importer(collection: str, entree: dict, *, deja_importes: list[str] | 
             if d["date"]:
                 dates.append(d["date"])
         mois_faits.append(f"{f}-{a:04d}{m:02d}")
-    bilan = await ingerer(collection, docs, strategie=Strategy.SECTION, max_documents=p.get("max_documents"))
+    bilan = await ingerer(collection, docs, max_documents=p.get("max_documents"))
     couverture = {
         "fonds": fonds,
         "mots_cles": mots,

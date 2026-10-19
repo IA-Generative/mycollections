@@ -102,8 +102,12 @@ def retirer_le_pied_sources(texte: str) -> str:
 def situer_source(s: dict) -> dict:
     """Un libellé lisible pour une source : le titre de sa section (qui porte le
     département, le code, l'année…), à défaut celui du document, à défaut rien —
-    le front retombe alors sur le nom de fichier. Les morceaux des amorces
-    commencent par `# <document>` puis `## <section>` (ingestion.situer).
+    le front retombe alors sur le nom de fichier. Deux générations de morceaux :
+
+    - les anciens (découpage maison) commencent par `# <document>` puis `## <section>` ;
+    - ceux d'OpenRAG (ADR-0005) portent leur chemin de titres en métadonnées
+      (`hierarchy_path`, `section_title`) — la première entrée du chemin tient lieu
+      de titre de document.
 
     ⚠ Le morceau rendu par /search porte d'abord le résumé qu'OpenRAG lui ajoute
     (`[CONTEXT] … [CHUNK_START]`) : les titres arrivent APRÈS. On lit donc au-delà,
@@ -116,6 +120,13 @@ def situer_source(s: dict) -> dict:
             titre_doc = ligne[2:].strip()
         if titre_doc and titre_section:
             break
+    if not (titre_doc and titre_section):
+        chemin = list(s.get("hierarchy_path") or [])
+        if chemin:
+            titre_doc = titre_doc or str(chemin[0])
+            titre_section = titre_section or str(chemin[-1])
+        if not titre_section and s.get("section_title"):
+            titre_section = str(s["section_title"])
     if titre_doc:
         s["titre_document"] = titre_doc
     if titre_section:

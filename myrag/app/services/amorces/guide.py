@@ -13,8 +13,7 @@ def documents_depuis(liste: list[dict]) -> tuple[list[Document], dict]:
 
 async def importer(collection: str, entree: dict) -> dict:
     from app.services.amorces.ingestion import ingerer
-    from app.services.chunker import Strategy
 
     docs, couverture = documents_depuis(pages())
-    bilan = await ingerer(collection, docs, strategie=Strategy.SECTION)
+    bilan = await ingerer(collection, docs)
     return {**bilan.model_dump(), "couverture": couverture, "lignes_importees": len(docs)}
