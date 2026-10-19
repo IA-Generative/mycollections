@@ -184,6 +184,24 @@ async def _exiger_gestion(collection: str, user: CurrentUser) -> None:
     await _fiche_pour(collection, user, ecrire=True)
 
 
+class DepotResultat(BaseModel):
+    """Réponse d'un dépôt accepté : le travail créé et où le suivre.
+
+    « nature » vaut « document » quand le fichier part entier et qu'OpenRAG le découpe
+    lui-même ; « total_chunks » vaut alors None — OpenRAG ne compte les passages qu'en
+    les lisant."""
+
+    job_id: str
+    collection: str
+    filename: str
+    strategy: str
+    sensitivity: str
+    total_chunks: int | None = None
+    status: str
+    track_url: str
+    nature: str | None = None
+
+
 async def _ingest_content(
     collection: str,
     filename: str,
@@ -191,7 +209,7 @@ async def _ingest_content(
     strategy: Strategy,
     sensitivity: Sensitivity,
     source_path: str = "",
-) -> dict:
+) -> DepotResultat:
     """Common ingest logic for file upload and URL fetch."""
     nature = formats.nature(filename, content)
     if nature is None:
@@ -249,16 +267,16 @@ async def _ingest_content(
 
     asyncio.create_task(_upload_chunks_background(job["job_id"], collection, chunks))
 
-    return {
-        "job_id": job["job_id"],
-        "collection": collection,
-        "filename": filename,
-        "strategy": strategy,
-        "sensitivity": sensitivity,
-        "total_chunks": len(chunks),
-        "status": "chunking_done",
-        "track_url": f"/api/ingest/jobs/{job['job_id']}",
-    }
+    return DepotResultat(
+        job_id=job["job_id"],
+        collection=collection,
+        filename=filename,
+        strategy=strategy,
+        sensitivity=sensitivity,
+        total_chunks=len(chunks),
+        status="chunking_done",
+        track_url=f"/api/ingest/jobs/{job['job_id']}",
+    )
 
 
 #: La « stratégie » d'un document : c'est OpenRAG qui le découpe.
@@ -288,7 +306,7 @@ async def _enregistrer_source(collection: str, filename: str, content: bytes, st
     return saved_path
 
 
-async def _ingest_document(collection: str, filename: str, content: bytes, sensitivity: Sensitivity, source_path: str = "") -> dict:
+async def _ingest_document(collection: str, filename: str, content: bytes, sensitivity: Sensitivity, source_path: str = "") -> DepotResultat:
     """Un document (PDF, Word…) : gardé comme source, puis confié tel quel à OpenRAG."""
     if len(content) > DOCUMENT_MAX_OCTETS:
         raise HTTPException(status_code=413, detail=f"« {filename} » dépasse {DOCUMENT_MAX_OCTETS // 1024 // 1024} Mo.")
@@ -301,17 +319,17 @@ async def _ingest_document(collection: str, filename: str, content: bytes, sensi
     job = await create_job(collection=collection, filename=filename, strategy=STRATEGIE_DOCUMENT, sensitivity=sensitivity, source_path=saved_path)
     await update_job(job["job_id"], total_chunks=1)
     asyncio.create_task(_indexer_document_background(job["job_id"], collection, filename, content))
-    return {
-        "job_id": job["job_id"],
-        "collection": collection,
-        "filename": filename,
-        "strategy": STRATEGIE_DOCUMENT,
-        "sensitivity": sensitivity,
-        "total_chunks": None,
-        "nature": "document",
-        "status": "uploading",
-        "track_url": f"/api/ingest/jobs/{job['job_id']}",
-    }
+    return DepotResultat(
+        job_id=job["job_id"],
+        collection=collection,
+        filename=filename,
+        strategy=STRATEGIE_DOCUMENT,
+        sensitivity=sensitivity,
+        total_chunks=None,
+        status="uploading",
+        track_url=f"/api/ingest/jobs/{job['job_id']}",
+        nature="document",
+    )
 
 
 @router.post("/{collection}")
@@ -323,7 +341,7 @@ async def ingest_file(
     max_chars: int = Form(512),
     overlap: int = Form(50),
     user: CurrentUser = Depends(current_user),
-):
+) -> DepotResultat:
     """Upload a file, chunk it intelligently, and index in OpenRAG."""
     await _exiger_gestion(collection, user)
     content = await file.read()
@@ -343,7 +361,7 @@ class IngestFromUrlRequest(BaseModel):
 
 
 @router.post("/{collection}/from-url")
-async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: CurrentUser = Depends(current_user)):
+async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: CurrentUser = Depends(current_user)) -> DepotResultat:
     """Download a remote file by URL, chunk it, and index in OpenRAG."""
     await _exiger_gestion(collection, user)
     assert_public_http_url(req.url)
@@ -433,7 +451,7 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
         "collection": collection,
         "strategy": strategy,
         "files_reindexed": len(total_jobs),
-        "jobs": [j["job_id"] for j in total_jobs],
+        "jobs": [j.job_id for j in total_jobs],
     }
 
 

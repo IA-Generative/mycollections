@@ -358,8 +358,7 @@ async def _ingest_downloaded_files(collection: str, files: list[tuple[bytes, str
                 sensitivity=Sensitivity.PUBLIC,
                 source_path=src_url,
             )
-            if "job_id" in result:
-                job_ids.append(result["job_id"])
+            job_ids.append(result.job_id)
         except Exception as e:
             logger.warning("drive ingest failed for %s: %s", filename, e)
     return job_ids
@@ -518,8 +517,7 @@ async def sync_drive_source(
                 sensitivity=Sensitivity.PUBLIC,
                 source_path=doc.url,
             )
-            if "job_id" in result:
-                job_ids.append(result["job_id"])
+            job_ids.append(result.job_id)
     finally:
         await connector.close()
 

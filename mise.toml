@@ -2,3 +2,23 @@
 uv = "latest"
 node = "22"
 prek = { version = "latest", postinstall = "prek install" }
+
+# Tests du monorepo. « mise run test » lance tout ; les deux suites tournent en
+# parallèle (depends). La suite e2e s'ignore d'elle-même sans E2E_BASE_URL :
+# voir myrag/tests/e2e/README.md pour la jouer contre une cible réelle.
+[tasks.test-backend]
+description = "Backend : pytest (unit + integration ; e2e ignorees sans E2E_BASE_URL)"
+dir = "{{config_root}}/myrag"
+run = "uv run --extra generation python -m pytest tests -q"
+
+[tasks.test-frontend]
+description = "Frontend : vitest (prepare Nuxt si .nuxt absent)"
+dir = "{{config_root}}/myrag/frontend"
+run = [
+  "test -f .nuxt/tsconfig.json || npx nuxi prepare",
+  "npx vitest run",
+]
+
+[tasks.test]
+description = "Tous les tests du monorepo : backend + frontend en parallele"
+depends = ["test-backend", "test-frontend"]
