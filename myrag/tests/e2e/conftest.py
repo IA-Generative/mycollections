@@ -216,15 +216,27 @@ def _menage(session: Session, nom: str) -> None:
             pass
 
 
+def prefixe_de_la_cible(session: Session) -> str:
+    """Le préfixe qu'une preview impose aux identifiants (`pr-<n>-`, MYCOLLECTIONS_PARTITION_PREFIXE) ;
+    vide sur la bêta. Lu dans les règles de nommage que l'API sert au formulaire."""
+    try:
+        reponse = session.get("/api/collections/regles-nommage")
+        return str((reponse.json() or {}).get("prefixe_impose") or "") if reponse.status == 200 else ""
+    except Exception:
+        return ""
+
+
 @pytest.fixture(scope="session")
 def collection_essai(session_testeur) -> Iterator[str]:
-    """Le nom de la collection que la séquence crée. Les orphelines `e2e-*` d'une campagne
-    interrompue sont purgées d'abord ; la collection l'est à la fin, même en cas d'échec."""
-    nom = "e2e-" + _dt.date.today().strftime("%Y%m%d")
+    """Le nom de la collection que la séquence crée : `e2e-<date>`, derrière le préfixe imposé par
+    une preview (`pr-<n>-e2e-<date>`). Les orphelines d'une campagne interrompue sont purgées
+    d'abord ; la collection l'est à la fin, même en cas d'échec."""
+    racine = prefixe_de_la_cible(session_testeur) + "e2e-"
+    nom = racine + _dt.date.today().strftime("%Y%m%d")
     try:
         reponse = session_testeur.get("/api/collections?include_archived=true")
         for c in _liste(reponse.json(), "collections") if reponse.status == 200 else []:
-            if str(c.get("name", "")).startswith("e2e-"):
+            if str(c.get("name", "")).startswith(racine):
                 _menage(session_testeur, c["name"])
     except Exception:
         pass
