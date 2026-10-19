@@ -1,15 +1,36 @@
+<script setup lang="ts">
+defineProps<{
+  currentStep: number
+}>()
+
+const steps = ['Source', 'Identification', 'Données', 'Questions et qualité', 'Partage']
+</script>
+
 <template>
-  <nav class="fr-stepper fr-mb-4w" aria-label="Étapes de création">
-    <div class="fr-stepper__steps" :data-fr-current-step="currentStep" :data-fr-steps="5">
-    </div>
+  <nav
+    class="fr-stepper fr-mb-4w"
+    aria-label="Étapes de création"
+  >
+    <div
+      class="fr-stepper__steps"
+      :data-fr-current-step="currentStep"
+      :data-fr-steps="5"
+    />
     <div class="fr-grid-row fr-grid-row--gutters fr-mt-2w">
-      <div v-for="(step, i) in steps" :key="i"
-           style="flex:1;max-width:20%;text-align:center;">
-        <div :class="['myrag-step', {
-          'myrag-step--active': currentStep === i + 1,
-          'myrag-step--done': currentStep > i + 1,
-          'myrag-step--future': currentStep < i + 1,
-        }]" :aria-current="currentStep === i + 1 ? 'step' : undefined">
+      <div
+        v-for="(step, i) in steps"
+        :key="i"
+        style="flex:1;max-width:20%;text-align:center;"
+      >
+        <div
+          class="myrag-step"
+          :class="[{
+            'myrag-step--active': currentStep === i + 1,
+            'myrag-step--done': currentStep > i + 1,
+            'myrag-step--future': currentStep < i + 1,
+          }]"
+          :aria-current="currentStep === i + 1 ? 'step' : undefined"
+        >
           <span class="myrag-step__number">{{ i + 1 }}</span>
           <span class="myrag-step__label">{{ step }}</span>
           <span class="fr-sr-only">{{ currentStep === i + 1 ? ' (étape en cours)' : currentStep > i + 1 ? ' (faite)' : ' (à venir)' }}</span>
@@ -18,14 +39,6 @@
     </div>
   </nav>
 </template>
-
-<script setup lang="ts">
-defineProps<{
-  currentStep: number
-}>()
-
-const steps = ['Source', 'Identification', 'Données', 'Questions et qualité', 'Partage']
-</script>
 
 <style>
 .myrag-step {

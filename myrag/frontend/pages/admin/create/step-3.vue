@@ -1,295 +1,6 @@
-<template>
-  <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Donnees</a></li>
-      </ol>
-    </nav>
-
-    <h1 class="fr-h3">Charger les donnees — {{ collection }}</h1>
-    <p class="fr-text--lg fr-mb-4w">Étape 3 sur 5 — Ajoutez vos documents à la collection</p>
-
-    <WizardStepper :current-step="3" />
-
-    <div v-if="!collection" class="fr-alert fr-alert--warning fr-mb-4w">
-      <p>Aucune collection specifiee. <NuxtLink to="/admin/create">Retour à l'étape 1</NuxtLink></p>
-    </div>
-
-    <div v-else class="fr-col-8">
-      <!-- Drive folder picker (when source=drive) -->
-      <div v-if="source === 'drive'" class="fr-card fr-mb-4w">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-h5">☁️ Choisir un dossier Drive à indexer</h3>
-
-            <div v-if="!driveReady" class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w">
-              <p>{{ driveError || 'Chargement du service Drive…' }}</p>
-              <p v-if="driveError && driveUrl" class="fr-mt-1w">
-                <a :href="driveUrl" target="_blank" rel="noopener noreferrer">
-                  Ouvrir Drive dans un nouvel onglet ↗
-                </a>
-              </p>
-            </div>
-
-            <div v-else>
-              <!-- Breadcrumb -->
-              <nav class="fr-breadcrumb" aria-label="Chemin Drive">
-                <ol class="fr-breadcrumb__list">
-                  <li>
-                    <a class="fr-breadcrumb__link" href="#" @click.prevent="goBack(-1)">Racine</a>
-                  </li>
-                  <li v-for="(f, idx) in drivePath" :key="f.id">
-                    <a class="fr-breadcrumb__link" href="#" @click.prevent="goBack(idx)">{{ f.title }}</a>
-                  </li>
-                </ol>
-              </nav>
-
-              <!-- Items list -->
-              <ul class="fr-mt-2w" style="list-style:none;padding:0;">
-                <li v-for="item in driveItems" :key="item.id" class="fr-mb-1w">
-                  <button v-if="item.type === 'FOLDER'"
-                          class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-folder-2-line fr-btn--icon-left"
-                          @click="enterFolder(item)"
-                          :disabled="driveLoading">
-                    {{ item.title || '(sans nom)' }}
-                  </button>
-                  <span v-else class="fr-text--sm" style="color:#666;">
-                    <span class="fr-icon-file-line" aria-hidden="true"></span>
-                    {{ item.title || '(sans nom)' }}
-                    <span v-if="item.size" style="color:#999;"> — {{ formatSize(item.size) }}</span>
-                  </span>
-                </li>
-                <li v-if="!driveItems.length && !driveLoading" class="fr-text--sm" style="color:#666;">
-                  (Dossier vide)
-                </li>
-              </ul>
-
-              <!-- Index current folder button -->
-              <div v-if="drivePath.length" class="fr-mt-3w">
-                <p class="fr-text--sm fr-mb-1w">
-                  <strong>Dossier courant :</strong> {{ drivePath[drivePath.length - 1].title }}
-                  ({{ driveItems.filter(i => i.type === 'FILE').length }} fichier(s) visible(s))
-                </p>
-                <button class="fr-btn" @click="indexDriveFolder"
-                        :disabled="driveIndexing">
-                  {{ driveIndexing ? 'Import en cours…' : 'Indexer ce dossier →' }}
-                </button>
-              </div>
-              <p v-else class="fr-text--sm fr-mt-2w" style="color:#666;">
-                Ouvrez un dossier pour pouvoir l'indexer.
-              </p>
-
-              <div v-if="driveError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
-                <p>{{ driveError }}</p>
-                <p v-if="driveUrl" class="fr-mt-1w">
-                  <a :href="driveUrl" target="_blank" rel="noopener noreferrer">
-                    Ouvrir Drive dans un nouvel onglet ↗
-                  </a>
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Répertoire local : un dossier entier (ou plusieurs), chaque fichier suivi jusqu'à l'indexation -->
-      <div v-if="source === 'directory'" class="fr-card fr-mb-4w">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-h5">📁 Choisir le dossier à indexer</h3>
-            <p class="fr-text--sm">
-              Les fichiers texte sont découpés automatiquement ; les PDF, Word et autres documents sont lus et découpés
-              par le moteur de recherche. Vous pourrez en ajouter d'autres plus tard, depuis la fiche de la collection.
-            </p>
-            <DepotZone ref="zone" :collection="collection" titre="Dossier à indexer" dossier-seul sans-bouton
-                       @selection="n => dossierPret = n > 0" @lance="dossierLance = true" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Source selector (upload file / URL) — hidden when Drive picker or a folder is active -->
-      <div v-if="source !== 'drive' && source !== 'directory'" class="fr-card fr-mb-4w">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <div class="fr-segmented fr-segmented--sm fr-mt-2w fr-mb-2w">
-              <div class="fr-segmented__elements">
-                <div class="fr-segmented__element">
-                  <input type="radio" id="tab-file" name="upload-mode" value="file"
-                         v-model="tab" :disabled="uploaded" />
-                  <label class="fr-label" for="tab-file">📄 Fichier local</label>
-                </div>
-                <div class="fr-segmented__element">
-                  <input type="radio" id="tab-url" name="upload-mode" value="url"
-                         v-model="tab" :disabled="uploaded" />
-                  <label class="fr-label" for="tab-url">🌐 URL distante</label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Mode: Fichier local -->
-            <div v-if="tab === 'file' && !uploaded">
-              <div class="fr-upload-group fr-mt-2w">
-                <label class="fr-label">
-                  Deposer un fichier depuis votre ordinateur
-                  <span class="fr-hint-text">Formats acceptés : {{ FORMATS_LISIBLES }}. Pour déposer plusieurs fichiers ou un dossier entier, utilisez ensuite « Ajouter des documents » sur la fiche de la collection.</span>
-                </label>
-                <input type="file" class="fr-upload" @change="onFile"
-                       :accept="ACCEPT" />
-              </div>
-
-              <div v-if="file" class="fr-mt-2w">
-                <p class="fr-text--sm">
-                  Fichier selectionne : <strong>{{ file.name }}</strong> ({{ formatSize(file.size) }})
-                </p>
-              </div>
-            </div>
-
-            <!-- Mode: URL distante -->
-            <div v-if="tab === 'url' && !uploaded">
-              <div class="fr-input-group fr-mt-2w">
-                <label class="fr-label">
-                  URL d'un fichier unique accessible en ligne
-                  <span class="fr-hint-text">Lien direct vers un fichier : {{ FORMATS_LISIBLES }}.</span>
-                </label>
-                <input class="fr-input" v-model="remoteUrl"
-                       placeholder="https://example.gouv.fr/documents/rapport.pdf" />
-              </div>
-
-              <!-- Verification -->
-              <div v-if="remoteUrl && (!remoteCheck || remoteCheck.status === 'error')" class="fr-mt-1w">
-                <button class="fr-btn fr-btn--tertiary fr-btn--sm" @click="checkRemoteUrl">
-                  Verifier l'accessibilite
-                </button>
-              </div>
-
-              <div v-if="remoteCheck && remoteCheck.status === 'checking'" class="fr-mt-1w">
-                <p class="fr-text--sm" style="color:#666;">Verification en cours...</p>
-              </div>
-
-              <div v-if="remoteCheck && remoteCheck.status === 'error'" class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w">
-                <p>{{ remoteCheck.message }}</p>
-              </div>
-
-              <!-- Verification OK: info + preview -->
-              <div v-if="remoteCheck && remoteCheck.status === 'ok'" class="fr-mt-2w">
-                <div class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w">
-                  <p>
-                    Document accessible — <strong>{{ remoteCheck.contentType }}</strong>
-                    <span v-if="remoteCheck.size"> — {{ formatSize(remoteCheck.size) }}</span>
-                  </p>
-                  <p v-if="remoteCheck.githubConverted" class="fr-text--sm fr-mt-1v">
-                    L'URL GitHub a ete convertie automatiquement vers le fichier brut (raw).
-                  </p>
-                </div>
-
-                <details class="fr-mb-1w" open>
-                  <summary class="fr-text--sm" style="cursor:pointer;font-weight:bold;">
-                    Apercu du document
-                  </summary>
-                  <div class="myrag-preview-frame fr-mt-1w">
-                    <!-- Text preview fetched via backend -->
-                    <div v-if="previewContent !== null" class="myrag-preview-content">
-                      <pre>{{ previewContent }}</pre>
-                      <p v-if="previewTruncated" class="fr-text--xs" style="color:#666;text-align:center;margin-top:0.5rem;">
-                        ... affichage limite aux {{ previewMaxChars }} premiers caracteres
-                      </p>
-                    </div>
-                    <div v-else-if="previewLoading" style="text-align:center;padding:2rem;color:#666;">
-                      Chargement de l'apercu...
-                    </div>
-                    <div v-else class="myrag-preview-placeholder">
-                      <p class="fr-text--sm" style="text-align:center;color:#666;padding:2rem;">
-                        Apercu non disponible pour le format <strong>{{ remoteCheck.contentType }}</strong>.<br>
-                        Le document sera telecharge et indexe directement.
-                      </p>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </div>
-
-            <!-- Upload progress bar (shown during upload for both modes) -->
-            <div v-if="uploading" class="fr-mt-2w">
-              <progress style="width:100%;" :value="uploadProgress" max="100"></progress>
-              <p class="fr-text--sm">Envoi en cours... {{ uploadProgress }}%</p>
-            </div>
-
-            <!-- Upload done confirmation -->
-            <div v-if="uploaded" class="fr-alert fr-alert--success fr-alert--sm fr-mt-2w">
-              <p>
-                <strong>{{ uploadedName }}</strong> envoye avec succes.
-                L'indexation s'effectue en tache de fond — vous pouvez passer a l'etape suivante.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Indexation progress (background) -->
-      <div v-if="job" class="fr-card fr-mb-4w" :class="job.status === 'done' ? 'fr-card--grey' : ''">
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-card__title">
-              {{ job.status === 'done' ? '✅' : job.status === 'done_with_errors' ? '⚠️' : '⏳' }}
-              Indexation en tache de fond
-            </h3>
-            <progress :value="job.uploaded_chunks" :max="job.total_chunks" style="width:100%;"></progress>
-            <p class="fr-text--sm fr-mt-1w">
-              {{ job.uploaded_chunks }} / {{ job.total_chunks }} chunks indexes ({{ job.progress_pct }}%)
-              <span v-if="job.status === 'uploading'"> — en cours</span>
-              <span v-if="job.status === 'done'" style="color:#18753c;"> — terminé</span>
-              <span v-if="job.status === 'done_with_errors'" style="color:#b34000;"> — terminé avec erreurs</span>
-            </p>
-            <p class="fr-hint-text fr-mt-1w">
-              Vous n'avez pas besoin d'attendre la fin de l'indexation pour continuer.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Upload error -->
-      <div v-if="uploadError" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w">
-        <p>{{ uploadError }}</p>
-      </div>
-
-      <!-- Navigation -->
-      <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
-        <NuxtLink :to="`/admin/create/step-2?source=${source}`" class="fr-btn fr-btn--secondary">
-          ← Précédent
-        </NuxtLink>
-
-        <!-- Main action button: changes role depending on state -->
-        <template v-if="source === 'directory'">
-          <button v-if="dossierLance" class="fr-btn" @click="next">Suivant →</button>
-          <button v-else class="fr-btn" :disabled="!dossierPret" @click="zone?.deposer()">Indexer le dossier →</button>
-        </template>
-        <button v-else-if="uploaded" class="fr-btn" @click="next">
-          Suivant →
-        </button>
-        <button v-else class="fr-btn" @click="handleMainAction"
-                :disabled="!isReadyToUpload || uploading">
-          {{ uploading ? 'Chargement en cours...' : 'Charger la donnée →' }}
-        </button>
-      </div>
-
-      <p v-if="source === 'directory'" class="fr-hint-text fr-mt-1w">
-        <span v-if="!dossierPret && !dossierLance">Choisissez un dossier pour continuer.</span>
-        <span v-else-if="!dossierLance">Cliquez sur « Indexer le dossier » : les fichiers partent un par un.</span>
-        <span v-else>L'indexation se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
-      </p>
-      <p v-else-if="!uploaded && !uploading" class="fr-hint-text fr-mt-1w">
-        <span v-if="tab === 'file' && !file">Selectionnez un fichier pour continuer.</span>
-        <span v-else-if="tab === 'url' && (!remoteCheck || remoteCheck.status !== 'ok')">Saisissez une adresse et vérifiez qu'elle est accessible.</span>
-        <span v-else>Cliquez sur « Charger la donnée » pour lancer l'envoi et l'indexation.</span>
-      </p>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ACCEPT, FORMATS_LISIBLES } from '~/utils/depot'
+
 const route = useRoute()
 const router = useRouter()
 const collection = route.query.collection as string
@@ -304,7 +15,7 @@ const uploaded = ref(false)
 const uploadedName = ref('')
 const job = ref<any>(null)
 const remoteUrl = ref('')
-const remoteCheck = ref<{ status: string; contentType?: string; size?: number; message?: string; githubConverted?: boolean } | null>(null)
+const remoteCheck = ref<{ status: string, contentType?: string, size?: number, message?: string, githubConverted?: boolean } | null>(null)
 const uploadError = ref('')
 // --- Répertoire local ---
 const zone = ref<{ deposer: () => Promise<void> } | null>(null)
@@ -312,60 +23,63 @@ const dossierPret = ref(false)
 const dossierLance = ref(false)
 
 // --- Drive picker state ---
-interface DriveItem { id: string; title: string; type: 'FOLDER' | 'FILE'; size?: number; updated_at?: string }
+interface DriveItem { id: string, title: string, type: 'FOLDER' | 'FILE', size?: number, updated_at?: string }
 const driveReady = ref(false)
 const driveLoading = ref(false)
 const driveIndexing = ref(false)
 const driveError = ref('')
 const driveUrl = ref('')
 const driveItems = ref<DriveItem[]>([])
-const drivePath = ref<DriveItem[]>([])      // breadcrumb stack (folders traversed)
+const drivePath = ref<DriveItem[]>([]) // breadcrumb stack (folders traversed)
 
-function parseApiError(raw: string, fallback: string): string {
+function parseApiError (raw: string, fallback: string): string {
   // useApi throws "API error <code>: <body>" — pull out the backend detail
   // so we show a readable sentence instead of JSON noise.
   const m = /^API error \d+: (.*)$/s.exec(raw || '')
-  if (!m) return raw || fallback
+  if (!m) { return raw || fallback }
   try {
     const body = JSON.parse(m[1])
     return body.detail || body.message || m[1]
-  } catch {
+  }
+  catch {
     return m[1]
   }
 }
 
-async function loadDriveFolder(parentId: string | null) {
+async function loadDriveFolder (parentId: string | null) {
   driveLoading.value = true
   driveError.value = ''
   try {
     const params: Record<string, string> = {}
-    if (parentId) params.parent_id = parentId
+    if (parentId) { params.parent_id = parentId }
     const res = await get('/api/sources/drive/folders', params)
     driveItems.value = res.items || []
     driveReady.value = true
-  } catch (e: any) {
+  }
+  catch (e: any) {
     driveError.value = parseApiError(e?.message, 'Erreur de chargement Drive')
     driveReady.value = false
-  } finally {
+  }
+  finally {
     driveLoading.value = false
   }
 }
 
-async function enterFolder(item: DriveItem) {
+async function enterFolder (item: DriveItem) {
   drivePath.value = [...drivePath.value, item]
   await loadDriveFolder(item.id)
 }
 
-async function goBack(index: number) {
+async function goBack (index: number) {
   // index === -1 → back to root
   drivePath.value = index >= 0 ? drivePath.value.slice(0, index + 1) : []
-  const parent = drivePath.value[drivePath.value.length - 1]
+  const parent = drivePath.value.at(-1)
   await loadDriveFolder(parent?.id || null)
 }
 
-async function indexDriveFolder() {
-  if (!drivePath.value.length) return
-  const folder = drivePath.value[drivePath.value.length - 1]
+async function indexDriveFolder () {
+  if (!drivePath.value.length) { return }
+  const folder = drivePath.value.at(-1)
   driveIndexing.value = true
   driveError.value = ''
   try {
@@ -376,9 +90,11 @@ async function indexDriveFolder() {
     })
     // Redirect to step 4 — the import runs async server-side; step-4 can poll /api/ingest/jobs
     router.push({ path: '/admin/create/step-4', query: { collection, source: 'drive' } })
-  } catch (e: any) {
+  }
+  catch (e: any) {
     driveError.value = parseApiError(e?.message, 'Erreur lors du lancement de l\'import Drive')
-  } finally {
+  }
+  finally {
     driveIndexing.value = false
   }
 }
@@ -388,22 +104,22 @@ const previewTruncated = ref(false)
 const previewMaxChars = 4000
 
 const isReadyToUpload = computed(() => {
-  if (tab.value === 'file') return !!file.value
-  if (tab.value === 'url') return remoteCheck.value?.status === 'ok'
+  if (tab.value === 'file') { return !!file.value }
+  if (tab.value === 'url') { return remoteCheck.value?.status === 'ok' }
   return false
 })
 
-function onFile(e: Event) {
+function onFile (e: Event) {
   file.value = (e.target as HTMLInputElement).files?.[0] || null
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
+function formatSize (bytes: number): string {
+  if (bytes < 1024) { return `${bytes} o` }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(1)} Ko` }
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-function isPreviewableText(contentType: string): boolean {
+function isPreviewableText (contentType: string): boolean {
   return contentType.startsWith('text/') || ['application/json', 'application/xml', 'application/javascript'].includes(contentType)
 }
 
@@ -413,12 +129,12 @@ function isPreviewableText(contentType: string): boolean {
  * - Blob URL (github.com/user/repo/blob/branch/file) → raw.githubusercontent.com/...
  * - Already raw → pass through
  */
-function isGithubRepoUrl(url: string): boolean {
+function isGithubRepoUrl (url: string): boolean {
   return /^https?:\/\/github\.com\/[^/]+\/[^/]+\/?$/.test(url)
     || /^https?:\/\/github\.com\/[^/]+\/[^/]+\/tree\//.test(url)
 }
 
-function normalizeGithubUrl(url: string): string {
+function normalizeGithubUrl (url: string): string {
   const match = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/)
   if (match) {
     return `https://raw.githubusercontent.com/${match[1]}/${match[2]}/${match[3]}`
@@ -426,26 +142,28 @@ function normalizeGithubUrl(url: string): string {
   return url
 }
 
-async function handleMainAction() {
+async function handleMainAction () {
   if (tab.value === 'file') {
     await uploadLocalFile()
-  } else {
+  }
+  else {
     await uploadRemoteUrl()
   }
 }
 
-async function uploadLocalFile() {
-  if (!file.value) return
+async function uploadLocalFile () {
+  if (!file.value) { return }
   uploading.value = true
   uploadProgress.value = 0
 
   const progressInterval = setInterval(() => {
-    if (uploadProgress.value < 90) uploadProgress.value += 10
+    if (uploadProgress.value < 90) { uploadProgress.value += 10 }
   }, 200)
 
   try {
     const result = await uploadFile(`/api/ingest/${collection}`, file.value, {
-      strategy: 'auto', sensitivity: 'public',
+      strategy: 'auto',
+      sensitivity: 'public',
     })
     clearInterval(progressInterval)
     uploadProgress.value = 100
@@ -455,19 +173,20 @@ async function uploadLocalFile() {
     job.value = result
 
     pollJob(result.job_id)
-  } catch (e) {
+  }
+  catch (e) {
     clearInterval(progressInterval)
     uploading.value = false
     uploadError.value = 'Erreur lors du chargement du fichier. Verifiez que le serveur MyRAG est accessible.'
   }
 }
 
-async function uploadRemoteUrl() {
+async function uploadRemoteUrl () {
   uploading.value = true
   uploadProgress.value = 0
 
   const progressInterval = setInterval(() => {
-    if (uploadProgress.value < 90) uploadProgress.value += 15
+    if (uploadProgress.value < 90) { uploadProgress.value += 15 }
   }, 300)
 
   try {
@@ -486,14 +205,15 @@ async function uploadRemoteUrl() {
       job.value = result
       pollJob(result.job_id)
     }
-  } catch (e) {
+  }
+  catch (e) {
     clearInterval(progressInterval)
     uploading.value = false
     uploadError.value = 'Erreur lors du chargement. Verifiez que le serveur MyRAG est accessible.'
   }
 }
 
-function pollJob(jobId: string) {
+function pollJob (jobId: string) {
   const pollInterval = setInterval(async () => {
     try {
       const j = await get(`/api/ingest/jobs/${jobId}`)
@@ -501,7 +221,8 @@ function pollJob(jobId: string) {
       if (j.status === 'done' || j.status === 'done_with_errors') {
         clearInterval(pollInterval)
       }
-    } catch (e) {}
+    }
+    catch (e) {}
   }, 2000)
 }
 
@@ -511,7 +232,7 @@ watch(remoteUrl, () => {
   previewTruncated.value = false
 })
 
-async function loadPreview(url: string, contentType: string) {
+async function loadPreview (url: string, contentType: string) {
   // Only preview text-based formats
   if (!isPreviewableText(contentType)) {
     previewContent.value = null
@@ -524,15 +245,17 @@ async function loadPreview(url: string, contentType: string) {
       previewContent.value = resp.content
       previewTruncated.value = resp.truncated || false
     }
-  } catch {
+  }
+  catch {
     previewContent.value = null
-  } finally {
+  }
+  finally {
     previewLoading.value = false
   }
 }
 
-async function checkRemoteUrl() {
-  if (!remoteUrl.value) return
+async function checkRemoteUrl () {
+  if (!remoteUrl.value) { return }
 
   // Reject GitHub repo/tree URLs (not a file)
   if (isGithubRepoUrl(remoteUrl.value)) {
@@ -562,7 +285,8 @@ async function checkRemoteUrl() {
         githubConverted: wasConverted,
       }
       loadPreview(remoteUrl.value, resp.content_type || '')
-    } else {
+    }
+    else {
       const detail = resp?.error
         ? `Erreur : ${resp.error}`
         : resp?.status_code
@@ -570,12 +294,13 @@ async function checkRemoteUrl() {
           : 'Le document n\'est pas accessible.'
       remoteCheck.value = { status: 'error', message: `${detail} Verifiez l'URL et que le fichier est public.` }
     }
-  } catch {
+  }
+  catch {
     remoteCheck.value = { status: 'error', message: 'Impossible de joindre le serveur MyRAG pour verifier l\'URL.' }
   }
 }
 
-function next() {
+function next () {
   router.push(`/admin/create/step-4?collection=${collection}`)
 }
 
@@ -584,11 +309,558 @@ onMounted(async () => {
     try {
       const cfg = await get('/api/config')
       driveUrl.value = cfg.drive_url || ''
-    } catch { /* non-blocking — link just won't appear */ }
+    }
+    catch { /* non-blocking — link just won't appear */ }
     loadDriveFolder(null)
   }
 })
 </script>
+
+<template>
+  <div>
+    <nav
+      role="navigation"
+      class="fr-breadcrumb"
+      aria-label="vous etes ici"
+    >
+      <ol class="fr-breadcrumb__list">
+        <li>
+          <NuxtLink
+            class="fr-breadcrumb__link"
+            to="/admin"
+          >
+            Administration
+          </NuxtLink>
+        </li>
+        <li>
+          <NuxtLink
+            class="fr-breadcrumb__link"
+            to="/admin/create"
+          >
+            Créer
+          </NuxtLink>
+        </li>
+        <li>
+          <a
+            class="fr-breadcrumb__link"
+            aria-current="page"
+          >Donnees</a>
+        </li>
+      </ol>
+    </nav>
+
+    <h1 class="fr-h3">
+      Charger les donnees — {{ collection }}
+    </h1>
+    <p class="fr-text--lg fr-mb-4w">
+      Étape 3 sur 5 — Ajoutez vos documents à la collection
+    </p>
+
+    <WizardStepper :current-step="3" />
+
+    <div
+      v-if="!collection"
+      class="fr-alert fr-alert--warning fr-mb-4w"
+    >
+      <p>
+        Aucune collection specifiee. <NuxtLink to="/admin/create">
+          Retour à l'étape 1
+        </NuxtLink>
+      </p>
+    </div>
+
+    <div
+      v-else
+      class="fr-col-8"
+    >
+      <!-- Drive folder picker (when source=drive) -->
+      <div
+        v-if="source === 'drive'"
+        class="fr-card fr-mb-4w"
+      >
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <h3 class="fr-h5">
+              ☁️ Choisir un dossier Drive à indexer
+            </h3>
+
+            <div
+              v-if="!driveReady"
+              class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w"
+            >
+              <p>{{ driveError || 'Chargement du service Drive…' }}</p>
+              <p
+                v-if="driveError && driveUrl"
+                class="fr-mt-1w"
+              >
+                <a
+                  :href="driveUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ouvrir Drive dans un nouvel onglet ↗
+                </a>
+              </p>
+            </div>
+
+            <div v-else>
+              <!-- Breadcrumb -->
+              <nav
+                class="fr-breadcrumb"
+                aria-label="Chemin Drive"
+              >
+                <ol class="fr-breadcrumb__list">
+                  <li>
+                    <a
+                      class="fr-breadcrumb__link"
+                      href="#"
+                      @click.prevent="goBack(-1)"
+                    >Racine</a>
+                  </li>
+                  <li
+                    v-for="(f, idx) in drivePath"
+                    :key="f.id"
+                  >
+                    <a
+                      class="fr-breadcrumb__link"
+                      href="#"
+                      @click.prevent="goBack(idx)"
+                    >{{ f.title }}</a>
+                  </li>
+                </ol>
+              </nav>
+
+              <!-- Items list -->
+              <ul
+                class="fr-mt-2w"
+                style="list-style:none;padding:0;"
+              >
+                <li
+                  v-for="item in driveItems"
+                  :key="item.id"
+                  class="fr-mb-1w"
+                >
+                  <button
+                    v-if="item.type === 'FOLDER'"
+                    class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-folder-2-line fr-btn--icon-left"
+                    :disabled="driveLoading"
+                    @click="enterFolder(item)"
+                  >
+                    {{ item.title || '(sans nom)' }}
+                  </button>
+                  <span
+                    v-else
+                    class="fr-text--sm"
+                    style="color:#666;"
+                  >
+                    <span
+                      class="fr-icon-file-line"
+                      aria-hidden="true"
+                    />
+                    {{ item.title || '(sans nom)' }}
+                    <span
+                      v-if="item.size"
+                      style="color:#999;"
+                    > — {{ formatSize(item.size) }}</span>
+                  </span>
+                </li>
+                <li
+                  v-if="!driveItems.length && !driveLoading"
+                  class="fr-text--sm"
+                  style="color:#666;"
+                >
+                  (Dossier vide)
+                </li>
+              </ul>
+
+              <!-- Index current folder button -->
+              <div
+                v-if="drivePath.length"
+                class="fr-mt-3w"
+              >
+                <p class="fr-text--sm fr-mb-1w">
+                  <strong>Dossier courant :</strong> {{ drivePath[drivePath.length - 1].title }}
+                  ({{ driveItems.filter(i => i.type === 'FILE').length }} fichier(s) visible(s))
+                </p>
+                <button
+                  class="fr-btn"
+                  :disabled="driveIndexing"
+                  @click="indexDriveFolder"
+                >
+                  {{ driveIndexing ? 'Import en cours…' : 'Indexer ce dossier →' }}
+                </button>
+              </div>
+              <p
+                v-else
+                class="fr-text--sm fr-mt-2w"
+                style="color:#666;"
+              >
+                Ouvrez un dossier pour pouvoir l'indexer.
+              </p>
+
+              <div
+                v-if="driveError"
+                class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"
+              >
+                <p>{{ driveError }}</p>
+                <p
+                  v-if="driveUrl"
+                  class="fr-mt-1w"
+                >
+                  <a
+                    :href="driveUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ouvrir Drive dans un nouvel onglet ↗
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Répertoire local : un dossier entier (ou plusieurs), chaque fichier suivi jusqu'à l'indexation -->
+      <div
+        v-if="source === 'directory'"
+        class="fr-card fr-mb-4w"
+      >
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <h3 class="fr-h5">
+              📁 Choisir le dossier à indexer
+            </h3>
+            <p class="fr-text--sm">
+              Les fichiers texte sont découpés automatiquement ; les PDF, Word et autres documents sont lus et découpés
+              par le moteur de recherche. Vous pourrez en ajouter d'autres plus tard, depuis la fiche de la collection.
+            </p>
+            <DepotZone
+              ref="zone"
+              :collection="collection"
+              titre="Dossier à indexer"
+              dossier-seul
+              sans-bouton
+              @selection="n => dossierPret = n > 0"
+              @lance="dossierLance = true"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Source selector (upload file / URL) — hidden when Drive picker or a folder is active -->
+      <div
+        v-if="source !== 'drive' && source !== 'directory'"
+        class="fr-card fr-mb-4w"
+      >
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <div class="fr-segmented fr-segmented--sm fr-mt-2w fr-mb-2w">
+              <div class="fr-segmented__elements">
+                <div class="fr-segmented__element">
+                  <input
+                    id="tab-file"
+                    v-model="tab"
+                    type="radio"
+                    name="upload-mode"
+                    value="file"
+                    :disabled="uploaded"
+                  >
+                  <label
+                    class="fr-label"
+                    for="tab-file"
+                  >📄 Fichier local</label>
+                </div>
+                <div class="fr-segmented__element">
+                  <input
+                    id="tab-url"
+                    v-model="tab"
+                    type="radio"
+                    name="upload-mode"
+                    value="url"
+                    :disabled="uploaded"
+                  >
+                  <label
+                    class="fr-label"
+                    for="tab-url"
+                  >🌐 URL distante</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mode: Fichier local -->
+            <div v-if="tab === 'file' && !uploaded">
+              <div class="fr-upload-group fr-mt-2w">
+                <label class="fr-label">
+                  Deposer un fichier depuis votre ordinateur
+                  <span class="fr-hint-text">Formats acceptés : {{ FORMATS_LISIBLES }}. Pour déposer plusieurs fichiers ou un dossier entier, utilisez ensuite « Ajouter des documents » sur la fiche de la collection.</span>
+                </label>
+                <input
+                  type="file"
+                  class="fr-upload"
+                  :accept="ACCEPT"
+                  @change="onFile"
+                >
+              </div>
+
+              <div
+                v-if="file"
+                class="fr-mt-2w"
+              >
+                <p class="fr-text--sm">
+                  Fichier selectionne : <strong>{{ file.name }}</strong> ({{ formatSize(file.size) }})
+                </p>
+              </div>
+            </div>
+
+            <!-- Mode: URL distante -->
+            <div v-if="tab === 'url' && !uploaded">
+              <div class="fr-input-group fr-mt-2w">
+                <label class="fr-label">
+                  URL d'un fichier unique accessible en ligne
+                  <span class="fr-hint-text">Lien direct vers un fichier : {{ FORMATS_LISIBLES }}.</span>
+                </label>
+                <input
+                  v-model="remoteUrl"
+                  class="fr-input"
+                  placeholder="https://example.gouv.fr/documents/rapport.pdf"
+                >
+              </div>
+
+              <!-- Verification -->
+              <div
+                v-if="remoteUrl && (!remoteCheck || remoteCheck.status === 'error')"
+                class="fr-mt-1w"
+              >
+                <button
+                  class="fr-btn fr-btn--tertiary fr-btn--sm"
+                  @click="checkRemoteUrl"
+                >
+                  Verifier l'accessibilite
+                </button>
+              </div>
+
+              <div
+                v-if="remoteCheck && remoteCheck.status === 'checking'"
+                class="fr-mt-1w"
+              >
+                <p
+                  class="fr-text--sm"
+                  style="color:#666;"
+                >
+                  Verification en cours...
+                </p>
+              </div>
+
+              <div
+                v-if="remoteCheck && remoteCheck.status === 'error'"
+                class="fr-alert fr-alert--error fr-alert--sm fr-mt-1w"
+              >
+                <p>{{ remoteCheck.message }}</p>
+              </div>
+
+              <!-- Verification OK: info + preview -->
+              <div
+                v-if="remoteCheck && remoteCheck.status === 'ok'"
+                class="fr-mt-2w"
+              >
+                <div class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w">
+                  <p>
+                    Document accessible — <strong>{{ remoteCheck.contentType }}</strong>
+                    <span v-if="remoteCheck.size"> — {{ formatSize(remoteCheck.size) }}</span>
+                  </p>
+                  <p
+                    v-if="remoteCheck.githubConverted"
+                    class="fr-text--sm fr-mt-1v"
+                  >
+                    L'URL GitHub a ete convertie automatiquement vers le fichier brut (raw).
+                  </p>
+                </div>
+
+                <details
+                  class="fr-mb-1w"
+                  open
+                >
+                  <summary
+                    class="fr-text--sm"
+                    style="cursor:pointer;font-weight:bold;"
+                  >
+                    Apercu du document
+                  </summary>
+                  <div class="myrag-preview-frame fr-mt-1w">
+                    <!-- Text preview fetched via backend -->
+                    <div
+                      v-if="previewContent !== null"
+                      class="myrag-preview-content"
+                    >
+                      <pre>{{ previewContent }}</pre>
+                      <p
+                        v-if="previewTruncated"
+                        class="fr-text--xs"
+                        style="color:#666;text-align:center;margin-top:0.5rem;"
+                      >
+                        ... affichage limite aux {{ previewMaxChars }} premiers caracteres
+                      </p>
+                    </div>
+                    <div
+                      v-else-if="previewLoading"
+                      style="text-align:center;padding:2rem;color:#666;"
+                    >
+                      Chargement de l'apercu...
+                    </div>
+                    <div
+                      v-else
+                      class="myrag-preview-placeholder"
+                    >
+                      <p
+                        class="fr-text--sm"
+                        style="text-align:center;color:#666;padding:2rem;"
+                      >
+                        Apercu non disponible pour le format <strong>{{ remoteCheck.contentType }}</strong>.<br>
+                        Le document sera telecharge et indexe directement.
+                      </p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <!-- Upload progress bar (shown during upload for both modes) -->
+            <div
+              v-if="uploading"
+              class="fr-mt-2w"
+            >
+              <progress
+                style="width:100%;"
+                :value="uploadProgress"
+                max="100"
+              />
+              <p class="fr-text--sm">
+                Envoi en cours... {{ uploadProgress }}%
+              </p>
+            </div>
+
+            <!-- Upload done confirmation -->
+            <div
+              v-if="uploaded"
+              class="fr-alert fr-alert--success fr-alert--sm fr-mt-2w"
+            >
+              <p>
+                <strong>{{ uploadedName }}</strong> envoye avec succes.
+                L'indexation s'effectue en tache de fond — vous pouvez passer a l'etape suivante.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Indexation progress (background) -->
+      <div
+        v-if="job"
+        class="fr-card fr-mb-4w"
+        :class="job.status === 'done' ? 'fr-card--grey' : ''"
+      >
+        <div class="fr-card__body">
+          <div class="fr-card__content">
+            <h3 class="fr-card__title">
+              {{ job.status === 'done' ? '✅' : job.status === 'done_with_errors' ? '⚠️' : '⏳' }}
+              Indexation en tache de fond
+            </h3>
+            <progress
+              :value="job.uploaded_chunks"
+              :max="job.total_chunks"
+              style="width:100%;"
+            />
+            <p class="fr-text--sm fr-mt-1w">
+              {{ job.uploaded_chunks }} / {{ job.total_chunks }} chunks indexes ({{ job.progress_pct }}%)
+              <span v-if="job.status === 'uploading'"> — en cours</span>
+              <span
+                v-if="job.status === 'done'"
+                style="color:#18753c;"
+              > — terminé</span>
+              <span
+                v-if="job.status === 'done_with_errors'"
+                style="color:#b34000;"
+              > — terminé avec erreurs</span>
+            </p>
+            <p class="fr-hint-text fr-mt-1w">
+              Vous n'avez pas besoin d'attendre la fin de l'indexation pour continuer.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload error -->
+      <div
+        v-if="uploadError"
+        class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"
+      >
+        <p>{{ uploadError }}</p>
+      </div>
+
+      <!-- Navigation -->
+      <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
+        <NuxtLink
+          :to="`/admin/create/step-2?source=${source}`"
+          class="fr-btn fr-btn--secondary"
+        >
+          ← Précédent
+        </NuxtLink>
+
+        <!-- Main action button: changes role depending on state -->
+        <template v-if="source === 'directory'">
+          <button
+            v-if="dossierLance"
+            class="fr-btn"
+            @click="next"
+          >
+            Suivant →
+          </button>
+          <button
+            v-else
+            class="fr-btn"
+            :disabled="!dossierPret"
+            @click="zone?.deposer()"
+          >
+            Indexer le dossier →
+          </button>
+        </template>
+        <button
+          v-else-if="uploaded"
+          class="fr-btn"
+          @click="next"
+        >
+          Suivant →
+        </button>
+        <button
+          v-else
+          class="fr-btn"
+          :disabled="!isReadyToUpload || uploading"
+          @click="handleMainAction"
+        >
+          {{ uploading ? 'Chargement en cours...' : 'Charger la donnée →' }}
+        </button>
+      </div>
+
+      <p
+        v-if="source === 'directory'"
+        class="fr-hint-text fr-mt-1w"
+      >
+        <span v-if="!dossierPret && !dossierLance">Choisissez un dossier pour continuer.</span>
+        <span v-else-if="!dossierLance">Cliquez sur « Indexer le dossier » : les fichiers partent un par un.</span>
+        <span v-else>L'indexation se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
+      </p>
+      <p
+        v-else-if="!uploaded && !uploading"
+        class="fr-hint-text fr-mt-1w"
+      >
+        <span v-if="tab === 'file' && !file">Selectionnez un fichier pour continuer.</span>
+        <span v-else-if="tab === 'url' && (!remoteCheck || remoteCheck.status !== 'ok')">Saisissez une adresse et vérifiez qu'elle est accessible.</span>
+        <span v-else>Cliquez sur « Charger la donnée » pour lancer l'envoi et l'indexation.</span>
+      </p>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .myrag-preview-frame {
