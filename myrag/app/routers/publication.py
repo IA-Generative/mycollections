@@ -119,7 +119,7 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
         # Le nom de la fiche dans l'assistant : celui qu'on saisit, sinon le TITRE de la
         # collection — plus jamais l'identifiant précédé d'un pictogramme.
         # N'est GARDÉ que s'il diffère du titre : sinon un titre corrigé plus tard
-        # n'atteindrait jamais la fiche (fiche_assistant.nom_de_fiche retombe sur le titre).
+        # n'atteindrait jamais la fiche (fiche_socle.nom_de_fiche retombe sur le titre).
         titre = titre_de(col.to_dict() if col else {"name": name})
         saisi = req.alias_name.strip()
         pub.alias_name = "" if saisi == titre else saisi
@@ -163,7 +163,7 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     owui_error: str | None = None
     if req.alias_enabled and pub.state == "published":
         try:
-            from app.services.fiche_assistant import synchroniser_fiche
+            from app.services.fiche_socle import synchroniser_fiche
             from app.services.owui_client import OwuiAdminUnavailable
 
             # Tout ce qui part au socle se décide à UN endroit (nom = titre, étiquette =

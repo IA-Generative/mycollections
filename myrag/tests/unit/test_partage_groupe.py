@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services import fiche_assistant
+from app.services import fiche_socle
 from app.services.owui_client import OwuiClient
 
 GROUPES = [{"id": "b39ff556-0000", "name": "mirai-beta-testeurs-admin"}, {"id": "8d48a7a2-0000", "name": "Experimentation DGEF"}]
@@ -52,31 +52,31 @@ async def test_un_nom_un_chemin_ou_un_identifiant_designent_le_meme_groupe(monke
 
 @pytest.mark.asyncio
 async def test_la_fiche_vise_l_identifiant_du_groupe_ou_ne_part_pas(monkeypatch):
-    fiche = fiche_assistant.FicheVoulue(
+    fiche = fiche_socle.FicheVoulue(
         model_id="openrag-x",
         name="X",
         access_grants=[{"principal_type": "group", "principal_id": "/g/mirai-beta-testeurs-admin"}],
         groupes_saisis=["/g/mirai-beta-testeurs-admin"],
     )
-    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: fiche))
+    monkeypatch.setattr(fiche_socle, "_voulue", AsyncMock(side_effect=lambda n: fiche))
     client = AsyncMock()
     client.ids_de_groupes = AsyncMock(return_value=(["b39ff556-0000"], []))
-    await fiche_assistant.synchroniser_fiche("x", client=client)
+    await fiche_socle.synchroniser_fiche("x", client=client)
     envoye = client.upsert_model.await_args.kwargs
     assert envoye["access_grants"] == [{"principal_type": "group", "principal_id": "b39ff556-0000", "permission": "read"}]
     assert "groupes_saisis" not in envoye
 
     client = AsyncMock()
     client.ids_de_groupes = AsyncMock(return_value=([], ["/g/mirai-beta-testeurs-admin"]))
-    with pytest.raises(fiche_assistant.GroupeInconnu):
-        await fiche_assistant.synchroniser_fiche("x", client=client)
+    with pytest.raises(fiche_socle.GroupeInconnu):
+        await fiche_socle.synchroniser_fiche("x", client=client)
     client.upsert_model.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_la_resynchronisation_ne_touche_pas_aux_droits(monkeypatch):
-    fiche = fiche_assistant.FicheVoulue(model_id="openrag-x", name="X", groupes_saisis=["/g/quelque-chose"])
-    monkeypatch.setattr(fiche_assistant, "_voulue", AsyncMock(side_effect=lambda n: fiche))
+    fiche = fiche_socle.FicheVoulue(model_id="openrag-x", name="X", groupes_saisis=["/g/quelque-chose"])
+    monkeypatch.setattr(fiche_socle, "_voulue", AsyncMock(side_effect=lambda n: fiche))
     client = AsyncMock()
-    await fiche_assistant.synchroniser_fiche("x", client=client, garder_les_droits=True)
+    await fiche_socle.synchroniser_fiche("x", client=client, garder_les_droits=True)
     client.ids_de_groupes.assert_not_awaited()

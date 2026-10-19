@@ -12,7 +12,7 @@ def _publier(client, en_tant_que, nom, *, visibilite, createur):
     from unittest.mock import AsyncMock, patch
 
     en_tant_que(createur)
-    with patch("app.services.fiche_assistant.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})):
+    with patch("app.services.fiche_socle.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})):
         r = client.post(f"/api/collections/{nom}/publish", json={"alias_enabled": True, "visibility": visibilite, "visibility_groups": ["/g/mirai-beta-testeurs"]})
     assert r.status_code == 200, r.text
 

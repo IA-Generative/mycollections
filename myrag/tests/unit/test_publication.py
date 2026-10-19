@@ -18,7 +18,7 @@ PUBLIER = {"alias_enabled": True, "visibility": "group", "visibility_groups": ["
 @pytest.fixture
 def socle():
     with (
-        patch("app.services.fiche_assistant.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})) as m,
+        patch("app.services.fiche_socle.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})) as m,
         patch("app.services.owui_client.OwuiClient.delete_model", new=AsyncMock(return_value=None)),
     ):
         yield m
