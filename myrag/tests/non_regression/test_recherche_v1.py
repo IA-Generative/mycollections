@@ -13,6 +13,15 @@ from tests.non_regression._outils import figer
 from tests.unit.test_recherche import ALICE, _doc, jeu, moteur, noms, reglages  # noqa: F401 — fixtures et jeu partagés
 
 
+def _rendu(documents: list[dict]):
+    """Ce que rend `OpenRAGClient.search` : un modèle depuis le typage du client (#76), un dict avant."""
+    try:
+        from app.services.openrag_client import ResultatRecherche
+    except ImportError:
+        return {"documents": documents}
+    return ResultatRecherche.model_validate({"documents": documents})
+
+
 def _documents(jeu):
     return [
         _doc(
@@ -49,7 +58,7 @@ def _normaliser(corps, jeu):
 
 def test_search_sans_scope(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": _documents(jeu)}
+    moteur.return_value = _rendu(_documents(jeu))
     r = client.get("/api/v1/search", params={"q": "budget"})
     assert r.status_code == 200, r.text
     figer("recherche_v1/search_sans_scope", _normaliser(r.json(), jeu))
@@ -57,7 +66,7 @@ def test_search_sans_scope(client, en_tant_que, jeu, moteur):
 
 def test_search_avec_scope_et_limite(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": _documents(jeu)}
+    moteur.return_value = _rendu(_documents(jeu))
     r = client.get("/api/v1/search", params={"q": "budget", "scope": f"{jeu['partagee']},{jeu['secrete']}", "limit": "1"})
     assert r.status_code == 200, r.text
     figer("recherche_v1/search_avec_scope", _normaliser(r.json(), jeu))
@@ -75,7 +84,7 @@ def test_scopes(client, en_tant_que, jeu, moteur):
 
 def test_reponse_vide_et_en_tetes(client, en_tant_que, jeu, moteur):
     en_tant_que(ALICE)
-    moteur.return_value = {"documents": []}
+    moteur.return_value = _rendu([])
     r = client.get("/api/v1/search", params={"q": "budget"})
     assert r.headers["cache-control"] == "no-store"
     assert r.json() == {"source": "mycollections", "query": "budget", "total": 0, "truncated": False, "total_is_lower_bound": False, "results": []}
