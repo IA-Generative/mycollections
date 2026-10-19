@@ -127,8 +127,8 @@ async def test_la_banque_se_met_a_jour_quand_le_catalogue_change(creer_collectio
             return [(q.source_ref, q.question, q.reponse, q.relecture) for q in r.scalars().all()]
 
     assert await jeu() == [("amorce:1", "Q1 ?", "juste", "valide"), ("amorce:2", "Q2 ?", "b", "valide")]
-    q1 = (await questions_store.lister_questions(nom, texte="Q1"))["questions"][0]
-    await questions_store.modifier_question(nom, q1["id"], {"reponse": "corrigée à la main"}, None)
+    q1 = (await questions_store.lister_questions(nom, texte="Q1")).questions[0]
+    await questions_store.modifier_question(nom, q1.id, questions_store.QuestionModification(reponse="corrigée à la main"), None)
     await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "catalogue"}])
     assert await jeu() == [("amorce:1", "Q1 ?", "corrigée à la main", "valide")]
 
@@ -138,7 +138,9 @@ def test_les_reponses_attendues_de_natinf_collent_a_la_source():
     dit « achat en connaissance de cause de produits de la pêche maritime »."""
     from app.amorces import entree
 
-    questions = {q["question"]: q["expected_answer"] for q in entree("natinf")["questions"]}
+    e = entree("natinf")
+    assert e is not None
+    questions = {q["question"]: q["expected_answer"] for q in e["questions"]}
     assert "PECHE MARITIME" in questions["Quel est le libellé de l'infraction NATINF 7987 ?"]
     assert "conduite sans permis" not in " ".join(questions.values())
     assert "6047" not in " ".join(questions.values()), "ce code n'existe pas dans la nomenclature importée"

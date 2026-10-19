@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
+from app.services.openrag_client import ResultatPartition
 from tests.conftest import personne
 
 URL = "/api/collections/{}/qualite/questions"
@@ -155,13 +156,16 @@ def test_supprimer_un_run_garde_les_questions_validees(client, en_tant_que, cree
 
     creer_collection(nom)
     en_tant_que(personne("createur"))
-    run = asyncio.run(gs.creer_run(nom, [{"id": "p", "nom": "Agent"}], 3, {"entites": 1.0}, "chat", "x"))
-    asyncio.run(gs.terminer_run(run["id"], "termine"))
+    from app.models.generation import PersonaFiche
+
+    persona = PersonaFiche(id="p", collection=nom, nom="Agent", description_role="", cree_le="", maj_le="")
+    run = asyncio.run(gs.creer_run(nom, [persona], 3, {"entites": 1.0}, "chat", "x"))
+    asyncio.run(gs.terminer_run(run.id, "termine"))
     paires = [PaireGeneree(question=f"Question {i} ?", reponse="R", contextes=[], persona_nom="Agent", synthetiseur="s", style="", longueur="") for i in range(3)]
-    asyncio.run(gs.enregistrer_paires(run["id"], nom, paires))
+    asyncio.run(gs.enregistrer_paires(run.id, nom, paires))
     ids = [q["id"] for q in client.get(URL.format(nom)).json()["questions"]]
     client.patch(URL.format(nom) + f"/{ids[0]}", json={"relecture": "valide"})
-    asyncio.run(gs.supprimer_run(nom, run["id"]))
+    asyncio.run(gs.supprimer_run(nom, run.id))
     reste = client.get(URL.format(nom)).json()["questions"]
     assert [q["id"] for q in reste] == [ids[0]] and reste[0]["run_id"] is None and reste[0]["origine"] == "generee"
 
@@ -181,7 +185,7 @@ def test_la_purge_efface_le_jeu_de_questions(client, en_tant_que, creer_collecti
     con.execute("UPDATE collections SET archived_at = CURRENT_TIMESTAMP WHERE name = ?", (nom,))
     con.commit()
     con.close()
-    with patch("app.services.openrag_client.OpenRAGClient.delete_partition", new=AsyncMock(return_value={"status": "ok"})):
+    with patch("app.services.openrag_client.OpenRAGClient.delete_partition", new=AsyncMock(return_value=ResultatPartition(status="ok"))):
         rapport = asyncio.run(collection_store.purge_collection(nom))
     assert "paire_qa" in str(rapport)
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])

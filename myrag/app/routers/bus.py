@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.config import settings
+from app.models.collectif import SuiviBus
 from app.models.db import ROLES_SOUTIEN
 from app.routers._collectif_commun import capacite
 from app.routers.demandes import DemandeEntree
@@ -99,7 +100,7 @@ async def demandes(visiteur: str = Query(...), q: str | None = Query(None)):
     h = _hash(visiteur)
     liste = await store.lister_demandes(h)
     if q and q.strip():
-        liste = doublons.candidats(q.strip(), [d for d in liste if d["etat"] != "close"])
+        liste = doublons.candidats(q.strip(), [d for d in liste if d.etat != "close"])
     return {"demandes": liste, "seuil_chantier": (await capacites.lire_async())["seuil_chantier"]}
 
 
@@ -109,7 +110,7 @@ async def deposer(entree: BusDemande):
     seuil = int((await capacites.lire_async())["seuil_chantier"])
     donnees = entree.model_dump(exclude={"visiteur", "app"})
     demande = await store.creer_demande(donnees, h, seuil)
-    return {"demande": demande, "url": f"{settings.myrag_public_url.rstrip('/')}/demandes/{demande['id']}"}
+    return {"demande": demande, "url": f"{settings.myrag_public_url.rstrip('/')}/demandes/{demande.id}"}
 
 
 @router.post("/demandes/{ident}/soutenir", dependencies=[Depends(admission), Depends(capacite("demandes"))])
@@ -127,9 +128,11 @@ async def soutenir(ident: str, entree: BusSoutien):
 async def suivi(visiteur: str = Query(...)):
     h = _hash(visiteur)
     r = await store.suivi_pour(h)
-    r["seuil_chantier"] = (await capacites.lire_async())["seuil_chantier"]
-    r["url"] = f"{settings.myrag_public_url.rstrip('/')}/demandes"
-    return r
+    return SuiviBus(
+        **r.model_dump(),
+        seuil_chantier=(await capacites.lire_async())["seuil_chantier"],
+        url=f"{settings.myrag_public_url.rstrip('/')}/demandes",
+    )
 
 
 @router.get("/collections", dependencies=[Depends(admission)])
@@ -144,7 +147,7 @@ async def signaler(entree: BusSignalement):
         f = await store.fiche(entree.collection)
     except store.Introuvable:
         raise HTTPException(status_code=404, detail="Collection introuvable")
-    if f["etat_collab"] != "publiee_tous" and f["scope"] != "public":
+    if f.etat_collab != "publiee_tous" and f.scope != "public":
         # Sans les groupes du visiteur, on ne sait pas s'il peut la lire : on ne le dit pas.
         raise HTTPException(status_code=404, detail="Collection introuvable")
     texte = entree.texte if not entree.document else f"Document cité : {entree.document}\n{entree.texte}"
@@ -157,5 +160,5 @@ async def signaler(entree: BusSignalement):
             raise HTTPException(status_code=422, detail="version illisible (base64 attendu)")
         if not contenu or len(contenu) > VERSION_MAX:
             raise HTTPException(status_code=413, detail="version vide ou trop lourde (5 Mio au plus)")
-        proposition = await store.deposer_version(entree.collection, entree.document or entree.version.nom, entree.version.nom, contenu, h, signalement["id"])
+        proposition = await store.deposer_version(entree.collection, entree.document or entree.version.nom, entree.version.nom, contenu, h, signalement.id)
     return {"signalement": signalement, "proposition": proposition}

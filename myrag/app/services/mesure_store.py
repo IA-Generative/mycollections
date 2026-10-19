@@ -9,18 +9,19 @@ from sqlalchemy import delete, func, select
 
 from app.database import async_session
 from app.models.db import Mesure, MesureResultat, utcnow
+from app.models.qualite import MesureFiche, PageResultats, ResultatFiche, ResultatVolet, TendanceFiche
 from app.services.collectif_store import Conflit, Introuvable, signature
 
 ACTIVES = ("en_attente", "en_cours")
 
 
-async def mesure_active(name: str) -> dict | None:
+async def mesure_active(name: str) -> MesureFiche | None:
     async with async_session() as s:
         m = (await s.execute(select(Mesure).where(Mesure.collection_name == name, Mesure.etat.in_(ACTIVES)))).scalars().first()
-        return m.to_dict() if m else None
+        return MesureFiche.depuis(m) if m else None
 
 
-async def creer_mesure(name: str, filtre: dict, modele: str, nb_questions: int, sub: str | None) -> dict:
+async def creer_mesure(name: str, filtre: dict, modele: str, nb_questions: int, sub: str | None) -> MesureFiche:
     if await mesure_active(name):
         raise Conflit("Une mesure est déjà en cours pour cette collection.")
     async with async_session() as s:
@@ -28,21 +29,21 @@ async def creer_mesure(name: str, filtre: dict, modele: str, nb_questions: int, 
         s.add(m)
         await s.commit()
         await s.refresh(m)
-        return m.to_dict()
+        return MesureFiche.depuis(m)
 
 
-async def lister_mesures(name: str, limite: int = 50) -> list[dict]:
+async def lister_mesures(name: str, limite: int = 50) -> list[MesureFiche]:
     async with async_session() as s:
         r = await s.execute(select(Mesure).where(Mesure.collection_name == name).order_by(Mesure.cree_le.desc()).limit(limite))
-        return [m.to_dict() for m in r.scalars().all()]
+        return [MesureFiche.depuis(m) for m in r.scalars().all()]
 
 
-async def lire_mesure(name: str, ident: str) -> dict:
+async def lire_mesure(name: str, ident: str) -> MesureFiche:
     async with async_session() as s:
         m = await s.get(Mesure, ident)
         if not m or m.collection_name != name:
             raise Introuvable("Mesure introuvable")
-        return m.to_dict()
+        return MesureFiche.depuis(m)
 
 
 async def maj_mesure(ident: str, **champs) -> None:
@@ -55,7 +56,7 @@ async def maj_mesure(ident: str, **champs) -> None:
             await s.commit()
 
 
-async def terminer_mesure(ident: str, etat: str, *, erreur: str | None = None, **champs) -> dict | None:
+async def terminer_mesure(ident: str, etat: str, *, erreur: str | None = None, **champs) -> MesureFiche | None:
     async with async_session() as s:
         m = await s.get(Mesure, ident)
         if not m:
@@ -67,7 +68,7 @@ async def terminer_mesure(ident: str, etat: str, *, erreur: str | None = None, *
         m.erreur = (erreur or "Échec sans message") if etat == "erreur" else None
         await s.commit()
         await s.refresh(m)
-        return m.to_dict()
+        return MesureFiche.depuis(m)
 
 
 async def enregistrer_resultat(mesure_id: str, name: str, **champs) -> None:
@@ -76,7 +77,7 @@ async def enregistrer_resultat(mesure_id: str, name: str, **champs) -> None:
         await s.commit()
 
 
-async def lister_resultats(name: str, mesure_id: str, *, verdict: str | None = None, page: int = 1, par_page: int = 50) -> dict:
+async def lister_resultats(name: str, mesure_id: str, *, verdict: str | None = None, page: int = 1, par_page: int = 50) -> PageResultats:
     par_page = max(1, min(int(par_page), 200))
     f = [MesureResultat.collection_name == name, MesureResultat.mesure_id == mesure_id]
     if verdict:
@@ -88,7 +89,7 @@ async def lister_resultats(name: str, mesure_id: str, *, verdict: str | None = N
         r = await s.execute(
             select(MesureResultat).where(*f).order_by(MesureResultat.score.asc().nulls_first(), MesureResultat.cree_le).offset((page - 1) * par_page).limit(par_page)
         )
-        return {"total": total, "page": page, "pages": pages, "par_page": par_page, "resultats": [x.to_dict() for x in r.scalars().all()]}
+        return PageResultats(total=total, page=page, pages=pages, par_page=par_page, resultats=[ResultatFiche.depuis(x) for x in r.scalars().all()])
 
 
 async def supprimer_mesure(name: str, ident: str) -> None:
@@ -103,11 +104,11 @@ async def supprimer_mesure(name: str, ident: str) -> None:
         await s.commit()
 
 
-async def tendance(name: str, n: int = 10) -> list[dict]:
+async def tendance(name: str, n: int = 10) -> list[TendanceFiche]:
     """Les n dernières mesures terminées, dans l'ordre chronologique."""
     async with async_session() as s:
         r = await s.execute(select(Mesure).where(Mesure.collection_name == name, Mesure.etat == "termine").order_by(Mesure.cree_le.desc()).limit(n))
-        return [{"id": m.id, "cree_le": m.cree_le.isoformat(), "score": m.score, "nb_questions": m.nb_questions, "methode": m.methode} for m in reversed(r.scalars().all())]
+        return [TendanceFiche(id=m.id, cree_le=m.cree_le.isoformat(), score=m.score, nb_questions=m.nb_questions, methode=m.methode) for m in reversed(r.scalars().all())]
 
 
 async def marquer_interrompues() -> int:
@@ -121,7 +122,7 @@ async def marquer_interrompues() -> int:
         return len(orphelines)
 
 
-async def resultat_de(name: str, mesure_id: str | None, question_id: str) -> dict | None:
+async def resultat_de(name: str, mesure_id: str | None, question_id: str) -> ResultatVolet | None:
     """Le résultat d'une question dans une mesure (sa dernière, pour le volet)."""
     if not mesure_id:
         return None
@@ -130,7 +131,5 @@ async def resultat_de(name: str, mesure_id: str | None, question_id: str) -> dic
         x = r.scalars().first()
         if not x:
             return None
-        d = x.to_dict()
         m = await s.get(Mesure, mesure_id)
-        d["mesure_le"] = m.cree_le.isoformat() if m and m.cree_le else None
-        return d
+        return ResultatVolet(**ResultatFiche.depuis(x).model_dump(), mesure_le=m.cree_le.isoformat() if m and m.cree_le else None)

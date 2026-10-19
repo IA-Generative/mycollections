@@ -35,6 +35,7 @@ async def test_un_travail_interrompu_reprend_au_demarrage(client, en_tant_que, c
         repris = await ingest.reprendre_les_travaux_interrompus()
     assert job_id in repris
     job = await get_job(job_id)
+    assert job is not None
     assert job["status"] == "done", job
 
 
@@ -48,6 +49,7 @@ async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant
     await update_job(job["job_id"], status="uploading")
     await ingest.reprendre_les_travaux_interrompus()
     apres = await get_job(job["job_id"])
+    assert apres is not None
     assert apres["status"] == "interrupted" and "redéposez" in (apres.get("error") or "")
 
 
@@ -62,4 +64,5 @@ async def test_un_morceau_deja_indexe_compte_comme_reussi(client, en_tant_que, c
     with patch("app.routers.ingest.OpenRAGClient") as cls:
         cls.return_value.upload_chunk = AsyncMock(side_effect=deja)
         await ingest._upload_chunks_background(job["job_id"], nom, [{"content": "a"}, {"content": "b"}])
-    assert (await get_job(job["job_id"]))["status"] == "done"
+    j = await get_job(job["job_id"])
+    assert j is not None and j["status"] == "done"

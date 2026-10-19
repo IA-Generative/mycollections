@@ -12,6 +12,7 @@ import logging
 import random
 from datetime import timedelta
 
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.database import async_session
@@ -26,6 +27,17 @@ FENETRE_JOURS = 30
 #: En dessous, on ne dit pas COMBIEN de personnes : trois questions de deux collègues, dans
 #: un petit service, c'est déjà presque les nommer.
 SEUIL_PERSONNES = 3
+
+
+class _LigneAccueil(BaseModel):
+    name: str
+    titre: str
+    categorie: str | None
+    categorie_libelle: str | None
+    etat_collab: str | None
+    publiee: bool
+    questions: int
+    signalements_ouverts: int
 
 
 async def noter_question(collection: str, sub: str | None, canal: str = "bac-a-sable") -> None:
@@ -65,45 +77,48 @@ async def mes_collections(sub: str, mon_hash: str) -> dict:
         categories = {k.cle: k.libelle for k in (await session.execute(select(Categorie))).scalars().all()}
         publiees = set((await session.execute(select(Publication.collection_name).where(Publication.collection_name.in_(noms), Publication.state == "published"))).scalars().all())
         des_autres = (UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis, (UsageQuestion.auteur_hash.is_(None)) | (UsageQuestion.auteur_hash != mon_hash))
-        questions = dict((await session.execute(select(UsageQuestion.collection_name, func.count()).where(*des_autres).group_by(UsageQuestion.collection_name))).all())
+        questions = {
+            c_name: n for c_name, n in (await session.execute(select(UsageQuestion.collection_name, func.count()).where(*des_autres).group_by(UsageQuestion.collection_name))).all()
+        }
         personnes = (await session.execute(select(func.count(func.distinct(UsageQuestion.auteur_hash))).where(*des_autres, UsageQuestion.auteur_hash.is_not(None)))).scalar() or 0
         # Mes propres essais ne comptent pas — mais on les DIT : un « 0 » nu, pour qui vient de poser
         # six questions, se lit comme une panne du compteur.
         les_miennes = (
             await session.execute(select(func.count()).where(UsageQuestion.collection_name.in_(noms), UsageQuestion.cree_le >= depuis, UsageQuestion.auteur_hash == mon_hash))
         ).scalar() or 0
-        signalements = dict(
-            (
+        signalements = {
+            c_name: n
+            for c_name, n in (
                 await session.execute(
                     select(Signalement.collection_name, func.count())
                     .where(Signalement.collection_name.in_(noms), Signalement.etat == "ouvert")
                     .group_by(Signalement.collection_name)
                 )
             ).all()
-        )
-
-    lignes = [
-        {
-            "name": c.name,
-            "titre": titre_de(c.to_dict()),
-            "categorie": c.categorie,
-            "categorie_libelle": categories.get(c.categorie or ""),
-            "etat_collab": c.etat_collab,
-            "publiee": c.name in publiees,
-            "questions": questions.get(c.name, 0),
-            "signalements_ouverts": signalements.get(c.name, 0),
         }
+
+    lignes: list[_LigneAccueil] = [
+        _LigneAccueil(
+            name=c.name,
+            titre=titre_de(c.to_dict()),
+            categorie=c.categorie,
+            categorie_libelle=categories.get(c.categorie or ""),
+            etat_collab=c.etat_collab,
+            publiee=c.name in publiees,
+            questions=questions.get(c.name, 0),
+            signalements_ouverts=signalements.get(c.name, 0),
+        )
         for c in cols
     ]
-    lignes.sort(key=lambda ligne: (-ligne["questions"], ligne["titre"].lower()))
+    lignes.sort(key=lambda ligne: (-ligne.questions, ligne.titre.lower()))
     return {
         "collections": lignes,
         "fenetre_jours": FENETRE_JOURS,
-        "actives": sum(1 for ligne in lignes if ligne["publiee"]),
-        "questions": sum(ligne["questions"] for ligne in lignes),
+        "actives": sum(1 for ligne in lignes if ligne.publiee),
+        "questions": sum(ligne.questions for ligne in lignes),
         "mes_essais": les_miennes,
         "personnes": personnes if personnes >= SEUIL_PERSONNES else None,
-        "signalements_ouverts": sum(ligne["signalements_ouverts"] for ligne in lignes),
+        "signalements_ouverts": sum(ligne.signalements_ouverts for ligne in lignes),
     }
 
 

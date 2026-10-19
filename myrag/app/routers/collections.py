@@ -63,8 +63,8 @@ async def _provision_collection_access(name: str, creator_sub: str | None, reade
     try:
         kc = KeycloakClient()
         groups = await kc.create_collection_groups(name)
-        admin_gid = groups.get("admin_group_id")
-        user_gid = groups.get("user_group_id")
+        admin_gid = groups.admin_group_id
+        user_gid = groups.user_group_id
         if admin_gid and creator_sub:
             await kc.add_user_to_group(creator_sub, admin_gid)
         await SyncService(kc, openrag_client).sync_collection(
@@ -225,8 +225,8 @@ async def list_collections_endpoint(
     try:
         client = OpenRAGClient(timeout=10.0)
         models = await client.list_models()
-        for m in models.get("data", []):
-            model_id = m.get("id", "")
+        for m in models.data:
+            model_id = m.id or ""
             if model_id.startswith("openrag-"):
                 name = model_id[len("openrag-") :]
                 if name and name not in known_names and name not in ("all", "default") and (allowed is None or name in allowed):
@@ -274,17 +274,17 @@ async def _est_garant(name: str, user: CurrentUser) -> bool:
         from app.services.pseudo import condenser
 
         f = await collectif_store.fiche(name)
-        return bool(f.get("garant_hash")) and f["garant_hash"] == condenser(user.sub)
+        return bool(f.garant_hash) and f.garant_hash == condenser(user.sub)
     except Exception:  # noqa: BLE001 — sel absent, fiche absente : pas garant, jamais une panne
         return False
 
 
 async def _partition_existe(name: str) -> bool:
     try:
-        models = await OpenRAGClient(timeout=10.0).list_models()
-    except Exception:
+        modeles = await OpenRAGClient(timeout=10.0).list_models()
+    except Exception:  # noqa: BLE001 — OpenRAG injoignable : pas de partition à adopter
         return False
-    return any(m.get("id") == f"openrag-{name}" for m in models.get("data", []))
+    return any(m.id == f"openrag-{name}" for m in modeles.data)
 
 
 @router.post("")
@@ -363,8 +363,8 @@ async def check_name_endpoint(name: str, user: CurrentUser = Depends(current_use
         return {"available": False, "reason": "db", "message": nommage.MOTIFS["db"]}
     try:
         models = await OpenRAGClient(timeout=10.0).list_models()
-        for m in models.get("data", []):
-            mid = m.get("id", "")
+        for m in models.data:
+            mid = m.id or ""
             if mid.startswith("openrag-") and mid[len("openrag-") :] == norm:
                 return {"available": False, "reason": "partition", "message": nommage.MOTIFS["partition"]}
     except Exception:

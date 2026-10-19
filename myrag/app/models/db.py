@@ -394,29 +394,6 @@ class Demande(Base):
         Index("demande_etat_maj", "etat", "maj_le"),
     )
 
-    def to_dict(self) -> dict:
-        # Ni `contact`, ni `recontact`, ni le condensé de l'auteur : ce que l'API sert
-        # est lisible par tout le groupe ; le consentement, lui, se lit en base.
-        return {
-            "id": self.id,
-            "titre": self.titre,
-            "usage": self.usage,
-            "frequence": self.frequence,
-            "service": self.service or "",
-            "acces_actuel": self.acces_actuel,
-            "etat": self.etat,
-            "seuil": self.seuil,
-            "amorce_id": self.amorce_id,
-            "collection_name": self.collection_name,
-            "doublon_de": self.doublon_de,
-            "motif_cloture": self.motif_cloture,
-            "satisfaction": self.satisfaction,
-            "motif_insatisfaction": self.motif_insatisfaction,
-            "confirmation_demandee_le": self.confirmation_demandee_le.isoformat() if self.confirmation_demandee_le else None,
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-            "maj_le": self.maj_le.isoformat() if self.maj_le else "",
-        }
-
 
 class Soutien(Base):
     """Une personne derrière une demande, avec le rôle qu'elle prend et le temps qu'elle offre."""
@@ -478,22 +455,6 @@ class Proposition(Base):
         CheckConstraint("etat = 'proposee' OR decide_le IS NOT NULL", name="proposition_decision_datee"),
     )
 
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "collection": self.collection_name,
-            "cible_type": self.cible_type,
-            "cible_ref": self.cible_ref or "",
-            "avant": self.avant or "",
-            "apres": self.apres,
-            "justification": self.justification,
-            "source": self.source,
-            "etat": self.etat,
-            "motif_refus": self.motif_refus,
-            "decide_le": self.decide_le.isoformat() if self.decide_le else None,
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-        }
-
 
 class Signalement(Base):
     """Un défaut signalé sur une collection ou sur l'un de ses fichiers."""
@@ -517,18 +478,6 @@ class Signalement(Base):
         CheckConstraint("etat = 'ouvert' OR traite_le IS NOT NULL", name="signalement_traitement_date"),
     )
 
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "collection": self.collection_name,
-            "fichier_id": self.fichier_id,
-            "motif": self.motif,
-            "texte": self.texte,
-            "etat": self.etat,
-            "traite_le": self.traite_le.isoformat() if self.traite_le else None,
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-        }
-
 
 class GrilleControle(Base):
     """La grille de contrôle d'une collection — servie même vide, jamais 404."""
@@ -544,18 +493,6 @@ class GrilleControle(Base):
     couverture_json: Mapped[str] = mapped_column(Text, default="{}")
     maj_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     maj_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
-
-    def to_dict(self) -> dict:
-        return {
-            "collection": self.collection_name,
-            "source_licence": self.source_licence or "",
-            "donnees_perso": self.donnees_perso or "",
-            "fraicheur": self.fraicheur or "",
-            "relecture_n": self.relecture_n or 0,
-            "relecteurs": len(json.loads(self.relecteurs_json or "[]")),
-            "couverture": json.loads(self.couverture_json or "{}"),
-            "maj_le": self.maj_le.isoformat() if self.maj_le else None,
-        }
 
 
 class Evenement(Base):
@@ -581,18 +518,6 @@ class Evenement(Base):
         ),
         Index("evenement_objet_date", "objet_type", "objet_id", "cree_le"),
     )
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "objet_type": self.objet_type,
-            "objet_id": self.objet_id,
-            "collection": self.collection_name,
-            "type": self.type,
-            "par": f"robot:{self.robot}" if self.robot else "personne",
-            "detail": json.loads(self.detail_json or "{}"),
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-        }
 
 
 class UsageQuestion(Base):
@@ -624,16 +549,6 @@ class Amorce(Base):
 
     __table_args__ = (CheckConstraint(_domaine("etat_import", ETATS_IMPORT_AMORCE), name="amorce_etat_import_valide"),)
 
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "collection_name": self.collection_name,
-            "etat_import": self.etat_import,
-            "dernier_import_le": self.dernier_import_le.isoformat() if self.dernier_import_le else None,
-            "detail": json.loads(self.detail_json or "{}"),
-            "erreur": self.erreur,
-        }
-
 
 # ─── Génération de paires question/réponse par persona (docs/generation.md) ──────────────
 ETATS_GENERATION = ("en_attente", "en_cours", "termine", "erreur")
@@ -659,16 +574,6 @@ class Persona(Base):
     cree_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     maj_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "collection": self.collection_name,
-            "nom": self.nom,
-            "description_role": self.description_role,
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-            "maj_le": self.maj_le.isoformat() if self.maj_le else "",
-        }
 
 
 class Generation(Base):
@@ -713,32 +618,6 @@ class Generation(Base):
     termine_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     COMPTEURS = ("appels_llm", "tokens_entree", "tokens_sortie", "reparations_json", "inachevees", "erreurs_llm", "refus_debit", "appels_embeddings")
-
-    def to_dict(self) -> dict:
-        d = lambda v: v.isoformat() if v else None  # noqa: E731
-        return {
-            "id": self.id,
-            "collection": self.collection_name,
-            "personas": json.loads(self.personas_json or "[]"),
-            "personas_auto": self.personas_auto,
-            "taille": self.taille,
-            "distribution": json.loads(self.distribution_json or "{}"),
-            "modele": self.modele,
-            "etat": self.etat,
-            "phase": self.phase,
-            "actif": self.etat in ("en_attente", "en_cours"),
-            "fichiers_collection": self.fichiers_collection,
-            "morceaux_envoyes": self.morceaux_envoyes,
-            "noeuds_avec_proprietes": self.noeuds_avec_proprietes,
-            "paires_obtenues": self.paires_obtenues,
-            "paires_echouees": self.paires_echouees,
-            "compteurs": {k: getattr(self, k) for k in self.COMPTEURS},
-            "duree_s": self.duree_s,
-            "erreur": self.erreur,
-            "cree_le": d(self.cree_le),
-            "demarre_le": d(self.demarre_le),
-            "termine_le": d(self.termine_le),
-        }
 
 
 class PaireQA(Base):
@@ -795,37 +674,6 @@ class PaireQA(Base):
     servie_fois: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     servie_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    def to_dict(self) -> dict:
-        d = lambda v: v.isoformat() if v else None  # noqa: E731
-        return {
-            "id": self.id,
-            "run_id": self.run_id,
-            "origine": self.origine,
-            "feedback_id": self.feedback_id,
-            "must_cite": json.loads(self.must_cite_json or "[]"),
-            "tags": json.loads(self.tags_json or "[]"),
-            "hors_sujet": bool(self.hors_sujet),
-            "fiable": bool(self.fiable),
-            "dernier_verdict": self.dernier_verdict,
-            "derniere_mesure_le": d(self.derniere_mesure_le),
-            "derniere_mesure_id": self.derniere_mesure_id,
-            "modifie_le": d(self.modifie_le),
-            "servie_fois": self.servie_fois or 0,
-            "collection": self.collection_name,
-            "rang": self.rang,
-            "question": self.question,
-            "reponse": self.reponse,
-            "contextes": json.loads(self.contextes_json or "[]"),
-            "persona": self.persona_nom,
-            "synthetiseur": self.synthetiseur,
-            "style": self.style,
-            "longueur": self.longueur,
-            "relecture": self.relecture,
-            "commentaire": self.commentaire,
-            "relu_le": self.relu_le.isoformat() if self.relu_le else None,
-            "cree_le": self.cree_le.isoformat() if self.cree_le else "",
-        }
-
 
 # ─── Mesure de qualité (docs/qualite.md) ─────────────────────────────────────────────
 ETATS_MESURE = ("en_attente", "en_cours", "termine", "erreur")
@@ -879,29 +727,6 @@ class Mesure(Base):
     COMPTEURS = ("appels_chat", "appels_llm", "tokens_entree", "tokens_sortie", "erreurs_llm", "refus_debit")
     VERDICTS = ("nb_conformes", "nb_partielles", "nb_non_conformes", "nb_refus_ok", "nb_refus_ko", "nb_sans_source", "nb_erreurs")
 
-    def to_dict(self) -> dict:
-        d = lambda v: v.isoformat() if v else None  # noqa: E731
-        return {
-            "id": self.id,
-            "collection": self.collection_name,
-            "etat": self.etat,
-            "phase": self.phase,
-            "actif": self.etat in ("en_attente", "en_cours"),
-            "methode": self.methode,
-            "modele": self.modele,
-            "filtre": json.loads(self.filtre_json or "{}"),
-            "nb_questions": self.nb_questions,
-            "nb_traitees": self.nb_traitees,
-            "verdicts": {k[3:]: getattr(self, k) for k in self.VERDICTS},
-            "score": self.score,
-            "compteurs": {k: getattr(self, k) for k in self.COMPTEURS},
-            "duree_s": self.duree_s,
-            "erreur": self.erreur,
-            "cree_le": d(self.cree_le),
-            "demarre_le": d(self.demarre_le),
-            "termine_le": d(self.termine_le),
-        }
-
 
 class MesureResultat(Base):
     """Le résultat d'une question dans une mesure. L'instantané (question, référence) est gardé :
@@ -931,23 +756,3 @@ class MesureResultat(Base):
     methode: Mapped[str] = mapped_column(String(20), default="judge")
     duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "mesure_id": self.mesure_id,
-            "question_id": self.question_id,
-            "question": self.question_texte,
-            "reponse_reference": self.reponse_reference,
-            "hors_sujet": bool(self.hors_sujet),
-            "persona": self.persona_nom,
-            "origine": self.origine,
-            "reponse_obtenue": self.reponse_obtenue,
-            "sources": json.loads(self.sources_json or "[]"),
-            "repli": self.repli,
-            "verdict": self.verdict,
-            "justification": self.justification,
-            "score": self.score,
-            "methode": self.methode,
-            "duree_s": self.duree_s,
-        }

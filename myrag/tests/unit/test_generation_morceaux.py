@@ -9,20 +9,23 @@ import pytest
 
 from app.generation import morceaux as m
 from app.services import corpus
+from app.services.openrag_client import ExtraitOpenRAG, FichierOpenRAG, FileDetail, MorceauOpenRAG
 
 TEXTE = "Le titre de séjour pluriannuel est délivré par le préfet après un premier titre d'un an."
 
 
-def _fichiers(n: int) -> list[dict]:
-    return [{"file_id": f"f{i}", "title": f"Question {i}"} for i in range(n)]
+def _fichiers(n: int) -> list[FichierOpenRAG]:
+    return [FichierOpenRAG.model_validate({"file_id": f"f{i}", "title": f"Question {i}"}) for i in range(n)]
 
 
-def _chunk(cid: str, fid: str, texte: str = TEXTE, partition: str = "faq") -> dict:
-    return {
-        "link": f"https://openrag/extract/{cid}",
-        "content": f"[CONTEXT] résumé\n* filename: {fid}.md\n[CHUNK_START] {texte} [CHUNK_END]",
-        "metadata": {"_id": cid, "file_id": fid, "partition": partition, "page": 1, "filename": f"{fid}.md"},
-    }
+def _chunk(cid: str, fid: str, texte: str = TEXTE, partition: str = "faq") -> MorceauOpenRAG:
+    return MorceauOpenRAG.model_validate(
+        {
+            "link": f"https://openrag/extract/{cid}",
+            "content": f"[CONTEXT] résumé\n* filename: {fid}.md\n[CHUNK_START] {texte} [CHUNK_END]",
+            "metadata": {"_id": cid, "file_id": fid, "partition": partition, "page": 1, "filename": f"{fid}.md"},
+        }
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -41,11 +44,11 @@ def test_nombre_a_lire_quatre_par_paire_plafonne():
 def test_echantillon_couvre_toute_la_collection_et_reste_stable():
     fichiers = _fichiers(3585)
     a = m.echantillonner_fichiers(fichiers, 120, "run-1")
-    assert len(a) == 120 and len({f["file_id"] for f in a}) == 120
+    assert len(a) == 120 and len({f.file_id for f in a}) == 120
     assert a == m.echantillonner_fichiers(list(reversed(fichiers)), 120, "run-1")
     assert a != m.echantillonner_fichiers(fichiers, 120, "run-2")
     # Le tourniquet va jusqu'au bout de la liste, pas seulement le début.
-    rangs = sorted(int(f["file_id"][1:]) for f in a)
+    rangs = sorted(int(f.file_id[1:]) for f in a if f.file_id is not None)
     assert rangs[0] < 40 and rangs[-1] > 3500
 
 
@@ -55,6 +58,7 @@ def test_echantillon_prend_tout_si_moins_de_fichiers():
 
 def test_morceau_sans_habillage_avec_ses_identifiants():
     morceau = m.morceau_depuis_chunk(_chunk("42", "f1"), "faq")
+    assert morceau is not None
     assert morceau.texte == TEXTE
     assert morceau.identifiants() == {"chunk_id": "42", "file_id": "f1", "partition": "faq", "fichier": "f1.md", "page": "1"}
 
@@ -67,7 +71,7 @@ def test_morceau_ignore_vide_court_et_partition_etrangere():
 
 def test_documents_gardent_les_identifiants():
     pytest.importorskip("langchain_core")
-    morceaux = [m.morceau_depuis_chunk(_chunk(str(i), f"f{i}"), "faq") for i in range(3)]
+    morceaux = [mo for mo in (m.morceau_depuis_chunk(_chunk(str(i), f"f{i}"), "faq") for i in range(3)) if mo is not None]
     docs = m.en_documents(morceaux)
     assert [d.page_content for d in docs] == [TEXTE] * 3
     assert [d.metadata["chunk_id"] for d in docs] == ["0", "1", "2"]
@@ -87,11 +91,11 @@ def _client(fichiers, par_fichier=None, chunks_absent=False, en_panne=()):
             raise RuntimeError("panne")
         if chunks_absent:
             return None
-        return (par_fichier or {}).get(file_id, [_chunk(f"c-{file_id}", file_id)])
+        return (par_fichier or {}).get(file_id, [_chunk(f"c-{file_id}", file_id or "")])
 
     c.partition_chunks = AsyncMock(side_effect=partition_chunks)
-    c.file_detail = AsyncMock(side_effect=lambda p, fid: {"documents": [{"link": f"http://o/extract/x-{fid}"}]})
-    c.extract = AsyncMock(side_effect=lambda cid: {"page_content": TEXTE, "metadata": {"partition": "faq", "filename": "a.md"}})
+    c.file_detail = AsyncMock(side_effect=lambda p, fid: FileDetail(documents=[{"link": f"http://o/extract/x-{fid}"}]))
+    c.extract = AsyncMock(side_effect=lambda cid: ExtraitOpenRAG.model_validate({"page_content": TEXTE, "metadata": {"partition": "faq", "filename": "a.md"}}))
     return c
 
 
@@ -128,16 +132,19 @@ def test_partition_chunks_du_vrai_client():
     client = OpenRAGClient(base_url="http://openrag", admin_token="t")
     lu = {}
 
-    async def faux_get(path, params=None):
+    async def faux_get(path: str, params: dict | None = None) -> dict:
         lu.update(path=path, params=params)
         return {"chunks": [_chunk("1", "f1")]}
 
-    client._get = faux_get
-    assert asyncio.run(client.partition_chunks("faq", file_id="f1"))[0]["metadata"]["_id"] == "1"
+    client._get = AsyncMock(side_effect=faux_get)
+    lus = asyncio.run(client.partition_chunks("faq", file_id="f1"))
+    assert lus is not None
+    assert lus[0].metadata is not None
+    assert lus[0].metadata["_id"] == "1"
     assert lu == {"path": "/partition/faq/chunks", "params": {"include_embedding": "false", "file_id": "f1"}}
 
-    async def absent(path, params=None):
+    async def absent(path: str, params: dict | None = None) -> dict:
         raise httpx.HTTPStatusError("404", request=httpx.Request("GET", "http://o"), response=httpx.Response(404))
 
-    client._get = absent
+    client._get = AsyncMock(side_effect=absent)
     assert asyncio.run(client.partition_chunks("faq")) is None

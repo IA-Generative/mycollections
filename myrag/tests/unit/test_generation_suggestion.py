@@ -77,7 +77,8 @@ def test_route_reservee_et_erreurs_dites(client, en_tant_que, creer_collection, 
     with patch("app.generation.suggestion.proposer", new=AsyncMock(return_value=ok)) as p:
         r = client.post(URL.format(nom), json={"nombre": 3})
     assert r.status_code == 200 and r.json()["propositions"][0]["nom"] == "A"
-    assert p.await_args.args[1] == 3
+    appel = p.await_args
+    assert appel is not None and appel.args[1] == 3
     with patch("app.generation.suggestion.proposer", new=AsyncMock(side_effect=LookupError("Cette collection n'a encore aucun document indexé."))):
         r = client.post(URL.format(nom), json={})
     assert r.status_code == 409 and "aucun document" in r.json()["detail"]

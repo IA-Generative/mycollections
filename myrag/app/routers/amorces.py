@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.amorces import charger_catalogue, entree
+from app.models.collectif import AmorceEtat
 from app.routers._collectif_commun import Identite, exiger_superadmin, identite
 from app.services import collectif_store as store
 from app.services.amorces import CONNECTEURS, ingestion
@@ -29,7 +30,7 @@ _AVANCEES = ("en_controle", "publiee_groupe", "publiee_tous")
 _taches: list[asyncio.Task] = []
 
 
-def _fusion(e: dict, etat: dict | None, collection: dict | None) -> dict:
+def _fusion(e: dict, etat: AmorceEtat | None, collection: dict | None) -> dict:
     return {
         **{k: v for k, v in e.items() if k != "questions"},
         "nb_questions": len(e.get("questions", [])),
@@ -38,7 +39,7 @@ def _fusion(e: dict, etat: dict | None, collection: dict | None) -> dict:
         "dernier_import_le": None,
         "erreur": None,
         "detail": {},
-        **{k: v for k, v in (etat or {}).items() if k != "id"},
+        **({k: v for k, v in etat.model_dump().items() if k != "id"} if etat else {}),
         "etat_collab": (collection or {}).get("etat_collab"),
     }
 
@@ -90,10 +91,10 @@ async def _executer(ident: str, e: dict, name: str, *, depuis_zero: bool = False
     """`depuis_zero` : après une purge, ce que l'import précédent disait avoir fait
     (les mois déjà importés de la justice administrative) ne compte plus."""
     connecteur = CONNECTEURS[e["connecteur"]]
-    precedent = {} if depuis_zero else ((await store.etats_des_amorces()).get(ident) or {})
+    precedent = None if depuis_zero else (await store.etats_des_amorces()).get(ident)
     contexte = {}
     if e["connecteur"] == "justice-administrative":
-        contexte["deja_importes"] = (precedent.get("detail") or {}).get("couverture", {}).get("mois_importes", [])
+        contexte["deja_importes"] = ((precedent.detail if precedent else {}) or {}).get("couverture", {}).get("mois_importes", [])
     try:
         resultat = await connecteur(name, e, **contexte)
     except Exception as ex:  # noqa: BLE001 — l'échec se consigne, il ne se perd pas
@@ -120,8 +121,8 @@ async def importer(
         erreur = f"connecteur « {e.get('connecteur')} » non implémenté pour l'amorce {ident}"
         await store.marquer_amorce(ident, "echec", collection_name=name, erreur=erreur)
         raise HTTPException(status_code=501, detail=erreur)
-    etat = (await store.etats_des_amorces()).get(ident) or {}
-    if etat.get("etat_import") == "en_cours":
+    etat = (await store.etats_des_amorces()).get(ident)
+    if etat and etat.etat_import == "en_cours":
         raise HTTPException(status_code=409, detail=f"L'import de {ident} est déjà en cours")
     await store.marquer_amorce(ident, "en_cours", collection_name=name)
     if purger:

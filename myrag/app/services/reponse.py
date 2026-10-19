@@ -80,13 +80,10 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
         raise ErreurReponse(f"Erreur OpenRAG: {e}") from e
 
     # Extract response and sources
-    content = ""
-    sources = []
-    if "choices" in result and result["choices"]:
-        content = result["choices"][0].get("message", {}).get("content", "")
+    content = result.texte()
 
     # `extra` : chaîne (OpenRAG 2.2.1) ou objet (2.3.1) ; sources ramenées à plat (2.3.1 : sous `chunk`).
-    sources = sources_de(result.get("extra"))
+    sources = sources_de(result.extra)
 
     # Étape 2a : aucune source ? On cherche nous-mêmes avant d'abandonner.
     #
@@ -122,8 +119,8 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
                     temperature=temperature,
                     max_tokens=_CHAT_MAX_TOKENS,
                 )
-                if resultat_repli.get("choices"):
-                    content = resultat_repli["choices"][0].get("message", {}).get("content", "") or content
+                if resultat_repli.choices:
+                    content = resultat_repli.texte() or content
             except Exception:  # noqa: BLE001 — le repli ne casse jamais la réponse
                 pass
 
@@ -138,10 +135,10 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
             # les passe en DONNÉE délimitée, jamais dans le prompt système.
             file_list = []
             for i, f in enumerate(sample_files, 1):
-                fname = sanitize_oneline(f.get("original_filename") or f.get("filename") or f"fichier-{i}", max_len=200)
-                fsize = sanitize_oneline(str(f.get("file_size", "")), max_len=20)
+                fname = sanitize_oneline(f.original_filename or f.filename or f"fichier-{i}", max_len=200)
+                fsize = sanitize_oneline(str(f.file_size) if f.file_size is not None else "", max_len=20)
                 file_list.append(f"- {fname} ({fsize})")
-                sources.append(f)
+                sources.append(f.model_dump())
 
             total_files_count = len(await client.list_files(collection))
             files_block = wrap_untrusted("\n".join(file_list), label="NOMS DE FICHIERS")
@@ -164,8 +161,8 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
                     temperature=temperature,
                     max_tokens=_CHAT_MAX_TOKENS,
                 )
-                if "choices" in fallback_result and fallback_result["choices"]:
-                    content = fallback_result["choices"][0].get("message", {}).get("content", "")
+                if fallback_result.choices:
+                    content = fallback_result.texte()
             except Exception:
                 pass
 
@@ -192,7 +189,7 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
         from app.services.collectif_store import fiche
         from app.services.etats import mention_verification
 
-        mention = mention_verification((await fiche(collection))["etat_collab"])
+        mention = mention_verification((await fiche(collection)).etat_collab)
     except Exception:  # noqa: BLE001 — fiche absente : pas de mention, pas de panne
         mention = None
 

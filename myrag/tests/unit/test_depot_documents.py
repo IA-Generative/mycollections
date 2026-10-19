@@ -9,6 +9,7 @@ import pytest
 from app.routers import ingest
 from app.services import formats
 from app.services.job_store import create_job, get_job, update_job
+from app.services.openrag_client import EnvoiDocument, EtatTache, ResultatPartition
 from tests.conftest import personne
 
 PDF = b"%PDF-1.7\n1 0 obj << >> endobj\n%%EOF"
@@ -42,9 +43,9 @@ def test_types_mime_annonces_a_openrag():
 
 def _client(etats=("QUEUED", "RUNNING", "COMPLETED"), envoi=None, erreur=""):
     c = AsyncMock()
-    c.create_partition = AsyncMock(return_value={})
-    c.upload_document = envoi or AsyncMock(return_value={"file_id": "f1", "task_id": "t1"})
-    c.task_state = AsyncMock(side_effect=[{"task_state": e} for e in etats])
+    c.create_partition = AsyncMock(return_value=ResultatPartition(status="ok"))
+    c.upload_document = envoi or AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+    c.task_state = AsyncMock(side_effect=[EtatTache(task_state=e) for e in etats])
     c.task_error = AsyncMock(return_value=erreur)
     return c
 
@@ -82,6 +83,7 @@ async def test_une_tache_en_echec_rend_le_travail_en_echec_avec_la_raison():
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(("RUNNING", "FAILED"), erreur="PDF chiffré")):
         await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
     j = await get_job(job["job_id"])
+    assert j is not None
     assert j["status"] == "done_with_errors" and "PDF chiffré" in j["error"]
 
 
@@ -92,7 +94,8 @@ async def test_un_document_deja_present_compte_comme_reussi():
     envoi = AsyncMock(side_effect=httpx.HTTPStatusError("conflit", request=reponse.request, response=reponse))
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(envoi=envoi)):
         await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
-    assert (await get_job(job["job_id"]))["status"] == "done"
+    j = await get_job(job["job_id"])
+    assert j is not None and j["status"] == "done"
 
 
 @pytest.mark.asyncio
@@ -103,6 +106,7 @@ async def test_un_format_refuse_par_openrag_est_dit():
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(envoi=envoi)):
         await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
     j = await get_job(job["job_id"])
+    assert j is not None
     assert j["status"] == "done_with_errors" and "format ou taille" in j["error"]
 
 
@@ -147,4 +151,5 @@ async def test_un_document_interrompu_reprend_au_demarrage(client, en_tant_que, 
     with patch("app.routers.ingest.OpenRAGClient", return_value=_client(("COMPLETED",))) as cls:
         repris = await ingest.reprendre_les_travaux_interrompus()
     assert job_id in repris
-    assert (await get_job(job_id))["status"] == "done"
+    j = await get_job(job_id)
+    assert j is not None and j["status"] == "done"

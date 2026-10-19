@@ -121,7 +121,7 @@ async def promote_feedback_endpoint(collection: str, feedback_id: int, req: Prom
             feedback_id=feedback_id,
         )
         if reponse and req.promote_to == "qr":
-            await questions_store.modifier_question(collection, q["id"], {"fiable": True}, user.sub)
+            await questions_store.modifier_question(collection, q.id, questions_store.QuestionModification(fiable=True), user.sub)
     except Conflit:
         pass  # déjà dans le jeu : la promotion ne crée pas de doublon
 

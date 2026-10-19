@@ -34,10 +34,8 @@ class TestGroupsMatch:
 
 
 class TestCanWrite:
-    def _w(self, **kw):
-        base = dict(name="victor", created_by="", user_groups=[], user_sub="x")
-        base.update(kw)
-        return access.can_write(**base)
+    def _w(self, *, name="victor", created_by="", user_groups=None, user_sub="x"):
+        return access.can_write(name=name, created_by=created_by, user_groups=user_groups, user_sub=user_sub)
 
     def test_superadmin(self):
         assert self._w(user_groups=SUPERADMIN)
@@ -58,10 +56,8 @@ class TestCanWrite:
 
 
 class TestCanRead:
-    def _r(self, **kw):
-        base = dict(name="victor", scope="group", scope_groups=[], created_by="", user_groups=[], user_sub="x")
-        base.update(kw)
-        return access.can_read(**base)
+    def _r(self, *, name="victor", scope="group", scope_groups=None, created_by="", user_groups=None, user_sub="x"):
+        return access.can_read(name=name, scope=scope, scope_groups=scope_groups, created_by=created_by, user_groups=user_groups, user_sub=user_sub)
 
     # --- gestionnaires lisent toujours ---
     def test_createur_lit_meme_en_prive(self):

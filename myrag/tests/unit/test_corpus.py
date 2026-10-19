@@ -10,9 +10,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services import corpus
+from app.services.openrag_client import ExtraitOpenRAG, FichierOpenRAG, FileDetail
 from tests.conftest import SUPERADMIN, personne
 
-FICHIERS = [
+#: Les formes brutes mesurées sur la bêta, telles qu'OpenRAG les rend.
+_BRUT: list[dict] = [
     {
         "file_id": "LEGIARTI1-p10",
         "title": "CESEDA, art. Annexe 10 (partie 10/12)",
@@ -32,8 +34,8 @@ FICHIERS = [
     },
     {"file_id": "uuid-2", "original_filename": "Séjour des étudiants.pdf", "mimetype": "application/pdf", "url": "javascript:alert(1)", "partition": "p"},
     {"title": "sans identifiant"},
-    "pas un dictionnaire",
 ]
+FICHIERS: list[FichierOpenRAG] = [FichierOpenRAG.model_validate(f) for f in _BRUT]
 
 
 @pytest.fixture(autouse=True)
@@ -72,7 +74,7 @@ def test_la_recherche_ignore_accents_et_casse_et_exige_tous_les_mots():
 
 
 def test_la_pagination_borne_la_page_et_la_taille():
-    beaucoup = [{"file_id": f"f{i}", "title": f"Doc {i}"} for i in range(1, 121)]
+    beaucoup = [FichierOpenRAG.model_validate({"file_id": f"f{i}", "title": f"Doc {i}"}) for i in range(1, 121)]
     p1 = corpus.chercher_et_paginer(beaucoup, par_page=50)
     assert (p1["total"], p1["pages"], len(p1["documents"])) == (120, 3, 50)
     assert p1["documents"][1]["titre"] == "Doc 2"  # tri naturel : 2 avant 10
@@ -84,9 +86,9 @@ def test_la_pagination_borne_la_page_et_la_taille():
 
 
 def test_les_morceaux_se_lisent_dans_les_liens_dans_l_ordre_sans_doublon():
-    detail = {"documents": [{"link": "https://x/extract/30"}, {"link": "https://x/extract/10?a=1"}, {"link": "https://x/extract/30"}, {"link": "ailleurs"}, "n'importe quoi"]}
+    detail = FileDetail(documents=[{"link": "https://x/extract/30"}, {"link": "https://x/extract/10?a=1"}, {"link": "https://x/extract/30"}, {"link": "ailleurs"}])
     assert corpus.identifiants_des_morceaux(detail) == ["30", "10"]
-    assert corpus.identifiants_des_morceaux({}) == [] and corpus.identifiants_des_morceaux(None) == []
+    assert corpus.identifiants_des_morceaux(FileDetail()) == [] and corpus.identifiants_des_morceaux(None) == []
 
 
 # ─── Les routes ─────────────────────────────────────────────────────────────────
@@ -100,8 +102,13 @@ def _openrag(fichiers=FICHIERS, detail=None, morceaux=None):
     cls = p.start()
     c = cls.return_value
     c.list_files = AsyncMock(return_value=fichiers)
-    c.file_detail = AsyncMock(return_value=detail)
-    c.extract = AsyncMock(side_effect=lambda cid: (morceaux or {}).get(cid))
+    c.file_detail = AsyncMock(return_value=FileDetail.model_validate(detail) if detail is not None else None)
+
+    def _extrait(cid):
+        m = (morceaux or {}).get(cid)
+        return ExtraitOpenRAG.model_validate(m) if m else None
+
+    c.extract = AsyncMock(side_effect=_extrait)
     return p, c
 
 

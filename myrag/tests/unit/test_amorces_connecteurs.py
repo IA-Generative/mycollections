@@ -171,11 +171,11 @@ async def test_l_ingestion_est_idempotente(sans_reseau, creer_collection, nom):
     creer_collection(nom)
     docs = [ingestion.Document("a.md", "# A\n\ntexte a"), ingestion.Document("b.md", "# B\n\ntexte b")]
     b1 = await ingestion.ingerer(nom, docs)
-    assert b1["documents"] == 2 and b1["ignores"] == 0 and b1["morceaux"] >= 2
+    assert b1.documents == 2 and b1.ignores == 0 and b1.morceaux >= 2
     b2 = await ingestion.ingerer(nom, docs)
-    assert b2["documents"] == 0 and b2["ignores"] == 2
+    assert b2.documents == 0 and b2.ignores == 2
     b3 = await ingestion.ingerer(nom, [ingestion.Document("a.md", "# A\n\ntexte a modifié")])
-    assert b3["documents"] == 1 and b3["versions"] == 1
+    assert b3.documents == 1 and b3.versions == 1
     import os
     import sqlite3
 
@@ -201,10 +201,10 @@ SSMSI_75 = SSMSI_69.replace("69", "75").replace("1234", "9876")
 
 class TestSituer:
     def _morceaux(self, nom, texte):
-        from app.services.chunker import chunk_document
+        from app.services.chunker import Sensitivity, Strategy, chunk_document
 
         doc = ingestion.Document(nom, texte)
-        return ingestion.situer(doc, chunk_document(texte, strategy="section", sensitivity="public"))
+        return ingestion.situer(doc, chunk_document(texte, strategy=Strategy.SECTION, sensitivity=Sensitivity.PUBLIC))
 
     def test_le_texte_commence_par_le_titre_du_document_et_de_la_section(self):
         m = self._morceaux("ssmsi-departement-69.md", SSMSI_69)
@@ -247,8 +247,8 @@ async def test_un_ancien_decoupage_repasse_en_nouvelle_version(sans_reseau, cree
     con.commit()
     con.close()
     b = await ingestion.ingerer(nom, docs)
-    assert b["versions"] == 1 and b["ignores"] == 0
-    assert (await ingestion.ingerer(nom, docs))["ignores"] == 1
+    assert b.versions == 1 and b.ignores == 0
+    assert (await ingestion.ingerer(nom, docs)).ignores == 1
 
 
 @pytest.mark.asyncio
@@ -258,7 +258,7 @@ async def test_la_purge_vide_la_partition_et_oublie_les_documents(sans_reseau, c
     client.delete_partition = AsyncMock(return_value={})
     docs = [ingestion.Document("a.md", "# A\n\ntexte a"), ingestion.Document("b.md", "# B\n\ntexte b")]
     await ingestion.ingerer(nom, docs)
-    assert (await ingestion.purger(nom)) == {"documents_oublies": 2}
+    assert (await ingestion.purger(nom)).documents_oublies == 2
     client.delete_partition.assert_awaited_once_with(nom)
     b = await ingestion.ingerer(nom, docs)
-    assert b["documents"] == 2 and b["ignores"] == 0, "après purge, tout repart"
+    assert b.documents == 2 and b.ignores == 0, "après purge, tout repart"

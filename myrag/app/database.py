@@ -5,6 +5,7 @@ Supports SQLite (dev) and PostgreSQL (prod) via DATABASE_URL:
   - postgresql+asyncpg://user:pass@host:5432/myrag
 """
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -264,7 +265,7 @@ async def _migrate_add_column(conn, column: str, sqlite_type: str, pg_type: str,
     await conn.run_sync(_sync)
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncIterator[AsyncSession]:
     """Get a database session (for use with FastAPI Depends)."""
     async with async_session() as session:
         yield session

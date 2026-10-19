@@ -52,6 +52,8 @@ def test_telemetrie_de_ragas_coupee():
 pytest.importorskip("ragas")
 from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.outputs import ChatGeneration, LLMResult  # noqa: E402
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # noqa: E402
+from pydantic import SecretStr  # noqa: E402
 
 from app.generation import modele  # noqa: E402
 
@@ -60,9 +62,11 @@ def test_fabrique_du_modele_de_langage(monkeypatch):
     monkeypatch.setattr(settings, "generation_max_tokens", 2048)
     llm = modele.fabriquer_llm(modele.Compteurs(), url="https://passerelle.fake-domain.name/v1", cle="cle", modele="chat")
     chat = llm.langchain_llm
+    assert isinstance(chat, ChatOpenAI)
     assert chat.openai_api_base == "https://passerelle.fake-domain.name/v1"
     assert chat.model_name == "chat" and chat.max_tokens == 2048
-    assert chat.openai_api_key.get_secret_value() == "cle"
+    cle = chat.openai_api_key
+    assert isinstance(cle, SecretStr) and cle.get_secret_value() == "cle"
     assert chat.max_retries == 0  # les réessais sont ceux de ragas, comptés
 
 
@@ -72,8 +76,10 @@ def test_fabrique_le_modele_par_repli_openrag(monkeypatch):
     monkeypatch.setattr(settings, "openrag_url", "http://openrag.fake-domain.name:8180/")
     monkeypatch.setattr(settings, "openrag_admin_token", "jeton-openrag")
     chat = modele.fabriquer_llm(modele.Compteurs()).langchain_llm
+    assert isinstance(chat, ChatOpenAI)
     assert chat.openai_api_base == "http://openrag.fake-domain.name:8180/v1"
-    assert chat.openai_api_key.get_secret_value() == "jeton-openrag"
+    cle = chat.openai_api_key
+    assert isinstance(cle, SecretStr) and cle.get_secret_value() == "jeton-openrag"
     assert chat.model_name == ""  # sans nom de modèle : le serveur en aval choisit (mode direct)
 
 
@@ -81,6 +87,7 @@ def test_fabrique_des_embeddings_reprend_l_url_du_modele(monkeypatch):
     monkeypatch.setattr(settings, "generation_llm_url", "https://passerelle.fake-domain.name/v1")
     monkeypatch.setattr(settings, "generation_embeddings_url", "")
     emb = modele.fabriquer_embeddings(modele.Compteurs(), cle="cle", modele="bge-m3")
+    assert isinstance(emb.embeddings, OpenAIEmbeddings)
     assert emb.embeddings.openai_api_base == "https://passerelle.fake-domain.name/v1"
     assert emb.embeddings.check_embedding_ctx_length is False
     assert emb.embeddings.model == "bge-m3"

@@ -117,13 +117,44 @@ def test_garde_fous(client, en_tant_que, creer_collection, nom, monkeypatch):
 
 
 def test_actions_suggerees():
+    from app.models.qualite import ComptesQuestions, MesureFiche
     from app.services.qualite import actions_suggerees
 
-    assert actions_suggerees({"total": 0}, None, {})[0]["code"] == "constituer_jeu"
-    codes = [a["code"] for a in actions_suggerees({"total": 3, "par_relecture": {"brut": 3}}, None, {"pending_review": 2})]
+    def comptes(**surcharge) -> ComptesQuestions:
+        base = ComptesQuestions(total=0, par_origine={}, par_relecture={}, par_verdict={}, fiables=0, hors_sujet=0)
+        return base.model_copy(update=surcharge) if surcharge else base
+
+    def mesure(**surcharge) -> MesureFiche:
+        base = MesureFiche(
+            id="m",
+            collection="c",
+            etat="termine",
+            phase="fini",
+            actif=False,
+            methode="judge",
+            modele="",
+            filtre={},
+            nb_questions=10,
+            nb_traitees=10,
+            verdicts={},
+            score=None,
+            compteurs={},
+            duree_s=None,
+            erreur=None,
+            cree_le=None,
+            demarre_le=None,
+            termine_le=None,
+        )
+        return base.model_copy(update=surcharge) if surcharge else base
+
+    assert actions_suggerees(comptes(), None, {})[0]["code"] == "constituer_jeu"
+    codes = [a["code"] for a in actions_suggerees(comptes(total=3, par_relecture={"brut": 3}), None, {"pending_review": 2})]
     assert codes == ["valider_questions", "traiter_avis"]
-    derniere = {"etat": "termine", "cree_le": "2026-10-15T10:00:00", "nb_traitees": 10, "verdicts": {"non_conformes": 1, "partielles": 1, "sans_source": 3, "refus_ko": 0}}
-    codes = [a["code"] for a in actions_suggerees({"total": 10, "par_relecture": {"valide": 10}}, derniere, {})]
+    derniere = mesure(
+        cree_le="2026-10-15T10:00:00",
+        verdicts={"non_conformes": 1, "partielles": 1, "sans_source": 3, "refus_ko": 0},
+    )
+    codes = [a["code"] for a in actions_suggerees(comptes(total=10, par_relecture={"valide": 10}), derniere, {})]
     assert codes == ["corriger_echecs", "redecouper"]
 
 

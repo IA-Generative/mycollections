@@ -38,8 +38,8 @@ import os
 from dataclasses import dataclass
 
 from sqlalchemy import JSON, BigInteger, String, select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.services.feedback_store import ingest_feedback as myrag_ingest
 
@@ -117,7 +117,7 @@ def _extract_qa(chat_blob: dict | None, message_id: str) -> tuple[str, str]:
         return "", ""
 
 
-def _collection_from_model(model_id: str) -> str | None:
+def _collection_from_model(model_id: str | None) -> str | None:
     """Return the collection name embedded in the OWUI model_id, or None if
     this row isn't about an OpenRAG partition.
     """
@@ -134,7 +134,7 @@ async def sync_batch(owui_db_url: str, limit: int | None = None) -> SyncResult:
     """
     result = SyncResult()
     engine = create_async_engine(owui_db_url, echo=False)
-    owui_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    owui_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     try:
         async with owui_session_factory() as owui_session:

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 
 from app.database import async_session
 from app.models.db import (
@@ -174,7 +175,7 @@ async def purge_collection(name: str) -> dict:
     openrag_status = "skipped"
     try:
         result = await OpenRAGClient(timeout=15.0).delete_partition(name)
-        openrag_status = result.get("status", "unknown")
+        openrag_status = result.status
     except Exception as e:
         logger.warning("purge: failed to drop OpenRAG partition %s: %s", name, e)
         openrag_status = f"error: {e.__class__.__name__}"
@@ -218,7 +219,7 @@ async def purge_collection(name: str) -> dict:
         ):
             stmt = delete(model).where(model.collection_name == name)
             result = await session.execute(stmt)
-            counts[model.__tablename__] = result.rowcount or 0
+            counts[model.__tablename__] = result.rowcount if isinstance(result, CursorResult) else 0
         # finally the collection row itself
         c = await session.get(Collection, name)
         if c:

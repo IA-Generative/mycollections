@@ -7,14 +7,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.collectif import FicheCollection
+from app.services.openrag_client import FichierOpenRAG, ReponseChat, ResultatRecherche
 from app.services.reponse import ErreurReponse, repondre
 
 
 def _client(chat_reponses, recherche=None, fichiers=None):
+    """Le faux OpenRAG : les réponses du chat et de la recherche, dict de test → modèle."""
     c = MagicMock()
-    c.chat = AsyncMock(side_effect=chat_reponses)
-    c.search = AsyncMock(return_value={"documents": recherche or []})
-    c.list_files = AsyncMock(return_value=fichiers or [])
+    c.chat = AsyncMock(side_effect=[r if isinstance(r, Exception) else ReponseChat.model_validate(r) for r in chat_reponses])
+    c.search = AsyncMock(return_value=ResultatRecherche.model_validate({"documents": recherche or []}))
+    c.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers or []])
     return c
 
 
@@ -25,8 +28,9 @@ def _chat(texte, sources=None):
 
 
 def _repondre(client, mention=None):
+    fiche = FicheCollection(name="x", etat_collab="publiee_tous", garant_hash=None, demande_id=None, scope="public", created_by="", scope_groups=[], archived_at=None)
     with (
-        patch("app.services.collectif_store.fiche", new=AsyncMock(return_value={"etat_collab": "publiee_tous"})),
+        patch("app.services.collectif_store.fiche", new=AsyncMock(return_value=fiche)),
         patch("app.services.etats.mention_verification", return_value=mention),
         patch("app.services.collection_store.get_system_prompt", new=AsyncMock(return_value="")),
     ):

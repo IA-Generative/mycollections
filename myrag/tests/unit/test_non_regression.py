@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.services.openrag_client import ResultatPartition
 from tests.conftest import TABLES_PAR_COLLECTION, personne
 
 TABLES_HISTORIQUES = {
@@ -73,7 +74,7 @@ def test_la_purge_vide_aussi_les_tables_du_collectif(client, en_tant_que, creer_
     en_tant_que(garant)
     client.post(f"/api/collections/{nom}/archive")
     with patch("app.services.collection_store.OpenRAGClient", create=True), patch("app.routers.collections.OpenRAGClient") as cls:
-        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value=ResultatPartition(status="ok"))
         r = client.delete(f"/api/collections/{nom}")
     assert r.status_code == 200, r.text
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])

@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 
 from app.services import corpus
 from app.services.morceau import decouper_morceau
+from app.services.openrag_client import ExtraitOpenRAG, FichierOpenRAG, MorceauOpenRAG
 
 logger = logging.getLogger("myrag.generation")
 
@@ -45,11 +46,11 @@ def nombre_a_lire(taille: int, plafond: int) -> int:
     return max(1, min(FACTEUR * max(1, int(taille)), max(1, int(plafond))))
 
 
-def echantillonner_fichiers(fichiers: list[dict], n: int, graine: str) -> list[dict]:
+def echantillonner_fichiers(fichiers: list[FichierOpenRAG], n: int, graine: str) -> list[FichierOpenRAG]:
     """`n` fichiers répartis sur toute la collection, dans l'ordre naturel des titres, à pas
     régulier depuis un départ tiré de la graine (même graine ⇒ même échantillon). Tous si moins."""
-    valides = [f for f in fichiers if isinstance(f, dict) and f.get("file_id")]
-    valides.sort(key=lambda f: (corpus._cle_naturelle(str(f.get("title") or f.get("original_filename") or f.get("filename") or "")), str(f["file_id"])))
+    valides = [f for f in fichiers if f.file_id]
+    valides.sort(key=lambda f: (corpus._cle_naturelle(str(f.title or f.original_filename or f.filename or "")), str(f.file_id)))
     if len(valides) <= n:
         return valides
     pas = len(valides) / n
@@ -57,46 +58,52 @@ def echantillonner_fichiers(fichiers: list[dict], n: int, graine: str) -> list[d
     return [valides[int(depart + i * pas)] for i in range(n)]
 
 
-def _texte_brut(brut: dict) -> str:
-    meta = brut.get("metadata") if isinstance(brut.get("metadata"), dict) else {}
-    return str(brut.get("content") or brut.get("page_content") or brut.get("text") or meta.get("content") or "")
+def _meta(brut: MorceauOpenRAG | ExtraitOpenRAG) -> dict:
+    """Les métadonnées d'un morceau OpenRAG, ou un dictionnaire vide."""
+    return brut.metadata if isinstance(brut.metadata, dict) else {}
 
 
-def _page(brut: dict, meta: dict) -> str | None:
-    page = brut.get("page", meta.get("page"))
+def _texte_chunk(brut: MorceauOpenRAG) -> str:
+    return str(brut.content or _meta(brut).get("content") or "")
+
+
+def _texte_extrait(brut: ExtraitOpenRAG) -> str:
+    return str(brut.page_content or _meta(brut).get("content") or "")
+
+
+def _page(meta: dict) -> str | None:
+    page = meta.get("page")
     return None if page in ("", None) else str(page)
 
 
-def morceau_depuis_chunk(brut: dict, partition: str) -> Morceau | None:
+def morceau_depuis_chunk(brut: MorceauOpenRAG, partition: str) -> Morceau | None:
     """Un élément de `GET /partition/<p>/chunks`. None s'il est vide, trop court, ou d'ailleurs."""
-    if not isinstance(brut, dict):
-        return None
-    meta = brut.get("metadata") if isinstance(brut.get("metadata"), dict) else {}
+    meta = _meta(brut)
     if meta.get("partition") not in (None, partition):
         return None
     chunk_id = str(meta.get("_id") or "")
     if not chunk_id:
-        lien = str(brut.get("link") or "")
+        lien = str(brut.link or "")
         chunk_id = lien.rsplit("/extract/", 1)[-1].split("?")[0] if "/extract/" in lien else ""
-    _ctx, fichier_balise, corps = decouper_morceau(_texte_brut(brut))
+    _ctx, fichier_balise, corps = decouper_morceau(_texte_chunk(brut))
     if not chunk_id or len(corps) < TEXTE_MIN:
         return None
     fichier = str(meta.get("original_filename") or meta.get("filename") or fichier_balise or "")
-    return Morceau(chunk_id, str(meta.get("file_id") or ""), partition, fichier, _page(brut, meta), corps)
+    return Morceau(chunk_id, str(meta.get("file_id") or ""), partition, fichier, _page(meta), corps)
 
 
-def morceau_depuis_extrait(chunk_id: str, file_id: str, partition: str, brut: dict) -> Morceau | None:
+def morceau_depuis_extrait(chunk_id: str, file_id: str, partition: str, brut: ExtraitOpenRAG | None) -> Morceau | None:
     """Un `GET /extract/<id>` (repli des instances sans /chunks)."""
-    if not isinstance(brut, dict):
+    if brut is None:
         return None
-    meta = brut.get("metadata") if isinstance(brut.get("metadata"), dict) else {}
+    meta = _meta(brut)
     if meta.get("partition") not in (None, partition):
         return None
-    _ctx, fichier_balise, corps = decouper_morceau(_texte_brut(brut))
+    _ctx, fichier_balise, corps = decouper_morceau(_texte_extrait(brut))
     if len(corps) < TEXTE_MIN:
         return None
     fichier = str(meta.get("original_filename") or meta.get("filename") or fichier_balise or "")
-    return Morceau(str(chunk_id), str(file_id), partition, fichier, _page(brut, meta), corps)
+    return Morceau(str(chunk_id), str(file_id), partition, fichier, _page(meta), corps)
 
 
 async def _morceaux_du_fichier(client, partition: str, file_id: str) -> list[Morceau]:
@@ -105,8 +112,8 @@ async def _morceaux_du_fichier(client, partition: str, file_id: str) -> list[Mor
         return [m for m in (morceau_depuis_chunk(c, partition) for c in brut) if m]
     detail = await client.file_detail(partition, file_id)
     morceaux = []
-    for cid in corpus.identifiants_des_morceaux(detail or {})[: corpus.MORCEAUX_MAX]:
-        m = morceau_depuis_extrait(cid, file_id, partition, await client.extract(cid) or {})
+    for cid in corpus.identifiants_des_morceaux(detail)[: corpus.MORCEAUX_MAX]:
+        m = morceau_depuis_extrait(cid, file_id, partition, await client.extract(cid))
         if m:
             morceaux.append(m)
     return morceaux
@@ -120,11 +127,11 @@ async def lire_echantillon(client, partition: str, n: int, graine: str, parallel
     verrou = asyncio.Semaphore(parallelisme)
     illisibles = 0
 
-    async def lire(f: dict) -> list[Morceau]:
+    async def lire(f: FichierOpenRAG) -> list[Morceau]:
         nonlocal illisibles
         async with verrou:
             try:
-                return await _morceaux_du_fichier(client, partition, str(f["file_id"]))
+                return await _morceaux_du_fichier(client, partition, str(f.file_id))
             except Exception as e:  # noqa: BLE001 — un fichier en panne ne fait pas échouer l'échantillon
                 illisibles += 1
                 logger.warning("génération : fichier illisible dans %s (%s)", partition, type(e).__name__)

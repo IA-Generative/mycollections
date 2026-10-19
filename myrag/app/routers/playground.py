@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
 from app.services import accueil, liens
-from app.services.openrag_client import OpenRAGClient
+from app.services.openrag_client import FichierOpenRAG, OpenRAGClient
 from app.services.reponse import ErreurReponse, repondre
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
@@ -44,16 +44,16 @@ async def _morceaux_par_recherche(client: OpenRAGClient, collection: str, questi
     except Exception:  # noqa: BLE001 — pas de recherche, pas de repli : on continue
         return []
     morceaux = []
-    for d in (resultat or {}).get("documents") or []:
-        metadonnees = d.get("metadata") or {}
-        contenu = d.get("content") or metadonnees.get("content") or ""
+    for d in resultat.documents:
+        metadonnees = d.metadata or {}
+        contenu = d.content or metadonnees.get("content") or ""
         if not contenu:
             continue
         morceaux.append({**{k: v for k, v in metadonnees.items() if k != "content"}, "content": contenu})
     return morceaux
 
 
-async def _get_collection_sample(client: OpenRAGClient, collection: str, max_files: int = 5) -> list[dict]:
+async def _get_collection_sample(client: OpenRAGClient, collection: str, max_files: int = 5) -> list[FichierOpenRAG]:
     """Get a sample of files from the collection to provide context.
 
     Used as fallback when semantic search returns no results

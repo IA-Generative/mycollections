@@ -6,6 +6,7 @@ import os
 import sqlite3
 from unittest.mock import AsyncMock, patch
 
+from app.services.openrag_client import ReponseChat, ResultatPartition
 from tests.conftest import SUPERADMIN, personne
 
 
@@ -23,7 +24,7 @@ def _demander(client, en_tant_que, qui, nom, question="Que dit le texte ?"):
     en_tant_que(qui)
     with patch("app.routers.playground.OpenRAGClient") as cls:
         cls.return_value.health_check = AsyncMock(return_value=True)
-        cls.return_value.chat = AsyncMock(return_value={"choices": [{"message": {"content": "Réponse."}}], "extra": ""})
+        cls.return_value.chat = AsyncMock(return_value=ReponseChat.model_validate({"choices": [{"message": {"content": "Réponse."}}], "extra": ""}))
         r = client.post(f"/api/playground/{nom}/chat", json={"question": question})
     assert r.status_code == 200, r.text
 
@@ -160,6 +161,6 @@ def test_la_purge_emporte_la_mesure(client, en_tant_que, creer_collection, nom):
     en_tant_que(SUPERADMIN)
     client.post(f"/api/collections/{nom}/archive")
     with patch("app.routers.collections.OpenRAGClient") as cls:
-        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value=ResultatPartition(status="ok"))
         assert client.delete(f"/api/collections/{nom}").status_code == 200
     assert _sql("SELECT COUNT(*) FROM usage_question WHERE collection_name = ?", (nom,))[0][0] == 0

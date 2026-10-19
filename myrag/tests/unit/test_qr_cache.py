@@ -13,7 +13,7 @@ def cache(tmp_path):
 class TestQRCache:
     def test_add_entry(self, cache):
         cache.add("test-col", "Quel delai ?", "2 mois avant expiration (art L433-1)")
-        entries = cache.list("test-col")
+        entries = cache.lister("test-col")
         assert len(entries) == 1
         assert entries[0].question == "Quel delai ?"
 
@@ -39,15 +39,15 @@ class TestQRCache:
     def test_delete_entry(self, cache):
         cache.add("test-col", "Q1", "A1")
         cache.add("test-col", "Q2", "A2")
-        entries = cache.list("test-col")
+        entries = cache.lister("test-col")
         cache.delete("test-col", entries[0].id)
-        assert len(cache.list("test-col")) == 1
+        assert len(cache.lister("test-col")) == 1
 
     def test_update_entry(self, cache):
         cache.add("test-col", "Q1", "A1")
-        entries = cache.list("test-col")
+        entries = cache.lister("test-col")
         cache.update("test-col", entries[0].id, answer="A1 updated")
-        updated = cache.list("test-col")
+        updated = cache.lister("test-col")
         assert updated[0].answer == "A1 updated"
 
     def test_import_json(self, cache):
@@ -57,7 +57,7 @@ class TestQRCache:
             {"question": "Q3", "answer": "A3"},
         ]
         cache.import_json("test-col", data)
-        assert len(cache.list("test-col")) == 3
+        assert len(cache.lister("test-col")) == 3
 
     def test_export_json(self, cache):
         cache.add("test-col", "Q1", "A1")
@@ -70,11 +70,11 @@ class TestQRCache:
         cache.add("test-col", "Q1", "A1")
         # Create new cache instance
         cache2 = QRCache(data_dir=str(tmp_path))
-        entries = cache2.list("test-col")
+        entries = cache2.lister("test-col")
         assert len(entries) == 1
 
     def test_empty_collection(self, cache):
-        entries = cache.list("nonexistent")
+        entries = cache.lister("nonexistent")
         assert entries == []
 
     def test_stats(self, cache):

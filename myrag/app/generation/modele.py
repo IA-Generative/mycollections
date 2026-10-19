@@ -17,6 +17,11 @@ from __future__ import annotations
 import asyncio
 import time
 
+from langchain_core.callbacks import Callbacks
+from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.outputs import LLMResult
+from langchain_core.prompt_values import PromptValue
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from ragas.embeddings.base import LangchainEmbeddingsWrapper
 from ragas.llms.base import LangchainLLMWrapper
@@ -29,7 +34,9 @@ from app.generation.resultats import MARQUE_REPARATION, Compteurs, Debit, _usage
 class LLMCompte(LangchainLLMWrapper):
     """L'enveloppe ragas d'un modèle LangChain, qui compte chaque appel et appelle en synchrone."""
 
-    def __init__(self, langchain_llm, compteurs: Compteurs, debit: Debit | None = None, **kw):
+    langchain_llm: BaseChatModel
+
+    def __init__(self, langchain_llm: BaseChatModel, compteurs: Compteurs, debit: Debit | None = None, **kw):
         import warnings
 
         with warnings.catch_warnings():
@@ -38,10 +45,10 @@ class LLMCompte(LangchainLLMWrapper):
         self.compteurs = compteurs
         self.debit = debit or Debit(0)
 
-    def generate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
+    def generate_text(self, prompt: PromptValue, n: int = 1, temperature: float | None = 0.01, stop: list[str] | None = None, callbacks: Callbacks = None) -> LLMResult:
         self.debit.prendre()
         debut = time.monotonic()
-        texte = prompt.to_string() if hasattr(prompt, "to_string") else str(prompt)
+        texte = prompt.to_string()
         try:
             resultat = super().generate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks)
         except Exception as e:
@@ -50,14 +57,16 @@ class LLMCompte(LangchainLLMWrapper):
         self.compteurs.observer(texte, resultat, time.monotonic() - debut)
         return resultat
 
-    async def agenerate_text(self, prompt, n=1, temperature=0.01, stop=None, callbacks=None):
-        return await asyncio.to_thread(self.generate_text, prompt, n, temperature, stop, callbacks)
+    async def agenerate_text(self, prompt: PromptValue, n: int = 1, temperature: float | None = 0.01, stop: list[str] | None = None, callbacks: Callbacks = None) -> LLMResult:
+        return await asyncio.to_thread(lambda: self.generate_text(prompt, n=n, temperature=temperature, stop=stop, callbacks=callbacks))  # ty: ignore[missing-argument, invalid-argument-type]
 
 
 class EmbeddingsComptes(LangchainEmbeddingsWrapper):
     """Même principe pour les embeddings (utilisés seulement par les personas automatiques)."""
 
-    def __init__(self, embeddings, compteurs: Compteurs, debit: Debit | None = None, **kw):
+    embeddings: Embeddings
+
+    def __init__(self, embeddings: Embeddings, compteurs: Compteurs, debit: Debit | None = None, **kw):
         super().__init__(embeddings, **kw)
         self.compteurs = compteurs
         self.debit = debit or Debit(0)

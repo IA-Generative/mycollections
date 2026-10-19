@@ -13,7 +13,9 @@ l'appellent toutes deux. Tout vient de la base : rien de ce que dit l'appelant.
 from __future__ import annotations
 
 import json
+from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.database import async_session
@@ -34,6 +36,20 @@ class PasPubliee(Exception):
     pass
 
 
+class FicheVoulue(BaseModel):
+    """Ce qui part au socle : tout vient de la base, rien de ce que dit l'appelant."""
+
+    model_id: str
+    name: str
+    description: str = ""
+    description_par_defaut: str = ""
+    tags: list[str] = []
+    tags_geres: set[str] = set()
+    access_control: dict[str, Any] | None = None
+    access_grants: list[dict[str, Any]] = []
+    groupes_saisis: list[str] = []
+
+
 def nom_de_fiche(collection: dict, alias_name: str | None) -> str:
     """Le nom saisi à la publication s'il en est un ; sinon le titre de la collection.
     Un alias qui n'est que l'identifiant déguisé (`📚 demo-x`, `MirAI demo-x`) ne compte
@@ -41,7 +57,7 @@ def nom_de_fiche(collection: dict, alias_name: str | None) -> str:
     return titre_depuis_alias(alias_name, collection.get("name", "")) or titre_de(collection)
 
 
-async def _voulue(name: str) -> dict:
+async def _voulue(name: str) -> FicheVoulue:
     async with async_session() as session:
         col = await session.get(Collection, name)
         pub = await session.get(Publication, name)
@@ -56,19 +72,19 @@ async def _voulue(name: str) -> dict:
         ac = None
         if pub.visibility == "group" and groupes:
             ac = {"read": {"group_ids": groupes, "user_ids": []}, "write": {"group_ids": groupes, "user_ids": []}}
-        return {
-            "model_id": f"openrag-{name}",
-            "name": nom_de_fiche(fiche, pub.alias_name),
-            "description": description,
-            "description_par_defaut": (col.description or "").strip()[:500],
-            "tags": [categories[col.categorie]] if col.categorie in categories else [],
-            "tags_geres": set(categories.values()),
-            "access_control": ac,
-            "access_grants": owui_client.grants_de_partage(pub.visibility, groupes),
+        return FicheVoulue(
+            model_id=f"openrag-{name}",
+            name=nom_de_fiche(fiche, pub.alias_name),
+            description=description,
+            description_par_defaut=(col.description or "").strip()[:500],
+            tags=[categories[col.categorie]] if col.categorie in categories else [],
+            tags_geres=set(categories.values()),
+            access_control=ac,
+            access_grants=owui_client.grants_de_partage(pub.visibility, groupes),
             # Les noms saisis : traduits en identifiants de groupes de l'assistant au moment de
             # poser la fiche (synchroniser_fiche), jamais envoyés tels quels.
-            "groupes_saisis": groupes if pub.visibility == "group" else [],
-        }
+            groupes_saisis=groupes if pub.visibility == "group" else [],
+        )
 
 
 async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None, garder_les_droits: bool = False) -> dict:
@@ -77,19 +93,22 @@ async def synchroniser_fiche(name: str, *, a_sec: bool = False, client=None, gar
 
     `garder_les_droits` : la portée de la fiche EXISTANTE est reconduite. Une publication
     pose la portée que son auteur vient de choisir ; une resynchronisation, non."""
-    v = {**await _voulue(name), "garder_les_droits": garder_les_droits}
-    rendu = {"collection": name, "model_id": v["model_id"], "nom": v["name"], "tags": v["tags"]}
+    fiche = await _voulue(name)
+    rendu = {"collection": name, "model_id": fiche.model_id, "nom": fiche.name, "tags": fiche.tags}
     if a_sec:
         return {**rendu, "a_sec": True}
     client = client or owui_client.OwuiClient()
-    groupes = v.pop("groupes_saisis", [])
-    if groupes and not garder_les_droits:
-        ids, inconnus = await client.ids_de_groupes(groupes)
+    if fiche.groupes_saisis and not garder_les_droits:
+        ids, inconnus = await client.ids_de_groupes(fiche.groupes_saisis)
         if inconnus:
             raise GroupeInconnu(inconnus)
-        v["access_grants"] = owui_client.grants_de_partage("group", ids)
-        v["access_control"] = {"read": {"group_ids": ids, "user_ids": []}, "write": {"group_ids": ids, "user_ids": []}}
-    await client.upsert_model(**v)
+        fiche = fiche.model_copy(
+            update={
+                "access_grants": owui_client.grants_de_partage("group", ids),
+                "access_control": {"read": {"group_ids": ids, "user_ids": []}, "write": {"group_ids": ids, "user_ids": []}},
+            }
+        )
+    await client.upsert_model(**fiche.model_dump(exclude={"groupes_saisis"}), garder_les_droits=garder_les_droits)
     return {**rendu, "a_sec": False}
 
 

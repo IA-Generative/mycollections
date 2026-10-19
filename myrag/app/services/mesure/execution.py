@@ -17,6 +17,7 @@ import time
 from app.config import settings
 from app.generation.resultats import Compteurs, message_sur
 from app.models.db import utcnow
+from app.models.qualite import MesureFiche, QuestionFiche
 from app.services import mesure_store as store
 from app.services import questions_store
 from app.services.mesure import juge as juge_mod
@@ -55,33 +56,33 @@ class _Etat:
         self.jugements = 0
 
 
-async def evaluer(name: str, q: dict, *, client, compteurs: Compteurs, etat: _Etat, debit) -> dict:
+async def evaluer(name: str, q: QuestionFiche, *, client, compteurs: Compteurs, etat: _Etat, debit) -> dict:
     """Poser une question à la collection et juger la réponse ; rend le résultat (sans l'écrire)."""
     debut = time.monotonic()
     resultat = {
-        "question_id": q["id"],
-        "question_texte": q["question"],
-        "reponse_reference": q.get("reponse") or "",
-        "hors_sujet": bool(q.get("hors_sujet")),
-        "persona_nom": q.get("persona") or "",
-        "origine": q.get("origine") or "",
+        "question_id": q.id,
+        "question_texte": q.question,
+        "reponse_reference": q.reponse or "",
+        "hors_sujet": bool(q.hors_sujet),
+        "persona_nom": q.persona or "",
+        "origine": q.origine or "",
     }
     try:
-        rep = await repondre(name, q["question"], client=client)
+        rep = await repondre(name, q.question, client=client)
         etat.appels_chat += 1
         resultat.update(reponse_obtenue=rep.contenu, repli=rep.repli, sources_json=json.dumps([{"fichier": n} for n in rep.source_names[:10]], ensure_ascii=False))
         methode = "judge"
-        if q.get("hors_sujet"):
+        if q.hors_sujet:
             verdict, justification = v.verdict_hors_sujet(rep.contenu, rep.repli)
         elif not rep.sources or rep.repli == "fichiers":
             verdict, justification = "sans_source", "La collection n'a trouvé aucun passage pour répondre."
-        elif not (q.get("reponse") or "").strip():
+        elif not (q.reponse or "").strip():
             verdict, justification = "partiel", "Pas de réponse de référence : complétez-la pour une mesure exacte."
         else:
             jugement = None
             if etat.juge_ok:
                 try:
-                    jugement = await juge_mod.juger(q["question"], q["reponse"], rep.contenu, compteurs=compteurs, debit=debit)
+                    jugement = await juge_mod.juger(q.question, q.reponse, rep.contenu, compteurs=compteurs, debit=debit)
                     etat.jugements += 1
                 except juge_mod.JugeIndisponible:
                     etat.juge_ok = False  # inutile d'insister : la suite passe à la similarité
@@ -91,9 +92,9 @@ async def evaluer(name: str, q: dict, *, client, compteurs: Compteurs, etat: _Et
                 verdict, justification = jugement.verdict, jugement.justification
             else:
                 methode = "similarite"
-                verdict, ratio = v.verdict_similarite(q["reponse"], rep.contenu)
+                verdict, ratio = v.verdict_similarite(q.reponse, rep.contenu)
                 justification = f"Comparaison des textes (juge indisponible) : {round(100 * ratio)} % de ressemblance."
-            verdict, raison = v.plafonner(verdict, rep.contenu, q.get("must_cite") or [])
+            verdict, raison = v.plafonner(verdict, rep.contenu, q.must_cite or [])
             if raison:
                 justification = f"{justification} {raison}".strip()
         resultat.update(verdict=verdict, justification=justification, score=v.score_de(verdict), methode=methode)
@@ -103,11 +104,11 @@ async def evaluer(name: str, q: dict, *, client, compteurs: Compteurs, etat: _Et
     return resultat
 
 
-async def mesurer_une(name: str, mesure_id: str, q: dict, *, client, compteurs: Compteurs, etat: _Etat, debit) -> str:
+async def mesurer_une(name: str, mesure_id: str, q: QuestionFiche, *, client, compteurs: Compteurs, etat: _Etat, debit) -> str:
     resultat = await evaluer(name, q, client=client, compteurs=compteurs, etat=etat, debit=debit)
     await store.enregistrer_resultat(mesure_id, name, **resultat)
-    if resultat["verdict"] != "erreur" and q.get("id"):
-        await questions_store.noter_verdict(q["id"], resultat["verdict"], mesure_id)
+    if resultat["verdict"] != "erreur" and q.id:
+        await questions_store.noter_verdict(q.id, resultat["verdict"], mesure_id)
     etat.verdicts.append(resultat["verdict"])
     return resultat["verdict"]
 
@@ -143,7 +144,7 @@ async def _suivre(mesure_id: str, etat: _Etat, compteurs: Compteurs) -> None:
             logger.warning("suivi de la mesure %s : %s", mesure_id, type(e).__name__)
 
 
-async def executer(mesure_id: str, name: str, questions: list[dict]) -> None:
+async def executer(mesure_id: str, name: str, questions: list[QuestionFiche]) -> None:
     from app.services.debit import partage
 
     debut = time.monotonic()
@@ -221,14 +222,14 @@ async def executer(mesure_id: str, name: str, questions: list[dict]) -> None:
         logger.warning("journal de la mesure %s : %s", mesure_id, type(e).__name__)
 
 
-def lancer(mesure: dict, name: str, questions: list[dict]) -> asyncio.Task:
-    tache = asyncio.create_task(executer(mesure["id"], name, questions))
-    _taches[mesure["id"]] = tache
-    tache.add_done_callback(lambda _t: _taches.pop(mesure["id"], None))
+def lancer(mesure: MesureFiche, name: str, questions: list[QuestionFiche]) -> asyncio.Task:
+    tache = asyncio.create_task(executer(mesure.id, name, questions))
+    _taches[mesure.id] = tache
+    tache.add_done_callback(lambda _t: _taches.pop(mesure.id, None))
     return tache
 
 
-async def tester_une(name: str, q: dict) -> dict:
+async def tester_une(name: str, q: QuestionFiche) -> dict:
     """Re-tester une seule question, tout de suite (volet d'une question) : rien n'est enregistré."""
     from app.services.debit import partage
 

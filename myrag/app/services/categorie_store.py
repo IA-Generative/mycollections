@@ -7,6 +7,7 @@ La liste, l'ordre et le classement se règlent à chaud par un superadmin
 from __future__ import annotations
 
 from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
 
 from app.database import async_session
 from app.models.db import Categorie, Collection
@@ -36,7 +37,10 @@ async def lister() -> list[dict]:
     """Les rubriques dans l'ordre d'affichage, avec le nombre de collections NON archivées."""
     async with async_session() as session:
         cats = (await session.execute(select(Categorie).order_by(Categorie.ordre, Categorie.libelle))).scalars().all()
-        comptes = dict((await session.execute(select(Collection.categorie, func.count()).where(Collection.archived_at.is_(None)).group_by(Collection.categorie))).all())
+        comptes = {
+            categorie: n
+            for categorie, n in (await session.execute(select(Collection.categorie, func.count()).where(Collection.archived_at.is_(None)).group_by(Collection.categorie))).all()
+        }
         return [{**c.to_dict(), "nb_collections": comptes.get(c.cle, 0)} for c in cats]
 
 
@@ -74,7 +78,7 @@ async def supprimer(cle: str) -> int:
         res = await session.execute(update(Collection).where(Collection.categorie == cle).values(categorie=None))
         await session.delete(c)
         await session.commit()
-        return res.rowcount or 0
+        return res.rowcount if isinstance(res, CursorResult) else 0
 
 
 async def ordonner(cles: list[str]) -> list[dict]:

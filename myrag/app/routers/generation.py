@@ -135,7 +135,7 @@ async def proposer_personas(collection: str, corps: PropositionEntree, user: Cur
     from app.generation import suggestion
     from app.generation.resultats import message_sur
 
-    existants = [p["nom"] for p in await store.lister_personas(collection)]
+    existants = [p.nom for p in await store.lister_personas(collection)]
     try:
         return await suggestion.proposer(collection, corps.nombre, existants)
     except LookupError as e:
@@ -193,7 +193,7 @@ async def lancer(collection: str, corps: RunEntree, user: CurrentUser = Depends(
         "generation.lancee",
         user.sub,
         collection_name=collection,
-        detail={"run": run["id"], "taille": corps.taille, "personas": [p["nom"] for p in personas]},
+        detail={"run": run.id, "taille": corps.taille, "personas": [p.nom for p in personas]},
     )
     execution.lancer(run, collection, personas)
     return {"run": run}
@@ -268,21 +268,21 @@ async def exporter(collection: str, ident: str, format: str = Query("json", patt
         # Le format de l'outillage d'évaluation (eval-rag, DatasetItem) : question, answer, context,
         # persona_name, query_style — plus de quoi retrouver les passages et la relecture.
         corps = {
-            "metadata": {"collection": collection, "run": ident, "modele": run["modele"], "cree_le": run["cree_le"], "total_samples": len(paires)},
+            "metadata": {"collection": collection, "run": ident, "modele": run.modele, "cree_le": run.cree_le, "total_samples": len(paires)},
             "samples": [
                 {
-                    "question": p["question"],
-                    "answer": p["reponse"],
-                    "context": [c.get("texte", "") for c in p["contextes"]],
-                    "persona_name": p["persona"],
-                    "query_style": p["style"],
+                    "question": p.question,
+                    "answer": p.reponse,
+                    "context": [c.get("texte", "") for c in p.contextes],
+                    "persona_name": p.persona,
+                    "query_style": p.style,
                     "metadata": {
-                        "query_length": p["longueur"],
-                        "synthetiseur": p["synthetiseur"],
-                        "chunk_ids": [c.get("chunk_id") for c in p["contextes"]],
-                        "file_ids": [c.get("file_id") for c in p["contextes"]],
-                        "relecture": p["relecture"],
-                        "commentaire": p["commentaire"],
+                        "query_length": p.longueur,
+                        "synthetiseur": p.synthetiseur,
+                        "chunk_ids": [c.get("chunk_id") for c in p.contextes],
+                        "file_ids": [c.get("file_id") for c in p.contextes],
+                        "relecture": p.relecture,
+                        "commentaire": p.commentaire,
                     },
                 }
                 for p in paires
@@ -297,17 +297,17 @@ async def exporter(collection: str, ident: str, format: str = Query("json", patt
             [
                 _cellule(x)
                 for x in (
-                    p["id"],
-                    p["persona"],
-                    p["question"],
-                    p["reponse"],
-                    p["style"],
-                    p["longueur"],
-                    p["relecture"],
-                    p["commentaire"],
-                    " ".join(str(c.get("chunk_id") or "") for c in p["contextes"]),
-                    " ".join(str(c.get("file_id") or "") for c in p["contextes"]),
-                    " | ".join(str(c.get("fichier") or "") for c in p["contextes"]),
+                    p.id,
+                    p.persona,
+                    p.question,
+                    p.reponse,
+                    p.style,
+                    p.longueur,
+                    p.relecture,
+                    p.commentaire,
+                    " ".join(str(c.get("chunk_id") or "") for c in p.contextes),
+                    " ".join(str(c.get("file_id") or "") for c in p.contextes),
+                    " | ".join(str(c.get("fichier") or "") for c in p.contextes),
                 )
             ]
         )

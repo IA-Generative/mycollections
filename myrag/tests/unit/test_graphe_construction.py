@@ -6,6 +6,7 @@ sans écraser le graphe existant."""
 
 from unittest.mock import AsyncMock, patch
 
+from app.services.openrag_client import FichierOpenRAG, ReponseChat, ResultatRecherche
 from tests.unit.test_graph_import import (  # noqa: F401
     SUPERADMIN,
     _as,
@@ -19,8 +20,8 @@ CONTENUS = {"11": "Voir l'article L. 423-1.", "12": "Conjoint de Français.", "1
 
 def _openrag(mock_cls, fichiers=FICHIERS):
     client = mock_cls.return_value
-    client.search = AsyncMock(return_value={"documents": []})  # ce que rend « * » en vrai
-    client.list_files = AsyncMock(return_value=fichiers)
+    client.search = AsyncMock(return_value=ResultatRecherche(documents=[]))  # ce que rend « * » en vrai
+    client.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers])
     client.get_file_content = AsyncMock(side_effect=lambda p, f: CONTENUS.get(f, ""))
     return client
 
@@ -59,11 +60,13 @@ def test_le_resume_ia_fonctionne_par_openrag_sans_adresse_fournie_par_l_appelant
     fichiers = [{"file_id": "1", "filename": "Article-L1.md"}]
     with patch("app.services.openrag_client.OpenRAGClient") as cls:
         c = cls.return_value
-        c.list_files = AsyncMock(return_value=fichiers)
+        c.list_files = AsyncMock(return_value=[FichierOpenRAG.model_validate(f) for f in fichiers])
         c.get_file_content = AsyncMock(return_value=long_texte)
-        c.chat = AsyncMock(return_value={"choices": [{"message": {"content": "Cet article dit l'essentiel."}}]})
+        c.chat = AsyncMock(return_value=ReponseChat.model_validate({"choices": [{"message": {"content": "Cet article dit l'essentiel."}}]}))
         assert client.post("/graph/gcons-resume/build").status_code == 200
         r = client.post("/graph/gcons-resume/summarize", params={"threshold": 100, "llm_url": "http://169.254.169.254/"})
     assert r.status_code == 200, r.text
     assert r.json()["summarized"] == 1
-    assert c.chat.await_args.kwargs.get("model") == "openrag-gcons-resume" or c.chat.await_args.args[0] == "openrag-gcons-resume"
+    appel = c.chat.await_args
+    assert appel is not None
+    assert appel.kwargs.get("model") == "openrag-gcons-resume" or appel.args[0] == "openrag-gcons-resume"

@@ -16,6 +16,7 @@ from app.routers._droits import gerer_la_collection
 from app.services import export_questions
 from app.services import questions_store as store
 from app.services.collectif_store import Conflit, Introuvable, consigner
+from app.services.questions_store import QuestionModification
 
 router = APIRouter(prefix="/api/collections/{collection}/qualite", tags=["Qualite"])
 
@@ -39,19 +40,6 @@ class QuestionEntree(BaseModel):
     hors_sujet: bool = False
     persona: str = Field(default="", max_length=120)
     relecture: str = Field(default="brut", pattern="^(brut|valide|rejete)$")
-
-
-class QuestionModification(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    question: str | None = Field(default=None, max_length=store.QUESTION_MAX)
-    reponse: str | None = Field(default=None, max_length=store.REPONSE_MAX)
-    must_cite: list[str] | None = None
-    tags: list[str] | None = None
-    hors_sujet: bool | None = None
-    fiable: bool | None = None
-    relecture: str | None = Field(default=None, pattern="^(brut|valide|rejete)$")
-    commentaire: str | None = Field(default=None, max_length=2000)
-    persona: str | None = Field(default=None, max_length=120)
 
 
 class ImportEntree(BaseModel):
@@ -84,7 +72,7 @@ async def lister(
     page_ = await store.lister_questions(
         collection, origine=origine, relecture=relecture, verdict=verdict, fiable=fiable, hors_sujet=hors_sujet, persona=persona, texte=q, page=page, par_page=par_page
     )
-    return {**page_, "comptes": await store.compter(collection)}
+    return {**page_.model_dump(), "comptes": await store.compter(collection)}
 
 
 @router.post("/questions", status_code=201)
@@ -104,7 +92,7 @@ async def importer(collection: str, corps: ImportEntree, user: CurrentUser = Dep
         bilan = await store.importer_questions(collection, items, user.sub, origine=corps.origine)
     except ValueError as e:
         _traduire(e)
-    await consigner("collection", collection, "questions.importees", user.sub, collection_name=collection, detail=bilan)
+    await consigner("collection", collection, "questions.importees", user.sub, collection_name=collection, detail=bilan.model_dump())
     return bilan
 
 
@@ -118,11 +106,11 @@ async def depuis_avis(collection: str, feedback_id: int, corps: AvisEntree, user
 
 @router.get("/questions/export")
 async def exporter(collection: str, format: str = Query("json", pattern="^(json|csv)$"), user: CurrentUser = Depends(gerer_la_collection)):
-    questions = (await store.lister_questions(collection, par_page=200, page=1))["questions"]
-    total = (await store.compter(collection))["total"]
+    questions = (await store.lister_questions(collection, par_page=200, page=1)).questions
+    total = (await store.compter(collection)).total
     page = 2
     while len(questions) < total:
-        questions += (await store.lister_questions(collection, par_page=200, page=page))["questions"]
+        questions += (await store.lister_questions(collection, par_page=200, page=page)).questions
         page += 1
     nom = f"{collection}-jeu-de-questions.{format}"
     entete = {"Content-Disposition": f'attachment; filename="{nom}"'}
@@ -139,7 +127,7 @@ async def lire(collection: str, ident: str, user: CurrentUser = Depends(gerer_la
         q = await store.lire_question(collection, ident)
     except Introuvable as e:
         _traduire(e)
-    return {"question": q, "dernier_resultat": await mesure_store.resultat_de(collection, q.get("derniere_mesure_id"), ident)}
+    return {"question": q, "dernier_resultat": await mesure_store.resultat_de(collection, q.derniere_mesure_id, ident)}
 
 
 @router.post("/questions/{ident}/tester")
@@ -156,11 +144,10 @@ async def tester(collection: str, ident: str, user: CurrentUser = Depends(gerer_
 
 @router.patch("/questions/{ident}")
 async def modifier(collection: str, ident: str, corps: QuestionModification, user: CurrentUser = Depends(gerer_la_collection)):
-    champs = corps.model_dump(exclude_unset=True)
-    if not champs:
+    if not corps.model_fields_set:
         raise HTTPException(status_code=422, detail="Rien à modifier")
     try:
-        return {"question": await store.modifier_question(collection, ident, champs, user.sub)}
+        return {"question": await store.modifier_question(collection, ident, corps, user.sub)}
     except (Conflit, Introuvable, ValueError) as e:
         _traduire(e)
 
@@ -209,7 +196,7 @@ async def lancer_mesure(collection: str, corps: MesureEntree, user: CurrentUser 
         mesure = await mesure_store.creer_mesure(collection, corps.model_dump(), settings.mesure_juge_modele or settings.generation_llm_modele, len(questions), user.sub)
     except Conflit as e:
         _traduire(e)
-    await consigner("collection", collection, "mesure.lancee", user.sub, collection_name=collection, detail={"mesure": mesure["id"], "questions": len(questions)})
+    await consigner("collection", collection, "mesure.lancee", user.sub, collection_name=collection, detail={"mesure": mesure.id, "questions": len(questions)})
     execution.lancer(mesure, collection, questions)
     return {"mesure": mesure, "appels_estimes": 2 * len(questions)}
 

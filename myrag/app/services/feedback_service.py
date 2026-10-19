@@ -80,7 +80,7 @@ class FeedbackService:
         self._save(collection, items)
         return fb
 
-    def list(self, collection: str, status: str | None = None, rating: int | None = None) -> list[Feedback]:
+    def lister(self, collection: str, status: str | None = None, rating: int | None = None) -> list[Feedback]:
         items = self._load(collection)
         if status:
             items = [f for f in items if f.status == status]

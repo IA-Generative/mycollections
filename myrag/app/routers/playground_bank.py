@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from app.database import async_session
 from app.models.db import Feedback, PaireQA
+from app.models.qualite import QuestionFiche
 from app.routers._droits import lire_la_collection
 
 router = APIRouter(prefix="/api/playground", tags=["Playground"])
@@ -38,7 +39,7 @@ async def get_bank(collection: str):
         r = await session.execute(select(PaireQA).where(PaireQA.collection_name == collection, PaireQA.relecture != "rejete").order_by(PaireQA.cree_le.desc()))
         for q in r.scalars().all():
             source = source_de(q)
-            d = q.to_dict()
+            d = QuestionFiche.depuis(q)
             items.append(
                 {
                     "id": f"q_{q.id}",
@@ -49,13 +50,13 @@ async def get_bank(collection: str):
                         "question_id": q.id,
                         "origine": q.origine,
                         "relecture": q.relecture,
-                        "fiable": d["fiable"],
-                        "out_of_scope": d["hors_sujet"],
-                        "must_cite": d["must_cite"],
-                        "tags": d["tags"],
+                        "fiable": d.fiable,
+                        "out_of_scope": d.hors_sujet,
+                        "must_cite": d.must_cite,
+                        "tags": d.tags,
                         "persona": q.persona_nom,
                         "dernier_verdict": q.dernier_verdict,
-                        "created_at": d["cree_le"],
+                        "created_at": d.cree_le,
                     },
                 }
             )

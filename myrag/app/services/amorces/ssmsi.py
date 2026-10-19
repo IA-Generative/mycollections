@@ -49,4 +49,4 @@ async def importer(collection: str, entree: dict) -> dict:
     octets = await reseau.telecharger(p["url_departemental"])
     docs, couverture = documents_depuis(lire_csv(octets))
     bilan = await ingerer(collection, docs, max_documents=p.get("max_documents"))
-    return {**bilan, "couverture": couverture, "lignes_importees": couverture["lignes_lues"]}
+    return {**bilan.model_dump(), "couverture": couverture, "lignes_importees": couverture["lignes_lues"]}

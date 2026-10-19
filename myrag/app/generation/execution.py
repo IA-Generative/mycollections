@@ -14,10 +14,12 @@ import logging
 import time
 
 from app.config import settings
-from app.generation.morceaux import lire_echantillon, nombre_a_lire
+from app.generation.morceaux import Morceau, lire_echantillon, nombre_a_lire
 from app.generation.resultats import Compteurs, PersonaDemande, ResultatGeneration, message_sur
 from app.models.db import utcnow
+from app.models.generation import PersonaFiche, RunFiche
 from app.services import generation_store as store
+from app.services.generation_store import AvancementRun
 from app.services.openrag_client import OpenRAGClient
 
 logger = logging.getLogger("myrag.generation")
@@ -43,7 +45,7 @@ def _file() -> asyncio.Semaphore:
     return _files[boucle]
 
 
-def generer_dans_le_fil(morceaux, personas, taille, distribution, compteurs: Compteurs) -> ResultatGeneration:
+def generer_dans_le_fil(morceaux: list[Morceau], personas: list[PersonaDemande], taille: int, distribution: dict[str, float], compteurs: Compteurs) -> ResultatGeneration:
     """Le travail ragas, dans un fil. Les imports de ragas sont ici, pas au chargement du service."""
     from app.generation import modele, moteur
 
@@ -56,31 +58,55 @@ def generer_dans_le_fil(morceaux, personas, taille, distribution, compteurs: Com
     return moteur.generer(morceaux, personas, taille, llm, emb, distribution=distribution, run_config=rc, progression=compteurs.poser_phase)
 
 
-def _compteurs_en_base(c: Compteurs) -> dict:
-    return {k: v for k, v in c.instantane().items() if k != "duree_llm_s"}
+def _avancement(
+    c: Compteurs,
+    *,
+    phase: str | None = None,
+    paires_obtenues: int | None = None,
+    paires_echouees: int | None = None,
+    duree_s: float | None = None,
+    noeuds_avec_proprietes: int | None = None,
+) -> AvancementRun:
+    """L'instantané des compteurs du fil, en champs d'avancement du run (la durée LLM reste au fil)."""
+    i = c.instantane()
+    return AvancementRun(
+        phase=phase,
+        appels_llm=i["appels_llm"],
+        tokens_entree=i["tokens_entree"],
+        tokens_sortie=i["tokens_sortie"],
+        reparations_json=i["reparations_json"],
+        inachevees=i["inachevees"],
+        erreurs_llm=i["erreurs_llm"],
+        refus_debit=i["refus_debit"],
+        appels_embeddings=i["appels_embeddings"],
+        paires_obtenues=paires_obtenues,
+        paires_echouees=paires_echouees,
+        duree_s=duree_s,
+        noeuds_avec_proprietes=noeuds_avec_proprietes,
+    )
 
 
 async def _suivre(run_id: str, compteurs: Compteurs) -> None:
     while True:
         await asyncio.sleep(INTERVALLE_SUIVI_S)
         try:
-            await store.maj_run(run_id, phase=compteurs.phase, **_compteurs_en_base(compteurs))
+            await store.maj_run(run_id, _avancement(compteurs, phase=compteurs.phase))
         except Exception as e:  # noqa: BLE001 — le suivi ne fait jamais échouer le run
             logger.warning("suivi du run %s : %s", run_id, type(e).__name__)
 
 
-async def executer(run_id: str, name: str, personas: list[dict], taille: int, distribution: dict) -> None:
+async def executer(run_id: str, name: str, personas: list[PersonaFiche], taille: int, distribution: dict) -> None:
     debut = time.monotonic()
     compteurs = Compteurs()
-    demandes = [PersonaDemande(p["nom"], p["description_role"]) for p in personas]
+    demandes = [PersonaDemande(p.nom, p.description_role) for p in personas]
     suivi: asyncio.Task | None = None
     resultat = ResultatGeneration(etat="erreur")
     try:
         async with _file():
-            await store.maj_run(run_id, etat="en_cours", phase="lecture", demarre_le=utcnow())
+            await store.maj_run(run_id, AvancementRun(etat="en_cours", phase="lecture", demarre_le=utcnow()))
             n = nombre_a_lire(taille, settings.generation_morceaux_max)
             morceaux, nb_fichiers = await lire_echantillon(OpenRAGClient(timeout=60.0), name, n, graine=run_id)
-            await store.maj_run(run_id, fichiers_collection=nb_fichiers, morceaux_envoyes=len(morceaux), phase="extraction")
+            await store.maj_run(run_id, AvancementRun(fichiers_collection=nb_fichiers, morceaux_envoyes=len(morceaux), phase="extraction"))
             if not morceaux:
                 resultat.erreur = (
                     "Cette collection n'a encore aucun document indexé."
@@ -103,14 +129,19 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
             suivi.cancel()
 
     duree = round(time.monotonic() - debut, 1)
-    champs = {**_compteurs_en_base(compteurs), "duree_s": duree, "noeuds_avec_proprietes": resultat.noeuds_avec_proprietes or None}
+    compte_rendu = _avancement(
+        compteurs,
+        paires_echouees=resultat.paires_echouees,
+        duree_s=duree,
+        noeuds_avec_proprietes=resultat.noeuds_avec_proprietes or None,
+    )
     try:
         if resultat.etat == "termine":
-            await store.maj_run(run_id, phase="enregistrement")
+            await store.maj_run(run_id, AvancementRun(phase="enregistrement"))
             n_paires = await store.enregistrer_paires(run_id, name, resultat.paires)
-            await store.terminer_run(run_id, "termine", paires_obtenues=n_paires, paires_echouees=resultat.paires_echouees, **champs)
+            await store.terminer_run(run_id, "termine", avancement=compte_rendu.model_copy(update={"paires_obtenues": n_paires}))
         else:
-            await store.terminer_run(run_id, "erreur", erreur=resultat.erreur, paires_echouees=resultat.paires_echouees, **champs)
+            await store.terminer_run(run_id, "erreur", erreur=resultat.erreur, avancement=compte_rendu)
     except Exception as e:  # noqa: BLE001
         logger.error("run %s : écriture du résultat impossible (%s)", run_id, type(e).__name__)
         await store.terminer_run(run_id, "erreur", erreur=f"Résultat non enregistré : {type(e).__name__}")
@@ -156,8 +187,8 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
         logger.warning("journal du run %s : %s", run_id, type(e).__name__)
 
 
-def lancer(run: dict, name: str, personas: list[dict]) -> asyncio.Task:
-    tache = asyncio.create_task(executer(run["id"], name, personas, run["taille"], run["distribution"]))
-    _taches[run["id"]] = tache
-    tache.add_done_callback(lambda _t: _taches.pop(run["id"], None))
+def lancer(run: RunFiche, name: str, personas: list[PersonaFiche]) -> asyncio.Task:
+    tache = asyncio.create_task(executer(run.id, name, personas, run.taille, run.distribution))
+    _taches[run.id] = tache
+    tache.add_done_callback(lambda _t: _taches.pop(run.id, None))
     return tache

@@ -96,7 +96,7 @@ async def proposer(name: str, nombre: int, existants: list[str]) -> dict:
 
     from langchain_core.prompt_values import StringPromptValue
 
-    resultat = await asyncio.to_thread(llm.generate_text, StringPromptValue(text=prompt), 1, 0.7)
+    resultat = await asyncio.to_thread(lambda: llm.generate_text(StringPromptValue(text=prompt), 1, 0.7))  # ty: ignore[invalid-argument-type]
     texte = resultat.generations[0][0].text
     propositions = lire_propositions(texte, existants, nombre)
     if not propositions:

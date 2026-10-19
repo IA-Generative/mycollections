@@ -20,17 +20,35 @@ import re
 import unicodedata
 from math import ceil
 
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.database import async_session
 from app.models.db import ORIGINES_QUESTION, RELECTURES_PAIRE, VERDICTS_MESURE, Feedback, PaireQA, utcnow
+from app.models.qualite import BilanImport, ComptesQuestions, PageQuestions, QuestionFiche
 from app.services.collectif_store import Conflit, Introuvable, signature
 
 QUESTION_MAX = 2000
 REPONSE_MAX = 8000
 IMPORT_MAX = 500
-CHAMPS_MODIFIABLES = ("question", "reponse", "must_cite", "tags", "hors_sujet", "fiable", "relecture", "commentaire", "persona")
+
+
+class QuestionModification(BaseModel):
+    """Une modification de question du jeu : seuls les champs fournis sont appliqués.
+    `must_cite` et `tags` fournis à `null` effacent la liste ; pour les autres champs,
+    `null` ne change rien."""
+
+    model_config = ConfigDict(extra="forbid")
+    question: str | None = Field(default=None, max_length=QUESTION_MAX)
+    reponse: str | None = Field(default=None, max_length=REPONSE_MAX)
+    must_cite: list[str] | None = None
+    tags: list[str] | None = None
+    hors_sujet: bool | None = None
+    fiable: bool | None = None
+    relecture: str | None = Field(default=None, pattern="^(" + "|".join(RELECTURES_PAIRE) + ")$")
+    commentaire: str | None = Field(default=None, max_length=2000)
+    persona: str | None = Field(default=None, max_length=120)
 
 
 def condense(sub: str | None) -> str | None:
@@ -94,7 +112,7 @@ def _filtres(name: str, *, origine=None, relecture=None, fiable=None, hors_sujet
     return f
 
 
-async def lister_questions(name: str, *, page: int = 1, par_page: int = 50, **filtres) -> dict:
+async def lister_questions(name: str, *, page: int = 1, par_page: int = 50, **filtres) -> PageQuestions:
     par_page = max(1, min(int(par_page), 200))
     conditions = _filtres(name, **filtres)
     async with async_session() as s:
@@ -102,18 +120,18 @@ async def lister_questions(name: str, *, page: int = 1, par_page: int = 50, **fi
         pages = max(1, ceil(total / par_page))
         page = max(1, min(int(page), pages))
         r = await s.execute(select(PaireQA).where(*conditions).order_by(PaireQA.cree_le.desc(), PaireQA.rang).offset((page - 1) * par_page).limit(par_page))
-        return {"total": total, "page": page, "pages": pages, "par_page": par_page, "questions": [q.to_dict() for q in r.scalars().all()]}
+        return PageQuestions(total=total, page=page, pages=pages, par_page=par_page, questions=[QuestionFiche.depuis(q) for q in r.scalars().all()])
 
 
-async def lire_question(name: str, ident: str) -> dict:
+async def lire_question(name: str, ident: str) -> QuestionFiche:
     async with async_session() as s:
         q = await s.get(PaireQA, ident)
         if not q or q.collection_name != name:
             raise Introuvable("Question introuvable")
-        return q.to_dict()
+        return QuestionFiche.depuis(q)
 
 
-async def compter(name: str) -> dict:
+async def compter(name: str) -> ComptesQuestions:
     """Les comptes du jeu, par axe : de quoi résumer sans tout lire."""
     async with async_session() as s:
 
@@ -126,17 +144,17 @@ async def compter(name: str) -> dict:
         par_verdict = await par(PaireQA.dernier_verdict)
         fiables = (await s.execute(select(func.count()).where(PaireQA.collection_name == name, PaireQA.fiable.is_(True)))).scalar_one()
         hors = (await s.execute(select(func.count()).where(PaireQA.collection_name == name, PaireQA.hors_sujet.is_(True)))).scalar_one()
-    return {
-        "total": sum(par_origine.values()),
-        "par_origine": par_origine,
-        "par_relecture": par_relecture,
-        "par_verdict": par_verdict,
-        "fiables": fiables,
-        "hors_sujet": hors,
-    }
+    return ComptesQuestions(
+        total=sum(par_origine.values()),
+        par_origine=par_origine,
+        par_relecture=par_relecture,
+        par_verdict=par_verdict,
+        fiables=fiables,
+        hors_sujet=hors,
+    )
 
 
-async def questions_a_mesurer(name: str, *, seulement_validees: bool = True, origines: list[str] | None = None) -> list[dict]:
+async def questions_a_mesurer(name: str, *, seulement_validees: bool = True, origines: list[str] | None = None) -> list[QuestionFiche]:
     conditions = [PaireQA.collection_name == name, PaireQA.relecture != "rejete"]
     if seulement_validees:
         conditions.append(PaireQA.relecture == "valide")
@@ -144,7 +162,7 @@ async def questions_a_mesurer(name: str, *, seulement_validees: bool = True, ori
         conditions.append(PaireQA.origine.in_(origines))
     async with async_session() as s:
         r = await s.execute(select(PaireQA).where(*conditions).order_by(PaireQA.cree_le))
-        return [q.to_dict() for q in r.scalars().all()]
+        return [QuestionFiche.depuis(q) for q in r.scalars().all()]
 
 
 async def _questions_pliees(s, name: str) -> set[str]:
@@ -181,7 +199,7 @@ def _nouvelle(name: str, champs: dict, sub: str | None, *, origine: str, source_
     return q
 
 
-async def creer_question(name: str, champs: dict, sub: str | None, *, origine: str = "saisie", source_ref: str | None = None, feedback_id: int | None = None) -> dict:
+async def creer_question(name: str, champs: dict, sub: str | None, *, origine: str = "saisie", source_ref: str | None = None, feedback_id: int | None = None) -> QuestionFiche:
     async with async_session() as s:
         if plier(str(champs.get("question") or "")) in await _questions_pliees(s, name):
             raise Conflit("Cette question est déjà dans le jeu.")
@@ -192,7 +210,7 @@ async def creer_question(name: str, champs: dict, sub: str | None, *, origine: s
         except IntegrityError:
             raise Conflit("Cette question est déjà dans le jeu.")
         await s.refresh(q)
-        return q.to_dict()
+        return QuestionFiche.depuis(q)
 
 
 def normaliser_import(item: dict) -> dict | None:
@@ -201,7 +219,8 @@ def normaliser_import(item: dict) -> dict | None:
     eval-rag (`question`, `answer`, `persona_name`, `metadata`). None si inexploitable."""
     if not isinstance(item, dict):
         return None
-    meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    brut_meta = item.get("metadata")
+    meta = brut_meta if isinstance(brut_meta, dict) else {}
     question = str(item.get("question") or item.get("user_input") or "").strip()
     if not question:
         return None
@@ -225,7 +244,7 @@ def normaliser_import(item: dict) -> dict | None:
     }
 
 
-async def importer_questions(name: str, items: list, sub: str | None, *, origine: str = "importee", prefixe_ref: str | None = None) -> dict:
+async def importer_questions(name: str, items: list, sub: str | None, *, origine: str = "importee", prefixe_ref: str | None = None) -> BilanImport:
     """{crees, doublons, ignores}. Un doublon (déjà dans le jeu, ou deux fois dans le fichier)
     n'écrase rien ; une entrée sans question est ignorée."""
     if len(items) > IMPORT_MAX:
@@ -252,47 +271,45 @@ async def importer_questions(name: str, items: list, sub: str | None, *, origine
             vues.add(cle)
             crees += 1
         await s.commit()
-    return {"crees": crees, "doublons": doublons, "ignores": ignores}
+    return BilanImport(crees=crees, doublons=doublons, ignores=ignores)
 
 
-async def modifier_question(name: str, ident: str, champs: dict, sub: str | None) -> dict:
-    inconnus = set(champs) - set(CHAMPS_MODIFIABLES)
-    if inconnus:
-        raise ValueError(f"Champs non modifiables : {', '.join(sorted(inconnus))}")
+async def modifier_question(name: str, ident: str, corps: QuestionModification, sub: str | None) -> QuestionFiche:
     async with async_session() as s:
         q = await s.get(PaireQA, ident)
         if not q or q.collection_name != name:
             raise Introuvable("Question introuvable")
-        _verifier_textes(champs.get("question"), champs.get("reponse"))
+        _verifier_textes(corps.question, corps.reponse)
         texte_change = False
         for cle in ("question", "reponse"):
-            if cle in champs and champs[cle] is not None and champs[cle].strip() != (getattr(q, cle) or ""):
-                setattr(q, cle, champs[cle].strip())
+            v = getattr(corps, cle)
+            if v is not None and v.strip() != (getattr(q, cle) or ""):
+                setattr(q, cle, v.strip())
                 texte_change = True
         if texte_change:
             q.modifie_le, q.modifie_par_hash = utcnow(), condense(sub)
             q.dernier_verdict = None  # la mesure portait sur l'ancien texte
-        if "must_cite" in champs:
-            q.must_cite_json = json.dumps(_liste(champs["must_cite"]), ensure_ascii=False)
-        if "tags" in champs:
-            q.tags_json = json.dumps(_liste(champs["tags"]), ensure_ascii=False)
-        if "persona" in champs and champs["persona"] is not None:
-            q.persona_nom = str(champs["persona"])[:120]
-        if "commentaire" in champs and champs["commentaire"] is not None:
-            q.commentaire = str(champs["commentaire"])[:2000]
-        if "hors_sujet" in champs and champs["hors_sujet"] is not None:
-            q.hors_sujet = bool(champs["hors_sujet"])
+        if "must_cite" in corps.model_fields_set:
+            q.must_cite_json = json.dumps(_liste(corps.must_cite), ensure_ascii=False)
+        if "tags" in corps.model_fields_set:
+            q.tags_json = json.dumps(_liste(corps.tags), ensure_ascii=False)
+        if corps.persona is not None:
+            q.persona_nom = corps.persona
+        if corps.commentaire is not None:
+            q.commentaire = corps.commentaire
+        if corps.hors_sujet is not None:
+            q.hors_sujet = corps.hors_sujet
             if q.hors_sujet:
                 q.fiable = False
-        if champs.get("relecture") is not None:
-            _appliquer_relecture(q, champs["relecture"], sub)
-        if champs.get("fiable") is not None:
-            if champs["fiable"] and (q.relecture != "valide" or q.hors_sujet):
+        if corps.relecture is not None:
+            _appliquer_relecture(q, corps.relecture, sub)
+        if corps.fiable is not None:
+            if corps.fiable and (q.relecture != "valide" or q.hors_sujet):
                 raise Conflit("Seule une question validée, et pas hors sujet, peut avoir une réponse fiable.")
-            q.fiable = bool(champs["fiable"])
+            q.fiable = corps.fiable
         await s.commit()
         await s.refresh(q)
-        return q.to_dict()
+        return QuestionFiche.depuis(q)
 
 
 async def supprimer_question(name: str, ident: str) -> None:
@@ -304,7 +321,7 @@ async def supprimer_question(name: str, ident: str) -> None:
         await s.commit()
 
 
-async def depuis_avis(name: str, feedback_id: int, reponse: str | None, sub: str | None) -> dict:
+async def depuis_avis(name: str, feedback_id: int, reponse: str | None, sub: str | None) -> QuestionFiche:
     """Un avis (souvent négatif) devient une question de référence : la question de l'usager,
     et la réponse corrigée par le gestionnaire (validée d'office si elle est fournie)."""
     async with async_session() as s:
@@ -316,8 +333,9 @@ async def depuis_avis(name: str, feedback_id: int, reponse: str | None, sub: str
     q = await creer_question(name, champs, sub, origine="avis", source_ref=f"feedback:{feedback_id}", feedback_id=feedback_id)
     async with async_session() as s:
         fb = await s.get(Feedback, feedback_id)
-        fb.status, fb.promoted_to, fb.reviewed_at = "promoted", "questions", utcnow()
-        await s.commit()
+        if fb is not None:
+            fb.status, fb.promoted_to, fb.reviewed_at = "promoted", "questions", utcnow()
+            await s.commit()
     return q
 
 

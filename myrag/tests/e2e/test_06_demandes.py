@@ -25,9 +25,9 @@ def capacite_demandes(session_testeur):
 @pytest.fixture(scope="module")
 def demande_essai(session_testeur, capacite_demandes):
     """L'identifiant de la demande déposée par le parcours ; close en fin de module."""
-    boite = {"id": None}
+    boite: dict[str, str | None] = {"id": None}
     yield boite
-    if boite["id"]:
+    if boite.get("id"):
         session_testeur.post(f"/api/demandes/{boite['id']}/clore", {"motif": "Demande d'essai de la suite de tests : close automatiquement."})
 
 

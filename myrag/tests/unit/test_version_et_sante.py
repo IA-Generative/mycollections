@@ -10,7 +10,21 @@ service) et « ok » sans rien vérifier. Écrit avant le correctif.
 import json
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 CLES = {"source", "version", "commit", "build", "code_date", "changes", "history"}
+
+
+@pytest.fixture(autouse=True)
+def _sante_froide():
+    """Le bilan des dépendances est gardé 30 s (sondes Kubernetes) : chaque test de ce fichier
+    repart d'un cache froid, sinon il lit celui d'un test précédent — voire d'un VRAI OpenRAG
+    quand le .env local pointe dessus, et la panne simulée n'est jamais vue."""
+    from app import main
+
+    main._sante_cache.clear()
+    yield
+    main._sante_cache.clear()
 
 
 def test_hors_image_la_version_est_dev(client):
@@ -40,9 +54,11 @@ def test_dans_l_image_le_journal_est_servi_tel_quel(client, tmp_path, monkeypatc
 
 
 def test_la_route_de_version_ne_demande_pas_de_jeton_et_n_est_pas_dans_le_schema(client):
+    from starlette.routing import Route
+
     from app.main import app
 
-    assert "/__version__" not in {r.path for r in app.routes if getattr(r, "include_in_schema", False)}
+    assert "/__version__" not in {r.path for r in app.routes if isinstance(r, Route) and r.include_in_schema}
 
 
 def test_la_sante_dit_l_etat_des_dependances_sans_tomber(client):

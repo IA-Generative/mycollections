@@ -1,7 +1,7 @@
 """MyRAG chunker — intelligent document splitting strategies."""
 
 import re
-from typing import Literal
+from enum import StrEnum
 
 # --- Regex patterns ---
 
@@ -19,11 +19,41 @@ SECTION_HEADER_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
 FAQ_HEADER_RE = re.compile(r"^#{1,4}\s+(.+\?)\s*$", re.MULTILINE)
 
 
-Strategy = Literal["article", "section", "qr", "length", "auto"]
+class Strategy(StrEnum):
+    """Chunking strategies."""
+
+    ARTICLE = "article"
+    SECTION = "section"
+    QR = "qr"
+    LENGTH = "length"
+    AUTO = "auto"
+
 
 # Sensitivity levels for access control filtering
 # Based on French classification convention + platform capability
-Sensitivity = Literal["public", "internal", "restricted", "confidential", "secret"]
+class Sensitivity(StrEnum):
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    RESTRICTED = "restricted"
+    CONFIDENTIAL = "confidential"
+    SECRET = "secret"
+
+
+def valider_strategy(valeur: str) -> Strategy | None:
+    """The strategy if it is a known one, None otherwise."""
+    try:
+        return Strategy(valeur)
+    except ValueError:
+        return None
+
+
+def valider_sensibilite(valeur: str) -> Sensitivity | None:
+    """The sensitivity if it is a known one, None otherwise."""
+    try:
+        return Sensitivity(valeur)
+    except ValueError:
+        return None
+
 
 SENSITIVITY_LEVELS = {
     "public": 0,  # Accessible a tous (ex: textes de loi publies au JO)
@@ -38,17 +68,17 @@ def detect_strategy(text: str) -> Strategy:
     """Detect the best chunking strategy for the given text."""
     article_count = len(ARTICLE_HEADER_RE.findall(text))
     if article_count >= 2:
-        return "article"
+        return Strategy.ARTICLE
 
     faq_count = len(FAQ_HEADER_RE.findall(text))
     if faq_count >= 2:
-        return "qr"
+        return Strategy.QR
 
     section_count = len(SECTION_HEADER_RE.findall(text))
     if section_count >= 2:
-        return "section"
+        return Strategy.SECTION
 
-    return "length"
+    return Strategy.LENGTH
 
 
 def _extract_references(text: str) -> list[str]:
@@ -81,7 +111,7 @@ def _track_hierarchy(text_before: str) -> dict:
     return hierarchy
 
 
-def chunk_by_article(text: str, sensitivity: Sensitivity = "public") -> list[dict]:
+def chunk_by_article(text: str, sensitivity: Sensitivity = Sensitivity.PUBLIC) -> list[dict]:
     """Split a legal code by article. Each article becomes one chunk."""
     if not text.strip():
         return []
@@ -150,7 +180,7 @@ def chunk_by_article(text: str, sensitivity: Sensitivity = "public") -> list[dic
     return chunks
 
 
-def chunk_by_section(text: str, sensitivity: Sensitivity = "internal") -> list[dict]:
+def chunk_by_section(text: str, sensitivity: Sensitivity = Sensitivity.INTERNAL) -> list[dict]:
     """Split a document by markdown headers (##, ###)."""
     if not text.strip():
         return []
@@ -187,7 +217,7 @@ def chunk_by_section(text: str, sensitivity: Sensitivity = "internal") -> list[d
     return chunks
 
 
-def chunk_by_qr(text: str, sensitivity: Sensitivity = "public") -> list[dict]:
+def chunk_by_qr(text: str, sensitivity: Sensitivity = Sensitivity.PUBLIC) -> list[dict]:
     """Split a FAQ document by question/answer pairs."""
     if not text.strip():
         return []
@@ -220,7 +250,7 @@ def chunk_by_qr(text: str, sensitivity: Sensitivity = "public") -> list[dict]:
     return chunks
 
 
-def chunk_by_length(text: str, max_chars: int = 512, overlap: int = 50, sensitivity: Sensitivity = "internal") -> list[dict]:
+def chunk_by_length(text: str, max_chars: int = 512, overlap: int = 50, sensitivity: Sensitivity = Sensitivity.INTERNAL) -> list[dict]:
     """Split text into fixed-length chunks with overlap."""
     if not text.strip():
         return []
@@ -268,10 +298,10 @@ def chunk_by_length(text: str, max_chars: int = 512, overlap: int = 50, sensitiv
 
 def chunk_document(
     text: str,
-    strategy: Strategy = "auto",
+    strategy: Strategy = Strategy.AUTO,
     max_chars: int = 512,
     overlap: int = 50,
-    sensitivity: Sensitivity = "public",
+    sensitivity: Sensitivity = Sensitivity.PUBLIC,
 ) -> list[dict]:
     """Chunk a document using the specified or auto-detected strategy.
 
