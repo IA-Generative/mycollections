@@ -20,6 +20,7 @@ import re
 import unicodedata
 from math import ceil
 
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -31,7 +32,23 @@ from app.services.collectif_store import Conflit, Introuvable, signature
 QUESTION_MAX = 2000
 REPONSE_MAX = 8000
 IMPORT_MAX = 500
-CHAMPS_MODIFIABLES = ("question", "reponse", "must_cite", "tags", "hors_sujet", "fiable", "relecture", "commentaire", "persona")
+
+
+class QuestionModification(BaseModel):
+    """Une modification de question du jeu : seuls les champs fournis sont appliqués.
+    `must_cite` et `tags` fournis à `null` effacent la liste ; pour les autres champs,
+    `null` ne change rien."""
+
+    model_config = ConfigDict(extra="forbid")
+    question: str | None = Field(default=None, max_length=QUESTION_MAX)
+    reponse: str | None = Field(default=None, max_length=REPONSE_MAX)
+    must_cite: list[str] | None = None
+    tags: list[str] | None = None
+    hors_sujet: bool | None = None
+    fiable: bool | None = None
+    relecture: str | None = Field(default=None, pattern="^(" + "|".join(RELECTURES_PAIRE) + ")$")
+    commentaire: str | None = Field(default=None, max_length=2000)
+    persona: str | None = Field(default=None, max_length=120)
 
 
 def condense(sub: str | None) -> str | None:
@@ -257,41 +274,39 @@ async def importer_questions(name: str, items: list, sub: str | None, *, origine
     return BilanImport(crees=crees, doublons=doublons, ignores=ignores)
 
 
-async def modifier_question(name: str, ident: str, champs: dict, sub: str | None) -> QuestionFiche:
-    inconnus = set(champs) - set(CHAMPS_MODIFIABLES)
-    if inconnus:
-        raise ValueError(f"Champs non modifiables : {', '.join(sorted(inconnus))}")
+async def modifier_question(name: str, ident: str, corps: QuestionModification, sub: str | None) -> QuestionFiche:
     async with async_session() as s:
         q = await s.get(PaireQA, ident)
         if not q or q.collection_name != name:
             raise Introuvable("Question introuvable")
-        _verifier_textes(champs.get("question"), champs.get("reponse"))
+        _verifier_textes(corps.question, corps.reponse)
         texte_change = False
         for cle in ("question", "reponse"):
-            if cle in champs and champs[cle] is not None and champs[cle].strip() != (getattr(q, cle) or ""):
-                setattr(q, cle, champs[cle].strip())
+            v = getattr(corps, cle)
+            if v is not None and v.strip() != (getattr(q, cle) or ""):
+                setattr(q, cle, v.strip())
                 texte_change = True
         if texte_change:
             q.modifie_le, q.modifie_par_hash = utcnow(), condense(sub)
             q.dernier_verdict = None  # la mesure portait sur l'ancien texte
-        if "must_cite" in champs:
-            q.must_cite_json = json.dumps(_liste(champs["must_cite"]), ensure_ascii=False)
-        if "tags" in champs:
-            q.tags_json = json.dumps(_liste(champs["tags"]), ensure_ascii=False)
-        if "persona" in champs and champs["persona"] is not None:
-            q.persona_nom = str(champs["persona"])[:120]
-        if "commentaire" in champs and champs["commentaire"] is not None:
-            q.commentaire = str(champs["commentaire"])[:2000]
-        if "hors_sujet" in champs and champs["hors_sujet"] is not None:
-            q.hors_sujet = bool(champs["hors_sujet"])
+        if "must_cite" in corps.model_fields_set:
+            q.must_cite_json = json.dumps(_liste(corps.must_cite), ensure_ascii=False)
+        if "tags" in corps.model_fields_set:
+            q.tags_json = json.dumps(_liste(corps.tags), ensure_ascii=False)
+        if corps.persona is not None:
+            q.persona_nom = corps.persona
+        if corps.commentaire is not None:
+            q.commentaire = corps.commentaire
+        if corps.hors_sujet is not None:
+            q.hors_sujet = corps.hors_sujet
             if q.hors_sujet:
                 q.fiable = False
-        if champs.get("relecture") is not None:
-            _appliquer_relecture(q, champs["relecture"], sub)
-        if champs.get("fiable") is not None:
-            if champs["fiable"] and (q.relecture != "valide" or q.hors_sujet):
+        if corps.relecture is not None:
+            _appliquer_relecture(q, corps.relecture, sub)
+        if corps.fiable is not None:
+            if corps.fiable and (q.relecture != "valide" or q.hors_sujet):
                 raise Conflit("Seule une question validée, et pas hors sujet, peut avoir une réponse fiable.")
-            q.fiable = bool(champs["fiable"])
+            q.fiable = corps.fiable
         await s.commit()
         await s.refresh(q)
         return QuestionFiche.depuis(q)

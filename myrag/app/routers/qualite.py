@@ -16,6 +16,7 @@ from app.routers._droits import gerer_la_collection
 from app.services import export_questions
 from app.services import questions_store as store
 from app.services.collectif_store import Conflit, Introuvable, consigner
+from app.services.questions_store import QuestionModification
 
 router = APIRouter(prefix="/api/collections/{collection}/qualite", tags=["Qualite"])
 
@@ -39,19 +40,6 @@ class QuestionEntree(BaseModel):
     hors_sujet: bool = False
     persona: str = Field(default="", max_length=120)
     relecture: str = Field(default="brut", pattern="^(brut|valide|rejete)$")
-
-
-class QuestionModification(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    question: str | None = Field(default=None, max_length=store.QUESTION_MAX)
-    reponse: str | None = Field(default=None, max_length=store.REPONSE_MAX)
-    must_cite: list[str] | None = None
-    tags: list[str] | None = None
-    hors_sujet: bool | None = None
-    fiable: bool | None = None
-    relecture: str | None = Field(default=None, pattern="^(brut|valide|rejete)$")
-    commentaire: str | None = Field(default=None, max_length=2000)
-    persona: str | None = Field(default=None, max_length=120)
 
 
 class ImportEntree(BaseModel):
@@ -156,11 +144,10 @@ async def tester(collection: str, ident: str, user: CurrentUser = Depends(gerer_
 
 @router.patch("/questions/{ident}")
 async def modifier(collection: str, ident: str, corps: QuestionModification, user: CurrentUser = Depends(gerer_la_collection)):
-    champs = corps.model_dump(exclude_unset=True)
-    if not champs:
+    if not corps.model_fields_set:
         raise HTTPException(status_code=422, detail="Rien à modifier")
     try:
-        return {"question": await store.modifier_question(collection, ident, champs, user.sub)}
+        return {"question": await store.modifier_question(collection, ident, corps, user.sub)}
     except (Conflit, Introuvable, ValueError) as e:
         _traduire(e)
 

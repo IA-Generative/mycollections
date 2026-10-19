@@ -257,7 +257,4 @@ async def relire_paire(name: str, ident: str, relecture: str, commentaire: str |
     modification de question du jeu, avec les mêmes règles (une paire rejetée n'est plus fiable)."""
     from app.services import questions_store
 
-    champs = {"relecture": relecture}
-    if commentaire is not None:
-        champs["commentaire"] = commentaire
-    return await questions_store.modifier_question(name, ident, champs, sub)
+    return await questions_store.modifier_question(name, ident, questions_store.QuestionModification(relecture=relecture, commentaire=commentaire), sub)
