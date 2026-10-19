@@ -1,0 +1,3 @@
+[
+  {"id": "referentiel-eligibilite", "type": "connecteur", "titre": "Référentiel d'éligibilité (exemple)", "description": "Exemple de connecteur : les tables du référentiel, en lecture seule.", "exemples": ["pièces à fournir pour un titre de séjour"], "relais": ["article_trouve"]}
+]

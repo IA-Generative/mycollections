@@ -231,6 +231,10 @@ async def purge_collection(name: str) -> dict:
     from app.services.collectif_store import delier_collection
 
     await delier_collection(name)
+    # L'assistant miroir de la collection (ADR-0003) et ses versions, consignes, journal.
+    from app.services.assistant_store import purger_miroir
+
+    counts.update({f"miroir.{k}": v for k, v in (await purger_miroir(name)).items()})
 
     return {
         "status": "purged",

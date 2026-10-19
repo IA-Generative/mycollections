@@ -36,7 +36,11 @@ from app.routers import (
     sources,
     sync,
 )
+from app.routers import assistants as assistants_routeur
+from app.routers import embed as embed_routeur
+from app.routers import entraide as entraide_routeur
 from app.routers import generation as generation_routeur
+from app.routers import openai_compat as openai_compat_routeur
 from app.routers import qualite as qualite_routeur
 from app.routers._acces_navigateur import acces_extrait, peut_lire
 from app.services import access, capacites
@@ -49,11 +53,11 @@ async def lifespan(app: FastAPI):
     from app.models import db as _db  # noqa: F401
 
     await init_db()
-    # Les anciens magasins de questions (jeux de test, réponses validées, avis promus) versés
-    # dans le jeu de questions de référence — idempotent, ne lève jamais (docs/qualite.md).
-    from app.services.migration_questions import migrer_vers_questions
+    # Les migrations idempotentes (jeu de questions, assistants dérivés des collections…) :
+    # un tuple dans app.services.demarrage, où un lot ajoute la sienne sans toucher ce fichier.
+    from app.services.demarrage import migrations_au_demarrage
 
-    await migrer_vers_questions()
+    await migrations_au_demarrage()
     # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
     import asyncio
 
@@ -218,6 +222,34 @@ app.include_router(recherche.router)
 app.add_middleware(recherche.CorsRecherche)
 
 
+# ─── Le chantier des assistants de recherche (ADR-0003) ──────────────────────────────────────
+# Les routeurs sont montés ici une fois pour toutes, vides s'il le faut : chaque lot remplit le
+# sien sans toucher ce fichier. Chacun est gardé par son drapeau (capacites.json).
+
+# Les assistants : la fiche (lot 0), puis le plan, l'exécution, les réponses fiables (lot A).
+app.include_router(assistants_routeur.router, dependencies=AUTH_REQUIRED)
+if settings.doublure_assistants:
+    # La doublure du harnais (lot B sans le lot A) : jamais en production.
+    from app.routers import assistants_doublure
+
+    app.include_router(assistants_doublure.router, dependencies=AUTH_REQUIRED)
+
+
+# La route compatible OpenAI des assistants (lot A, pas 7).
+app.include_router(openai_compat_routeur.router, dependencies=AUTH_REQUIRED)
+
+
+# [lot A] montage du serveur MCP
+
+
+# La fenêtre de recherche embarquée (lot C) : sans jeton, son CORS est le sien.
+app.include_router(embed_routeur.router)
+
+
+# Le réseau d'entraide (lot G).
+app.include_router(entraide_routeur.router, dependencies=AUTH_REQUIRED)
+
+
 @app.get("/api/moi", dependencies=AUTH_REQUIRED)
 async def moi(user: CurrentUser = Depends(current_user)):
     """Ce que l'interface doit savoir de l'appelant : est-il administrateur ? (L'interface ne
@@ -239,7 +271,7 @@ async def get_config():
         # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,
         # jamais bloquant). L'écran lit aussi /_beta/capacites.json en même origine ;
         # ceci est son repli, et la valeur que le SERVEUR applique.
-        **{k: v for k, v in (await capacites.lire_async()).items() if k in ("demandes", "signalements", "seuil_chantier")},
+        **{k: v for k, v in (await capacites.lire_async()).items() if k in (*capacites.DRAPEAUX, "seuil_chantier")},
     }
 
 

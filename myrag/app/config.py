@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     # Où lire capacites.json du menu commun (service interne du cluster). Vide ⇒
     # drapeaux à false et seuil au défaut : rien ne s'affiche, rien ne s'écrit.
     capacites_url: str = Field(default="")
+    # Un objet JSON posé par-dessus capacites.json (ex. `{"assistants": true}`) : allumer une
+    # fonction sur une prévisualisation ou un poste sans toucher au menu commun (ADR-0003).
+    capacites_surcharge: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CAPACITES_SURCHARGE", "capacites_surcharge"))
+    # La doublure du harnais (plan et exécution servis depuis app/doublure/assistants/) : pour
+    # que l'interface des assistants avance sans le harnais. Jamais en production.
+    doublure_assistants: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_DOUBLURE_ASSISTANTS", "doublure_assistants"))
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)

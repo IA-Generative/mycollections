@@ -28,6 +28,12 @@ generation = [
     "langchain-community<0.4.2",
 ]
 
+# Le serveur MCP des assistants (ADR-0003, lot A, pas 7) : rempli par le lot A.
+mcp = []
+
+# Le connecteur Resana (ADR-0003, lot F) : rempli par le lot F.
+resana = []
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

@@ -41,40 +41,33 @@
             Fermer
           </button>
           <div class="fr-header__menu-links"></div>
-          <nav class="fr-nav" role="navigation" aria-label="Navigation principale">
-            <ul class="fr-nav__list">
-              <li v-for="e in entrees" :key="e.vers" class="fr-nav__item">
-                <NuxtLink :to="e.vers" class="fr-nav__link" :aria-current="estActive(e, route.path) ? 'page' : undefined">
-                  {{ e.libelle }}
-                </NuxtLink>
-              </li>
-              <!-- Les collections que JE gère : dans un menu, sur toutes les pages — l'accueil,
-                   lui, invite à découvrir. -->
-              <li class="fr-nav__item myrag-menu-miennes" @keydown.esc="menuOuvert = false">
-                <button type="button" class="fr-nav__link myrag-menu-miennes__bouton" :aria-expanded="menuOuvert" aria-controls="menu-miennes"
-                        @click="menuOuvert = !menuOuvert">
-                  Mes collections
-                  <span class="myrag-menu-miennes__compte">{{ miennes.length }}</span>
-                  <span class="fr-icon-arrow-down-s-line fr-icon--sm" aria-hidden="true"></span>
-                </button>
-                <div v-if="menuOuvert" id="menu-miennes" class="myrag-menu-miennes__volet">
-                  <p class="myrag-menu-miennes__entete">Celles que je gère</p>
-                  <NuxtLink v-for="c in miennes.slice(0, 6)" :key="c.name" :to="`/c/${c.name}`" class="myrag-menu-miennes__ligne" @click="menuOuvert = false">
-                    <b>{{ c.titre }}</b>
-                    <small>
-                      <template v-if="c.categorie_libelle">{{ c.categorie_libelle }} · </template>{{ c.questions }} question{{ c.questions > 1 ? 's' : '' }} en 30 jours<template v-if="c.signalements_ouverts"> · {{ c.signalements_ouverts }} signalement{{ c.signalements_ouverts > 1 ? 's' : '' }} à traiter</template>
-                    </small>
-                    <span class="fr-badge fr-badge--sm fr-badge--no-icon" :class="c.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'">{{ libelleEtat(c.etat_collab) }}</span>
-                  </NuxtLink>
-                  <p v-if="!miennes.length" class="myrag-menu-miennes__vide">Vous ne gérez pas encore de collection.</p>
-                  <div class="myrag-menu-miennes__pied">
-                    <NuxtLink to="/admin/create" @click="menuOuvert = false">+ Créer une collection</NuxtLink>
-                    <NuxtLink v-if="miennes.length" to="/mes-collections" @click="menuOuvert = false">Tout voir et gérer</NuxtLink>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </nav>
+          <NavigationPrincipale :admin="isAdmin">
+          <!-- Les collections que JE gère : dans un menu, sur toutes les pages — l'accueil,
+               lui, invite à découvrir. -->
+          <li class="fr-nav__item myrag-menu-miennes" @keydown.esc="menuOuvert = false">
+            <button type="button" class="fr-nav__link myrag-menu-miennes__bouton" :aria-expanded="menuOuvert" aria-controls="menu-miennes"
+                    @click="menuOuvert = !menuOuvert">
+              Mes collections
+              <span class="myrag-menu-miennes__compte">{{ miennes.length }}</span>
+              <span class="fr-icon-arrow-down-s-line fr-icon--sm" aria-hidden="true"></span>
+            </button>
+            <div v-if="menuOuvert" id="menu-miennes" class="myrag-menu-miennes__volet">
+              <p class="myrag-menu-miennes__entete">Celles que je gère</p>
+              <NuxtLink v-for="c in miennes.slice(0, 6)" :key="c.name" :to="`/c/${c.name}`" class="myrag-menu-miennes__ligne" @click="menuOuvert = false">
+                <b>{{ c.titre }}</b>
+                <small>
+                  <template v-if="c.categorie_libelle">{{ c.categorie_libelle }} · </template>{{ c.questions }} question{{ c.questions > 1 ? 's' : '' }} en 30 jours<template v-if="c.signalements_ouverts"> · {{ c.signalements_ouverts }} signalement{{ c.signalements_ouverts > 1 ? 's' : '' }} à traiter</template>
+                </small>
+                <span class="fr-badge fr-badge--sm fr-badge--no-icon" :class="c.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'">{{ libelleEtat(c.etat_collab) }}</span>
+              </NuxtLink>
+              <p v-if="!miennes.length" class="myrag-menu-miennes__vide">Vous ne gérez pas encore de collection.</p>
+              <div class="myrag-menu-miennes__pied">
+                <NuxtLink to="/admin/create" @click="menuOuvert = false">+ Créer une collection</NuxtLink>
+                <NuxtLink v-if="miennes.length" to="/mes-collections" @click="menuOuvert = false">Tout voir et gérer</NuxtLink>
+              </div>
+            </div>
+          </li>
+          </NavigationPrincipale>
         </div>
       </div>
     </header>
@@ -150,7 +143,6 @@
 
 <script setup lang="ts">
 import { libelleEtat } from '~/utils/collectif'
-import { entreesPrincipales, estActive } from '~/utils/navigation'
 
 const config = useRuntimeConfig()
 const route = useRoute()
@@ -159,8 +151,6 @@ const { isAdmin, charger: chargerDroits } = useAdminAuth()
 // Aucun bouton n'apparaît si le service ne sait pas le faire : l'onglet des demandes
 // n'existe que si capacites.json le déclare.
 const { capacites, charger: chargerCapacites } = useCapacites()
-// Les entrées du menu : calculées en pur (utils/navigation.ts), rendues ici telles quelles.
-const entrees = computed(() => entreesPrincipales(capacites.value, isAdmin.value))
 
 // Le menu « Mes collections » : celles dont je suis le créateur ou le garant.
 const menuOuvert = ref(false)

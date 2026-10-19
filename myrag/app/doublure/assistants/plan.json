@@ -1,0 +1,15 @@
+{
+  "assistant": "sejour-des-etrangers",
+  "version": 1,
+  "planificateur": "regles",
+  "consigne": "pays-a-accord",
+  "score_consigne": 0.83,
+  "reponse_fiable": null,
+  "etapes": [
+    {"n": 1, "source": "accords-bilateraux", "question": "titre de séjour du conjoint selon l'accord", "poids": 1.0, "attend": []},
+    {"n": 2, "source": "ceseda", "question": "carte de séjour du conjoint de Français", "poids": 0.8, "attend": []},
+    {"n": 3, "source": "referentiel-eligibilite", "question": "pièces à fournir", "poids": 0.8, "attend": [1, 2], "avec": "article_trouve"}
+  ],
+  "sources_ignorees": 0,
+  "a_valider": false
+}

@@ -23,6 +23,13 @@ TABLES_HISTORIQUES = {
     "source_files": {"id", "collection_name", "checksum"},
 }
 TABLES_COLLECTIF = ("demande", "soutien", "abonnement", "proposition", "signalement", "grille_controle", "evenement", "amorce")
+#: Les assistants de recherche (ADR-0003) : créées au lot 0, lues par les lots suivants.
+TABLES_ASSISTANTS = {
+    "assistants": {"id", "titre", "rubrique", "sources_json", "publication_json", "seuil_fiable", "version_publiee", "collection_name", "archive_le"},
+    "assistant_versions": {"assistant_id", "numero", "empreinte", "contenu_json", "publie_par_hash", "robot"},
+    "consignes": {"assistant_id", "cle", "rang", "quand", "exemples_json", "chercher_json", "repondre", "gabarit"},
+    "plans_journal": {"assistant_id", "version", "empreinte", "canal", "planificateur", "consigne", "reponse_fiable", "etapes_json", "duree_ms", "auteur_hash", "robot"},
+}
 
 
 def _colonnes(table):
@@ -41,6 +48,11 @@ def test_les_tables_historiques_gardent_leurs_colonnes(client, table, colonnes):
 @pytest.mark.parametrize("table", TABLES_COLLECTIF)
 def test_les_tables_du_collectif_existent(client, table):
     assert _colonnes(table)
+
+
+@pytest.mark.parametrize("table,colonnes", TABLES_ASSISTANTS.items())
+def test_les_tables_des_assistants_existent(client, table, colonnes):
+    assert colonnes <= _colonnes(table)
 
 
 def test_les_routes_historiques_repondent(client, en_tant_que, creer_collection, nom):

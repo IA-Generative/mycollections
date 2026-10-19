@@ -59,6 +59,7 @@ async def init_db():
         await _migrate_add_column(conn, "satisfaction", "VARCHAR(20)", "VARCHAR(20)", table="demande")
         await _migrate_add_column(conn, "motif_insatisfaction", "TEXT", "TEXT", table="demande")
         await _elargir_etats_demande(conn)
+        await _elargir_objets_evenement(conn)
         # Jeu de questions de référence (docs/qualite.md) : paire_qa étendue.
         for col, lite, pg in _COLONNES_QUESTIONS:
             await _migrate_add_column(conn, col, lite, pg, table="paire_qa")
@@ -153,6 +154,24 @@ async def _elargir_etats_demande(conn):
         satisfactions = ", ".join(f"'{v}'" for v in SATISFACTIONS)
         sync_conn.execute(text("ALTER TABLE demande DROP CONSTRAINT IF EXISTS demande_satisfaction_valide"))
         sync_conn.execute(text(f"ALTER TABLE demande ADD CONSTRAINT demande_satisfaction_valide CHECK (satisfaction IS NULL OR satisfaction IN ({satisfactions}))"))
+
+    await conn.run_sync(_sync)
+
+
+async def _elargir_objets_evenement(conn):
+    """La contrainte `evenement_objet_valide` d'une base existante ne connaît pas « assistant »
+    (ADR-0003) : reposée à partir du modèle, toujours la même, donc idempotente. PostgreSQL
+    seulement, comme `_elargir_etats_demande`."""
+    from sqlalchemy import text
+
+    from app.models.db import OBJETS_EVENEMENT
+
+    def _sync(sync_conn):
+        if sync_conn.dialect.name == "sqlite":
+            return
+        domaine = ", ".join(f"'{e}'" for e in OBJETS_EVENEMENT)
+        sync_conn.execute(text("ALTER TABLE evenement DROP CONSTRAINT IF EXISTS evenement_objet_valide"))
+        sync_conn.execute(text(f"ALTER TABLE evenement ADD CONSTRAINT evenement_objet_valide CHECK (objet_type IN ({domaine}))"))
 
     await conn.run_sync(_sync)
 

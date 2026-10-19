@@ -54,6 +54,9 @@ TABLES_PAR_COLLECTION = (
     "paire_qa",
     "mesure",
     "mesure_resultat",
+    # Les assistants de recherche (ADR-0003) : le miroir d'une collection ; ses versions,
+    # consignes et journal sont effacés par assistant_id dans `purger`.
+    "assistants",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])
@@ -100,7 +103,7 @@ def capacites(monkeypatch):
     from app.services import capacites as module
 
     def _poser(**drapeaux):
-        valeur = {"demandes": True, "signalements": True, "seuil_chantier": 5, **drapeaux}
+        valeur = {"demandes": True, "signalements": True, "assistants": True, "entraide": True, "seuil_chantier": 5, **drapeaux}
         monkeypatch.setattr(module, "lire", lambda: dict(valeur))
         return valeur
 
@@ -114,6 +117,9 @@ def purger():
         chemin = os.environ["DATABASE_URL"].split("///")[-1]
         con = sqlite3.connect(chemin)
         try:
+            for (aid,) in con.execute("SELECT id FROM assistants WHERE collection_name = ?", (name,)).fetchall():
+                for t in ("assistant_versions", "consignes", "plans_journal"):
+                    con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (aid,))
             for t in TABLES_PAR_COLLECTION:
                 con.execute(f"DELETE FROM {t} WHERE collection_name = ?", (name,))
             con.execute("DELETE FROM abonnement WHERE objet_type='collection' AND objet_id = ?", (name,))
@@ -146,6 +152,24 @@ def creer_collection(client, en_tant_que):
         return r.json()["collection"]
 
     return _f
+
+
+@pytest.fixture
+def ident_assistant():
+    """Un identifiant d'assistant unique, et tout ce qui s'y rattache effacé après."""
+    import uuid
+
+    ident = f"t-asst-{uuid.uuid4().hex[:8]}"
+    yield ident
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    try:
+        for t in ("assistant_versions", "consignes", "plans_journal"):
+            con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (ident,))
+        con.execute("DELETE FROM evenement WHERE objet_type = 'assistant' AND objet_id = ?", (ident,))
+        con.execute("DELETE FROM assistants WHERE id = ?", (ident,))
+        con.commit()
+    finally:
+        con.close()
 
 
 @pytest.fixture
