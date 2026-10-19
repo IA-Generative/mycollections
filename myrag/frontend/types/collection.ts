@@ -18,7 +18,7 @@ export interface Collection {
   file_count?: number
   orphan?: boolean
   archived_at?: string | null
-  publication?: { state?: string; visibility?: string; alias_name?: string; targets?: string[] }
+  publication?: { state?: string, visibility?: string, alias_name?: string, targets?: string[] }
   [cle: string]: unknown
 }
 

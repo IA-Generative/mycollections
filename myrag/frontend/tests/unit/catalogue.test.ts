@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { titreDe, titreDepuisNom, filtrerCollections, grouperParCategorie, cleDepuisLibelle, NON_CLASSEES } from '../../utils/catalogue'
+import { describe, expect, it } from 'vitest'
+import { cleDepuisLibelle, filtrerCollections, grouperParCategorie, NON_CLASSEES, titreDe, titreDepuisNom } from '../../utils/catalogue'
 
 const CATS = [
   { cle: 'securite', libelle: 'Sécurité et délinquance', description: '', ordre: 20 },
@@ -18,12 +18,12 @@ describe('titreDe', () => {
   it('montre le titre de la fiche', () => {
     expect(titreDe(COLS[0])).toBe('Codes NATINF')
   })
-  it("à défaut, rend l'identifiant lisible sans son préfixe de provenance", () => {
+  it('à défaut, rend l\'identifiant lisible sans son préfixe de provenance', () => {
     expect(titreDe(COLS[3])).toBe('Teletravail')
     expect(titreDepuisNom('amorce-ta-caa-ceseda')).toBe('TA CAA CESEDA')
     expect(titreDepuisNom('dgef-sdst-faq')).toBe('DGEF SDST FAQ')
   })
-  it("ne retire pas un préfixe s'il ne reste rien, et tolère le vide", () => {
+  it('ne retire pas un préfixe s\'il ne reste rien, et tolère le vide', () => {
     expect(titreDepuisNom('amorce-')).toBe('Amorce')
     expect(titreDepuisNom('')).toBe('')
     expect(titreDe(null)).toBe('')
@@ -35,7 +35,7 @@ describe('filtrerCollections', () => {
     expect(filtrerCollections(COLS, 'delinquance').map(c => c.name)).toEqual(['amorce-ssmsi-delinquance'])
     expect(filtrerCollections(COLS, 'CÉSEDA').map(c => c.name)).toEqual(['ceseda-legifrance'])
   })
-  it("trouve par le titre, par l'identifiant ou par la description", () => {
+  it('trouve par le titre, par l\'identifiant ou par la description', () => {
     expect(filtrerCollections(COLS, 'natinf')).toHaveLength(1)
     expect(filtrerCollections(COLS, 'amorce-')).toHaveLength(2)
     expect(filtrerCollections(COLS, 'infractions')).toHaveLength(1)
@@ -50,7 +50,7 @@ describe('filtrerCollections', () => {
 })
 
 describe('grouperParCategorie', () => {
-  it("suit l'ordre de l'administration et trie par titre dans une rubrique", () => {
+  it('suit l\'ordre de l\'administration et trie par titre dans une rubrique', () => {
     const g = grouperParCategorie(COLS, CATS)
     expect(g.map(x => x.libelle)).toEqual(['Droit des étrangers', 'Sécurité et délinquance', NON_CLASSEES])
     expect(g[1].collections.map(c => c.name)).toEqual(['amorce-natinf', 'amorce-ssmsi-delinquance'])

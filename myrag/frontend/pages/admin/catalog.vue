@@ -1,252 +1,6 @@
-<template>
-  <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Catalogue des collections</a></li>
-      </ol>
-    </nav>
-
-    <h1 class="fr-h3">Catalogue des collections existantes</h1>
-    <div v-if="erreurAction" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w" role="alert">
-      <p>{{ erreurAction }}</p>
-    </div>
-    <p class="fr-text--sm fr-mb-3w">
-      Une collection <strong>publiée à tous</strong> s'interroge ici, dans son bac à sable, mais aussi dans
-      l'agent conversationnel de MirAI Next et par l'API depuis vos SI — le détail est sur sa fiche.
-      <NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Interroger depuis vos SI</NuxtLink>.
-    </p>
-    <p class="fr-text--lg fr-mb-2w">Avant de creer une collection, verifiez qu'elle n'existe pas deja.</p>
-
-    <div class="fr-callout fr-callout--brown-caramel fr-mb-4w">
-      <p class="fr-callout__text">
-        <strong>Evitez les doublons.</strong> Dupliquer une collection degrade la qualite du RAG
-        (reponses inconsistantes, cout d'indexation double, maintenance multiple).
-        Preferez contacter le responsable d'une collection existante pour y contribuer.
-      </p>
-    </div>
-
-    <!-- Search + toggle -->
-    <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
-      <div class="fr-col-12 fr-col-md-5">
-        <div class="fr-search-bar" role="search">
-          <label class="fr-label" for="search">Rechercher une collection</label>
-          <input class="fr-input" id="search" type="search" v-model="search"
-                 placeholder="CESEDA, code civil, documentation technique..." />
-          <button class="fr-btn" @click="">Rechercher</button>
-        </div>
-      </div>
-      <div class="fr-col-12 fr-col-md-4">
-        <label class="fr-sr-only" for="filtre-categorie">Catégorie</label>
-        <select id="filtre-categorie" class="fr-select" v-model="categorieChoisie">
-          <option value="">Toutes les catégories</option>
-          <option v-for="c in categories" :key="c.cle" :value="c.cle">{{ c.libelle }}</option>
-          <option value="__aucune__">{{ NON_CLASSEES }}</option>
-        </select>
-      </div>
-      <div class="fr-col-12 fr-col-md-3" style="display:flex;align-items:flex-end;">
-        <div class="fr-toggle">
-          <input type="checkbox" class="fr-toggle__input" id="show-archived" v-model="showArchived" @change="loadCollections" />
-          <label class="fr-toggle__label" for="show-archived">Afficher les archivees</label>
-        </div>
-      </div>
-    </div>
-
-    <!-- Chargement : sans lui, le tableau vide des premières secondes se lisait « aucune collection ». -->
-    <div v-if="chargement && !collections.length" class="catalogue-chargement fr-mb-4w" role="status" aria-live="polite" aria-busy="true">
-      <div class="catalogue-chargement__tete">
-        <span class="catalogue-chargement__roue" aria-hidden="true"></span>
-        <span><strong>Chargement du catalogue…</strong> Les collections et leurs documents sont recensés ; cela peut prendre quelques secondes.</span>
-      </div>
-      <div class="catalogue-chargement__lignes" aria-hidden="true">
-        <div v-for="n in 6" :key="n" class="catalogue-chargement__ligne" :style="{ animationDelay: `${n * 90}ms` }">
-          <span style="width:22%"></span><span style="width:38%"></span><span style="width:12%"></span><span style="width:14%"></span>
-        </div>
-      </div>
-    </div>
-
-    <div v-else-if="erreurChargement && !collections.length" class="fr-alert fr-alert--error fr-mb-4w">
-      <h3 class="fr-alert__title">Le catalogue n'a pas pu être chargé</h3>
-      <p>{{ erreurChargement }}</p>
-      <button class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w" @click="loadCollections">Réessayer</button>
-    </div>
-
-    <div v-else-if="!collections.length" class="fr-callout fr-mb-4w">
-      <h3 class="fr-callout__title">Aucune collection pour l'instant</h3>
-      <p class="fr-callout__text">Le catalogue est vide : la première collection peut être la vôtre.</p>
-      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Créer une collection</NuxtLink>
-    </div>
-
-    <!-- Results -->
-    <div v-else-if="filtered.length === 0 && search" class="fr-callout fr-mb-4w">
-      <h3 class="fr-callout__title">Aucune collection trouvee pour "{{ search }}"</h3>
-      <p class="fr-callout__text">Vous pouvez creer une nouvelle collection.</p>
-      <NuxtLink to="/admin/create" class="fr-btn fr-mt-2w">Créer une collection</NuxtLink>
-    </div>
-
-    <div v-else :aria-busy="chargement">
-      <!-- Les catégories sont repliées par défaut : on parcourt les rubriques, on ouvre celle qui intéresse.
-           Une recherche ou un filtre de catégorie les déplie, sinon le résultat serait caché. -->
-      <div class="catalogue-replis">
-        <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-down-s-line fr-btn--icon-left"
-                :disabled="toutOuvert" @click="toutDeplier">Tout déplier</button>
-        <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-up-s-line fr-btn--icon-left"
-                :disabled="!ouvertes.size" @click="toutReplier">Tout replier</button>
-      </div>
-      <div class="fr-table catalogue-table" :class="{ 'catalogue-rechargement': chargement }">
-        <table>
-          <thead>
-            <tr>
-              <th>Collection</th>
-              <th>Description</th>
-              <th>Source</th>
-              <th>Etat</th>
-              <th>Responsable</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody v-for="groupe in groupes" :key="groupe.cle || '__aucune__'">
-            <tr>
-              <th colspan="6" scope="colgroup" class="catalogue-categorie">
-                <button type="button" class="catalogue-categorie__bascule"
-                        :aria-expanded="estOuverte(groupe) ? 'true' : 'false'"
-                        @click="basculer(groupe)">
-                  <span class="catalogue-categorie__chevron fr-icon-arrow-right-s-line fr-icon--sm"
-                        :class="{ 'catalogue-categorie__chevron--ouvert': estOuverte(groupe) }" aria-hidden="true"></span>
-                  <span class="fr-icon-folder-2-line fr-icon--sm" aria-hidden="true"></span>
-                  {{ groupe.libelle }}
-                  <span class="catalogue-categorie__compte">
-                    {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
-                  </span>
-                </button>
-              </th>
-            </tr>
-            <tr v-for="col in groupe.collections" v-show="estOuverte(groupe)" :key="col.name" :style="col.archived_at ? 'opacity:0.65;' : ''">
-              <td>
-                <NuxtLink :to="`/c/${col.name}`" class="fr-link">{{ titreDe(col) }}</NuxtLink>
-                <br />
-                <code class="fr-text--xs" style="color:var(--text-mention-grey);" title="Identifiant technique : ce que tapent les applications (openrag-…)">{{ col.name }}</code>
-              </td>
-              <td>{{ col.description || '—' }}</td>
-              <td>
-                <span class="fr-badge fr-badge--sm">{{ col.source?.type || col.strategy }}</span>
-              </td>
-              <td>
-                <span v-if="col.archived_at" class="fr-badge fr-badge--sm fr-badge--warning">Archivee</span>
-                <template v-else>
-                  <span class="fr-badge fr-badge--sm" :class="stateBadge(col.publication?.state)">
-                    {{ stateLabel(col.publication?.state) }}
-                  </span>
-                  <span v-for="t in col.publication?.targets || []" :key="t.app"
-                        class="fr-badge fr-badge--sm fr-badge--success fr-ml-1v"
-                        :title="`Servie dans ${appLabel(t.app)} (${t.model_id})`">
-                    {{ appLabel(t.app) }}
-                  </span>
-                </template>
-              </td>
-              <td>
-                <div v-if="col.contact_name">
-                  {{ col.contact_name }}
-                  <br v-if="col.contact_email" />
-                  <a v-if="col.contact_email" :href="`mailto:${col.contact_email}?subject=Collection : ${titreDe(col)} (${col.name})`"
-                     class="fr-link fr-text--sm">
-                    {{ col.contact_email }}
-                  </a>
-                </div>
-                <span v-else class="fr-text--sm" style="color:#666;">Non renseigné</span>
-              </td>
-              <td>
-                <!-- Archiver, désarchiver, purger : gestes de qui GÈRE la collection (dit par l'API). -->
-                <div v-if="col.mes_droits?.ecrire" class="fr-btns-group fr-btns-group--sm fr-btns-group--inline fr-btns-group--inline-sm">
-                  <button v-if="!col.archived_at"
-                          class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-inbox-archive-line fr-btn--icon-left"
-                          @click="onArchive(col)">
-                    Archiver
-                  </button>
-                  <button v-else
-                          class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left"
-                          @click="onUnarchive(col)">
-                    Desarchiver
-                  </button>
-                  <button v-if="col.archived_at"
-                          class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-delete-line fr-btn--icon-left"
-                          style="color:#ce0500;"
-                          @click="askPurge(col)">
-                    Purger
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="fr-text--sm fr-mt-2w">
-        {{ filtered.length }} collection(s) trouvee(s)
-        <template v-if="isAdmin"> — <NuxtLink to="/admin/categories" class="fr-link fr-text--sm">Régler les catégories et le classement</NuxtLink></template>
-      </p>
-    </div>
-
-    <div class="fr-btns-group fr-mt-4w">
-      <NuxtLink to="/admin/create" class="fr-btn">
-        Creer une nouvelle collection
-      </NuxtLink>
-    </div>
-
-    <!-- Purge confirmation modal -->
-    <dialog v-if="purgeTarget" open class="fr-modal fr-modal--opened" @keydown="piegerLeFocus($event, $event.currentTarget as HTMLElement)" @keydown.esc="purgeTarget = null"
-            aria-labelledby="purge-title" style="display:block;">
-      <div class="fr-container fr-container--fluid fr-container-md">
-        <div class="fr-grid-row fr-grid-row--center">
-          <div class="fr-col-12 fr-col-md-8 fr-col-lg-6">
-            <div class="fr-modal__body">
-              <div class="fr-modal__header">
-                <button class="fr-btn--close fr-btn" @click="purgeTarget = null">Fermer</button>
-              </div>
-              <div class="fr-modal__content">
-                <h1 id="purge-title" class="fr-modal__title">
-                  <span class="fr-icon-warning-fill" aria-hidden="true"></span>
-                  Purger definitivement « {{ titreDe(purgeTarget) }} » ?
-                </h1>
-                <p>Cette action est <strong>irreversible</strong>. Elle supprime :</p>
-                <ul>
-                  <li>Tous les documents indexés</li>
-                  <li>Les fichiers sources stockes sur disque</li>
-                  <li>Toutes les données liées (partages, dépôts, avis, évaluations)</li>
-                </ul>
-                <div class="fr-input-group" :class="purgeError ? 'fr-input-group--error' : ''">
-                  <label class="fr-label" for="purge-confirm">
-                    Pour confirmer, tapez l'identifiant de la collection : <strong>{{ purgeTarget.name }}</strong>
-                  </label>
-                  <input class="fr-input" id="purge-confirm" type="text" v-model="purgeConfirm"
-                         @keyup.enter="confirmPurge" />
-                  <p v-if="purgeError" class="fr-error-text">{{ purgeError }}</p>
-                </div>
-              </div>
-              <div class="fr-modal__footer">
-                <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-reverse fr-btns-group--inline-lg">
-                  <li>
-                    <button class="fr-btn" style="background:#ce0500;color:#fff;" @click="confirmPurge"
-                            :disabled="purging">
-                      {{ purging ? 'Purge en cours...' : 'Purger definitivement' }}
-                    </button>
-                  </li>
-                  <li>
-                    <button class="fr-btn fr-btn--secondary" @click="purgeTarget = null">Annuler</button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </dialog>
-  </div>
-</template>
-
 <script setup lang="ts">
 import type { Categorie, Collection } from '~/types/collection'
-import { NON_CLASSEES, filtrerCollections, grouperParCategorie, titreDe } from '~/utils/catalogue'
+import { filtrerCollections, grouperParCategorie, NON_CLASSEES, titreDe } from '~/utils/catalogue'
 
 const { get, post, del } = useApi()
 const { isAdmin } = useAdminAuth()
@@ -268,8 +22,8 @@ const purging = ref(false)
 const filtered = computed(() => {
   const connues = new Set(categories.value.map(c => c.cle))
   const parRubrique = collections.value.filter((c) => {
-    if (!categorieChoisie.value) return true
-    if (categorieChoisie.value === '__aucune__') return !c.categorie || !connues.has(c.categorie)
+    if (!categorieChoisie.value) { return true }
+    if (categorieChoisie.value === '__aucune__') { return !c.categorie || !connues.has(c.categorie) }
     return c.categorie === categorieChoisie.value
   })
   return filtrerCollections(parRubrique, search.value)
@@ -281,75 +35,81 @@ const ouvertes = ref(new Set<string>())
 const cleDe = (g: { cle?: string | null }) => g.cle || '__aucune__'
 const estOuverte = (g: { cle?: string | null }) => ouvertes.value.has(cleDe(g))
 const toutOuvert = computed(() => groupes.value.length > 0 && groupes.value.every(estOuverte))
-function basculer(g: { cle?: string | null }) {
+function basculer (g: { cle?: string | null }) {
   const suivantes = new Set(ouvertes.value)
   suivantes.has(cleDe(g)) ? suivantes.delete(cleDe(g)) : suivantes.add(cleDe(g))
   ouvertes.value = suivantes
 }
-function toutDeplier() { ouvertes.value = new Set(groupes.value.map(cleDe)) }
-function toutReplier() { ouvertes.value = new Set() }
+function toutDeplier () { ouvertes.value = new Set(groupes.value.map(cleDe)) }
+function toutReplier () { ouvertes.value = new Set() }
 // Chercher ou filtrer déplie ce qui répond — y compris l'arrivée par ?categorie= depuis l'accueil.
 watch([search, categorieChoisie, groupes], () => {
-  if (search.value.trim() || categorieChoisie.value) toutDeplier()
+  if (search.value.trim() || categorieChoisie.value) { toutDeplier() }
 }, { immediate: true })
 
-function stateBadge(state: string) {
+function stateBadge (state: string) {
   return {
-    draft: 'fr-badge--info', published: 'fr-badge--success',
-    disabled: 'fr-badge--warning', archived: '',
+    draft: 'fr-badge--info',
+    published: 'fr-badge--success',
+    disabled: 'fr-badge--warning',
+    archived: '',
   }[state] || ''
 }
 
-function stateLabel(state: string) {
+function stateLabel (state: string) {
   return { draft: 'Brouillon', published: 'Publie', disabled: 'Desactive', archived: 'Archive' }[state] || 'Brouillon'
 }
 
 // Applications dans lesquelles une collection publiee est servie. L'assistant
 // est la seule aujourd'hui ; les suivantes (greffon LibreOffice…) s'ajoutent ici.
-function appLabel(app: string) {
+function appLabel (app: string) {
   return { assistant: 'Assistant' }[app] || app
 }
 
 const chargement = ref(true)
 const erreurChargement = ref('')
 
-async function loadCollections() {
+async function loadCollections () {
   chargement.value = true
   erreurChargement.value = ''
   try {
     const data = await get('/api/collections', showArchived.value ? { include_archived: 'true' } : undefined)
     collections.value = data.collections || []
-  } catch (e: any) {
+  }
+  catch (e: any) {
     console.error(e)
     erreurChargement.value = messageErreur(e)
-  } finally {
+  }
+  finally {
     chargement.value = false
   }
 }
 
-async function onArchive(col: any) {
-  if (!confirm(`Archiver la collection « ${titreDe(col)} » (${col.name}) ? Elle sera depubliee et masquee du catalogue. Reversible.`)) return
+async function onArchive (col: any) {
+  if (!confirm(`Archiver la collection « ${titreDe(col)} » (${col.name}) ? Elle sera depubliee et masquee du catalogue. Reversible.`)) { return }
   try {
     await post(`/api/collections/${col.name}/archive`)
     await loadCollections()
-  } catch (e: any) { erreurAction.value = messageErreur(e) }
+  }
+  catch (e: any) { erreurAction.value = messageErreur(e) }
 }
 
-async function onUnarchive(col: any) {
+async function onUnarchive (col: any) {
   try {
     await post(`/api/collections/${col.name}/unarchive`)
     await loadCollections()
-  } catch (e: any) { erreurAction.value = messageErreur(e) }
+  }
+  catch (e: any) { erreurAction.value = messageErreur(e) }
 }
 
-function askPurge(col: any) {
+function askPurge (col: any) {
   purgeTarget.value = col
   purgeConfirm.value = ''
   purgeError.value = ''
 }
 
-async function confirmPurge() {
-  if (!purgeTarget.value) return
+async function confirmPurge () {
+  if (!purgeTarget.value) { return }
   if (purgeConfirm.value !== purgeTarget.value.name) {
     purgeError.value = 'Le nom saisi ne correspond pas.'
     return
@@ -360,18 +120,518 @@ async function confirmPurge() {
     await del(`/api/collections/${purgeTarget.value.name}`)
     purgeTarget.value = null
     await loadCollections()
-  } catch (e: any) {
+  }
+  catch (e: any) {
     purgeError.value = messageErreur(e)
-  } finally {
+  }
+  finally {
     purging.value = false
   }
 }
 
 onMounted(async () => {
   await loadCollections()
-  try { categories.value = await listerCategories() } catch (e) { console.error(e) }
+  try { categories.value = await listerCategories() }
+  catch (e) { console.error(e) }
 })
 </script>
+
+<template>
+  <div>
+    <nav
+      role="navigation"
+      class="fr-breadcrumb"
+      aria-label="vous etes ici"
+    >
+      <ol class="fr-breadcrumb__list">
+        <li>
+          <NuxtLink
+            class="fr-breadcrumb__link"
+            to="/admin"
+          >
+            Administration
+          </NuxtLink>
+        </li>
+        <li>
+          <a
+            class="fr-breadcrumb__link"
+            aria-current="page"
+          >Catalogue des collections</a>
+        </li>
+      </ol>
+    </nav>
+
+    <h1 class="fr-h3">
+      Catalogue des collections existantes
+    </h1>
+    <div
+      v-if="erreurAction"
+      class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"
+      role="alert"
+    >
+      <p>{{ erreurAction }}</p>
+    </div>
+    <p class="fr-text--sm fr-mb-3w">
+      Une collection <strong>publiée à tous</strong> s'interroge ici, dans son bac à sable, mais aussi dans
+      l'agent conversationnel de MirAI Next et par l'API depuis vos SI — le détail est sur sa fiche.
+      <NuxtLink
+        to="/guide/interroger-depuis-vos-si"
+        class="fr-link"
+      >
+        Interroger depuis vos SI
+      </NuxtLink>.
+    </p>
+    <p class="fr-text--lg fr-mb-2w">
+      Avant de creer une collection, verifiez qu'elle n'existe pas deja.
+    </p>
+
+    <div class="fr-callout fr-callout--brown-caramel fr-mb-4w">
+      <p class="fr-callout__text">
+        <strong>Evitez les doublons.</strong> Dupliquer une collection degrade la qualite du RAG
+        (reponses inconsistantes, cout d'indexation double, maintenance multiple).
+        Preferez contacter le responsable d'une collection existante pour y contribuer.
+      </p>
+    </div>
+
+    <!-- Search + toggle -->
+    <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
+      <div class="fr-col-12 fr-col-md-5">
+        <div
+          class="fr-search-bar"
+          role="search"
+        >
+          <label
+            class="fr-label"
+            for="search"
+          >Rechercher une collection</label>
+          <input
+            id="search"
+            v-model="search"
+            class="fr-input"
+            type="search"
+            placeholder="CESEDA, code civil, documentation technique..."
+          >
+          <button
+            class="fr-btn"
+            @click=""
+          >
+            Rechercher
+          </button>
+        </div>
+      </div>
+      <div class="fr-col-12 fr-col-md-4">
+        <label
+          class="fr-sr-only"
+          for="filtre-categorie"
+        >Catégorie</label>
+        <select
+          id="filtre-categorie"
+          v-model="categorieChoisie"
+          class="fr-select"
+        >
+          <option value="">
+            Toutes les catégories
+          </option>
+          <option
+            v-for="c in categories"
+            :key="c.cle"
+            :value="c.cle"
+          >
+            {{ c.libelle }}
+          </option>
+          <option value="__aucune__">
+            {{ NON_CLASSEES }}
+          </option>
+        </select>
+      </div>
+      <div
+        class="fr-col-12 fr-col-md-3"
+        style="display:flex;align-items:flex-end;"
+      >
+        <div class="fr-toggle">
+          <input
+            id="show-archived"
+            v-model="showArchived"
+            type="checkbox"
+            class="fr-toggle__input"
+            @change="loadCollections"
+          >
+          <label
+            class="fr-toggle__label"
+            for="show-archived"
+          >Afficher les archivees</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chargement : sans lui, le tableau vide des premières secondes se lisait « aucune collection ». -->
+    <div
+      v-if="chargement && !collections.length"
+      class="catalogue-chargement fr-mb-4w"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="catalogue-chargement__tete">
+        <span
+          class="catalogue-chargement__roue"
+          aria-hidden="true"
+        />
+        <span><strong>Chargement du catalogue…</strong> Les collections et leurs documents sont recensés ; cela peut prendre quelques secondes.</span>
+      </div>
+      <div
+        class="catalogue-chargement__lignes"
+        aria-hidden="true"
+      >
+        <div
+          v-for="n in 6"
+          :key="n"
+          class="catalogue-chargement__ligne"
+          :style="{ animationDelay: `${n * 90}ms` }"
+        >
+          <span style="width:22%" /><span style="width:38%" /><span style="width:12%" /><span style="width:14%" />
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-else-if="erreurChargement && !collections.length"
+      class="fr-alert fr-alert--error fr-mb-4w"
+    >
+      <h3 class="fr-alert__title">
+        Le catalogue n'a pas pu être chargé
+      </h3>
+      <p>{{ erreurChargement }}</p>
+      <button
+        class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1w"
+        @click="loadCollections"
+      >
+        Réessayer
+      </button>
+    </div>
+
+    <div
+      v-else-if="!collections.length"
+      class="fr-callout fr-mb-4w"
+    >
+      <h3 class="fr-callout__title">
+        Aucune collection pour l'instant
+      </h3>
+      <p class="fr-callout__text">
+        Le catalogue est vide : la première collection peut être la vôtre.
+      </p>
+      <NuxtLink
+        to="/admin/create"
+        class="fr-btn fr-mt-2w"
+      >
+        Créer une collection
+      </NuxtLink>
+    </div>
+
+    <!-- Results -->
+    <div
+      v-else-if="filtered.length === 0 && search"
+      class="fr-callout fr-mb-4w"
+    >
+      <h3 class="fr-callout__title">
+        Aucune collection trouvee pour "{{ search }}"
+      </h3>
+      <p class="fr-callout__text">
+        Vous pouvez creer une nouvelle collection.
+      </p>
+      <NuxtLink
+        to="/admin/create"
+        class="fr-btn fr-mt-2w"
+      >
+        Créer une collection
+      </NuxtLink>
+    </div>
+
+    <div
+      v-else
+      :aria-busy="chargement"
+    >
+      <!-- Les catégories sont repliées par défaut : on parcourt les rubriques, on ouvre celle qui intéresse.
+           Une recherche ou un filtre de catégorie les déplie, sinon le résultat serait caché. -->
+      <div class="catalogue-replis">
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-down-s-line fr-btn--icon-left"
+          :disabled="toutOuvert"
+          @click="toutDeplier"
+        >
+          Tout déplier
+        </button>
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-up-s-line fr-btn--icon-left"
+          :disabled="!ouvertes.size"
+          @click="toutReplier"
+        >
+          Tout replier
+        </button>
+      </div>
+      <div
+        class="fr-table catalogue-table"
+        :class="{ 'catalogue-rechargement': chargement }"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Collection</th>
+              <th>Description</th>
+              <th>Source</th>
+              <th>Etat</th>
+              <th>Responsable</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody
+            v-for="groupe in groupes"
+            :key="groupe.cle || '__aucune__'"
+          >
+            <tr>
+              <th
+                colspan="6"
+                scope="colgroup"
+                class="catalogue-categorie"
+              >
+                <button
+                  type="button"
+                  class="catalogue-categorie__bascule"
+                  :aria-expanded="estOuverte(groupe) ? 'true' : 'false'"
+                  @click="basculer(groupe)"
+                >
+                  <span
+                    class="catalogue-categorie__chevron fr-icon-arrow-right-s-line fr-icon--sm"
+                    :class="{ 'catalogue-categorie__chevron--ouvert': estOuverte(groupe) }"
+                    aria-hidden="true"
+                  />
+                  <span
+                    class="fr-icon-folder-2-line fr-icon--sm"
+                    aria-hidden="true"
+                  />
+                  {{ groupe.libelle }}
+                  <span class="catalogue-categorie__compte">
+                    {{ groupe.collections.length }} collection{{ groupe.collections.length > 1 ? 's' : '' }}
+                  </span>
+                </button>
+              </th>
+            </tr>
+            <tr
+              v-for="col in groupe.collections"
+              v-show="estOuverte(groupe)"
+              :key="col.name"
+              :style="col.archived_at ? 'opacity:0.65;' : ''"
+            >
+              <td>
+                <NuxtLink
+                  :to="`/c/${col.name}`"
+                  class="fr-link"
+                >
+                  {{ titreDe(col) }}
+                </NuxtLink>
+                <br>
+                <code
+                  class="fr-text--xs"
+                  style="color:var(--text-mention-grey);"
+                  title="Identifiant technique : ce que tapent les applications (openrag-…)"
+                >{{ col.name }}</code>
+              </td>
+              <td>{{ col.description || '—' }}</td>
+              <td>
+                <span class="fr-badge fr-badge--sm">{{ col.source?.type || col.strategy }}</span>
+              </td>
+              <td>
+                <span
+                  v-if="col.archived_at"
+                  class="fr-badge fr-badge--sm fr-badge--warning"
+                >Archivee</span>
+                <template v-else>
+                  <span
+                    class="fr-badge fr-badge--sm"
+                    :class="stateBadge(col.publication?.state)"
+                  >
+                    {{ stateLabel(col.publication?.state) }}
+                  </span>
+                  <span
+                    v-for="t in col.publication?.targets || []"
+                    :key="t.app"
+                    class="fr-badge fr-badge--sm fr-badge--success fr-ml-1v"
+                    :title="`Servie dans ${appLabel(t.app)} (${t.model_id})`"
+                  >
+                    {{ appLabel(t.app) }}
+                  </span>
+                </template>
+              </td>
+              <td>
+                <div v-if="col.contact_name">
+                  {{ col.contact_name }}
+                  <br v-if="col.contact_email">
+                  <a
+                    v-if="col.contact_email"
+                    :href="`mailto:${col.contact_email}?subject=Collection : ${titreDe(col)} (${col.name})`"
+                    class="fr-link fr-text--sm"
+                  >
+                    {{ col.contact_email }}
+                  </a>
+                </div>
+                <span
+                  v-else
+                  class="fr-text--sm"
+                  style="color:#666;"
+                >Non renseigné</span>
+              </td>
+              <td>
+                <!-- Archiver, désarchiver, purger : gestes de qui GÈRE la collection (dit par l'API). -->
+                <div
+                  v-if="col.mes_droits?.ecrire"
+                  class="fr-btns-group fr-btns-group--sm fr-btns-group--inline fr-btns-group--inline-sm"
+                >
+                  <button
+                    v-if="!col.archived_at"
+                    class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-inbox-archive-line fr-btn--icon-left"
+                    @click="onArchive(col)"
+                  >
+                    Archiver
+                  </button>
+                  <button
+                    v-else
+                    class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left"
+                    @click="onUnarchive(col)"
+                  >
+                    Desarchiver
+                  </button>
+                  <button
+                    v-if="col.archived_at"
+                    class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-delete-line fr-btn--icon-left"
+                    style="color:#ce0500;"
+                    @click="askPurge(col)"
+                  >
+                    Purger
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="fr-text--sm fr-mt-2w">
+        {{ filtered.length }} collection(s) trouvee(s)
+        <template v-if="isAdmin">
+          — <NuxtLink
+            to="/admin/categories"
+            class="fr-link fr-text--sm"
+          >
+            Régler les catégories et le classement
+          </NuxtLink>
+        </template>
+      </p>
+    </div>
+
+    <div class="fr-btns-group fr-mt-4w">
+      <NuxtLink
+        to="/admin/create"
+        class="fr-btn"
+      >
+        Creer une nouvelle collection
+      </NuxtLink>
+    </div>
+
+    <!-- Purge confirmation modal -->
+    <dialog
+      v-if="purgeTarget"
+      open
+      class="fr-modal fr-modal--opened"
+      aria-labelledby="purge-title"
+      style="display:block;"
+      @keydown="piegerLeFocus($event, $event.currentTarget as HTMLElement)"
+      @keydown.esc="purgeTarget = null"
+    >
+      <div class="fr-container fr-container--fluid fr-container-md">
+        <div class="fr-grid-row fr-grid-row--center">
+          <div class="fr-col-12 fr-col-md-8 fr-col-lg-6">
+            <div class="fr-modal__body">
+              <div class="fr-modal__header">
+                <button
+                  class="fr-btn--close fr-btn"
+                  @click="purgeTarget = null"
+                >
+                  Fermer
+                </button>
+              </div>
+              <div class="fr-modal__content">
+                <h1
+                  id="purge-title"
+                  class="fr-modal__title"
+                >
+                  <span
+                    class="fr-icon-warning-fill"
+                    aria-hidden="true"
+                  />
+                  Purger definitivement « {{ titreDe(purgeTarget) }} » ?
+                </h1>
+                <p>Cette action est <strong>irreversible</strong>. Elle supprime :</p>
+                <ul>
+                  <li>Tous les documents indexés</li>
+                  <li>Les fichiers sources stockes sur disque</li>
+                  <li>Toutes les données liées (partages, dépôts, avis, évaluations)</li>
+                </ul>
+                <div
+                  class="fr-input-group"
+                  :class="purgeError ? 'fr-input-group--error' : ''"
+                >
+                  <label
+                    class="fr-label"
+                    for="purge-confirm"
+                  >
+                    Pour confirmer, tapez l'identifiant de la collection : <strong>{{ purgeTarget.name }}</strong>
+                  </label>
+                  <input
+                    id="purge-confirm"
+                    v-model="purgeConfirm"
+                    class="fr-input"
+                    type="text"
+                    @keyup.enter="confirmPurge"
+                  >
+                  <p
+                    v-if="purgeError"
+                    class="fr-error-text"
+                  >
+                    {{ purgeError }}
+                  </p>
+                </div>
+              </div>
+              <div class="fr-modal__footer">
+                <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-reverse fr-btns-group--inline-lg">
+                  <li>
+                    <button
+                      class="fr-btn"
+                      style="background:#ce0500;color:#fff;"
+                      :disabled="purging"
+                      @click="confirmPurge"
+                    >
+                      {{ purging ? 'Purge en cours...' : 'Purger definitivement' }}
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      class="fr-btn fr-btn--secondary"
+                      @click="purgeTarget = null"
+                    >
+                      Annuler
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  </div>
+</template>
 
 <style scoped>
 /* Le bandeau de catégorie : les lignes du tableau DSFR sont zébrées de gris, un intertitre gris s'y perdait.
