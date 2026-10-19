@@ -165,7 +165,7 @@ def texte_ou_refus(content: bytes, filename: str) -> str:
     """Le texte du fichier, ou 415. Le découpage maison ne lit que du texte ; un document (PDF,
     Word…) passe par `_ingest_document`, un binaire inconnu est refusé — il partait autrefois
     décodé « avec remplacement », en caractères illisibles (diagnostic d'octobre 2026)."""
-    if formats.nature(filename, content) == "texte":
+    if formats.nature(filename, content) is formats.Nature.TEXTE:
         try:
             return content.decode("utf-8")
         except UnicodeDecodeError:
@@ -196,7 +196,7 @@ async def _ingest_content(
     nature = formats.nature(filename, content)
     if nature is None:
         raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
-    if nature == "document":
+    if nature is formats.Nature.DOCUMENT:
         return await _ingest_document(collection, filename, content, sensitivity, source_path)
     text = texte_ou_refus(content, filename)
     if not text.strip():
@@ -403,7 +403,7 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
         if not path.exists():
             raise HTTPException(status_code=409, detail=f"Le fichier source « {sf.filename} » n'est plus conservé : redéposez-le avant de réindexer.")
         content = path.read_bytes()
-        if formats.nature(sf.filename, content) == "document":
+        if formats.nature(sf.filename, content) is formats.Nature.DOCUMENT:
             contenus.append((sf, content))
             continue
         if not chunk_document(texte_ou_refus(content, sf.filename), strategy=strategy, max_chars=512, overlap=50, sensitivity=sensitivity):

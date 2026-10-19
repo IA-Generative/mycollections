@@ -15,9 +15,18 @@ La nature se décide sur l'extension ET les premiers octets : un PDF renommé en
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import PurePosixPath
 
 FORMATS_TEXTE = (".txt", ".md", ".markdown", ".csv")
+
+
+class Nature(StrEnum):
+    """Ce qu'on sait faire d'un fichier : le découper ici, ou le confier à OpenRAG."""
+
+    TEXTE = "texte"
+    DOCUMENT = "document"
+
 
 #: Extension → type MIME annoncé à OpenRAG.
 FORMATS_DOCUMENT = {
@@ -55,18 +64,18 @@ def extension(nom: str) -> str:
     return PurePosixPath((nom or "").replace("\\", "/")).suffix.lower()
 
 
-def nature(nom: str, contenu: bytes) -> str | None:
-    """« texte », « document », ou None (format refusé)."""
+def nature(nom: str, contenu: bytes) -> Nature | None:
+    """La nature du fichier, ou None (format refusé)."""
     ext = extension(nom)
     tete = contenu[:4096]
     if ext in FORMATS_DOCUMENT:
         signatures = _SIGNATURES.get(ext)
         if signatures and not tete.startswith(signatures):
             return None  # l'extension ment : on ne confie pas à OpenRAG un fichier qu'il lirait mal
-        return "document"
+        return Nature.DOCUMENT
     if tete.startswith(_BINAIRES) or b"\x00" in tete:
         return None  # un binaire sans extension connue (ou renommé en .md)
-    return "texte"
+    return Nature.TEXTE
 
 
 def type_mime(nom: str) -> str:
