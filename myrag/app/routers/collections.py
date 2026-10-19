@@ -21,6 +21,10 @@ from app.services.collection_store import (
     create_collection as db_create_collection,
 )
 from app.services.collection_store import (
+    derniere_mise_a_jour,
+    derniers_depots,
+)
+from app.services.collection_store import (
     get_collection as db_get_collection,
 )
 from app.services.collection_store import (
@@ -35,6 +39,7 @@ from app.services.collection_store import (
 from app.services.collection_store import (
     update_system_prompt as db_update_system_prompt,
 )
+from app.services.feedback_store import stats_par_collection
 from app.services.keycloak_client import KeycloakClient
 from app.services.openrag_client import OpenRAGClient
 from app.services.sync_service import SyncService
@@ -251,10 +256,17 @@ async def list_collections_endpoint(
 
     # L'état de partage, joint en une requête — sans lui, le badge « Publie »
     # du catalogue ne peut jamais s'allumer.
-    partages = await _etats_de_partage([c["name"] for c in collections])
+    noms = [c["name"] for c in collections]
+    partages = await _etats_de_partage(noms)
+    # Le catalogue : l'avis des usagers et la fraîcheur, chacun en UNE requête groupée.
+    avis = await stats_par_collection(noms)
+    depots = await derniers_depots(noms)
     for c in collections:
         c["publication"] = partages.get(c["name"]) or {"state": "draft", "targets": []}
         c["mes_droits"] = _droits(c, user)
+        stats = avis.get(c["name"])
+        c["avis"] = {"total": stats.total, "satisfaction_rate": stats.satisfaction_rate} if stats else {"total": 0, "satisfaction_rate": None}
+        c["derniere_mise_a_jour"] = derniere_mise_a_jour(c, depots.get(c["name"]))
 
     return {"collections": collections}
 
