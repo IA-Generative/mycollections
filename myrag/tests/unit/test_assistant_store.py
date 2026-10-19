@@ -9,7 +9,6 @@ import copy
 import hashlib
 import os
 import sqlite3
-import uuid
 
 import pytest
 
@@ -27,19 +26,8 @@ def _sql(requete: str, *params):
 
 
 @pytest.fixture
-def ident():
-    """Un identifiant d'assistant unique, et ses quatre tables vidées après."""
-    i = f"t-asst-{uuid.uuid4().hex[:8]}"
-    yield i
-    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
-    try:
-        for t in ("assistant_versions", "consignes", "plans_journal"):
-            con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (i,))
-        con.execute("DELETE FROM evenement WHERE objet_type = 'assistant' AND objet_id = ?", (i,))
-        con.execute("DELETE FROM assistants WHERE id = ?", (i,))
-        con.commit()
-    finally:
-        con.close()
+def ident(ident_assistant):
+    return ident_assistant
 
 
 def _fiche(ident: str, **modifs) -> FicheAssistant:

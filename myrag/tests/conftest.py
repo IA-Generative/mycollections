@@ -155,6 +155,24 @@ def creer_collection(client, en_tant_que):
 
 
 @pytest.fixture
+def ident_assistant():
+    """Un identifiant d'assistant unique, et tout ce qui s'y rattache effacé après."""
+    import uuid
+
+    ident = f"t-asst-{uuid.uuid4().hex[:8]}"
+    yield ident
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    try:
+        for t in ("assistant_versions", "consignes", "plans_journal"):
+            con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (ident,))
+        con.execute("DELETE FROM evenement WHERE objet_type = 'assistant' AND objet_id = ?", (ident,))
+        con.execute("DELETE FROM assistants WHERE id = ?", (ident,))
+        con.commit()
+    finally:
+        con.close()
+
+
+@pytest.fixture
 def nom(request, purger):
     """Un nom de collection unique par test, purgé après."""
     # ≤ 40 caractères, comme tout identifiant (app.services.nommage) : le début du nom du test

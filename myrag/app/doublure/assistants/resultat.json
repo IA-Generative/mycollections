@@ -1,0 +1,25 @@
+{
+  "plan": {
+    "assistant": "sejour-des-etrangers",
+    "version": 1,
+    "planificateur": "regles",
+    "consigne": "pays-a-accord",
+    "score_consigne": 0.83,
+    "reponse_fiable": null,
+    "etapes": [
+      {"n": 1, "source": "accords-bilateraux", "question": "titre de séjour du conjoint selon l'accord", "poids": 1.0, "attend": []},
+      {"n": 2, "source": "ceseda", "question": "carte de séjour du conjoint de Français", "poids": 0.8, "attend": []},
+      {"n": 3, "source": "referentiel-eligibilite", "question": "pièces à fournir", "poids": 0.8, "attend": [1, 2], "avec": "article_trouve"}
+    ],
+    "sources_ignorees": 0,
+    "a_valider": false
+  },
+  "passages": [
+    {"source": "accords-bilateraux", "etape": 1, "rang": 1, "score": 0.91, "ident": "1001", "document": "accord-exemple", "titre": "Accord bilatéral (exemple)", "page": 3, "texte": "Exemple de passage : le conjoint d'un ressortissant français reçoit, de plein droit, un titre de séjour d'un an, dans les conditions de l'article 6 de l'accord.", "url": null, "meta": {}},
+    {"source": "ceseda", "etape": 2, "rang": 1, "score": 0.84, "ident": "2001", "document": "ceseda-exemple", "titre": "Code (exemple)", "page": null, "texte": "Exemple de passage : la carte de séjour du conjoint de Français est délivrée sous réserve de la communauté de vie.", "url": null, "meta": {}},
+    {"source": "referentiel-eligibilite", "etape": 3, "rang": 1, "score": null, "ident": null, "document": "pieces-conjoint", "titre": "Pièces à fournir (exemple)", "page": null, "texte": "Exemple : acte de mariage, justificatif de domicile, passeport en cours de validité.", "url": null, "meta": {"table": "pieces"}}
+  ],
+  "reponse": null,
+  "duree_ms": 412,
+  "par_source": {"accords-bilateraux": 1, "ceseda": 1, "referentiel-eligibilite": 1}
+}

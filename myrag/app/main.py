@@ -36,7 +36,11 @@ from app.routers import (
     sources,
     sync,
 )
+from app.routers import assistants as assistants_routeur
+from app.routers import embed as embed_routeur
+from app.routers import entraide as entraide_routeur
 from app.routers import generation as generation_routeur
+from app.routers import openai_compat as openai_compat_routeur
 from app.routers import qualite as qualite_routeur
 from app.routers._acces_navigateur import acces_extrait, peut_lire
 from app.services import access, capacites
@@ -216,6 +220,34 @@ app.include_router(bus.router)
 # La recherche de Mon portail (contrat de recherche MirAI) : sa garde (audience, groupe) et son CORS.
 app.include_router(recherche.router)
 app.add_middleware(recherche.CorsRecherche)
+
+
+# ─── Le chantier des assistants de recherche (ADR-0003) ──────────────────────────────────────
+# Les routeurs sont montés ici une fois pour toutes, vides s'il le faut : chaque lot remplit le
+# sien sans toucher ce fichier. Chacun est gardé par son drapeau (capacites.json).
+
+# Les assistants : la fiche (lot 0), puis le plan, l'exécution, les réponses fiables (lot A).
+app.include_router(assistants_routeur.router, dependencies=AUTH_REQUIRED)
+if settings.doublure_assistants:
+    # La doublure du harnais (lot B sans le lot A) : jamais en production.
+    from app.routers import assistants_doublure
+
+    app.include_router(assistants_doublure.router, dependencies=AUTH_REQUIRED)
+
+
+# La route compatible OpenAI des assistants (lot A, pas 7).
+app.include_router(openai_compat_routeur.router, dependencies=AUTH_REQUIRED)
+
+
+# [lot A] montage du serveur MCP
+
+
+# La fenêtre de recherche embarquée (lot C) : sans jeton, son CORS est le sien.
+app.include_router(embed_routeur.router)
+
+
+# Le réseau d'entraide (lot G).
+app.include_router(entraide_routeur.router, dependencies=AUTH_REQUIRED)
 
 
 @app.get("/api/moi", dependencies=AUTH_REQUIRED)

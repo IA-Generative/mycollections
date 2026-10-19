@@ -63,6 +63,7 @@ async def lire(ident: str) -> dict | None:
         if a is None:
             return None
         d = a.to_dict()
+        d["cree_par_hash"] = a.cree_par_hash  # pour les droits du routeur ; jamais rendu au client
         d["fiche"] = (await _fiche_depuis(s, a)).model_dump(mode="json")
         return d
 

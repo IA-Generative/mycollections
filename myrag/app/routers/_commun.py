@@ -43,4 +43,5 @@ def capacite(nom: str):
         if (await capacites.lire_async()).get(nom) is not True:
             raise HTTPException(status_code=404, detail=f"Fonction désactivée : « {nom} » n'est pas déclarée dans capacites.json")
 
+    _dep.capacite = nom  # lu par les tests : quel drapeau garde ce routeur
     return _dep
