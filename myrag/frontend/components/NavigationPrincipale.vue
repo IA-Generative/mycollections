@@ -41,13 +41,15 @@ const entrees = computed(() => entreesPrincipales(capacites.value, props.admin))
             class="fr-nav__link"
             :aria-current="estActive(e, route.path) ? 'page' : undefined"
           >
-            <span
-              v-if="e.icone"
-              class="fr-icon--sm fr-mr-1v"
-              :class="[e.icone]"
-              aria-hidden="true"
-            />
-            {{ e.libelle }}
+            <!-- Icône et libellé dans un seul bloc : sur mobile, le DSFR écarte les enfants du lien. -->
+            <span>
+              <span
+                v-if="e.icone"
+                class="fr-icon--sm fr-mr-1v"
+                :class="[e.icone]"
+                aria-hidden="true"
+              />{{ e.libelle }}
+            </span>
           </NuxtLink>
         </li>
       </template>

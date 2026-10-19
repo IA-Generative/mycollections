@@ -216,10 +216,15 @@ onMounted(() => {
 <style scoped>
 .accueil-tuiles { list-style: none; padding: 0; }
 .accueil-tuile { height: 100%; text-align: left; }
-.accueil-tuile .fr-tile__content { display: flex; flex-direction: column; gap: .75rem; }
+/* Le DSFR ordonne titre (2), description (3), détail (4) et centre le contenu : les blocs
+   ajoutés (exemple, chiffres, mention) se rangent après la description, l'action en bas. */
+.accueil-tuile .fr-tile__content { align-items: stretch; gap: .75rem; }
+.accueil-tuile .fr-tile__desc { flex: 0 0 auto; }
+.accueil-exemple, .accueil-kpis, .accueil-mention { order: 3; }
+.accueil-actions, .accueil-action { order: 4; }
 .accueil-exemple { padding: .5rem .75rem; background: var(--background-alt-blue-france); }
 .accueil-exemple__collection { color: var(--text-mention-grey); }
-.accueil-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 0; }
+.accueil-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .75rem; margin: 0; padding: 0; }
 .accueil-kpi dd { margin: 0; display: flex; flex-direction: column; }
 .accueil-kpi b { font-size: 1.5rem; line-height: 1.2; color: var(--text-title-blue-france); font-variant-numeric: tabular-nums; }
 .accueil-kpi span { font-size: .8rem; line-height: 1.3; color: var(--text-mention-grey); }
@@ -227,6 +232,6 @@ onMounted(() => {
 .accueil-mention { color: var(--text-mention-grey); }
 .accueil-mention--forte { color: var(--text-default-success); font-weight: 500; }
 .accueil-action { margin-top: auto; color: var(--text-action-high-blue-france); font-weight: 500; }
-.accueil-actions { margin-top: auto; }
+.accueil-actions { margin-top: auto; justify-content: flex-start; }
 .accueil-puce__nb { color: var(--text-mention-grey); font-variant-numeric: tabular-nums; }
 </style>
