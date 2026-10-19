@@ -215,10 +215,14 @@ _EXTENSION = re.compile(r"\.[A-Za-z0-9]{1,5}$")
 _SEPARATEURS = re.compile(r"[-_]+")
 
 
+_PREFIXE_SECTION = re.compile(r"^section\s+", re.IGNORECASE)
+
+
 def titre_lisible(titre: str) -> str:
-    """« circulaire-peines_2026.pdf » → « circulaire peines 2026 » : un nom de fichier qui se lit."""
+    """« circulaire-peines_2026.pdf » → « circulaire peines 2026 » : un nom de fichier qui se lit.
+    Le préfixe « section- » que pose le découpage par section (app.services.chunker) est retiré."""
     t = _SEPARATEURS.sub(" ", _EXTENSION.sub("", (titre or "").strip())).strip()
-    return " ".join(t.split())
+    return _PREFIXE_SECTION.sub("", " ".join(t.split()))
 
 
 def questions_depuis_documents(titres: list[str], n: int = NB_SUGGESTIONS) -> list[str]:

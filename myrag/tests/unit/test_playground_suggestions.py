@@ -27,6 +27,8 @@ def _suggestions(client, nom, fichiers=(), panne=False, passages=()):
 def test_un_titre_de_fichier_se_lit():
     assert titre_lisible("circulaire-peines_2026.pdf") == "circulaire peines 2026"
     assert titre_lisible("  note.md ") == "note"
+    # Le découpage par section nomme ses fichiers « section-<titre>.md » : le préfixe ne se lit pas.
+    assert titre_lisible("section-le-code-de-controle.md") == "le code de controle"
 
 
 def test_une_question_par_document_trois_au_plus_sans_doublon():
@@ -96,4 +98,4 @@ def test_les_intertitres_passent_avant_les_noms_de_fichiers(client, en_tant_que,
     creer_collection(nom)
     en_tant_que(personne(3))
     r = _suggestions(client, nom, _fichiers("section-le-code-de-contr-le.md"), passages=[("Le code…", {"section_title": "Code de contrôle"})])
-    assert r.json()["questions"] == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le document « section le code de contr le » ?"]
+    assert r.json()["questions"] == ["Que dit le texte sur « Code de contrôle » ?", "Que dit le document « le code de contr le » ?"]
