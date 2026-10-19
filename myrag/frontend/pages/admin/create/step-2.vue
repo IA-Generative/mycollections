@@ -393,7 +393,9 @@ onMounted(async () => {
             <label
               class="fr-label"
               for="scope"
-            >Qui peut l'interroger ?</label>
+            >Qui peut l'interroger ?
+              <span class="fr-hint-text">Vous pourrez l'ouvrir plus largement ensuite.</span>
+            </label>
             <select
               id="scope"
               v-model="form.scope"
