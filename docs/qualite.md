@@ -1,9 +1,24 @@
 # Piloter la qualité d'une collection
 
 Une collection répond-elle juste ? La page **Qualité** (`/c/{collection}/qualite`, réservée à qui
-gère la collection) répond à cette question et donne de quoi agir. L'étape 4 de l'assistant de
-création, « Questions et qualité », en est le début : les mêmes composants, les mêmes données.
-Rien de ce qui est fait à l'étape 4 ne se perd en la quittant.
+gère la collection) répond à cette question et donne de quoi agir. Elle n'est plus le début de
+l'assistant de création : l'étape 4 n'y fait qu'un test technique (ci-dessous).
+
+## L'étape 4 de l'assistant de création : un test technique
+
+« Vérifier les réponses » ne mesure pas la qualité : elle dit si les documents sont lus,
+découpés et retrouvés. Trois questions sont proposées (`GET /api/playground/{c}/suggestions`) :
+d'abord celles du jeu de la collection — jamais une question posée par un usager (origine
+« avis ») —, puis, à défaut, une par document d'après son titre ; la personne peut les réécrire.
+Chacune est posée au bac à sable (`POST /api/playground/{c}/chat`) et reçoit un verdict simple :
+**la collection répond** (un texte, appuyé sur au moins un passage, qui n'est pas un refus) ou
+**ne répond pas** (avec la raison probable : aucun passage — l'indexation est peut-être en cours —,
+ou une question hors du contenu). Pas de juge ni de note : c'est le rôle de la mesure.
+
+Chaque question posée **entre au jeu de questions « à relire »** (`relecture: brut`), sans
+réponse de référence : celle de la collection n'en est pas une. On la retrouve dans la page
+Qualité, où elle se relit, se valide puis se mesure. Le jeu, la mesure et le volet d'une question
+ont quitté l'étape 4 ; ils restent dans la page Qualité, sur la fiche de la collection.
 
 ## Le jeu de questions de référence
 
@@ -148,6 +163,9 @@ Toutes sous `/api/collections/{collection}/qualite`, réservées à qui gère la
 | `POST /mesures` | lancer une mesure (202) |
 | `GET /mesures`, `GET/DELETE /mesures/{id}` | historique, une mesure |
 | `GET /mesures/{id}/resultats?verdict=` | le détail question par question |
+
+Hors de ce préfixe, `GET /api/playground/{c}/suggestions` rend les trois questions du test
+technique de l'étape 4 ; il suffit de pouvoir lire la collection.
 
 ## Vérifier dans un navigateur
 
