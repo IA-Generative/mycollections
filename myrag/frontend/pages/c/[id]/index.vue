@@ -1,201 +1,17 @@
-<template>
-  <div>
-    <FilAriane :collection="id" :titre="titre" :rubrique="collection ? rubrique : undefined" />
-
-    <div v-if="loading" class="fr-callout"><p>Chargement…</p></div>
-
-    <!-- Collection not found in MyRAG DB (may exist as bare OpenRAG partition) -->
-    <div v-else-if="!collection" class="fr-alert fr-alert--warning">
-      <h3 class="fr-alert__title">La collection « {{ id }} » n'a pas encore de fiche</h3>
-      <p>
-        Cette collection existe peut-être dans le moteur de recherche, mais n'a pas encore
-        de fiche dans Mes collections (description, découpage, responsable…).
-        <span v-if="loadError" class="fr-text--sm" style="color:#666;">({{ loadError }})</span>
-      </p>
-      <p>
-        Vous pouvez la rattacher à une fiche minimale puis compléter sa description
-        depuis les onglets habituels — aucun document n'est touché.
-      </p>
-      <div v-if="adoptError" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w">
-        <p>{{ adoptError }}</p>
-      </div>
-      <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
-        <button class="fr-btn" @click="adoptCollection" :disabled="adopting">
-          {{ adopting ? 'Création en cours…' : 'Rattacher cette collection' }}
-        </button>
-        <NuxtLink to="/admin/catalog" class="fr-btn fr-btn--secondary">
-          Retour au catalogue
-        </NuxtLink>
-      </div>
-    </div>
-
-    <div v-else>
-      <div class="fr-grid-row fr-grid-row--gutters fr-mb-3w">
-        <!-- Left: collection info -->
-        <div class="fr-col-8">
-          <h1 class="fr-h2 fr-mb-1w">{{ titre }}</h1>
-          <p class="fr-text--sm fr-mb-2w" style="color:var(--text-mention-grey);">
-            Identifiant : <code title="Ce que tapent les applications : openrag-…">{{ collection.name }}</code>
-            <template v-if="libelleCategorie"> · {{ libelleCategorie }}</template>
-          </p>
-          <p v-if="etat && etat.mention" class="collectif-mention fr-mb-1w">⚠ {{ etat.mention }} — servie à son groupe seulement</p>
-          <p class="fr-text--lg">{{ collection.description || 'Pas de description' }}</p>
-
-          <!-- Où interroger : servi par l'API seulement quand la collection est
-               publiée à tous — on ne promet rien qui ne soit pas servi. -->
-          <div v-if="collection.acces" class="fr-callout fr-callout--green-emeraude fr-mb-3w">
-            <h3 class="fr-callout__title fr-h6">Où interroger cette collection</h3>
-            <p class="fr-callout__text fr-text--sm">
-              Ici, dans le bac à sable, pour l'essayer — mais aussi :
-            </p>
-            <ul class="fr-text--sm">
-              <li><strong>dans l'agent conversationnel de MirAI Next</strong>, en choisissant le modèle
-                <code>{{ collection.acces.assistant.model_id }}</code> ;</li>
-              <li v-if="collection.acces.api"><strong>par l'API, depuis vos SI</strong> :
-                <code>POST {{ collection.acces.api.chat }}</code> avec <code>"model": "{{ collection.acces.api.model }}"</code>
-                (format OpenAI), ou <code>GET {{ collection.acces.api.search }}</code> pour la recherche seule —
-                sur clé d'API à demander à l'équipe de la bêta ;</li>
-              <li><strong>dans vos outils bureautiques</strong> : greffon LibreOffice à venir.</li>
-              <li v-if="agentsDisponibles"><strong>avec un agent de Mes agents</strong>, sur les passages de la collection :
-                <button type="button" class="fr-link fr-text--sm" @click="tab = 'agent'">onglet « Interroger avec un agent »</button>.</li>
-            </ul>
-            <p class="fr-text--sm fr-mb-0"><NuxtLink to="/guide/interroger-depuis-vos-si" class="fr-link">Le guide : interroger depuis vos SI</NuxtLink></p>
-          </div>
-
-          <!-- Badges : trois réglages techniques, chacun expliqué au survol et au focus -->
-          <div class="fr-mt-2w fr-mb-4w fiche-badges">
-            <span v-for="b in badges" :key="b.cle" class="fr-badge" :class="b.classe" :title="b.aide" tabindex="0">{{ b.libelle }}</span>
-          </div>
-
-          <!-- Dans un groupe DSFR, la position de l'icône se déclare sur le GROUPE : sans
-               `fr-btns-group--icon-left`, il réduit chaque bouton à son icône, libellé masqué. -->
-          <div class="fr-btns-group fr-btns-group--inline fr-btns-group--icon-left fr-mb-4w">
-            <NuxtLink v-for="a in actions" :key="a.vers" :to="a.disabled ? undefined : a.vers" class="fr-btn fr-btn--icon-left"
-                      :class="[a.icone, a.rang]" :disabled="a.disabled" :aria-disabled="a.disabled" :title="a.aide">
-              {{ a.libelle }}
-            </NuxtLink>
-          </div>
-        </div>
-
-        <!-- Right: état du circuit, puis qualité -->
-        <div class="fr-col-4">
-          <CollectifEtapesCollection v-if="etat" :etat="etat" :superadmin="isAdmin" class="fr-mb-2w" @changer="changerEtat" @forcer="forcerEtat" />
-          <div v-if="erreurEtat" class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>{{ erreurEtat }}</p></div>
-          <!-- Un simple encadré, comme le parcours d'états au-dessus — pas une `.fr-card` : elle vaut
-               `height: 100%` (posée sous le parcours d'états, elle débordait sur les onglets) et
-               réordonne son contenu (le titre passait sous la jauge). -->
-          <section class="fiche-qualite" aria-labelledby="fiche-qualite-titre">
-            <h3 id="fiche-qualite-titre" class="fr-h6 fr-mb-1w">Qualité</h3>
-            <template v-if="mesure">
-              <div class="myrag-quality-bar" role="img" :aria-label="`Qualité mesurée : ${mesure.score} sur 100`">
-                <div class="myrag-quality-bar__fill" :class="qualityClass(mesure.score / 100)" :style="{ width: `${mesure.score}%` }" />
-              </div>
-              <p class="fr-text--sm fr-mt-1w fr-mb-0">
-                <strong>{{ mesure.score }} %</strong> · {{ appreciation(mesure.score).libelle }}<br>
-                <span class="fiche-discret">{{ mesure.verdicts.conformes + mesure.verdicts.refus_ok }} / {{ mesure.nb_traitees }} réponses justes · mesurée le {{ dateMesure(mesure.cree_le) }}</span>
-              </p>
-            </template>
-            <p v-else class="fr-text--sm fr-mb-0">{{ peutGerer ? 'Aucune mesure pour l\'instant.' : '' }}</p>
-            <p class="fr-text--sm fr-mt-1w fr-mb-0">
-              <template v-if="feedbackStats.total">
-                👍 {{ Math.round(feedbackStats.satisfaction_rate * 100) }} % de satisfaction ({{ feedbackStats.total }} avis)
-              </template>
-              <template v-else>Aucun avis d'usager pour l'instant.</template>
-            </p>
-            <p v-if="peutGerer && feedbackStats.pending_review > 0" class="fr-text--sm fr-mt-1v fr-mb-0">
-              {{ feedbackStats.pending_review }} avis à relire
-            </p>
-            <NuxtLink v-if="peutGerer" :to="`/c/${id}/qualite`" class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-2w">Piloter la qualité →</NuxtLink>
-          </section>
-        </div>
-      </div>
-
-      <!-- Tabs -->
-      <div class="fr-tabs">
-        <!-- Le DSFR cache tout panneau qui n'a pas `fr-tabs__panel--selected` (visibility: hidden) :
-             c'est son JavaScript qui pose cette classe, et nous ne le chargeons pas. Vue la pose. -->
-        <ul class="fr-tabs__list" role="tablist" aria-label="Rubriques de la collection" @keydown="clavierOnglets">
-          <li v-for="o in onglets" :key="o.cle" role="presentation">
-            <button :id="`onglet-${o.cle}`" type="button" class="fr-tabs__tab" role="tab"
-                    :aria-selected="tab === o.cle" :aria-controls="`panneau-${o.cle}`"
-                    :tabindex="tab === o.cle ? 0 : -1" @click="tab = o.cle">
-              {{ o.libelle }}
-            </button>
-          </li>
-        </ul>
-
-        <!-- Consulter : la grille de contrôle, toujours affichée, même vide -->
-        <div v-show="tab === 'consulter'" v-bind="panneau('consulter')">
-          <CollectifGrilleControle v-if="grille" :grille="grille" :garant="estGarant" @enregistrer="enregistrerGrille" @relire="relire" />
-          <p v-else class="fr-text--sm" style="color:var(--text-mention-grey)">Grille de contrôle indisponible.</p>
-          <div v-if="erreurGrille" class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"><p>{{ erreurGrille }}</p></div>
-          <p class="fr-text--sm fr-mt-3w">
-            <NuxtLink to="/guide/verifier-avant-de-publier" class="fr-link fr-text--sm">Vérifier avant de publier — le guide</NuxtLink>
-          </p>
-        </div>
-
-        <!-- Documents : le corpus lui-même. Monté à la première ouverture — la liste d'un code
-             entier ne se lit pas tant que personne ne la demande. -->
-        <div v-show="tab === 'documents'" v-bind="panneau('documents')">
-          <CorpusDocuments v-if="documentsVus" :collection="id" />
-        </div>
-
-        <!-- Interroger avec un agent : l'onglet n'existe que si Mes agents est branché et a
-             répondu sans refus (contrat d'agents MirAI, docs/agents.md). Monté à la première ouverture. -->
-        <div v-if="agentsDisponibles" v-show="tab === 'agent'" v-bind="panneau('agent')">
-          <AgentsInterrogerAvecAgent v-if="agentVu" :collection="collection.name" />
-        </div>
-
-        <!-- Signaler un défaut -->
-        <div v-show="tab === 'signaler'" v-bind="panneau('signaler')">
-          <CollectifSignalements :signalements="signalements" :garant="estGarant" :actif="capacites.signalements" :fichiers="fichiers"
-                                 :signaler="corps => c.signaler(id, corps)" @depose="rechargerCollectif" @traiter="traiterSignalement" />
-        </div>
-
-        <!-- Proposer une modification -->
-        <div v-show="tab === 'proposer'" v-bind="panneau('proposer')">
-          <CollectifPropositions :propositions="propositions" :garant="estGarant" :proposer="corps => c.proposer(id, corps)"
-                                 @deposee="rechargerCollectif" @publier="publierProposition" @refuser="refuserProposition" />
-        </div>
-
-        <!-- Historique : le fil -->
-        <div v-show="tab === 'historique'" v-bind="panneau('historique')">
-          <CollectifAvancement :evenements="evenements" :suivant="suivant" abonnable :abonne="abonne" @abonner="abonner" @suite="suite" />
-        </div>
-
-        <!-- Discussion -->
-        <div v-show="tab === 'discussion'" v-bind="panneau('discussion')">
-          <div class="fr-callout">
-            <h3 class="fr-callout__title">La discussion se tient dans les forums Mirai</h3>
-            <p class="fr-callout__text">
-              Les échanges entre contributeurs passent par le salon Tchap de la bêta. Ce qui engage la collection
-              — un défaut, une modification — se dépose ici, dans les onglets « Signaler » et « Proposer », pour rester tracé.
-            </p>
-            <button class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-2w" @click="abonner(!abonne)">{{ abonne ? 'Abonné·e au fil' : "S'abonner au fil d'avancement" }}</button>
-          </div>
-        </div>
-
-        <!-- Prompt tab -->
-        <div v-show="tab === 'prompt'" v-bind="panneau('prompt')">
-          <h3>Consignes données à l'assistant</h3>
-          <p class="fr-text--sm fr-mb-1w">Modèle de consignes : {{ libelleConsignes(collection.prompt_template) }}</p>
-          <pre class="fr-p-2w" style="background:#f6f6f6;border-radius:4px;white-space:pre-wrap;font-size:0.85rem;max-height:400px;overflow-y:auto;">{{ collection.system_prompt }}</pre>
-          <NuxtLink :to="`/c/${id}/prompt`" class="fr-btn fr-btn--sm fr-btn--icon-left fr-icon-edit-line fr-mt-2w">
-            Modifier les consignes
-          </NuxtLink>
-        </div>
-
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { messageErreur } from '~/utils/collectif'
-import { libelleStrategie, libelleSensibilite, libelleConsignes } from '~/utils/libelles'
-import { appreciation, dateMesure } from '~/utils/qualite'
-import { ongletDeLAdresse, libelleSansCompteur } from '~/utils/filAriane'
+import type { CleOnglet } from '~/utils/fiche'
 import { useMesAgents } from '~/composables/useMesAgents'
+import { libelleEtat, messageErreur } from '~/utils/collectif'
+import { actionsFiche, dateFiche, ligneMeta, ONGLET_PAR_DEFAUT, ongletDepuisAncien, ongletsFiche } from '~/utils/fiche'
+import { libelleSansCompteur, ongletDeLAdresse } from '~/utils/filAriane'
+import { appreciation, dateMesure } from '~/utils/qualite'
+
+/**
+ * La fiche d'une collection (refonte du 2026-10-19) : en-tête, actions, « Ce qu'en pensent vos
+ * collègues », « Consignes données à l'assistant », lignes Qualité et Où l'interroger, puis
+ * quatre onglets — Documents · Signalements · Propositions · Historique. Ce qu'elle affiche
+ * vient de utils/fiche.ts (testé).
+ */
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
@@ -205,8 +21,6 @@ const { isAdmin } = useAdminAuth()
 const { capacites, charger: chargerCapacites } = useCapacites()
 const agents = useMesAgents()
 // L'onglet « Interroger avec un agent » existe (Mes agents branché, liste obtenue sans refus).
-// Figé pour la vie de la page : un refus survenu en cours de route ne le retire pas sous les
-// pieds de la personne (le composant le dit, le prochain chargement l'enlève).
 const agentsDisponibles = ref(false)
 
 // ─── Le circuit collaboratif ─────────────────────────────────────────────────
@@ -217,208 +31,239 @@ const signalements = ref<any[] | null>([])
 const evenements = ref<any[] | null>([])
 const suivant = ref<string | null>(null)
 const abonne = ref(false)
-const fichiers = ref<any[]>([])
+const fichiers = ref<any[] | null>(null)
 const erreurEtat = ref('')
 const erreurGrille = ref('')
 const estGarant = computed(() => !!(etat.value && (etat.value.je_suis_garant || isAdmin.value)))
 
-async function chargerCollectif() {
+async function rechargerCollectif () {
+  try {
+    propositions.value = (await c.propositions(id)).propositions
+  }
+  catch {
+    propositions.value = null
+  }
+  try {
+    signalements.value = (await c.signalements(id)).signalements
+  }
+  catch {
+    signalements.value = null
+  }
+  try {
+    const j = await c.journalCollection(id)
+    evenements.value = j.evenements
+    suivant.value = j.suivant
+  }
+  catch {
+    evenements.value = null
+  }
+}
+async function chargerCollectif () {
   await chargerCapacites()
-  try { etat.value = await c.etat(id) } catch { etat.value = null }
-  try { grille.value = (await c.grille(id)).grille } catch { grille.value = null }
+  try {
+    etat.value = await c.etat(id)
+  }
+  catch {
+    etat.value = null
+  }
+  try {
+    grille.value = (await c.grille(id)).grille
+  }
+  catch {
+    grille.value = null
+  }
   await rechargerCollectif()
-  try { fichiers.value = (await get(`/api/ingest/${id}/sources`)).sources || [] } catch { fichiers.value = [] }
+  try {
+    fichiers.value = (await get(`/api/ingest/${id}/sources`)).sources || []
+  }
+  catch {
+    fichiers.value = null
+  }
 }
-async function rechargerCollectif() {
-  try { propositions.value = (await c.propositions(id)).propositions } catch { propositions.value = null }
-  try { signalements.value = (await c.signalements(id)).signalements } catch { signalements.value = null }
-  try { const j = await c.journalCollection(id); evenements.value = j.evenements; suivant.value = j.suivant } catch { evenements.value = null }
+async function suite (avant: string) {
+  const j = await c.journalCollection(id, { avant })
+  evenements.value = [...(evenements.value || []), ...j.evenements]
+  suivant.value = j.suivant
 }
-async function suite(avant: string) { const j = await c.journalCollection(id, { avant }); evenements.value = [...(evenements.value || []), ...j.evenements]; suivant.value = j.suivant }
-async function changerEtat(cible: string) {
-  erreurEtat.value = ''
-  try { etat.value = await c.changerEtat(id, cible); await rechargerCollectif() } catch (e) { erreurEtat.value = messageErreur(e) }
+async function geste (action: () => Promise<unknown>, erreur: Ref<string>) {
+  erreur.value = ''
+  try {
+    await action()
+    await rechargerCollectif()
+  }
+  catch (e) {
+    erreur.value = messageErreur(e)
+  }
 }
-async function forcerEtat(cible: string, motif: string) {
-  erreurEtat.value = ''
-  try { etat.value = await c.changerEtat(id, cible, true, motif); await rechargerCollectif() } catch (e) { erreurEtat.value = messageErreur(e) }
+function changerEtat (cible: string) {
+  return geste(async () => {
+    etat.value = await c.changerEtat(id, cible)
+  }, erreurEtat)
 }
-async function enregistrerGrille(champs: any) {
-  erreurGrille.value = ''
-  try { grille.value = (await c.majGrille(id, champs)).grille; etat.value = await c.etat(id); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) }
+function forcerEtat (cible: string, motif: string) {
+  return geste(async () => {
+    etat.value = await c.changerEtat(id, cible, true, motif)
+  }, erreurEtat)
 }
-async function relire() {
-  erreurGrille.value = ''
-  try { grille.value = (await c.relire(id)).grille; etat.value = await c.etat(id); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) }
+function enregistrerGrille (champs: any) {
+  return geste(async () => {
+    grille.value = (await c.majGrille(id, champs)).grille
+    etat.value = await c.etat(id)
+  }, erreurGrille)
 }
-async function publierProposition(pid: string) { try { await c.publierProposition(id, pid); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
-async function refuserProposition(pid: string, motif: string) { try { await c.refuserProposition(id, pid, motif); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
-async function traiterSignalement(sid: string, e2: string) { try { await c.traiterSignalement(id, sid, e2); await rechargerCollectif() } catch (e) { erreurGrille.value = messageErreur(e) } }
-async function abonner(oui: boolean) { try { await c.abonnerCollection(id, oui); abonne.value = oui } catch (e) { erreurGrille.value = messageErreur(e) } }
+function relire () {
+  return geste(async () => {
+    grille.value = (await c.relire(id)).grille
+    etat.value = await c.etat(id)
+  }, erreurGrille)
+}
+const publierProposition = (pid: string) => geste(() => c.publierProposition(id, pid), erreurGrille)
+const refuserProposition = (pid: string, motif: string) => geste(() => c.refuserProposition(id, pid, motif), erreurGrille)
+const traiterSignalement = (sid: string, e2: string) => geste(() => c.traiterSignalement(id, sid, e2), erreurGrille)
+async function abonner (oui: boolean) {
+  try {
+    await c.abonnerCollection(id, oui)
+    abonne.value = oui
+  }
+  catch (e) {
+    erreurGrille.value = messageErreur(e)
+  }
+}
 
+// ─── La fiche ────────────────────────────────────────────────────────────────
 const collection = ref<any>(null)
 const { titre, retenir } = useTitreCollection(id, { charger: false })
 const libelleCategorie = ref('')
 const loadError = ref<string>('')
 const adopting = ref(false)
 const adoptError = ref<string>('')
-const feedbackStats = ref({ satisfaction_rate: 0, positive: 0, negative: 0, total: 0, pending_review: 0 })
+const stats = ref<any>(null)
+const usage = ref<any>(null)
+const derniersAvis = ref<any[] | null>(null)
 const mesure = ref<any>(null)
 const loading = ref(true)
-const tab = ref('consulter')
+const accesOuverts = ref(false)
 
 /** Ce que l'appelant peut faire de la collection (dit par l'API) : on n'offre que ces gestes. */
 const peutGerer = computed(() => !!collection.value?.mes_droits?.ecrire)
-const RESERVES_A_QUI_GERE = new Set(['prompt', `/c/${id}/qualite`, `/c/${id}/upload`, `/c/${id}/config`, `/c/${id}/publish`])
+const actions = computed(() => actionsFiche(collection.value?.mes_droits, !!collection.value?.graph_enabled, id))
 
-/** Les rubriques de la fiche, dans l'ordre de la rangée d'onglets. */
-const onglets = computed(() => ongletsTous.value.filter(o => peutGerer.value || !RESERVES_A_QUI_GERE.has(o.cle)))
-const ongletsTous = computed(() => {
-  const ouverts = (l: any[] | null, garde: (x: any) => boolean) => { const n = (l || []).filter(garde).length; return n ? ` (${n})` : '' }
-  return [
-    { cle: 'consulter', libelle: 'Consulter' },
-    { cle: 'documents', libelle: 'Documents' },
-    // Interroger avec un agent : seulement quand Mes agents est branché et n'a pas refusé.
-    ...(agentsDisponibles.value ? [{ cle: 'agent', libelle: 'Interroger avec un agent' }] : []),
-    { cle: 'signaler', libelle: `Signaler un défaut${ouverts(signalements.value, s => s.etat !== 'clos')}` },
-    { cle: 'proposer', libelle: `Proposer une modification${ouverts(propositions.value, p => p.etat === 'proposee')}` },
-    { cle: 'historique', libelle: 'Historique' },
-    { cle: 'discussion', libelle: 'Discussion' },
-    { cle: 'prompt', libelle: "Consignes données à l'assistant" },
-  ]
+const meta = computed(() => {
+  const col = collection.value || {}
+  const cree = dateFiche(col.created_at)
+  const maj = dateFiche(col.updated_at)
+  return ligneMeta({
+    categorie_libelle: libelleCategorie.value || (col.categorie ? '' : 'Non classée'),
+    nb_documents: fichiers.value ? fichiers.value.length : null,
+    cree_le: cree,
+    mise_a_jour: maj && maj !== cree ? `le ${maj}` : '',
+    responsable: col.contact_name,
+  })
 })
 
-// L'onglet ouvert vit dans l'adresse (`?onglet=documents`) : un lien partagé, un retour
-// arrière ou un rechargement rouvrent la même rubrique. « Consulter », l'onglet par défaut,
-// n'y figure pas — les liens existants vers `/c/{id}` ne changent pas.
-const ONGLET_PAR_DEFAUT = 'consulter'
-// Les anciens onglets Avis, Réponses validées et Questions générées vivent dans la page Qualité.
-const ANCIENS: Record<string, string> = { feedback: 'avis', qr: 'jeu', generation: 'jeu' }
-const ancien = ANCIENS[String(route.query.onglet || '')]
-if (ancien) navigateTo(`/c/${id}/qualite${ancien === 'jeu' ? '' : `?onglet=${ancien}`}`, { replace: true })
-const ongletDemande = () => ongletDeLAdresse(route.query.onglet, onglets.value.map(o => o.cle), ONGLET_PAR_DEFAUT)
+// ─── Les onglets ─────────────────────────────────────────────────────────────
+const onglets = computed(() => ongletsFiche({
+  documents: fichiers.value ? fichiers.value.length : null,
+  signalements: signalements.value ? signalements.value.filter(s => s.etat !== 'clos').length : null,
+  propositions: propositions.value ? propositions.value.filter(p => p.etat === 'proposee').length : null,
+}, { agent: agentsDisponibles.value }))
+const tab = ref<CleOnglet>(ONGLET_PAR_DEFAUT)
+
+// L'onglet ouvert vit dans l'adresse (`?onglet=historique`). Les anciennes clés mènent à leur
+// nouvelle place : Consulter et Discussion → Historique, Consignes → le bloc des consignes,
+// Avis et jeux de questions → la page Qualité.
+const ancien = ongletDepuisAncien(route.query.onglet, id)
+if (ancien?.type === 'page') {
+  navigateTo(ancien.vers, { replace: true })
+}
+function ongletDemande (): CleOnglet {
+  const r = ongletDepuisAncien(route.query.onglet, id)
+  if (r?.type === 'onglet') {
+    return r.cle
+  }
+  return ongletDeLAdresse(route.query.onglet, onglets.value.map(o => o.cle), ONGLET_PAR_DEFAUT) as CleOnglet
+}
 tab.value = ongletDemande()
 watch(tab, (t) => {
-  if (t === ongletDemande()) return
+  if (t === ongletDemande() && !ongletDepuisAncien(route.query.onglet, id)) {
+    return
+  }
   const query = { ...route.query }
-  if (t === ONGLET_PAR_DEFAUT) delete query.onglet
-  else query.onglet = t
+  if (t === ONGLET_PAR_DEFAUT) {
+    delete query.onglet
+  }
+  else {
+    query.onglet = t
+  }
   router.replace({ query })
 })
-watch(() => route.query.onglet, () => { tab.value = ongletDemande() })
+watch(() => route.query.onglet, () => {
+  tab.value = ongletDemande()
+})
+watch(agentsDisponibles, () => {
+  tab.value = ongletDemande()
+})
 
 /** Le dernier maillon du fil d'Ariane : l'onglet ouvert, sans son compteur. */
 const rubrique = computed(() => libelleSansCompteur(onglets.value.find(o => o.cle === tab.value)?.libelle || ''))
 
-/** Les gestes de la fiche, filtrés selon les droits. `aide` s'affiche au survol et au focus : dire ce que le bouton FAIT. */
-const actions = computed(() => actionsToutes.value.filter(a => peutGerer.value || !RESERVES_A_QUI_GERE.has(a.vers)))
-const actionsToutes = computed(() => [
-  { vers: `/c/${id}/qualite`, libelle: 'Piloter la qualité', icone: 'fr-icon-line-chart-line', rang: 'fr-btn--secondary',
-    aide: "La page Qualité : le jeu de questions de référence, les mesures, les avis des usagers et les leviers pour améliorer les réponses." },
-  { vers: `/c/${id}/playground`, libelle: 'Poser une question', icone: 'fr-icon-chat-3-line', rang: '',
-    aide: "Le bac à sable : posez une question à la collection et voyez la réponse, avec les passages sur lesquels elle s'appuie." },
-  { vers: `/c/${id}/graph`, libelle: 'Voir les liens entre documents', icone: 'fr-icon-links-line', rang: 'fr-btn--secondary',
-    disabled: !collection.value?.graph_enabled,
-    aide: "La carte des renvois entre documents : quel article cite quel autre. Disponible quand les liens entre documents sont activés pour la collection." },
-  { vers: `/c/${id}/upload`, libelle: 'Ajouter des documents', icone: 'fr-icon-file-add-line', rang: 'fr-btn--secondary',
-    aide: "Ajouter des documents à la collection : fichiers de votre poste, adresse web, dossier Drive." },
-  { vers: `/c/${id}/config`, libelle: 'Réglages', icone: 'fr-icon-settings-5-line', rang: 'fr-btn--tertiary',
-    aide: "Les réglages : titre et description, type de collection, qui peut lire la collection, sensibilité des données, contact." },
-  { vers: `/c/${id}/publish`, libelle: 'Partager dans Mon assistant', icone: 'fr-icon-share-forward-line', rang: 'fr-btn--tertiary',
-    aide: "Rendre la collection disponible dans Mon assistant, là où vos collègues posent leurs questions — et choisir qui la voit. Rien n'est définitif : on peut la retirer ensuite." },
-])
-
-const STRATEGIES: Record<string, string> = {
-  auto: "Découpage automatique : l'outil choisit comment couper chaque document en passages, selon sa forme.",
-  article: "Découpage par article : un passage par article — fait pour les codes et les textes juridiques.",
-  chunk: "Découpage par longueur : des passages de taille régulière, sans tenir compte de la structure.",
-  directory: "Découpage par dossier : la structure des dossiers d'origine est conservée.",
-}
-const SENSIBILITES: Record<string, string> = {
-  public: "Données publiques : rien de sensible, la collection peut être ouverte largement.",
-  internal: "Données internes au ministère : à ne pas diffuser à l'extérieur.",
-  personal: "Contient des données personnelles : diffusion à limiter, et à justifier.",
-  restricted: "Diffusion restreinte : réservée aux personnes habilitées.",
-  confidential: "Confidentiel : accès au plus petit nombre.",
-}
-/** Les réglages affichés en badges, avec ce qu'ils veulent dire pour qui ne les a pas choisis. */
-const badges = computed(() => {
-  const col = collection.value || {}
-  const liste = [
-    { cle: 'strategie', libelle: libelleStrategie(col.strategy), classe: 'fr-badge--info',
-      aide: STRATEGIES[col.strategy] || `Mode de découpage des documents en passages : « ${col.strategy} ».` },
-    { cle: 'sensibilite', libelle: libelleSensibilite(col.sensitivity), classe: sensitivityBadge(col.sensitivity),
-      aide: SENSIBILITES[col.sensitivity] || `Sensibilité des données : « ${col.sensitivity} ».` },
-  ]
-  if (col.graph_enabled) liste.push({ cle: 'graphe', libelle: 'Liens entre documents', classe: 'fr-badge--new', aide: "Les renvois entre documents sont cartographiés : voir « Voir les liens entre documents »." })
-  if (col.ai_summary_enabled) liste.push({ cle: 'resume', libelle: 'Résumé IA', classe: 'fr-badge--new', aide: "Chaque document reçoit un résumé automatique, qui aide la recherche à le retrouver." })
-  liste.push({ cle: 'prompt', libelle: libelleConsignes(col.prompt_template), classe: '',
-    aide: `Modèle de consignes donné à l'assistant : « ${libelleConsignes(col.prompt_template)} ». Il fixe le ton et la façon de citer — voir l'onglet « Consignes données à l'assistant ».` })
-  return liste.filter(b => b.libelle)
-})
-
 const documentsVus = ref(false)
-watch(tab, (t) => { if (t === 'documents') documentsVus.value = true }, { immediate: true })
-
-// Le composant de l'agent est monté à la première ouverture de son onglet.
+watch(tab, (t) => {
+  if (t === 'documents') {
+    documentsVus.value = true
+  }
+}, { immediate: true })
 const agentVu = ref(false)
-watch(tab, (t) => { if (t === 'agent') agentVu.value = true }, { immediate: true })
-// `?onglet=agent` reçu avant que la liste ne soit connue : l'onglet s'ouvre quand elle l'est.
-watch(agentsDisponibles, () => { tab.value = ongletDemande() })
+watch(tab, (t) => {
+  if (t === 'agent') {
+    agentVu.value = true
+  }
+}, { immediate: true })
 
 /** Ce qu'un panneau doit porter pour que le DSFR le montre, et pour qu'un lecteur d'écran le relie à son onglet. */
-function panneau(cle: string) {
+function panneau (cle: string) {
   return {
-    id: `panneau-${cle}`,
-    class: ['fr-tabs__panel', { 'fr-tabs__panel--selected': tab.value === cle }],
-    role: 'tabpanel',
+    'id': `panneau-${cle}`,
+    'class': ['fr-tabs__panel', { 'fr-tabs__panel--selected': tab.value === cle }],
+    'role': 'tabpanel',
     'aria-labelledby': `onglet-${cle}`,
-    tabindex: 0,
+    'tabindex': 0,
   }
 }
 
 /** Flèches, Début et Fin parcourent la rangée, comme le veut le motif « onglets ». */
-function clavierOnglets(ev: KeyboardEvent) {
+function clavierOnglets (ev: KeyboardEvent) {
   const cles = onglets.value.map(o => o.cle)
   const i = cles.indexOf(tab.value)
-  const vers = { ArrowRight: (i + 1) % cles.length, ArrowLeft: (i - 1 + cles.length) % cles.length, Home: 0, End: cles.length - 1 }[ev.key]
-  if (vers === undefined) return
+  const vers = ({ ArrowRight: (i + 1) % cles.length, ArrowLeft: (i - 1 + cles.length) % cles.length, Home: 0, End: cles.length - 1 } as Record<string, number>)[ev.key]
+  if (vers === undefined) {
+    return
+  }
   ev.preventDefault()
-  tab.value = cles[vers]
+  tab.value = cles[vers]!
   nextTick(() => document.getElementById(`onglet-${cles[vers]}`)?.focus())
 }
 
-function sensitivityBadge(s: string) {
-  return { public: 'fr-badge--success', internal: 'fr-badge--info', restricted: 'fr-badge--warning', confidential: 'fr-badge--error' }[s] || ''
-}
-
-function qualityClass(rate: number) {
-  if (rate >= 0.7) return 'myrag-quality-bar__fill--good'
-  if (rate >= 0.4) return 'myrag-quality-bar__fill--medium'
+function qualityClass (rate: number) {
+  if (rate >= 0.7) {
+    return 'myrag-quality-bar__fill--good'
+  }
+  if (rate >= 0.4) {
+    return 'myrag-quality-bar__fill--medium'
+  }
   return 'myrag-quality-bar__fill--bad'
 }
 
-/**
- * Create a minimal MyRAG config for a collection that exists as an OpenRAG
- * partition but has no DB record. Backend POST is idempotent on the OpenRAG
- * side (create_partition returns {status: exists} if the partition is
- * already there), so this is safe to call on an orphan partition.
- */
-async function adoptCollection() {
+/** Une partition OpenRAG sans fiche : en créer une minimale (idempotent côté OpenRAG). */
+async function adoptCollection () {
   adopting.value = true
   adoptError.value = ''
   try {
     const { post } = useApi()
-    await post('/api/collections', {
-      name: id,
-      description: '',
-      strategy: 'auto',
-      sensitivity: 'public',
-      scope: 'group',
-    })
-    // Reload the whole page so onMounted re-runs with the new DB record.
+    await post('/api/collections', { name: id, description: '', strategy: 'auto', sensitivity: 'public', scope: 'group' })
     window.location.reload()
-  } catch (e: any) {
+  }
+  catch (e: any) {
     adoptError.value = messageErreur(e)
     adopting.value = false
   }
@@ -428,33 +273,476 @@ onMounted(async () => {
   try {
     collection.value = await get(`/api/collections/${id}`)
     retenir(collection.value)
-  } catch (e: any) {
+  }
+  catch (e: any) {
     loadError.value = e?.message || 'erreur de chargement'
     collection.value = null
     loading.value = false
     return
   }
-  if (collection.value?.categorie) {
-    useCategories().lister()
-      .then((cats) => { libelleCategorie.value = cats.find(k => k.cle === collection.value.categorie)?.libelle || '' })
-      .catch(() => {})
-  }
-  // Le circuit collaboratif — chaque bloc tombe seul, jamais la page.
-  chargerCollectif()
-  // Les agents — un service injoignable ou un refus masque l'onglet, sans bloquer l'écran.
-  if (agents.configure) agents.lister().then(() => { agentsDisponibles.value = agents.disponible.value }).catch(() => {})
-  // La qualité est facultative : une statistique absente ne vide pas la page.
-  try { feedbackStats.value = await get(`/api/feedback/${id}/stats`) } catch { /* best-effort */ }
-  if (peutGerer.value) {
-    try { mesure.value = (await useQualite(id).synthese()).derniere_terminee } catch { /* best-effort */ }
-  }
   loading.value = false
+  if (ancien?.type === 'ancre') {
+    nextTick(() => document.getElementById(ancien.cle)?.focus())
+  }
+  if (collection.value?.categorie) {
+    useCategories().lister().then((cats) => {
+      libelleCategorie.value = cats.find(k => k.cle === collection.value.categorie)?.libelle || ''
+    }).catch(() => {})
+  }
+  // Chaque bloc tombe seul, jamais la page.
+  chargerCollectif()
+  if (agents.configure) {
+    agents.lister().then(() => {
+      agentsDisponibles.value = agents.disponible.value
+    }).catch(() => {})
+  }
+  get(`/api/feedback/${id}/stats`).then((r) => {
+    stats.value = r
+  }).catch(() => {})
+  get(`/api/collections/${id}/usage`).then((r) => {
+    usage.value = r
+  }).catch(() => {})
+  if (peutGerer.value) {
+    get(`/api/feedback/${id}`, { limit: '3' }).then((r) => {
+      derniersAvis.value = r.feedback || []
+    }).catch(() => {})
+    useQualite(id).synthese().then((s) => {
+      mesure.value = s.derniere_terminee
+    }).catch(() => {})
+  }
 })
 </script>
 
-<style scoped>
-.fiche-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
-.fiche-badges .fr-badge { cursor: help; }
+<template>
+  <div>
+    <FilAriane
+      :collection="id"
+      :titre="titre"
+      :rubrique="collection ? rubrique : undefined"
+    />
+
+    <div
+      v-if="loading"
+      class="fr-callout"
+    >
+      <p>Chargement…</p>
+    </div>
+
+    <!-- Une partition OpenRAG sans fiche Mes collections. -->
+    <div
+      v-else-if="!collection"
+      class="fr-alert fr-alert--warning"
+    >
+      <h1 class="fr-alert__title fr-h5">
+        La collection « {{ id }} » n'a pas encore de fiche
+      </h1>
+      <p>
+        Cette collection existe peut-être dans le moteur de recherche, mais n'a pas encore
+        de fiche dans Mes collections (description, découpage, responsable…).
+        <span
+          v-if="loadError"
+          class="fr-text--sm fiche-discret"
+        >({{ loadError }})</span>
+      </p>
+      <p>
+        Vous pouvez la rattacher à une fiche minimale puis compléter sa description — aucun document n'est touché.
+      </p>
+      <div
+        v-if="adoptError"
+        class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"
+      >
+        <p>{{ adoptError }}</p>
+      </div>
+      <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
+        <button
+          class="fr-btn"
+          :disabled="adopting"
+          @click="adoptCollection"
+        >
+          {{ adopting ? 'Création en cours…' : 'Rattacher cette collection' }}
+        </button>
+        <NuxtLink
+          to="/admin/catalog"
+          class="fr-btn fr-btn--secondary"
+        >
+          Retour au catalogue
+        </NuxtLink>
+      </div>
+    </div>
+
+    <div v-else>
+      <!-- En-tête : titre et état, description, métadonnées ; à droite, les gestes. -->
+      <div class="fiche-tete fr-mb-4w">
+        <div class="fiche-tete__texte">
+          <div class="fiche-tete__titre">
+            <h1 class="fr-h2 fr-mb-0">
+              {{ titre }}
+            </h1>
+            <span
+              v-if="collection.etat_collab"
+              class="fr-badge fr-badge--no-icon"
+              :class="collection.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'"
+            >
+              {{ libelleEtat(collection.etat_collab) }}
+            </span>
+          </div>
+          <p
+            v-if="etat && etat.mention"
+            class="collectif-mention fr-mb-0"
+          >
+            {{ etat.mention }} — servie à son groupe seulement
+          </p>
+          <p class="fr-text--lg fr-mb-0">
+            {{ collection.description || 'Pas de description' }}
+          </p>
+          <p
+            v-if="meta"
+            class="fr-text--sm fr-mb-0 fiche-discret"
+          >
+            {{ meta }}
+          </p>
+          <p class="fr-text--xs fr-mb-0 fiche-discret">
+            Identifiant : <code title="Ce que tapent les applications : openrag-…">{{ collection.name }}</code>
+          </p>
+        </div>
+        <div class="fiche-tete__actions">
+          <NuxtLink
+            v-for="(a, i) in actions.principales"
+            :key="a.cle"
+            :to="a.vers"
+            :title="a.aide"
+            class="fr-btn fr-btn--icon-left"
+            :class="[a.icone, i ? 'fr-btn--secondary' : '']"
+          >
+            {{ a.libelle }}
+          </NuxtLink>
+          <FicheMenuPlus :actions="actions.plus" />
+        </div>
+      </div>
+
+      <!-- Deux blocs côte à côte ; empilés sur mobile. -->
+      <div class="fr-grid-row fr-grid-row--gutters fr-mb-2w">
+        <div class="fr-col-12 fr-col-lg-6">
+          <FicheAvisCollegues
+            :id="id"
+            :stats="stats"
+            :usage="usage"
+            :derniers="derniersAvis"
+            :peut-gerer="peutGerer"
+          />
+        </div>
+        <div class="fr-col-12 fr-col-lg-6">
+          <FicheConsignes
+            :id="id"
+            :modele="collection.prompt_template"
+            :consignes="collection.system_prompt"
+            :peut-gerer="peutGerer"
+          />
+        </div>
+      </div>
+
+      <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
+        <!-- Qualité : pour qui gère. -->
+        <div
+          v-if="peutGerer"
+          class="fr-col-12 fr-col-lg-6"
+        >
+          <div class="fiche-ligne">
+            <template v-if="mesure">
+              <div class="fiche-ligne__mesure">
+                <strong>{{ mesure.score }} %</strong>
+                <span class="fr-text--sm">de réponses justes · {{ appreciation(mesure.score).libelle }} · mesuré le {{ dateMesure(mesure.cree_le) }}</span>
+                <div
+                  class="myrag-quality-bar"
+                  role="img"
+                  :aria-label="`Qualité mesurée : ${mesure.score} sur 100`"
+                >
+                  <div
+                    class="myrag-quality-bar__fill"
+                    :class="qualityClass(mesure.score / 100)"
+                    :style="{ width: `${mesure.score}%` }"
+                  />
+                </div>
+              </div>
+            </template>
+            <span
+              v-else
+              class="fr-text--sm"
+            >Qualité : aucune mesure pour l'instant.</span>
+            <NuxtLink
+              :to="`/c/${id}/qualite`"
+              class="fr-link fiche-ligne__lien"
+            >
+              Piloter la qualité →
+            </NuxtLink>
+          </div>
+        </div>
+        <!-- Où l'interroger : le bloc détaillé ne s'ouvre qu'à la demande. -->
+        <div
+          class="fr-col-12"
+          :class="{ 'fr-col-lg-6': peutGerer }"
+        >
+          <div class="fiche-ligne">
+            <span
+              v-if="collection.acces"
+              class="fr-text--sm"
+            ><strong>Où l'interroger :</strong> ici, dans Mon assistant (modèle <code>{{ collection.acces.assistant.model_id }}</code>), ou par l'API.</span>
+            <span
+              v-else
+              class="fr-text--sm"
+            ><strong>Où l'interroger :</strong> ici, dans son bac à sable, tant qu'elle n'est pas publiée à tous.</span>
+            <button
+              v-if="collection.acces"
+              type="button"
+              class="fr-link fiche-ligne__lien"
+              aria-controls="fiche-acces"
+              :aria-expanded="accesOuverts ? 'true' : 'false'"
+              @click="accesOuverts = !accesOuverts"
+            >
+              {{ accesOuverts ? 'Masquer les accès' : 'Voir les accès' }}
+            </button>
+          </div>
+          <div
+            v-if="collection.acces"
+            v-show="accesOuverts"
+            id="fiche-acces"
+            class="fr-callout fr-callout--green-emeraude fr-mt-2w"
+          >
+            <ul class="fr-text--sm">
+              <li>
+                <strong>dans l'agent conversationnel de MirAI Next</strong>, en choisissant le modèle
+                <code>{{ collection.acces.assistant.model_id }}</code> ;
+              </li>
+              <li v-if="collection.acces.api">
+                <strong>par l'API, depuis vos SI</strong> :
+                <code>POST {{ collection.acces.api.chat }}</code> avec <code>"model": "{{ collection.acces.api.model }}"</code>
+                (format OpenAI), ou <code>GET {{ collection.acces.api.search }}</code> pour la recherche seule —
+                sur clé d'API à demander à l'équipe de la bêta ;
+              </li>
+              <li><strong>dans vos outils bureautiques</strong> : greffon LibreOffice à venir.</li>
+              <li v-if="agentsDisponibles">
+                <strong>avec un agent de Mes agents</strong>, sur les passages de la collection :
+                <button
+                  type="button"
+                  class="fr-link fr-text--sm"
+                  @click="tab = 'agent'"
+                >
+                  onglet « Interroger avec un agent »
+                </button>.
+              </li>
+            </ul>
+            <p class="fr-text--sm fr-mb-0">
+              <NuxtLink
+                to="/guide/interroger-depuis-vos-si"
+                class="fr-link"
+              >
+                Le guide : interroger depuis vos SI
+              </NuxtLink>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Onglets -->
+      <div class="fr-tabs">
+        <!-- Le DSFR cache tout panneau qui n'a pas `fr-tabs__panel--selected` : c'est son
+             JavaScript qui pose cette classe, et nous ne le chargeons pas. Vue la pose. -->
+        <ul
+          class="fr-tabs__list"
+          role="tablist"
+          aria-label="Rubriques de la collection"
+          @keydown="clavierOnglets"
+        >
+          <li
+            v-for="o in onglets"
+            :key="o.cle"
+            role="presentation"
+          >
+            <button
+              :id="`onglet-${o.cle}`"
+              type="button"
+              class="fr-tabs__tab"
+              role="tab"
+              :aria-selected="tab === o.cle"
+              :aria-controls="`panneau-${o.cle}`"
+              :tabindex="tab === o.cle ? 0 : -1"
+              @click="tab = o.cle"
+            >
+              {{ o.libelle }}
+            </button>
+          </li>
+        </ul>
+
+        <!-- Documents : le corpus, monté à la première ouverture. -->
+        <div
+          v-show="tab === 'documents'"
+          v-bind="panneau('documents')"
+        >
+          <div
+            v-if="peutGerer"
+            class="fiche-panneau-tete"
+          >
+            <NuxtLink
+              :to="`/c/${id}/upload`"
+              class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-file-add-line"
+            >
+              Ajouter des documents
+            </NuxtLink>
+          </div>
+          <CorpusDocuments
+            v-if="documentsVus"
+            :collection="id"
+          />
+        </div>
+
+        <div
+          v-show="tab === 'signalements'"
+          v-bind="panneau('signalements')"
+        >
+          <CollectifSignalements
+            :signalements="signalements"
+            :garant="estGarant"
+            :actif="capacites.signalements"
+            :fichiers="fichiers || []"
+            :signaler="corps => c.signaler(id, corps)"
+            @depose="rechargerCollectif"
+            @traiter="traiterSignalement"
+          />
+        </div>
+
+        <div
+          v-show="tab === 'propositions'"
+          v-bind="panneau('propositions')"
+        >
+          <CollectifPropositions
+            :propositions="propositions"
+            :garant="estGarant"
+            :proposer="corps => c.proposer(id, corps)"
+            @deposee="rechargerCollectif"
+            @publier="publierProposition"
+            @refuser="refuserProposition"
+          />
+        </div>
+
+        <!-- Historique : le circuit de vérification et la grille de contrôle en tête, puis le
+             fil, puis la discussion. -->
+        <div
+          v-show="tab === 'historique'"
+          v-bind="panneau('historique')"
+        >
+          <div class="fr-grid-row fr-grid-row--gutters fr-mb-3w">
+            <div class="fr-col-12 fr-col-lg-4">
+              <CollectifEtapesCollection
+                v-if="etat"
+                :etat="etat"
+                :superadmin="isAdmin"
+                @changer="changerEtat"
+                @forcer="forcerEtat"
+              />
+              <div
+                v-if="erreurEtat"
+                class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"
+              >
+                <p>{{ erreurEtat }}</p>
+              </div>
+            </div>
+            <div class="fr-col-12 fr-col-lg-8">
+              <CollectifGrilleControle
+                v-if="grille"
+                :grille="grille"
+                :garant="estGarant"
+                @enregistrer="enregistrerGrille"
+                @relire="relire"
+              />
+              <p
+                v-else
+                class="fr-text--sm fiche-discret"
+              >
+                Grille de contrôle indisponible.
+              </p>
+              <div
+                v-if="erreurGrille"
+                class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"
+              >
+                <p>{{ erreurGrille }}</p>
+              </div>
+              <p class="fr-text--sm fr-mt-2w">
+                <NuxtLink
+                  to="/guide/verifier-avant-de-publier"
+                  class="fr-link fr-text--sm"
+                >
+                  Vérifier avant de publier — le guide
+                </NuxtLink>
+              </p>
+            </div>
+          </div>
+          <CollectifAvancement
+            :evenements="evenements"
+            :suivant="suivant"
+            abonnable
+            :abonne="abonne"
+            @abonner="abonner"
+            @suite="suite"
+          />
+          <div class="fr-callout fr-mt-4w">
+            <h2 class="fr-callout__title fr-h6">
+              La discussion se tient dans les forums Mirai
+            </h2>
+            <p class="fr-callout__text fr-text--sm">
+              Les échanges entre contributeurs passent par le salon Tchap de la bêta. Ce qui engage la collection
+              — un défaut, une modification — se dépose ici, dans les onglets « Signalements » et « Propositions », pour rester tracé.
+            </p>
+            <button
+              class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-2w"
+              @click="abonner(!abonne)"
+            >
+              {{ abonne ? 'Abonné·e au fil' : "S'abonner au fil d'avancement" }}
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="agentsDisponibles"
+          v-show="tab === 'agent'"
+          v-bind="panneau('agent')"
+        >
+          <AgentsInterrogerAvecAgent
+            v-if="agentVu"
+            :collection="collection.name"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+/* Les blocs de la fiche (composants components/fiche/) partagent ces règles. */
+.fiche-bloc { height: 100%; display: flex; flex-direction: column; gap: .75rem; padding: 1.5rem; border: 1px solid var(--border-default-grey); }
+.fiche-bloc h2 { margin: 0; }
+.fiche-bloc__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; margin-top: auto; }
 .fiche-discret { color: var(--text-mention-grey); }
-.fiche-qualite { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; background: var(--background-default-grey); }
+.fiche-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .75rem; margin: 0; padding: 0; }
+.fiche-kpis dd { margin: 0; display: flex; flex-direction: column; }
+.fiche-kpis b { font-size: 1.5rem; line-height: 1.2; color: var(--text-title-blue-france); font-variant-numeric: tabular-nums; }
+.fiche-kpis span { font-size: .8rem; line-height: 1.3; color: var(--text-mention-grey); }
+.fiche-avis { list-style: none; margin: 0; padding: 0; }
+.fiche-avis li { display: flex; gap: .6rem; padding: .6rem 0; border-top: 1px solid var(--border-default-grey); }
+.fiche-avis__question { display: block; font-weight: 500; }
+.fiche-avis__motif { display: block; margin: 0; }
+.fiche-avis--positif { color: var(--text-default-success); }
+.fiche-avis--negatif { color: var(--text-default-warning); }
+.fiche-consignes { margin: 0; padding: 1rem; white-space: pre-wrap; font-size: .85rem; background: var(--background-alt-grey); max-height: 24rem; overflow-y: auto; }
+</style>
+
+<style scoped>
+.fiche-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1.5rem 2rem; }
+.fiche-tete__texte { flex: 1 1 32rem; min-width: 0; display: flex; flex-direction: column; gap: .75rem; }
+.fiche-tete__titre { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.fiche-tete__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.fiche-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 1.5rem; background: var(--background-alt-grey); }
+.fiche-ligne__mesure { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; flex: 1 1 16rem; }
+.fiche-ligne__mesure .myrag-quality-bar { flex-basis: 100%; }
+.fiche-ligne__lien { margin-left: auto; font-weight: 500; }
+.fiche-panneau-tete { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
 </style>

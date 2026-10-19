@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionsFiche, apercuConsignes, ligneMeta, ONGLET_PAR_DEFAUT, ongletDepuisAncien, ongletsFiche } from '../../utils/fiche'
+import { actionsFiche, apercuConsignes, dateFiche, ligneMeta, ONGLET_PAR_DEFAUT, ongletDepuisAncien, ongletsFiche } from '../../utils/fiche'
 
 describe('actionsFiche', () => {
   it('un lecteur n\'a ni Partager, ni Réglages, ni Ajouter des documents', () => {
@@ -96,5 +96,16 @@ describe('apercuConsignes', () => {
   it('du texte : une balise reste une suite de caractères', () => {
     expect(apercuConsignes('<img src=x onerror=alert(1)>').texte).toBe('<img src=x onerror=alert(1)>')
     expect(apercuConsignes(null)).toEqual({ texte: '', tronque: false })
+  })
+})
+
+describe('dateFiche', () => {
+  it('une date du serveur, sans fuseau, lue en UTC et écrite en français', () => {
+    expect(dateFiche('2026-03-12T09:00:00')).toBe('12 mars 2026')
+    expect(dateFiche('2026-10-15T09:00:00', false)).toBe('15 oct.')
+  })
+  it('absente ou illisible : vide', () => {
+    expect(dateFiche(null)).toBe('')
+    expect(dateFiche('pas une date')).toBe('')
   })
 })

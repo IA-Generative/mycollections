@@ -139,3 +139,20 @@ export function apercuConsignes (texte: string | null | undefined, lignes = 4): 
   }
   return { texte: apercu, tronque }
 }
+
+const FUSEAU_EXPLICITE = /(?:Z|[+-]\d{2}:?\d{2})$/
+
+/**
+ * Une date du serveur (ISO, UTC, souvent sans fuseau) écrite en français : « 12 mars 2026 »,
+ *  ou « 12 mars » sans l'année ; vide si absente ou illisible.
+ */
+export function dateFiche (iso: string | null | undefined, annee = true): string {
+  if (!iso) {
+    return ''
+  }
+  const d = new Date(FUSEAU_EXPLICITE.test(iso) ? iso : `${iso}Z`)
+  if (Number.isNaN(d.getTime())) {
+    return ''
+  }
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: annee ? 'long' : 'short', ...(annee ? { year: 'numeric' } : {}), timeZone: 'Europe/Paris' })
+}
