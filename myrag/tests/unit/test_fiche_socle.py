@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.fiche_assistant import nom_de_fiche
+from app.services.fiche_socle import nom_de_fiche
 from app.services.owui_client import fusionner_fiche
 from tests.conftest import SUPERADMIN, personne
 

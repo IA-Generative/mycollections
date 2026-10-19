@@ -163,6 +163,10 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/main.py` | FastAPI app + lifespan (init DB) |
 | `myrag/app/database.py` | SQLAlchemy engine (SQLite/PostgreSQL) |
 | `myrag/app/models/db.py` | 23 tables : 8 historiques, 8 du collectif (demande, soutien, abonnement, proposition, signalement, grille_controle, evenement, amorce) et 7 catalogue/generation/qualite (categories, usage_question, persona, generation, paire_qa, mesure, mesure_resultat) |
+| `myrag/app/harnais/contrat.py`, `interfaces.py` | Contrat des assistants de recherche (ADR-0003) : fiche, plan, passages, journal ; ne change que par PR dédiée |
+| `myrag/app/services/assistant_store.py`, `app/routers/assistants.py` | Fiche d'assistant : brouillon, versions, miroir d'une collection publiée, droits |
+| `myrag/app/services/demarrage.py` | Migrations idempotentes jouées au démarrage (tuple `MIGRATIONS`) |
+| `myrag/frontend/utils/navigation.ts`, `components/NavigationPrincipale.vue`, `middleware/capacite.ts` | Menu sous drapeaux, sous-menus, pages sous drapeau en 404 |
 | `myrag/app/services/etats.py` | Machine à états du collectif — module pur (docs/collectif.md, ADR-0001) |
 | `myrag/app/services/collectif_store.py` | Écritures du collectif + journal (fil d'avancement) |
 | `myrag/app/routers/demandes.py`, `collectif.py`, `amorces.py` | Routes du collectif |
@@ -262,6 +266,8 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |
 | `MYCOLLECTIONS_MESURE_JUGE_MODELE` / `_PARALLELISME` / `_QUESTIONS_MAX` / `_DUREE_MAX_S` / `_DELAI_APPEL_S` | `` / `2` / `200` / `1800` / `120` | Mesure de la qualite (docs/qualite.md) : modele du juge (vide ⇒ celui de la generation), questions en parallele, plafond, duree max, delai par appel |
 | `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
+| `MYCOLLECTIONS_CAPACITES_SURCHARGE` | `` | Objet JSON posé par-dessus capacites.json (ex. `{"assistants": true}`) : allumer une fonction sur une prévisualisation ou un poste ; illisible ⇒ ignorée |
+| `MYCOLLECTIONS_DOUBLURE_ASSISTANTS` | `false` | Doublure du harnais (`/api/v1/assistants/{id}/plan|executer` depuis `app/doublure/assistants/`) ; jamais en production |
 
 ## Groupes et droits
 

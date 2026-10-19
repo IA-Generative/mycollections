@@ -70,6 +70,24 @@ La diffusion d'une collection se fait à travers plusieurs canaux, à différent
 - **Graph de références croisées** (NetworkX + Cytoscape.js) pour les collections le supportant.
 - **Sync Keycloak ↔ OpenRAG** : propagation des groupes `rag-query/<collection>` vers les partitions.
 
+### Le chantier des assistants de recherche (en cours, sous drapeaux)
+
+Décision et découpage : [ADR-0003](docs/adr/ADR-0003-assistants-de-recherche.md). Chaque
+paragraphe ci-dessous appartient à un lot, qui le complète.
+
+**Assistants de recherche** — une fiche-donnée (sources, consignes, réponses fiables) et un
+harnais unique derrière toutes les entrées ; voir [docs/assistants.md](docs/assistants.md).
+
+**Clients** — le socle Open WebUI et la fenêtre embarquée ; voir [docs/clients.md](docs/clients.md).
+
+**Accueil et menus** — à venir.
+
+**Assistant de création, étape 4** — à venir.
+
+**Connecteur Resana** — à venir.
+
+**Réseau d'entraide** — voir [docs/entraide.md](docs/entraide.md).
+
 ## Architecture
 
 ```
@@ -293,6 +311,7 @@ Procédure détaillée (création de la base, compte de service Drive, dépannag
 - [docs/collectif.md](docs/collectif.md) — le collectif : modèle, états, routes, fil d'avancement ; décision dans [ADR-0001](docs/adr/ADR-0001-collections-collaboratives-modele-et-etats.md).
 - [docs/qualite.md](docs/qualite.md) — piloter la qualité : jeu de questions de référence, mesure par un juge IA, avis, leviers ; migration des anciens jeux de test et réponses validées.
 - [docs/generation.md](docs/generation.md) — générer des paires question / réponse par persona (ragas) : déroulé d'un run, coût, réglages, limites ; décision dans [ADR-0002](docs/adr/ADR-0002-generation-de-questions-par-persona.md).
+- [docs/assistants.md](docs/assistants.md), [docs/clients.md](docs/clients.md), [docs/entraide.md](docs/entraide.md) — le chantier des assistants de recherche ; décision dans [ADR-0003](docs/adr/ADR-0003-assistants-de-recherche.md). Index des décisions : [docs/adr/](docs/adr/README.md).
 - [myrag/app/guide/](myrag/app/guide/) — le guide « Soyez acteurs vous-mêmes », en six étapes, servi par l'application.
 - [docs/drive-find-architecture.md](docs/drive-find-architecture.md) — comment Drive et son moteur de recherche s'articulent.
 - [CLAUDE.md](CLAUDE.md) — repères pour travailler dans le dépôt : dépendances, architecture interne, fichiers clés, variables d'environnement, problèmes connus.

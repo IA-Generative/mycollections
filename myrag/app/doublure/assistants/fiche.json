@@ -1,0 +1,32 @@
+{
+  "assistant": "sejour-des-etrangers",
+  "titre": "Séjour des étrangers",
+  "rubrique": "droit-etrangers",
+  "description": "Exemple : le droit au séjour, selon les accords bilatéraux, le code et un référentiel d'éligibilité.",
+  "sources": [
+    {"id": "accords-bilateraux", "type": "collection", "regime": "selon_question", "rang": 1},
+    {"id": "ceseda", "type": "collection", "regime": "toujours", "rang": 2},
+    {"id": "referentiel-eligibilite", "type": "connecteur", "regime": "sur_consigne"}
+  ],
+  "consignes": [
+    {"id": "defaut", "quand": "toujours", "gabarit": "generic"},
+    {
+      "id": "pays-a-accord",
+      "quand": "la personne est ressortissante d'un pays lié par un accord bilatéral",
+      "exemples": [
+        "Un ressortissant d'un pays à accord, marié à une Française, peut-il obtenir un titre de séjour ?",
+        "Quel titre pour un salarié ressortissant d'un pays à accord ?",
+        "Un étudiant ressortissant d'un pays à accord peut-il travailler ?"
+      ],
+      "chercher": [
+        {"source": "accords-bilateraux"},
+        {"source": "ceseda"},
+        {"source": "referentiel-eligibilite", "avec": "article_trouve"}
+      ],
+      "repondre": "Citer l'article de l'accord avant celui du code, puis lister les pièces du référentiel."
+    }
+  ],
+  "seuil_fiable": 0.9,
+  "validation_requise": false,
+  "publication": {"socle": true, "portail": true, "fenetre_js": true, "api": true}
+}

@@ -1,4 +1,7 @@
-"""La fiche d'une collection dans l'assistant (OpenWebUI) : ce qu'on y LIT.
+"""La fiche d'une collection dans le SOCLE (Open WebUI, « Mon assistant ») : ce qu'on y LIT.
+
+Vocabulaire (ADR-0003) : « le socle » est Open WebUI ; « un assistant » est, dans le reste du
+code, un assistant de recherche (app/harnais). Ce module s'appelait `fiche_assistant`.
 
 Le nom de la fiche est le TITRE de la collection, son étiquette est sa CATÉGORIE : ce que
 l'agent voit dans le sélecteur de modèles, et ce que montrent les applications qui listent
@@ -7,7 +10,7 @@ les modèles. L'identifiant `openrag-<name>` ne change pas.
 Une seule fonction décide de ce qui part au socle — la publication et la resynchronisation
 l'appellent toutes deux. Tout vient de la base : rien de ce que dit l'appelant.
 
-    python -m app.services.fiche_assistant --toutes [--a-sec]
+    python -m app.services.fiche_socle --toutes [--a-sec]
 """
 
 from __future__ import annotations

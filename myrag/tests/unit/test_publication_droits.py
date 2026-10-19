@@ -26,7 +26,7 @@ def _archivee(client, nom) -> bool:
 @pytest.fixture
 def socle():
     """La synchronisation vers l'assistant, remplacée : ces tests ne parlent pas à OpenWebUI."""
-    with patch("app.services.fiche_assistant.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})) as m:
+    with patch("app.services.fiche_socle.synchroniser_fiche", new=AsyncMock(return_value={"nom": "x"})) as m:
         yield m
 
 
@@ -102,7 +102,7 @@ def test_un_echec_de_l_assistant_se_dit_en_clair(client, en_tant_que, creer_coll
     createur = personne("createur")
     creer_collection(nom, createur)
     en_tant_que(createur)
-    with patch("app.services.fiche_assistant.synchroniser_fiche", new=AsyncMock(side_effect=RuntimeError("socle injoignable"))):
+    with patch("app.services.fiche_socle.synchroniser_fiche", new=AsyncMock(side_effect=RuntimeError("socle injoignable"))):
         r = client.post(f"/api/collections/{nom}/publish", json=PUBLIER)
     assert r.status_code == 200
     erreur = r.json()["owui"]["error"]

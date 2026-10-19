@@ -1650,7 +1650,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", specifier = ">=0.32.0" },
 ]
-provides-extras = ["generation"]
+provides-extras = ["generation", "mcp", "resana"]
 
 [package.metadata.requires-dev]
 dev = [

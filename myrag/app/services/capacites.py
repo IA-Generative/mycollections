@@ -6,11 +6,14 @@ par le service interne du cluster, avec un cache court et un repli : la dernièr
 valeur connue, sinon des défauts qui n'affichent rien et n'écrivent rien.
 
 Un drapeau à `false` ne se contente pas de cacher un bouton : la route répond 404.
+
+Drapeaux : `demandes`, `signalements` (le collectif), `assistants`, `entraide` (ADR-0003).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 
@@ -22,31 +25,49 @@ logger = logging.getLogger("myrag.capacites")
 
 DELAI_S = 2.0
 CACHE_S = 60.0
-DRAPEAUX = ("demandes", "signalements")
+DRAPEAUX = ("demandes", "signalements", "assistants", "entraide")
 
 _cache: dict = {"valeur": None, "expire": 0.0}
 
 
 def _defauts() -> dict:
-    return {
-        "demandes": False,
-        "signalements": False,
-        "seuil_chantier": int(settings.seuil_chantier_defaut),
-    }
+    return {**dict.fromkeys(DRAPEAUX, False), "seuil_chantier": int(settings.seuil_chantier_defaut)}
 
 
-def _normaliser(brut: dict) -> dict:
-    valeur = _defauts()
+def _normaliser(brut: dict, valeur: dict | None = None) -> dict:
+    valeur = dict(valeur) if valeur is not None else _defauts()
     for nom in DRAPEAUX:
-        valeur[nom] = brut.get(nom) is True  # jamais « truthy », comme le menu
+        if nom in brut:
+            valeur[nom] = brut[nom] is True  # jamais « truthy », comme le menu
     seuil = brut.get("seuil_chantier")
     if isinstance(seuil, int) and not isinstance(seuil, bool) and 1 <= seuil <= 1000:
         valeur["seuil_chantier"] = seuil
     return valeur
 
 
+def _surcharger(valeur: dict) -> dict:
+    """La surcharge de l'environnement (MYCOLLECTIONS_CAPACITES_SURCHARGE, un objet JSON), posée
+    par-dessus ce que dit le menu : une prévisualisation ou un poste de développement allume une
+    fonction sans toucher au capacites.json partagé. Illisible : ignorée, avec un avertissement."""
+    brut = (settings.capacites_surcharge or "").strip()
+    if not brut:
+        return valeur
+    try:
+        surcharge = json.loads(brut)
+        if not isinstance(surcharge, dict):
+            raise ValueError("ce n'est pas un objet")
+    except ValueError as e:
+        logger.warning("MYCOLLECTIONS_CAPACITES_SURCHARGE illisible (%s) : ignorée", e)
+        return valeur
+    return _normaliser(surcharge, valeur)
+
+
 def _lire_depuis_le_menu() -> dict:
     """Les capacités en vigueur. Ne bloque jamais plus de DELAI_S, ne lève jamais."""
+    return _surcharger(_lire_le_menu())
+
+
+def _lire_le_menu() -> dict:
     if not settings.capacites_url:
         return _defauts()
     maintenant = time.monotonic()

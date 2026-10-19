@@ -18,6 +18,8 @@
         </div>
         <div class="myrag-debug__chunk-body myrag-md" v-html="rendu(chunk.content)"></div>
       </div>
+      <!-- Ce qu'un écran ajoute à la trace (le plan de recherche d'un assistant, par exemple). -->
+      <slot name="complement" />
     </div>
   </details>
 </template>
