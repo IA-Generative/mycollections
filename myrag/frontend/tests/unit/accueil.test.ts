@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { indicateurs, nombre, portes, demandeEnVue, messageMerci } from '../../utils/accueil'
+import { describe, expect, it } from 'vitest'
+import { demandeEnVue, indicateurs, messageMerci, nombre, portes } from '../../utils/accueil'
 
 const CATS = [
   { cle: 'securite', libelle: 'Sécurité et délinquance', description: '', ordre: 20 },
@@ -33,7 +33,7 @@ describe('nombre', () => {
 })
 
 describe('portes', () => {
-  it("suit l'ordre de l'administration et cache les catégories vides", () => {
+  it('suit l\'ordre de l\'administration et cache les catégories vides', () => {
     expect(portes(COLS, CATS)).toEqual([
       { cle: 'etrangers', libelle: 'Droit des étrangers', nb: 1 },
       { cle: 'securite', libelle: 'Sécurité et délinquance', nb: 2 },
@@ -43,7 +43,7 @@ describe('portes', () => {
 
 describe('demandeEnVue', () => {
   const d = (id: string, etat: string, nb: number, seuil = 5) => ({ id, titre: id, etat, nb_soutiens: nb, seuil })
-  it("montre l'ouverte la plus proche du seuil", () => {
+  it('montre l\'ouverte la plus proche du seuil', () => {
     expect(demandeEnVue([d('loin', 'ouverte', 1), d('proche', 'ouverte', 4), d('chantier', 'chantier', 5), d('close', 'close', 4)])?.id).toBe('proche')
   })
   it('ne montre rien quand aucune n\'est ouverte', () => {
