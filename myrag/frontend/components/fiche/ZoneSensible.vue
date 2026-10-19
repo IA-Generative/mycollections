@@ -57,6 +57,8 @@ function ouvrirPurge () {
   purgeSaisie.value = ''
   purgeErreur.value = ''
   purgeOuverte.value = true
+  // Le focus entre dans la fenêtre : Échap et le piège du focus y agissent.
+  nextTick(() => document.getElementById('purge-confirm')?.focus())
 }
 
 function fermerPurge () {

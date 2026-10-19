@@ -491,6 +491,7 @@ tbody + tbody th.catalogue-categorie { border-top: .75rem solid var(--background
   background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .catalogue-categorie__bascule:hover, .catalogue-categorie__bascule:active { background: none !important; text-decoration: underline; }
 /* Largeurs fixes : sans elles, replier une catégorie resserrait les colonnes et le tableau sautait. */
+.catalogue-table { overflow-x: auto; }
 .catalogue-table table { width: 100%; min-width: 56rem; table-layout: fixed; }
 .catalogue-table thead th:nth-child(1) { width: 36%; } .catalogue-table thead th:nth-child(2) { width: 10%; }
 .catalogue-table thead th:nth-child(3) { width: 11%; } .catalogue-table thead th:nth-child(4) { width: 12%; }
