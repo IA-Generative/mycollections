@@ -7,15 +7,9 @@
  * quelle plutôt que de disparaître.
  */
 
-/** Comment les documents sont coupés en passages. */
+/** Comment les documents sont coupés en passages : OpenRAG les découpe lui-même (ADR-0005). */
 export const LIBELLES_STRATEGIE: Record<string, string> = {
-  auto: 'Découpage automatique',
-  article: 'Découpage par article',
-  section: 'Découpage par section',
-  qr: 'Découpage par question-réponse',
-  length: 'Découpage par longueur',
-  chunk: 'Découpage par longueur',
-  directory: 'Découpage par dossier',
+  openrag: 'OpenRAG',
 }
 
 /** Le niveau de sensibilité des documents. */
@@ -40,15 +34,15 @@ export const LIBELLES_CONSIGNES: Record<string, string> = {
 
 /** Ce que l'historique de publication a enregistré (`action`). */
 export const LIBELLES_ACTION_PUBLICATION: Record<string, string> = {
-  published: "Rendue disponible dans l'assistant",
-  disabled: "Retirée de l'assistant",
+  published: 'Rendue disponible dans l\'assistant',
+  disabled: 'Retirée de l\'assistant',
   archived: 'Archivée',
   unarchived: 'Désarchivée',
   draft: 'Brouillon',
 }
 
-function libelle(table: Record<string, string>, valeur?: string | null): string {
-  if (!valeur) return ''
+function libelle (table: Record<string, string>, valeur?: string | null): string {
+  if (!valeur) { return '' }
   return table[valeur] || valeur
 }
 

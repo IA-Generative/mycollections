@@ -19,14 +19,15 @@ const { lister: listerCategories } = useCategories()
 const source = (route.query.source as string) || 'file'
 const defaut = reglagesAvancesDefaut(source)
 
-// Types de collection : découpage et consignes réglés ensemble.
+// Profils : consignes + options. Le découpage des documents, lui, appartient au moteur
+// de recherche (ADR-0005) — il n'y a plus rien à choisir de ce côté.
 const profiles = [
-  { key: 'generique', label: 'Générique (détection automatique)', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Découpage et consignes automatiques, adaptés à tout type de document.' },
-  { key: 'juridique', label: 'Code juridique (articles et citations)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Un passage par article, avec sa place dans le code ; l\'assistant cite les numéros d\'articles.' },
-  { key: 'faq', label: 'FAQ, questions-réponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Un passage par question ; l\'assistant répond directement, avec la source.' },
-  { key: 'rapport', label: 'Rapport, document structuré', strategy: 'section', prompt: 'technique', graph: false, desc: 'Un passage par section ; l\'assistant cite les sections et les pages.' },
-  { key: 'corpus', label: 'Plusieurs documents variés', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Le type de chaque document est détecté ; l\'assistant croise les sources.' },
-  { key: 'multimedia', label: 'Images, audio, vidéo', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions et descriptions ; l\'assistant cite les fichiers et les minutages.' },
+  { key: 'generique', label: 'Générique', prompt: 'generic', graph: false, desc: 'Consignes générales, adaptées à tout type de document.' },
+  { key: 'juridique', label: 'Code juridique (citations d\'articles)', prompt: 'juridique', graph: true, desc: 'L\'assistant cite les numéros d\'articles, avec la hiérarchie Livre/Titre/Chapitre.' },
+  { key: 'faq', label: 'FAQ, questions-réponses', prompt: 'faq', graph: false, desc: 'L\'assistant répond directement, avec la source.' },
+  { key: 'rapport', label: 'Rapport, document structuré', prompt: 'technique', graph: false, desc: 'L\'assistant cite les sections et les pages.' },
+  { key: 'corpus', label: 'Plusieurs documents variés', prompt: 'multi_thematique', graph: false, desc: 'L\'assistant croise les sources de plusieurs documents.' },
+  { key: 'multimedia', label: 'Images, audio, vidéo', prompt: 'multimedia', graph: false, desc: 'L\'assistant cite les fichiers et les minutages.' },
 ]
 const profilInitial = profiles.find(p => p.key === defaut.profil) || profiles[0]!
 const selectedProfile = ref(profilInitial.key)
@@ -37,7 +38,6 @@ const form = ref({
   name: '',
   description: '',
   categorie: '',
-  strategy: profilInitial.strategy,
   sensitivity: defaut.sensitivity,
   prompt_template: profilInitial.prompt,
   scope: 'group',
@@ -51,7 +51,6 @@ const form = ref({
 function applyProfile () {
   const p = profiles.find(pr => pr.key === selectedProfile.value)
   if (p) {
-    form.value.strategy = p.strategy
     form.value.prompt_template = p.prompt
     form.value.graph_enabled = p.graph
   }
@@ -541,8 +540,8 @@ onMounted(async () => {
             <label
               class="fr-label"
               for="profil"
-            >Type de collection
-              <span class="fr-hint-text">Il règle ensemble la façon de découper les documents et les consignes données à l'assistant.</span>
+            >Consignes de réponse de l'assistant
+              <span class="fr-hint-text">Un modèle de consignes adapté au contenu : le ton, la façon de citer, ce qu'il faut refuser.</span>
             </label>
             <select
               id="profil"

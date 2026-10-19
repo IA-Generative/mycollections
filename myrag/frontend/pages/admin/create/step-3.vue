@@ -185,7 +185,6 @@ async function uploadLocalFile () {
 
   try {
     const result = await uploadFile(`/api/ingest/${collection}`, file.value, {
-      strategy: 'auto',
       sensitivity: 'public',
     })
     clearInterval(progressInterval)
@@ -217,7 +216,6 @@ async function uploadRemoteUrl () {
   try {
     const result = await post(`/api/ingest/${collection}/from-url`, {
       url: remoteUrl.value,
-      strategy: 'auto',
       sensitivity: 'public',
     })
     clearInterval(progressInterval)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { titreDe } from '~/utils/catalogue'
+import { libelleStrategie } from '~/utils/libelles'
 
 import { etapesEnPhrase } from '~/utils/wizard'
 
@@ -33,7 +34,6 @@ onMounted(async () => {
     templateCount.value = tplData.templates?.length || 0
   }
   catch {}
-})
 </script>
 
 <template>
@@ -183,7 +183,7 @@ onMounted(async () => {
                 style="color:var(--text-mention-grey);"
               >{{ col.name }}</code>
             </td>
-            <td>{{ col.strategy }}</td>
+            <td>{{ libelleStrategie(col.strategy) }}</td>
             <td><span class="fr-badge fr-badge--sm">{{ col.sensitivity }}</span></td>
             <td>{{ col.graph_enabled ? '✅' : '—' }}</td>
             <td>{{ col.ai_summary_enabled ? '✅' : '—' }}</td>

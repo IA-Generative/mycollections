@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest'
-import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleActionPublication } from '../../utils/libelles'
+import { describe, expect, it } from 'vitest'
+import { libelleActionPublication, libelleConsignes, libelleSensibilite, libelleStrategie } from '../../utils/libelles'
 
 describe('libellés des réglages', () => {
   it('traduit les valeurs connues', () => {
-    expect(libelleStrategie('article')).toBe('Découpage par article')
+    expect(libelleStrategie('openrag')).toBe('OpenRAG')
     expect(libelleSensibilite('internal')).toBe('Interne au ministère')
     expect(libelleConsignes('generic')).toBe('Consignes générales')
-    expect(libelleActionPublication('disabled')).toBe("Retirée de l'assistant")
+    expect(libelleActionPublication('disabled')).toBe('Retirée de l\'assistant')
   })
 
-  it("rend une valeur inconnue telle quelle, plutôt que de la faire disparaître", () => {
+  it('rend une valeur inconnue telle quelle, plutôt que de la faire disparaître', () => {
     expect(libelleConsignes('modele-maison')).toBe('modele-maison')
     expect(libelleStrategie('nouvelle')).toBe('nouvelle')
   })

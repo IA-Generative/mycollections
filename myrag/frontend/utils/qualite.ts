@@ -163,7 +163,7 @@ Si la question de l'utilisateur ne concerne pas le contenu de cette collection, 
 
 export const aLaRegleDeGarde = (consignes: string | null | undefined) => /r[eè]gle de garde/i.test(consignes || '')
 
-/** Où en est un redécoupage : ses travaux d'indexation, finis ou non. */
+/** Où en est une réindexation : ses travaux d'indexation, finis ou non. */
 export function avancementTravaux(travaux: { status: string, completed_at?: string, progress_pct?: number }[]): { finis: number, total: number, pct: number, echecs: number } {
   const FINIS = ['completed', 'done', 'failed', 'error', 'interrupted']
   const total = travaux.length

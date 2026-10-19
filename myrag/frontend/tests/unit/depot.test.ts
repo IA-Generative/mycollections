@@ -8,6 +8,10 @@ describe('formats', () => {
     expect(natureFichier('Dossier/compte-rendu.docx')).toBe('document')
     expect(natureFichier('programme.exe')).toBeNull()
     expect(natureFichier('sans-extension')).toBeNull()
+    // Le CSV et le .markdown ne sont pas lus par le moteur de recherche : refusés
+    // au dépôt (« convertissez en .txt ou .md ») — cf. app/services/formats.py.
+    expect(natureFichier('tableau.csv')).toBeNull()
+    expect(natureFichier('note.markdown')).toBeNull()
   })
   it('annonce les mêmes extensions au sélecteur de fichiers', () => {
     expect(ACCEPT.split(',')).toEqual(expect.arrayContaining(['.md', '.pdf', '.docx', '.pptx']))

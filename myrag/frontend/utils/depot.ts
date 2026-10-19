@@ -3,15 +3,15 @@
  * comment un fichier se nomme. Fonctions pures, testées (tests/unit/depot.test.ts) ; le pendant
  * serveur est app/services/formats.py.
  *
- * Deux chemins côté serveur : le TEXTE est découpé par Mes collections selon la stratégie choisie ;
- * les DOCUMENTS (PDF, Word, PowerPoint, courriels, images) partent tels quels vers OpenRAG, qui
- * les lit et les découpe lui-même.
+ * Chaque fichier accepté part entier vers OpenRAG, qui le lit et le découpe lui-même en
+ * passages (ADR-0005). Le CSV et l'extension .markdown n'y sont pas lus : refusés au dépôt
+ * (« convertissez en .txt ou .md »).
  */
 
-export const EXTENSIONS_TEXTE = ['.txt', '.md', '.markdown', '.csv']
+export const EXTENSIONS_TEXTE = ['.txt', '.md']
 export const EXTENSIONS_DOCUMENT = ['.pdf', '.docx', '.doc', '.pptx', '.eml', '.png', '.jpg', '.jpeg']
 export const ACCEPT = [...EXTENSIONS_TEXTE, ...EXTENSIONS_DOCUMENT].join(',')
-export const FORMATS_LISIBLES = 'texte (.txt, .md, .csv), PDF, Word (.docx, .doc), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg)'
+export const FORMATS_LISIBLES = 'texte (.txt, .md), PDF, Word (.docx, .doc), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg)'
 export const TAILLE_MAX = 50 * 1024 * 1024
 
 export type Nature = 'texte' | 'document'

@@ -260,7 +260,7 @@ async function adoptCollection () {
   adoptError.value = ''
   try {
     const { post } = useApi()
-    await post('/api/collections', { name: id, description: '', strategy: 'auto', sensitivity: 'public', scope: 'group' })
+    await post('/api/collections', { name: id, description: '', sensitivity: 'public', scope: 'group' })
     window.location.reload()
   }
   catch (e: any) {
@@ -338,7 +338,7 @@ onMounted(async () => {
       </h1>
       <p>
         Cette collection existe peut-être dans le moteur de recherche, mais n'a pas encore
-        de fiche dans Mes collections (description, découpage, responsable…).
+        de fiche dans Mes collections (description, consignes, responsable…).
         <span
           v-if="loadError"
           class="fr-text--sm fiche-discret"

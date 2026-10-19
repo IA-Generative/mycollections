@@ -11,22 +11,18 @@ const savedMsg = ref('')
 const savedClass = ref('fr-alert--success')
 const isNew = ref(false)
 const selectedProfile = ref('generique')
-const initialStrategy = ref('')
-const initialPrompt = ref('')
 const guessing = ref(false)
 const guessError = ref('')
 
-const hasSourceFiles = ref(false)
-const reindexing = ref(false)
-const reindexResult = ref<any>(null)
-
+// Profils : consignes + options. Le découpage des documents, lui, appartient au moteur
+// de recherche (ADR-0005) — il n'y a plus rien à choisir de ce côté.
 const profiles = [
-  { key: 'generique', icon: '📄', label: 'Générique', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Pour tout type de document sans spécialisation. Découpage automatique.' },
-  { key: 'juridique', icon: '⚖️', label: 'Juridique (codes, lois)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Découpage par article avec hiérarchie Livre/Titre/Chapitre. Citations d\'articles dans les réponses.' },
-  { key: 'faq', icon: '❓', label: 'FAQ / Questions-réponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Découpage par question/réponse. Réponses directes avec source.' },
-  { key: 'technique', icon: '🔧', label: 'Documentation technique', strategy: 'section', prompt: 'technique', graph: false, desc: 'Découpage par section/chapitre. Références croisées entre sections.' },
-  { key: 'multimedia', icon: '🎬', label: 'Multimédia (images, audio, vidéo)', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions audio, descriptions d\'images. Citations avec minutage.' },
-  { key: 'multi', icon: '📚', label: 'Collection multi-thématique', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Grande collection couvrant plusieurs domaines avec des documents variés.' },
+  { key: 'generique', icon: '📄', label: 'Générique', prompt: 'generic', graph: false, desc: 'Consignes générales, adaptées à tout type de document.' },
+  { key: 'juridique', icon: '⚖️', label: 'Juridique (codes, lois)', prompt: 'juridique', graph: true, desc: 'Citations d\'articles, hiérarchie Livre/Titre/Chapitre — fait pour les codes et textes juridiques.' },
+  { key: 'faq', icon: '❓', label: 'FAQ / Questions-réponses', prompt: 'faq', graph: false, desc: 'Réponses directes avec la source, pour les questions-réponses.' },
+  { key: 'technique', icon: '🔧', label: 'Documentation technique', prompt: 'technique', graph: false, desc: 'Références croisées entre sections, pour la documentation technique.' },
+  { key: 'multimedia', icon: '🎬', label: 'Multimédia (images, audio, vidéo)', prompt: 'multimedia', graph: false, desc: 'Transcriptions audio, descriptions d\'images, citations avec minutage.' },
+  { key: 'multi', icon: '📚', label: 'Collection multi-thématique', prompt: 'multi_thematique', graph: false, desc: 'Croise les sources de plusieurs documents, pour une grande collection couvrant plusieurs domaines.' },
 ]
 
 const currentProfileDesc = computed(() => {
@@ -36,7 +32,6 @@ const currentProfileDesc = computed(() => {
 const form = ref({
   titre: '',
   description: '',
-  strategy: 'auto',
   sensitivity: 'public',
   scope: 'group',
   prompt_template: 'generic',
@@ -45,14 +40,6 @@ const form = ref({
   ai_summary_threshold: 1000,
   contact_name: '',
   contact_email: '',
-})
-
-const needsReindex = computed(() => {
-  if (!initialStrategy.value) {
-    return false
-  }
-  return form.value.strategy !== initialStrategy.value
-    || form.value.prompt_template !== initialPrompt.value
 })
 
 // Etat de partage renvoye par GET /api/collections/{id} (cle `publication`).
@@ -87,7 +74,6 @@ function visibiliteLabel (v?: string) {
 function applyProfile () {
   const p = profiles.find(pr => pr.key === selectedProfile.value)
   if (p) {
-    form.value.strategy = p.strategy
     form.value.prompt_template = p.prompt
     form.value.graph_enabled = p.graph
   }
@@ -103,7 +89,6 @@ onMounted(async () => {
     form.value = {
       titre: config.titre || '',
       description: config.description || '',
-      strategy: config.strategy || 'auto',
       sensitivity: config.sensitivity || 'public',
       scope: config.scope || 'group',
       prompt_template: config.prompt_template || 'generic',
@@ -113,10 +98,8 @@ onMounted(async () => {
       contact_name: config.contact_name || '',
       contact_email: config.contact_email || '',
     }
-    initialStrategy.value = form.value.strategy
-    initialPrompt.value = form.value.prompt_template
-    // Match profile from saved config
-    const match = profiles.find(p => p.strategy === form.value.strategy && p.prompt === form.value.prompt_template)
+    // Match profile from saved config (les consignes seules désignent le profil)
+    const match = profiles.find(p => p.prompt === form.value.prompt_template)
     if (match) {
       selectedProfile.value = match.key
     }
@@ -135,13 +118,6 @@ onMounted(async () => {
       form.value.contact_email = p.email || ''
     }
   }
-
-  // Check if source files exist for reindex
-  try {
-    const sources = await get(`/api/ingest/${id}/sources`)
-    hasSourceFiles.value = (sources.sources?.length || 0) > 0
-  }
-  catch {}
 
   loading.value = false
 })
@@ -178,20 +154,6 @@ async function guessDescription () {
   finally {
     guessing.value = false
   }
-}
-
-async function reindex () {
-  reindexing.value = true
-  reindexResult.value = null
-  try {
-    const result = await post(`/api/ingest/${id}/reindex?strategy=${form.value.strategy}&sensitivity=${form.value.sensitivity}`, {})
-    reindexResult.value = result
-  }
-  catch (e: any) {
-    savedMsg.value = `Le redécoupage n'a pas abouti : ${messageErreur(e)}`
-    savedClass.value = 'fr-alert--error'
-  }
-  reindexing.value = false
 }
 
 async function save () {
@@ -340,10 +302,10 @@ async function save () {
         </div>
       </div>
 
-      <!-- Type de collection (profil couplé) -->
+      <!-- Consignes de réponse (profil) -->
       <div class="fr-select-group fr-mt-2w">
-        <label class="fr-label">Type de collection
-          <span class="fr-hint-text">Il règle ensemble la façon de découper les documents et les consignes données à l'assistant.</span>
+        <label class="fr-label">Consignes de réponse de l'assistant
+          <span class="fr-hint-text">Un modèle de consignes adapté au contenu : le ton, la façon de citer, ce qu'il faut refuser.</span>
         </label>
         <select
           v-model="selectedProfile"
@@ -361,49 +323,6 @@ async function save () {
         <p class="fr-hint-text">
           {{ currentProfileDesc }}
         </p>
-      </div>
-
-      <!-- Reindex warning -->
-      <div
-        v-if="needsReindex"
-        class="fr-alert fr-alert--warning fr-alert--sm fr-mt-2w"
-      >
-        <p>
-          <strong>Attention :</strong> vous avez modifié le type de collection (découpage des documents ou consignes).
-          Les documents déjà ajoutés ne seront pas redécoupés automatiquement.
-        </p>
-        <div class="fr-btns-group fr-btns-group--inline fr-mt-1w">
-          <button
-            v-if="hasSourceFiles"
-            class="fr-btn fr-btn--sm"
-            :disabled="reindexing"
-            @click="reindex"
-          >
-            {{ reindexing ? 'Redécoupage en cours…' : 'Redécouper les documents selon le nouveau type' }}
-          </button>
-          <span
-            v-else
-            class="fr-text--sm"
-            style="color:#666;"
-          >
-            Aucun fichier d'origine enregistré —
-            <NuxtLink
-              :to="`/c/${id}/upload`"
-              class="fr-link"
-            >ajoutez à nouveau vos documents</NuxtLink>.
-          </span>
-        </div>
-        <div
-          v-if="reindexResult"
-          class="fr-mt-1w"
-        >
-          <p
-            class="fr-text--sm"
-            style="color:#18753c;"
-          >
-            Redécoupage lancé : {{ reindexResult.files_reindexed }} fichier(s) en cours de traitement.
-          </p>
-        </div>
       </div>
 
       <!-- Options -->

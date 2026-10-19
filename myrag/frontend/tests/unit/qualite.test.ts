@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
-  appreciation, cibleAction, classeVerdict, conseils, estimationMesure, libelleOrigine, libelleVerdict, lireImport,
-  pointsCourbe, resumeVerdicts, REGLE_DE_GARDE, aLaRegleDeGarde, avancementTravaux, dateMesure,
+  aLaRegleDeGarde,
+  appreciation,
+  avancementTravaux,
+  cibleAction,
+  classeVerdict,
+  conseils,
+  dateMesure,
+  estimationMesure,
+  libelleOrigine,
+  libelleVerdict,
+  lireImport,
+  pointsCourbe,
+  REGLE_DE_GARDE,
+  resumeVerdicts,
 } from '../../utils/qualite'
 
 describe('libellés', () => {
@@ -9,7 +21,7 @@ describe('libellés', () => {
     expect(libelleVerdict('refus_ko')).toBe('Réponse inventée')
     expect(libelleVerdict(null)).toBe('Jamais mesurée')
     expect(classeVerdict('non_conforme')).toBe('fr-badge--error')
-    expect(libelleOrigine('avis')).toBe("Avis d'usager")
+    expect(libelleOrigine('avis')).toBe('Avis d\'usager')
   })
   it('apprécie un score avec les seuils du serveur', () => {
     expect(appreciation(85).libelle).toBe('Très bonne')
@@ -70,7 +82,7 @@ describe('leviers', () => {
     expect(aLaRegleDeGarde(null)).toBe(false)
   })
 
-  it('suit un redécoupage : finis, échecs, pourcentage', () => {
+  it('suit une réindexation : finis, échecs, pourcentage', () => {
     expect(avancementTravaux([])).toEqual({ finis: 0, total: 0, pct: 0, echecs: 0 })
     const a = avancementTravaux([
       { status: 'completed', completed_at: '2026-10-15T10:00:00' },

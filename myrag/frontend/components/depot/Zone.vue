@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { EtatDepot, Nature } from '~/utils/depot'
-import { ACCEPT, bilan, etatAfficheDepuis, etatDuTravail, FORMATS_LISIBLES, libelleEtatDepot, passages, trier } from '~/utils/depot'
+import { ACCEPT, bilan, etatAfficheDepuis, etatDuTravail, FORMATS_LISIBLES, libelleEtatDepot, trier } from '~/utils/depot'
 
 /**
  * Déposer plusieurs fichiers ou un dossier entier dans une collection : chaque fichier a sa ligne
@@ -9,13 +9,12 @@ import { ACCEPT, bilan, etatAfficheDepuis, etatDuTravail, FORMATS_LISIBLES, libe
  */
 const props = withDefaults(defineProps<{
   collection: string
-  strategy?: string
   sensitivity?: string
   titre?: string
   dossierSeul?: boolean
   desactive?: boolean
   sansBouton?: boolean
-}>(), { strategy: 'auto', sensitivity: 'public', titre: 'Documents à ajouter' })
+}>(), { sensitivity: 'public', titre: 'Documents à ajouter' })
 
 const emit = defineEmits<{ lance: [], termine: [bilan: Record<EtatDepot, number>], selection: [n: number] }>()
 
@@ -28,7 +27,6 @@ const depots = ref<Depot[]>([])
 const ecartes = ref<{ nom: string, raison: string }[]>([])
 const enCours = ref(false)
 const aDeposer = computed(() => depots.value.filter(d => d.etat === 'attente').length)
-const documents = computed(() => depots.value.filter(d => d.nature === 'document').length)
 const indexationEnCours = computed(() => depots.value.some(d => d.etat === 'envoi' || d.etat === 'indexation'))
 const bilanDepot = computed(() => depots.value.some(d => d.etat !== 'attente') ? bilan(depots.value.map(d => d.etat)) : '')
 watch(aDeposer, n => emit('selection', n))
@@ -82,10 +80,9 @@ async function deposer () {
     d.etat = 'envoi'
     try {
       const fichier = d.nomDepot === d.fichier.name ? d.fichier : new File([d.fichier], d.nomDepot, { type: d.fichier.type })
-      const r = await uploadFile(`/api/ingest/${props.collection}`, fichier, { strategy: props.strategy, sensitivity: props.sensitivity })
+      const r = await uploadFile(`/api/ingest/${props.collection}`, fichier, { sensitivity: props.sensitivity })
       d.job = r.job_id
       d.etat = 'indexation'
-      d.message = passages(r.total_chunks) || ''
       suivis.push(suivre(d))
     }
     catch (e: any) {
@@ -166,9 +163,6 @@ defineExpose({ deposer, aDeposer, enCours })
         aria-live="polite"
       >
         <strong>{{ depots.length }} fichier{{ depots.length > 1 ? 's' : '' }}</strong>
-        <template v-if="documents">
-          — dont {{ documents }} lu{{ documents > 1 ? 's' : '' }} et découpé{{ documents > 1 ? 's' : '' }} par le moteur de recherche (PDF, Word…)
-        </template>
         <template v-if="bilanDepot">
           · {{ bilanDepot }}
         </template>
