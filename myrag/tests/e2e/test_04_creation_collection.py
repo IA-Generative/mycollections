@@ -54,7 +54,9 @@ def test_etape_2_identifier(session_testeur, collection_essai, captures):
     avances = page.get_by_role("button", name="Réglages avancés (facultatif)")
     if avances.get_attribute("aria-expanded") != "true":
         avances.click()
-    page.get_by_label("Choisir l'identifiant moi-même").check()
+    # Une case DSFR est masquée sous son libellé : on clique le libellé, comme une personne.
+    page.locator("label[for='identifiant-manuel']").click()
+    assert page.locator("#identifiant-manuel").is_checked()
     page.locator("#name").fill(collection_essai)
     verdict = page.locator(".fr-valid-text, .fr-error-text").first
     verdict.wait_for(state="visible", timeout=20_000)
