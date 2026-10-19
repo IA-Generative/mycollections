@@ -75,10 +75,11 @@ def test_la_fiche_d_une_collection_se_lit(session_testeur, collection_publiee, c
     titre = page.locator("h1").first.inner_text().strip()
     assert titre and "sans configuration" not in titre
     onglets = page.get_by_role("tab")
-    assert onglets.count() >= 3, "la fiche n'a pas d'onglets"
-    libelles = [onglets.nth(i).inner_text().strip() for i in range(onglets.count())]
-    assert any("Consulter" in libelle for libelle in libelles), libelles
-    assert any("Documents" in libelle for libelle in libelles), libelles
+    libelles = [re.sub(r"\s*\(\d+\)$", "", onglets.nth(i).inner_text().strip()) for i in range(onglets.count())]
+    assert libelles[:4] == ["Documents", "Signalements", "Propositions", "Historique"], libelles
+    assert page.locator("[role=tab][aria-selected=true]").inner_text().startswith("Documents"), "Documents est l'onglet par défaut"
+    texte = session_testeur.texte()
+    assert "Ce qu'en pensent vos collègues" in texte and "Consignes données à l'assistant" in texte
     captures.prendre(page, "03-fiche-collection")
 
     page.get_by_role("tab", name=re.compile("Documents")).click()
