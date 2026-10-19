@@ -127,8 +127,8 @@ async def test_la_banque_se_met_a_jour_quand_le_catalogue_change(creer_collectio
             return [(q.source_ref, q.question, q.reponse, q.relecture) for q in r.scalars().all()]
 
     assert await jeu() == [("amorce:1", "Q1 ?", "juste", "valide"), ("amorce:2", "Q2 ?", "b", "valide")]
-    q1 = (await questions_store.lister_questions(nom, texte="Q1"))["questions"][0]
-    await questions_store.modifier_question(nom, q1["id"], {"reponse": "corrigée à la main"}, None)
+    q1 = (await questions_store.lister_questions(nom, texte="Q1")).questions[0]
+    await questions_store.modifier_question(nom, q1.id, {"reponse": "corrigée à la main"}, None)
     await poser_questions(nom, [{"question": "Q1 ?", "expected_answer": "catalogue"}])
     assert await jeu() == [("amorce:1", "Q1 ?", "corrigée à la main", "valide")]
 

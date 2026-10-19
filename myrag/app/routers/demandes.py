@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from app.models.collectif import DemandeLue
 from app.models.db import FREQUENCES_DEMANDE, ROLES_SOUTIEN
 from app.routers._collectif_commun import Identite, capacite, date_avant, identite, limite
 from app.services import capacites, doublons
@@ -161,7 +162,7 @@ def _404(e: store.Introuvable):
 async def lister(moi: Identite = Depends(identite), etat: str | None = Query(None), q: str | None = Query(None)):
     demandes = await store.lister_demandes(moi.hash, etat)
     if q and q.strip():
-        demandes = doublons.candidats(q.strip(), [d for d in demandes if d["etat"] != "close"])
+        demandes = doublons.candidats(q.strip(), [d for d in demandes if d.etat != "close"])
     return {"demandes": demandes, "seuil_chantier": (await capacites.lire_async())["seuil_chantier"]}
 
 
@@ -178,8 +179,8 @@ async def lire(ident: str, moi: Identite = Depends(identite)):
         demande = await store.lire_demande(ident, moi.hash)
         # Le courriel de l'auteur : à son garant et à l'administration seulement — ce sont eux qui
         # le recontactent. Jamais dans la liste, jamais aux autres.
-        if moi.superadmin or demande.get("mon_role") == "garant":
-            demande["contact_auteur"] = await store.contact_de(ident)
+        if moi.superadmin or demande.mon_role == "garant":
+            demande = DemandeLue(**demande.model_dump(), contact_auteur=await store.contact_de(ident))
         return {"demande": demande}
     except store.Introuvable as e:
         raise _404(e)
@@ -274,7 +275,7 @@ async def clore(ident: str, entree: ClotureEntree, moi: Identite = Depends(ident
         auteur = await store.auteur_de(ident)
     except store.Introuvable as e:
         raise _404(e)
-    if not (moi.superadmin or auteur == moi.hash or demande.get("mon_role") == "garant"):
+    if not (moi.superadmin or auteur == moi.hash or demande.mon_role == "garant"):
         raise HTTPException(status_code=403, detail="Clore une demande revient à son auteur, à son garant ou à l'administration")
     try:
         return {"demande": await store.clore_demande(ident, moi.hash, entree.doublon_de, (entree.motif or "").strip() or None)}

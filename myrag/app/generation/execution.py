@@ -17,6 +17,7 @@ from app.config import settings
 from app.generation.morceaux import Morceau, lire_echantillon, nombre_a_lire
 from app.generation.resultats import Compteurs, PersonaDemande, ResultatGeneration, message_sur
 from app.models.db import utcnow
+from app.models.generation import PersonaFiche, RunFiche
 from app.services import generation_store as store
 from app.services.generation_store import AvancementRun
 from app.services.openrag_client import OpenRAGClient
@@ -94,10 +95,10 @@ async def _suivre(run_id: str, compteurs: Compteurs) -> None:
             logger.warning("suivi du run %s : %s", run_id, type(e).__name__)
 
 
-async def executer(run_id: str, name: str, personas: list[dict], taille: int, distribution: dict) -> None:
+async def executer(run_id: str, name: str, personas: list[PersonaFiche], taille: int, distribution: dict) -> None:
     debut = time.monotonic()
     compteurs = Compteurs()
-    demandes = [PersonaDemande(p["nom"], p["description_role"]) for p in personas]
+    demandes = [PersonaDemande(p.nom, p.description_role) for p in personas]
     suivi: asyncio.Task | None = None
     resultat = ResultatGeneration(etat="erreur")
     try:
@@ -186,8 +187,8 @@ async def executer(run_id: str, name: str, personas: list[dict], taille: int, di
         logger.warning("journal du run %s : %s", run_id, type(e).__name__)
 
 
-def lancer(run: dict, name: str, personas: list[dict]) -> asyncio.Task:
-    tache = asyncio.create_task(executer(run["id"], name, personas, run["taille"], run["distribution"]))
-    _taches[run["id"]] = tache
-    tache.add_done_callback(lambda _t: _taches.pop(run["id"], None))
+def lancer(run: RunFiche, name: str, personas: list[PersonaFiche]) -> asyncio.Task:
+    tache = asyncio.create_task(executer(run.id, name, personas, run.taille, run.distribution))
+    _taches[run.id] = tache
+    tache.add_done_callback(lambda _t: _taches.pop(run.id, None))
     return tache

@@ -92,9 +92,9 @@ class TestBankAggregation:
         )
         await qs.importer_questions(collection_name, [{"question": "Question importee ?", "expected_answer": "AI"}], None)
         fiable = await qs.creer_question(collection_name, {"question": "Promu question ?", "reponse": "Bonne reponse", "relecture": "valide"}, None)
-        await qs.modifier_question(collection_name, fiable["id"], {"fiable": True}, None)
+        await qs.modifier_question(collection_name, fiable.id, {"fiable": True}, None)
         rejet = await qs.creer_question(collection_name, {"question": "Mauvaise question ?", "reponse": "x"}, None)
-        await qs.modifier_question(collection_name, rejet["id"], {"relecture": "rejete"}, None)
+        await qs.modifier_question(collection_name, rejet.id, {"relecture": "rejete"}, None)
         # 2. Un avis négatif pas encore traité, et un avis promu (devenu question : absent du lot fb_neg).
         async with async_session() as session:
             session.add_all(

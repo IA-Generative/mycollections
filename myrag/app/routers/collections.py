@@ -274,7 +274,7 @@ async def _est_garant(name: str, user: CurrentUser) -> bool:
         from app.services.pseudo import condenser
 
         f = await collectif_store.fiche(name)
-        return bool(f.get("garant_hash")) and f["garant_hash"] == condenser(user.sub)
+        return bool(f.garant_hash) and f.garant_hash == condenser(user.sub)
     except Exception:  # noqa: BLE001 — sel absent, fiche absente : pas garant, jamais une panne
         return False
 

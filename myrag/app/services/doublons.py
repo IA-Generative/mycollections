@@ -11,6 +11,8 @@ import difflib
 import re
 import unicodedata
 
+from app.models.collectif import DemandeFiche, DoublonCandidat
+
 SEUIL_SIMILARITE = 0.45
 _MOTS_VIDES = {"des", "les", "une", "pour", "sur", "dans", "par", "avec", "aux", "national", "nationale"}
 
@@ -31,12 +33,12 @@ def similarite(a: str, b: str) -> float:
     return round(max(jaccard, ratio), 3)
 
 
-def candidats(titre: str, demandes: list[dict], seuil: float = SEUIL_SIMILARITE) -> list[dict]:
+def candidats(titre: str, demandes: list[DemandeFiche], seuil: float = SEUIL_SIMILARITE) -> list[DoublonCandidat]:
     """Les demandes proches, les plus proches d'abord, chacune avec sa `similarite`."""
     trouvees = []
     for d in demandes:
-        s = similarite(titre, d.get("titre", ""))
+        s = similarite(titre, d.titre)
         if s >= seuil:
-            trouvees.append({**d, "similarite": s})
-    trouvees.sort(key=lambda d: d["similarite"], reverse=True)
+            trouvees.append(DoublonCandidat(**d.model_dump(), similarite=s))
+    trouvees.sort(key=lambda d: d.similarite, reverse=True)
     return trouvees

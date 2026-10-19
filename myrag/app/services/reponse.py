@@ -189,7 +189,7 @@ async def repondre(collection: str, question: str, *, client, system_prompt: str
         from app.services.collectif_store import fiche
         from app.services.etats import mention_verification
 
-        mention = mention_verification((await fiche(collection))["etat_collab"])
+        mention = mention_verification((await fiche(collection)).etat_collab)
     except Exception:  # noqa: BLE001 — fiche absente : pas de mention, pas de panne
         mention = None
 

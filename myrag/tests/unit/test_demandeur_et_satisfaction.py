@@ -166,8 +166,8 @@ def test_la_cloche_de_l_auteur_porte_la_demande_a_confirmer(client, en_tant_que,
     d = _deposer(client, en_tant_que)
     _publier_a_tous(client, en_tant_que, creer_collection, nom, d["id"])
     suivi = asyncio.run(store.suivi_pour(_hash(AUTEUR)))
-    mienne = next(x for x in suivi["demandes"] if x["id"] == d["id"])
-    assert mienne["etat"] == "a_confirmer" and mienne["je_suis_demandeur"] is True and mienne["confirmation_avant"]
+    mienne = next(x for x in suivi.demandes if x.id == d["id"])
+    assert mienne.etat == "a_confirmer" and mienne.je_suis_demandeur is True and mienne.confirmation_avant
 
 
 def test_regle_pure_de_l_echeance():

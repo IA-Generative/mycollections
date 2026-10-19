@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.collectif import FicheCollection
 from app.services.openrag_client import FichierOpenRAG, ReponseChat, ResultatRecherche
 from app.services.reponse import ErreurReponse, repondre
 
@@ -27,8 +28,9 @@ def _chat(texte, sources=None):
 
 
 def _repondre(client, mention=None):
+    fiche = FicheCollection(name="x", etat_collab="publiee_tous", garant_hash=None, demande_id=None, scope="public", created_by="", scope_groups=[], archived_at=None)
     with (
-        patch("app.services.collectif_store.fiche", new=AsyncMock(return_value={"etat_collab": "publiee_tous"})),
+        patch("app.services.collectif_store.fiche", new=AsyncMock(return_value=fiche)),
         patch("app.services.etats.mention_verification", return_value=mention),
         patch("app.services.collection_store.get_system_prompt", new=AsyncMock(return_value="")),
     ):

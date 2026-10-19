@@ -84,7 +84,7 @@ async def lister(
     page_ = await store.lister_questions(
         collection, origine=origine, relecture=relecture, verdict=verdict, fiable=fiable, hors_sujet=hors_sujet, persona=persona, texte=q, page=page, par_page=par_page
     )
-    return {**page_, "comptes": await store.compter(collection)}
+    return {**page_.model_dump(), "comptes": await store.compter(collection)}
 
 
 @router.post("/questions", status_code=201)
@@ -104,7 +104,7 @@ async def importer(collection: str, corps: ImportEntree, user: CurrentUser = Dep
         bilan = await store.importer_questions(collection, items, user.sub, origine=corps.origine)
     except ValueError as e:
         _traduire(e)
-    await consigner("collection", collection, "questions.importees", user.sub, collection_name=collection, detail=bilan)
+    await consigner("collection", collection, "questions.importees", user.sub, collection_name=collection, detail=bilan.model_dump())
     return bilan
 
 
@@ -118,11 +118,11 @@ async def depuis_avis(collection: str, feedback_id: int, corps: AvisEntree, user
 
 @router.get("/questions/export")
 async def exporter(collection: str, format: str = Query("json", pattern="^(json|csv)$"), user: CurrentUser = Depends(gerer_la_collection)):
-    questions = (await store.lister_questions(collection, par_page=200, page=1))["questions"]
-    total = (await store.compter(collection))["total"]
+    questions = (await store.lister_questions(collection, par_page=200, page=1)).questions
+    total = (await store.compter(collection)).total
     page = 2
     while len(questions) < total:
-        questions += (await store.lister_questions(collection, par_page=200, page=page))["questions"]
+        questions += (await store.lister_questions(collection, par_page=200, page=page)).questions
         page += 1
     nom = f"{collection}-jeu-de-questions.{format}"
     entete = {"Content-Disposition": f'attachment; filename="{nom}"'}
@@ -139,7 +139,7 @@ async def lire(collection: str, ident: str, user: CurrentUser = Depends(gerer_la
         q = await store.lire_question(collection, ident)
     except Introuvable as e:
         _traduire(e)
-    return {"question": q, "dernier_resultat": await mesure_store.resultat_de(collection, q.get("derniere_mesure_id"), ident)}
+    return {"question": q, "dernier_resultat": await mesure_store.resultat_de(collection, q.derniere_mesure_id, ident)}
 
 
 @router.post("/questions/{ident}/tester")
@@ -209,7 +209,7 @@ async def lancer_mesure(collection: str, corps: MesureEntree, user: CurrentUser 
         mesure = await mesure_store.creer_mesure(collection, corps.model_dump(), settings.mesure_juge_modele or settings.generation_llm_modele, len(questions), user.sub)
     except Conflit as e:
         _traduire(e)
-    await consigner("collection", collection, "mesure.lancee", user.sub, collection_name=collection, detail={"mesure": mesure["id"], "questions": len(questions)})
+    await consigner("collection", collection, "mesure.lancee", user.sub, collection_name=collection, detail={"mesure": mesure.id, "questions": len(questions)})
     execution.lancer(mesure, collection, questions)
     return {"mesure": mesure, "appels_estimes": 2 * len(questions)}
 
