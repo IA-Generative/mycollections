@@ -1,4 +1,5 @@
-"""Créer une collection par l'interface, en cinq étapes, puis la retrouver sur sa fiche.
+"""Créer une collection par l'interface, en cinq étapes (gabarit de la refonte du 2026-10-19 : « Commencer
+la création », « Étape suivante », stepper « Étape n sur 5 »), puis la retrouver sur sa fiche.
 
 La séquence partage la page du testeur : chaque étape reprend là où la précédente s'arrête.
 """
@@ -11,39 +12,82 @@ from tests.e2e.conftest import DOCUMENT_TEMOIN, QUESTION_TEMOIN, TEMOIN, attendr
 
 
 def _suivant(page):
+    """Le bouton « Suivant → » des étapes 4 et 5 (contenu inchangé par la refonte)."""
     page.get_by_text(re.compile(r"^\s*Suivant\s*→\s*$")).last.click()
+
+
+def _etape_suivante(page):
+    page.locator(".etape__actions").get_by_role("button", name="Étape suivante").click()
+
+
+def _stepper(page) -> str:
+    return re.sub(r"\s+", " ", page.locator(".fr-stepper").inner_text())
+
+
+#: La catégorie choisie à l'étape 2, retrouvée sur la fiche à la fin de la séquence.
+CATEGORIE = {}
 
 
 def test_etape_1_choisir_la_source(session_testeur, collection_essai, captures):
     page = session_testeur.aller("/admin/create")
-    assert re.search(r"Cr[ée]er une collection", page.locator("h1").first.inner_text())
+    assert page.locator("h1").first.inner_text().strip() == "Créer une nouvelle collection"
+    assert "Étape 1 sur 5" in _stepper(page) and "Étape suivante : Identification" in _stepper(page)
+    assert "Bientôt :" in session_testeur.texte()
     captures.prendre(page, "05-creation-1-source")
-    page.locator(".fr-card", has_text="Fichier unique").first.click()
-    _suivant(page)
+    page.get_by_label(re.compile("^Un fichier")).check()
+    page.get_by_role("button", name="Commencer la création").click()
     page.wait_for_url(re.compile(r"/admin/create/step-2"), timeout=30_000)
 
 
 def test_etape_2_identifier(session_testeur, collection_essai, captures):
     page = session_testeur.page
     assert "/admin/create/step-2" in page.url
+    assert "Étape 2 sur 5" in _stepper(page)
     page.locator("#titre").fill("Note de contrôle de la suite e2e")
+    # L'identifiant est proposé d'après le titre, en lecture seule.
+    propose = page.locator("#name-propose")
+    page.wait_for_function("() => document.querySelector('#name-propose').value.length > 0", timeout=10_000)
+    assert propose.get_attribute("readonly") is not None
+    assert propose.input_value().startswith("note-controle"), propose.input_value()
+    # La suite impose son identifiant (ménage par préfixe) : il se choisit dans les réglages avancés.
+    avances = page.get_by_role("button", name="Réglages avancés (facultatif)")
+    if avances.get_attribute("aria-expanded") != "true":
+        avances.click()
+    page.get_by_label("Choisir l'identifiant moi-même").check()
     page.locator("#name").fill(collection_essai)
-    page.get_by_role("button", name=re.compile(r"^\s*V[ée]rifier\s*$")).click()
     verdict = page.locator(".fr-valid-text, .fr-error-text").first
     verdict.wait_for(state="visible", timeout=20_000)
     assert "disponible" in verdict.inner_text(), verdict.inner_text()
+    # Une catégorie existante, choisie par le créateur.
+    options = page.locator("#categorie option")
+    CATEGORIE["libelle"] = options.nth(1).inner_text().strip()
+    page.locator("#categorie").select_option(index=1)
     captures.prendre(page, "05-creation-2-identification")
-    _suivant(page)
+    _etape_suivante(page)
     page.wait_for_url(re.compile(r"/admin/create/step-3"), timeout=60_000)
-    assert session_testeur.get(f"/api/collections/{collection_essai}").status == 200, "la collection créée n'est pas relue par son créateur"
+    fiche = session_testeur.get(f"/api/collections/{collection_essai}")
+    assert fiche.status == 200, "la collection créée n'est pas relue par son créateur"
+    assert fiche.json().get("categorie"), "la catégorie choisie n'est pas enregistrée"
 
 
-def test_etape_3_deposer_le_document(session_testeur, collection_essai, captures):
+def test_etape_3_deposer_sans_attendre_l_indexation(session_testeur, collection_essai, captures):
     page = session_testeur.page
+    assert page.locator("h1").first.inner_text().strip() == "Déposez vos documents"
+    assert "Étape 3 sur 5" in _stepper(page)
     page.locator("input[type=file]").set_input_files(str(DOCUMENT_TEMOIN))
     captures.prendre(page, "05-creation-3-donnees", mobile=False)
-    page.get_by_role("button", name=re.compile("Charger la donn")).click()
-    page.get_by_text(re.compile(r"^\s*Suivant\s*→\s*$")).last.wait_for(state="visible", timeout=180_000)
+    page.get_by_role("button", name="Déposer le document").click()
+    # L'étape suivante s'offre dès le dépôt : l'indexation continue en tâche de fond.
+    suivante = page.locator(".etape__actions").get_by_role("button", name="Étape suivante")
+    suivante.wait_for(state="visible", timeout=60_000)
+    captures.prendre(page, "05-creation-3-deposee", mobile=False)
+    suivante.click()
+    page.wait_for_url(re.compile(r"/admin/create/step-4"), timeout=30_000)
+
+
+def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, collection_essai, captures):
+    page = session_testeur.page
+    assert "Étape 4 sur 5" in _stepper(page)
 
     def indexation_terminee():
         reponse = session_testeur.get(f"/api/ingest/jobs?collection={collection_essai}")
@@ -52,13 +96,6 @@ def test_etape_3_deposer_le_document(session_testeur, collection_essai, captures
 
     travail = attendre(indexation_terminee, delai=180, motif="indexation terminée")
     assert not travail.get("failed_chunks"), f"morceaux refusés : {travail}"
-    captures.prendre(page, "05-creation-3-indexee", mobile=False)
-    _suivant(page)
-    page.wait_for_url(re.compile(r"/admin/create/step-4"), timeout=30_000)
-
-
-def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, captures):
-    page = session_testeur.page
     # Le jeu de questions : une question saisie, avec sa réponse de référence, entre validée.
     page.get_by_role("button", name="Ajouter une question").click()
     champs = page.locator(".jeu__panneau textarea")
@@ -80,6 +117,7 @@ def test_etape_4_jeu_de_questions_et_question_libre(session_testeur, captures):
 
 def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_essai, captures):
     page = session_testeur.page
+    assert "Étape 5 sur 5" in _stepper(page)
     texte = session_testeur.texte()
     captures.prendre(page, "05-creation-5-partage")
     assert "en cours de vérification" in texte, "l'étape 5 doit dire que la collection est à vérifier avant d'être ouverte à tous"
@@ -90,6 +128,8 @@ def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_
     page.wait_for_url(re.compile(rf"/c/{collection_essai}"), timeout=30_000)
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
     assert "Note de contrôle" in page.locator("h1").first.inner_text()
+    if CATEGORIE.get("libelle"):
+        assert CATEGORIE["libelle"] in session_testeur.texte(), "la catégorie choisie à l'étape 2 n'est pas sur la fiche"
     captures.prendre(page, "05-creation-6-fiche-creee")
 
 
