@@ -20,12 +20,6 @@ const hasSourceFiles = ref(false)
 const reindexing = ref(false)
 const reindexResult = ref<any>(null)
 
-const needsReindex = computed(() => {
-  if (!initialStrategy.value) { return false }
-  return form.value.strategy !== initialStrategy.value
-    || form.value.prompt_template !== initialPrompt.value
-})
-
 const profiles = [
   { key: 'generique', icon: '📄', label: 'Générique', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Pour tout type de document sans spécialisation. Découpage automatique.' },
   { key: 'juridique', icon: '⚖️', label: 'Juridique (codes, lois)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Découpage par article avec hiérarchie Livre/Titre/Chapitre. Citations d\'articles dans les réponses.' },
@@ -53,9 +47,30 @@ const form = ref({
   contact_email: '',
 })
 
+const needsReindex = computed(() => {
+  if (!initialStrategy.value) {
+    return false
+  }
+  return form.value.strategy !== initialStrategy.value
+    || form.value.prompt_template !== initialPrompt.value
+})
+
 // Etat de partage renvoye par GET /api/collections/{id} (cle `publication`).
 const partage = ref<{ state: string, targets: any[], alias_name?: string, visibility?: string, published_at?: string }>({ state: 'draft', targets: [] })
 const estServie = computed(() => (partage.value.targets || []).length > 0)
+
+// Les gestes de la zone sensible : seulement pour qui gère (dit par l'API), selon l'archivage.
+const droits = ref<{ ecrire?: boolean }>({})
+const archivee = ref(false)
+async function rechargerEtat () {
+  try {
+    const c = await get(`/api/collections/${id}`)
+    droits.value = c.mes_droits || {}
+    archivee.value = !!c.archived_at
+    partage.value = c.publication || { state: 'draft', targets: [] }
+  }
+  catch {}
+}
 
 function appLabel (app: string) {
   return { assistant: 'Mon assistant' }[app] || app
@@ -82,6 +97,8 @@ onMounted(async () => {
   try {
     const config = await get(`/api/collections/${id}`)
     partage.value = config.publication || { state: 'draft', targets: [] }
+    droits.value = config.mes_droits || {}
+    archivee.value = !!config.archived_at
     retenir(config)
     form.value = {
       titre: config.titre || '',
@@ -100,7 +117,9 @@ onMounted(async () => {
     initialPrompt.value = form.value.prompt_template
     // Match profile from saved config
     const match = profiles.find(p => p.strategy === form.value.strategy && p.prompt === form.value.prompt_template)
-    if (match) { selectedProfile.value = match.key }
+    if (match) {
+      selectedProfile.value = match.key
+    }
   }
   catch {
     isNew.value = true
@@ -191,12 +210,16 @@ async function save () {
     savedClass.value = 'fr-alert--success'
     // Le bandeau reste visible un instant, puis on revient à la fiche de la collection :
     // c'est d'elle que l'on est parti, pas de l'accueil.
-    setTimeout(() => { navigateTo(`/c/${id}`) }, 1500)
+    setTimeout(() => {
+      navigateTo(`/c/${id}`)
+    }, 1500)
   }
   catch (e: any) {
     savedMsg.value = messageErreur(e)
     savedClass.value = 'fr-alert--error'
-    setTimeout(() => { savedMsg.value = '' }, 4000)
+    setTimeout(() => {
+      savedMsg.value = ''
+    }, 4000)
   }
   saving.value = false
 }
@@ -548,6 +571,16 @@ async function save () {
       >
         <p>{{ savedMsg }}</p>
       </div>
+
+      <!-- Archiver, désarchiver, purger : ici depuis la refonte du catalogue, pour qui gère. -->
+      <FicheZoneSensible
+        v-if="droits.ecrire && !isNew"
+        :name="id"
+        :titre="titre"
+        :archivee="archivee"
+        @change="rechargerEtat"
+        @purgee="navigateTo('/admin/catalog')"
+      />
     </div>
   </div>
 </template>
