@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from tests.e2e.conftest import DOCUMENT_TEMOIN, QUESTION_TEMOIN, TEMOIN, attendre
+from tests.e2e.conftest import DOCUMENT_TEMOIN, QUESTION_TEMOIN, TEMOIN, attendre, prefixe_de_la_cible
 
 
 def _suivant(page):
@@ -48,7 +48,8 @@ def test_etape_2_identifier(session_testeur, collection_essai, captures):
     propose = page.locator("#name-propose")
     page.wait_for_function("() => document.querySelector('#name-propose').value.length > 0", timeout=10_000)
     assert propose.get_attribute("readonly") is not None
-    assert propose.input_value().startswith("note-controle"), propose.input_value()
+    # Sur une preview, l'identifiant proposé porte le préfixe imposé (`pr-<n>-note-controle…`).
+    assert propose.input_value().removeprefix(prefixe_de_la_cible(session_testeur)).startswith("note-controle"), propose.input_value()
     # La suite impose son identifiant (ménage par préfixe) : il se choisit dans les réglages avancés.
     avances = page.get_by_role("button", name="Réglages avancés (facultatif)")
     if avances.get_attribute("aria-expanded") != "true":
