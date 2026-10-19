@@ -70,11 +70,12 @@ async def list_feedback_endpoint(
     collection: str,
     status: str | None = Query(None),
     rating: int | None = Query(None),
+    limit: int | None = Query(None, ge=1, le=50, description="Les N avis les plus récents (fiche d'une collection)"),
     user: CurrentUser = Depends(current_user),
 ):
     # Les questions et réponses des utilisateurs : réservées à qui GÈRE la collection.
     await _fiche_pour(collection, user, ecrire=True)
-    items = await db_list(collection, status=status, rating=rating)
+    items = await db_list(collection, status=status, rating=rating, limit=limit)
     return {"feedback": items}
 
 

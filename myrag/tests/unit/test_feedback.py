@@ -82,3 +82,48 @@ class TestFeedback:
         svc.ingest("col", "Q1?", "R1", rating=1)
         svc2 = FeedbackService(data_dir=str(tmp_path))
         assert len(svc2.lister("col")) == 1
+
+
+# --- Les derniers avis d'une collection (fiche d'une collection, ?limit=N) ---
+
+
+def _avis(client, en_tant_que, nom, n):
+    from tests.conftest import personne
+
+    en_tant_que(personne("lecteur-avis"))
+    for i in range(n):
+        r = client.post("/api/feedback/ingest", json={"collection": nom, "question": f"Question {i} ?", "response": "Réponse.", "rating": 1 if i % 2 else -1})
+        assert r.status_code == 200, r.text
+
+
+def test_limit_rend_les_plus_recents_d_abord(client, en_tant_que, creer_collection, nom):
+    from tests.conftest import personne
+
+    createur = personne("createur-avis")
+    creer_collection(nom, createur)
+    _avis(client, en_tant_que, nom, 5)
+    en_tant_que(createur)
+    r = client.get(f"/api/feedback/{nom}", params={"limit": 3})
+    assert r.status_code == 200, r.text
+    questions = [f["question"] for f in r.json()["feedback"]]
+    assert questions == ["Question 4 ?", "Question 3 ?", "Question 2 ?"]
+    assert len(client.get(f"/api/feedback/{nom}").json()["feedback"]) == 5  # sans limit : tout
+
+
+@pytest.mark.parametrize("limit", [0, 51, -1])
+def test_limit_hors_bornes_est_refuse(client, en_tant_que, creer_collection, nom, limit):
+    from tests.conftest import personne
+
+    createur = personne("createur-bornes")
+    creer_collection(nom, createur)
+    en_tant_que(createur)
+    assert client.get(f"/api/feedback/{nom}", params={"limit": limit}).status_code == 422
+
+
+def test_les_derniers_avis_restent_reserves_a_qui_gere(client, en_tant_que, creer_collection, nom):
+    from tests.conftest import personne
+
+    creer_collection(nom, personne("createur-reserve"))
+    _avis(client, en_tant_que, nom, 1)
+    en_tant_que(personne("simple-lecteur"))
+    assert client.get(f"/api/feedback/{nom}", params={"limit": 3}).status_code == 403
