@@ -1,259 +1,258 @@
 <script setup lang="ts">
+import type { VerdictTechnique } from '~/utils/wizard'
 import { messageErreur } from '~/utils/collectif'
 import { renderMarkdownSafe } from '~/utils/sanitize'
+import { chargeAuJeu, NB_QUESTIONS_TEST, questionsSuggerees, verdictTechnique } from '~/utils/wizard'
 
 /**
- * Étape 4 de l'assistant : le début du jeu de questions de la collection, et une première mesure.
- * Mêmes composants que la page Qualité (docs/qualite.md) : rien ne se perd en quittant l'étape.
+ * Étape 4 de l'assistant : un test technique, pas encore la qualité. Trois questions (suggérées
+ * depuis le jeu ou les titres des documents, modifiables), la réponse et ses passages, un verdict
+ * simple « répond / ne répond pas ». Chaque question posée entre au jeu de questions « à relire » :
+ * on la retrouve dans la page Qualité, où se mesure vraiment la qualité (docs/qualite.md).
  */
 const route = useRoute()
 const collection = route.query.collection as string
-const api = useQualite(collection)
-const { post } = useApi()
-const synthese = ref<any>(null)
-const ouvert = ref<string | null>(null)
-const filtre = ref<Record<string, string> | undefined>(undefined)
-const jeu = ref<any>(null)
-const question = ref('')
-const reponse = ref('')
-const sources = ref<string[]>([])
-const enTest = ref(false)
+const { get, post } = useApi()
 
-const echecs = computed(() => {
-  const v = synthese.value?.derniere_terminee?.verdicts
-  return v ? v.non_conformes + v.partielles + v.refus_ko + v.sans_source : 0
-})
-
-async function recharger () {
-  try {
-    synthese.value = await api.synthese()
+interface Essai {
+  question: string
+  enCours: boolean
+  reponse: string
+  passages: string[]
+  verdict: VerdictTechnique | null
+  erreur: string
+}
+const essai = (question = ''): Essai => ({ question, enCours: false, reponse: '', passages: [], verdict: null, erreur: '' })
+/** Un essai par question, chacun SON objet (un `fill` partagerait le même entre les trois lignes). */
+function essaisVides (): Essai[] {
+  const liste: Essai[] = []
+  for (let i = 0; i < NB_QUESTIONS_TEST; i++) {
+    liste.push(essai())
   }
-  catch { /* la mesure reste masquée */ }
+  return liste
 }
-onMounted(recharger)
+const essais = ref<Essai[]>(essaisVides())
+const suggestionsChargees = ref(false)
 
-function mesureFinie () {
-  recharger()
-  jeu.value?.charger()
-}
-function questionChange () {
-  recharger()
-  jeu.value?.charger()
-}
-function voirEchecs () {
-  // Le jeu filtre sur un verdict : le plus grave présent d'abord.
-  const v = synthese.value?.derniere_terminee?.verdicts || {}
-  const verdict = v.non_conformes ? 'non_conforme' : v.refus_ko ? 'refus_ko' : v.partielles ? 'partiel' : 'sans_source'
-  filtre.value = { verdict }
-  nextTick(() => document.getElementById('etape4-jeu')?.scrollIntoView({ behavior: 'smooth' }))
-}
-function levier (nom: 'decoupage' | 'consignes') {
-  window.open(`/c/${encodeURIComponent(collection)}/qualite?onglet=leviers#levier-${nom}`, '_blank', 'noopener')
-}
+const poses = computed(() => essais.value.filter(e => e.verdict))
+const repondues = computed(() => poses.value.filter(e => e.verdict?.cle === 'repond').length)
 
-async function tester () {
-  enTest.value = true
-  reponse.value = ''
-  sources.value = []
-  try {
-    const d = await post(`/api/playground/${encodeURIComponent(collection)}/chat`, { question: question.value })
-    reponse.value = d.response || 'Pas de réponse.'
-    sources.value = d.source_names || []
+async function poser (e: Essai) {
+  if (!e.question.trim() || e.enCours) {
+    return
   }
-  catch (e) {
-    reponse.value = messageErreur(e)
+  e.enCours = true
+  e.erreur = ''
+  e.verdict = null
+  try {
+    const d = await post(`/api/playground/${encodeURIComponent(collection)}/chat`, { question: e.question.trim() })
+    e.reponse = d.response || ''
+    e.passages = d.source_names || []
+    e.verdict = verdictTechnique(d)
+  }
+  catch (err) {
+    e.erreur = messageErreur(err)
   }
   finally {
-    enTest.value = false
+    e.enCours = false
+  }
+  // La question posée entre au jeu « à relire » ; une question déjà au jeu (409) n'est pas un échec.
+  const corps = chargeAuJeu(e.question)
+  if (corps) {
+    try {
+      await post(`/api/collections/${encodeURIComponent(collection)}/qualite/questions`, corps)
+    }
+    catch { /* déjà au jeu, ou droit manquant : le test reste valable */ }
   }
 }
+
+async function poserTout () {
+  for (const e of essais.value) {
+    if (e.question.trim() && !e.verdict) {
+      await poser(e)
+    }
+  }
+}
+
+onMounted(async () => {
+  try {
+    const qs = questionsSuggerees(await get(`/api/playground/${encodeURIComponent(collection)}/suggestions`))
+    qs.forEach((q, i) => {
+      essais.value[i]!.question = q
+    })
+  }
+  catch { /* pas de suggestion : la personne tape ses questions */ }
+  suggestionsChargees.value = true
+})
 </script>
 
 <template>
   <WizardEtape
     :numero="4"
-    :titre="`Vos questions, votre qualité — ${collection}`"
-    chapeau="Vérifiez que la collection répond juste, avant de la partager."
+    titre="Vérifiez que la collection répond"
+    chapeau="Un test rapide : posez trois questions et regardez si la collection y répond, en citant ses passages."
   >
     <template #formulaire>
-      <div class="etape4">
-        <div class="fr-callout fr-mb-4w">
-          <h2 class="fr-callout__title fr-h6">
-            Ce que vous faites ici
-          </h2>
-          <p class="fr-callout__text fr-text--sm">
-            Vous constituez le <strong>jeu de questions</strong> de votre collection : celles que poseront vraiment les gens,
-            avec la bonne réponse. Il sert à <strong>mesurer la qualité</strong> aujourd'hui, puis à la suivre dans le temps et
-            à l'améliorer (redécouper les documents, préciser les consignes, marquer des réponses fiables). Vous le
-            retrouverez dans la page « Qualité » de la collection. Cette étape est facultative.
-          </p>
-        </div>
-
-        <section
-          class="fr-mb-6w"
-          aria-labelledby="etape4-jeu"
-        >
-          <h2
-            id="etape4-jeu"
-            class="fr-h5"
+      <div
+        v-if="!collection"
+        class="fr-alert fr-alert--warning"
+      >
+        <p>
+          Aucune collection indiquée. <NuxtLink to="/admin/create">
+            Retour à l'étape 1
+          </NuxtLink>
+        </p>
+      </div>
+      <template v-else>
+        <ol class="etape4-essais">
+          <li
+            v-for="(e, i) in essais"
+            :key="i"
+            class="etape4-essai"
           >
-            1. Constituer le jeu de questions
-          </h2>
-          <p class="fr-text--sm">
-            Faites rédiger des questions d'après les documents, ajoutez les vôtres ou importez un fichier. Relisez-les :
-            question et réponse se modifient en place, d'un clic. Seules les questions <strong>validées</strong> sont mesurées.
-          </p>
-          <QualiteJeuDeQuestions
-            ref="jeu"
-            :collection="collection"
-            :filtre="filtre"
-            @change="recharger"
-            @ouvrir="i => ouvert = i"
-          />
-        </section>
-
-        <section
-          class="fr-mb-6w"
-          aria-labelledby="etape4-mesure"
-        >
-          <h2
-            id="etape4-mesure"
-            class="fr-h5"
-          >
-            2. Mesurer la qualité maintenant
-          </h2>
-          <p class="fr-text--sm">
-            Chaque question validée est posée à la collection ; un juge IA compare sa réponse à la vôtre et dit si elle est
-            conforme, partielle ou fausse — et pour une question hors sujet, si la collection a bien refusé.
-          </p>
-          <QualiteMesurer
-            v-if="synthese"
-            :collection="collection"
-            :synthese="synthese"
-            @fini="mesureFinie"
-          />
-          <div
-            v-if="synthese?.derniere_terminee"
-            class="etape4__synthese fr-mt-3w"
-          >
-            <QualiteSynthese
-              :synthese="synthese"
-              titre="Synthèse de la dernière mesure"
-            />
-            <div
-              v-if="echecs"
-              class="fr-mt-2w"
-            >
-              <p class="fr-text--sm fr-mb-1w">
-                <strong>À regarder :</strong> {{ echecs }} question{{ echecs > 1 ? 's' : '' }} mal répondue{{ echecs > 1 ? 's' : '' }}.
-                Ouvrez-en une : le volet montre la réponse obtenue, la raison du verdict et quoi faire.
-              </p>
+            <div class="etape4-essai__ligne">
+              <div class="fr-input-group fr-mb-0 etape4-essai__champ">
+                <label
+                  class="fr-label fr-sr-only"
+                  :for="`etape4-q${i}`"
+                >Question {{ i + 1 }}</label>
+                <input
+                  :id="`etape4-q${i}`"
+                  v-model="e.question"
+                  class="fr-input"
+                  type="text"
+                  :placeholder="suggestionsChargees ? 'Tapez une question que poseraient vos collègues' : 'Chargement des suggestions…'"
+                  @keydown.enter.prevent="poser(e)"
+                >
+              </div>
               <button
                 type="button"
-                class="fr-btn fr-btn--sm fr-btn--secondary"
-                @click="voirEchecs"
+                class="fr-btn fr-btn--secondary"
+                :disabled="e.enCours || !e.question.trim()"
+                @click="poser(e)"
               >
-                Afficher les plus graves dans le jeu
+                {{ e.enCours ? 'Question posée…' : 'Poser' }}
               </button>
             </div>
-          </div>
-        </section>
-
-        <details class="fr-mb-6w etape4__libre">
-          <summary class="fr-h6 fr-mb-0">
-            Poser une question libre à la collection
-          </summary>
-          <div class="fr-mt-2w">
-            <div class="fr-input-group">
-              <label
-                class="fr-label"
-                for="etape4-question"
-              >Votre question</label>
-              <textarea
-                id="etape4-question"
-                v-model="question"
-                class="fr-input"
-                rows="2"
-                @keydown.enter.exact.prevent="!enTest && question.trim() && tester()"
-              />
-            </div>
-            <button
-              type="button"
-              class="fr-btn fr-btn--sm"
-              :disabled="enTest || !question.trim()"
-              @click="tester"
-            >
-              {{ enTest ? 'Question posée…' : 'Poser la question' }}
-            </button>
             <div
-              v-if="reponse"
-              class="fr-mt-2w etape4__reponse"
-              v-html="renderMarkdownSafe(reponse)"
-            />
-            <p
-              v-if="reponse"
-              class="fr-text--xs fr-mt-1w etape4__discret"
+              v-if="e.verdict || e.erreur"
+              class="etape4-essai__resultat"
+              aria-live="polite"
             >
-              {{ sources.length ? `Sources : ${sources.join(', ')}` : 'Aucun passage trouvé par la recherche.' }}
-            </p>
-          </div>
-        </details>
+              <p
+                v-if="e.erreur"
+                class="fr-error-text fr-mt-0"
+              >
+                {{ e.erreur }}
+              </p>
+              <template v-else-if="e.verdict">
+                <p
+                  class="fr-badge fr-badge--sm fr-mb-0"
+                  :class="e.verdict.cle === 'repond' ? 'fr-badge--success' : 'fr-badge--warning'"
+                >
+                  {{ e.verdict.libelle }}
+                </p>
+                <p
+                  v-if="e.verdict.aide"
+                  class="fr-text--xs fr-mb-0 etape4-discret"
+                >
+                  {{ e.verdict.aide }}
+                </p>
+                <details class="fr-mt-1v">
+                  <summary class="fr-text--sm">
+                    Voir la réponse et ses passages
+                  </summary>
+                  <!-- Réponse de la collection : passée par renderMarkdownSafe (DOMPurify) avant v-html. -->
+                  <div
+                    class="etape4-reponse fr-mt-1w"
+                    v-html="renderMarkdownSafe(e.reponse || 'Pas de réponse.')"
+                  />
+                  <p class="fr-text--xs fr-mt-1v fr-mb-0 etape4-discret">
+                    {{ e.passages.length ? `Passages : ${e.passages.join(', ')}` : 'Aucun passage trouvé.' }}
+                  </p>
+                </details>
+              </template>
+            </div>
+          </li>
+        </ol>
 
-        <section
-          class="fr-callout fr-callout--green-emeraude fr-mb-4w"
-          aria-labelledby="etape4-ensuite"
-        >
-          <h2
-            id="etape4-ensuite"
-            class="fr-callout__title fr-h6"
+        <div class="etape4-bilan">
+          <button
+            type="button"
+            class="fr-btn fr-btn--sm"
+            :disabled="essais.every(e => !e.question.trim() || e.verdict || e.enCours)"
+            @click="poserTout"
           >
-            3. Et ensuite
-          </h2>
-          <p class="fr-callout__text fr-text--sm">
-            Tout cela vous attend dans la page Qualité de la collection : mesurer à nouveau après chaque changement,
-            suivre la courbe, enrichir le jeu avec les avis des usagers, marquer des réponses fiables.
+            Poser les trois questions
+          </button>
+          <p
+            v-if="poses.length"
+            class="fr-text--sm fr-mb-0"
+            aria-live="polite"
+          >
+            <strong>{{ repondues }} sur {{ poses.length }}</strong> question{{ poses.length > 1 ? 's' : '' }} avec une réponse.
+            Elles sont dans le jeu de questions, à relire depuis la page Qualité.
           </p>
-          <NuxtLink
-            :to="`/c/${collection}/qualite`"
-            class="fr-link fr-mt-1w"
-            target="_blank"
-          >
-            Ouvrir la page Qualité (nouvel onglet)
-          </NuxtLink>
-        </section>
+        </div>
+      </template>
+    </template>
 
-        <div class="fr-btns-group fr-btns-group--inline">
+    <template #encadre>
+      <h2 class="fr-callout__title fr-h6">
+        Et la qualité ?
+      </h2>
+      <p class="fr-callout__text fr-text--sm">
+        Ce test dit seulement si vos documents sont lus et retrouvés. Pour mesurer la justesse des réponses, préciser les
+        consignes ou marquer des réponses fiables, la page Qualité vous attend sur la fiche de la collection, après la publication.
+      </p>
+      <NuxtLink
+        :to="`/c/${encodeURIComponent(collection)}/qualite`"
+        class="fr-link fr-text--sm"
+        target="_blank"
+      >
+        Ouvrir la page Qualité (nouvel onglet)
+      </NuxtLink>
+    </template>
+
+    <template #actions>
+      <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-md">
+        <li>
+          <NuxtLink
+            to="/"
+            class="fr-btn fr-btn--tertiary-no-outline"
+          >
+            Annuler
+          </NuxtLink>
+        </li>
+        <li>
           <NuxtLink
             :to="`/admin/create/step-3?collection=${collection}`"
             class="fr-btn fr-btn--secondary"
           >
-            ← Précédent
+            Étape précédente
           </NuxtLink>
+        </li>
+        <li>
           <NuxtLink
             :to="`/admin/create/step-5?collection=${collection}`"
             class="fr-btn"
           >
-            Suivant →
+            Continuer vers la publication
           </NuxtLink>
-        </div>
-      </div>
-
-      <QualiteVolet
-        :collection="collection"
-        :ident="ouvert"
-        @fermer="ouvert = null"
-        @change="questionChange"
-        @levier="levier"
-      />
+        </li>
+      </ul>
     </template>
   </WizardEtape>
 </template>
 
 <style scoped>
-.etape4 { max-width: 64rem; }
-.etape4__synthese { border: 1px solid var(--border-default-grey); padding: 1rem 1.25rem; }
-.etape4__libre summary { cursor: pointer; }
-.etape4__reponse { background: var(--background-alt-grey); padding: .75rem; font-size: .875rem; max-height: 24rem; overflow-y: auto; }
-.etape4__reponse :deep(p), .etape4__reponse :deep(ul), .etape4__reponse :deep(ol) { margin: 0 0 .5rem; }
-.etape4__discret { color: var(--text-mention-grey); }
+.etape4-essais { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
+.etape4-essai { padding: 0; }
+.etape4-essai__ligne { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; }
+.etape4-essai__champ { flex: 1 1 18rem; min-width: 0; }
+.etape4-essai__resultat { margin-top: .5rem; display: flex; flex-direction: column; gap: .25rem; }
+.etape4-reponse { background: var(--background-alt-grey); padding: .75rem; font-size: .875rem; max-height: 16rem; overflow-y: auto; }
+.etape4-reponse :deep(p), .etape4-reponse :deep(ul), .etape4-reponse :deep(ol) { margin: 0 0 .5rem; }
+.etape4-bilan { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; margin-top: 1rem; }
+.etape4-discret { color: var(--text-mention-grey); }
 </style>
