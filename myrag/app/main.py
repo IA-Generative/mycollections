@@ -49,11 +49,11 @@ async def lifespan(app: FastAPI):
     from app.models import db as _db  # noqa: F401
 
     await init_db()
-    # Les anciens magasins de questions (jeux de test, réponses validées, avis promus) versés
-    # dans le jeu de questions de référence — idempotent, ne lève jamais (docs/qualite.md).
-    from app.services.migration_questions import migrer_vers_questions
+    # Les migrations idempotentes (jeu de questions, assistants dérivés des collections…) :
+    # un tuple dans app.services.demarrage, où un lot ajoute la sienne sans toucher ce fichier.
+    from app.services.demarrage import migrations_au_demarrage
 
-    await migrer_vers_questions()
+    await migrations_au_demarrage()
     # Les indexations coupées par l'arrêt précédent reprennent en tâche de fond.
     import asyncio
 

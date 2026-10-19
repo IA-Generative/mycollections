@@ -1,6 +1,7 @@
 """Publication router — publish/unpublish collections to Open WebUI."""
 
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -154,6 +155,15 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
         await session.commit()
         await session.refresh(pub)
 
+    # L'assistant de recherche miroir de la collection (ADR-0003) : créé ou réveillé à la
+    # publication, mis en sommeil à la dépublication — sans attendre un redémarrage.
+    try:
+        from app.services.assistant_store import assurer_miroir
+
+        await assurer_miroir(name)
+    except Exception as e:  # noqa: BLE001 — la publication n'en dépend pas
+        logging.getLogger("myrag.assistants").warning("miroir de %s non assuré : %s", name, e)
+
     # --- OWUI model registration ---------------------------------------
     # The publish flow here is two-step: we always persist local state
     # first (done above), then best-effort-sync to OWUI. A broken OWUI
@@ -237,6 +247,15 @@ async def unpublish_collection(name: str, user: CurrentUser = Depends(current_us
             )
         )
         await session.commit()
+
+    # L'assistant de recherche miroir de la collection (ADR-0003) : créé ou réveillé à la
+    # publication, mis en sommeil à la dépublication — sans attendre un redémarrage.
+    try:
+        from app.services.assistant_store import assurer_miroir
+
+        await assurer_miroir(name)
+    except Exception as e:  # noqa: BLE001 — la publication n'en dépend pas
+        logging.getLogger("myrag.assistants").warning("miroir de %s non assuré : %s", name, e)
 
     erreur = await _retirer_du_socle(name)
     await collectif_store.consigner("collection", name, "publication.retiree", user.sub, collection_name=name, detail={"owui_retire": erreur is None})

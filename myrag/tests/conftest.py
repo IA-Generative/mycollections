@@ -54,6 +54,9 @@ TABLES_PAR_COLLECTION = (
     "paire_qa",
     "mesure",
     "mesure_resultat",
+    # Les assistants de recherche (ADR-0003) : le miroir d'une collection ; ses versions,
+    # consignes et journal sont effacés par assistant_id dans `purger`.
+    "assistants",
 )
 
 SUPERADMIN = CurrentUser(sub="op-superadmin", username="op", groups=["/g/administration-de-test"])
@@ -114,6 +117,9 @@ def purger():
         chemin = os.environ["DATABASE_URL"].split("///")[-1]
         con = sqlite3.connect(chemin)
         try:
+            for (aid,) in con.execute("SELECT id FROM assistants WHERE collection_name = ?", (name,)).fetchall():
+                for t in ("assistant_versions", "consignes", "plans_journal"):
+                    con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (aid,))
             for t in TABLES_PAR_COLLECTION:
                 con.execute(f"DELETE FROM {t} WHERE collection_name = ?", (name,))
             con.execute("DELETE FROM abonnement WHERE objet_type='collection' AND objet_id = ?", (name,))

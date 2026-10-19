@@ -339,7 +339,7 @@ CIBLES_PROPOSITION = ("ligne", "fichier")
 ETATS_PROPOSITION = ("proposee", "publiee", "refusee")
 MOTIFS_SIGNALEMENT = ("obsolete", "erreur", "manquant")
 ETATS_SIGNALEMENT = ("ouvert", "pris_en_compte", "clos")
-OBJETS_EVENEMENT = ("demande", "collection", "proposition", "signalement", "synchronisation")
+OBJETS_EVENEMENT = ("demande", "collection", "proposition", "signalement", "synchronisation", "assistant")
 ETATS_IMPORT_AMORCE = ("jamais", "en_cours", "termine", "echec")
 
 
@@ -756,3 +756,147 @@ class MesureResultat(Base):
     methode: Mapped[str] = mapped_column(String(20), default="judge")
     duree_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+# ─── Les assistants de recherche (ADR-0003) ──────────────────────────────────────
+# Une fiche d'assistant est une DONNÉE (app/harnais/contrat.py) : `assistants` porte le
+# brouillon éditable et `consignes` ses consignes, une ligne chacune ; chaque publication fige
+# une ligne `assistant_versions`, immuable, dont `contenu_json` est le texte canonique et
+# `empreinte` son sha256. `plans_journal` garde ce qui se journalise d'une recherche — jamais
+# la question ni un contenu. Pas de clé étrangère, comme partout ici : une source disparue est
+# ignorée par le périmètre, et la purge d'une collection emporte son miroir (assistant_store).
+from app.harnais.contrat import CANAUX_JOURNAL, PLANIFICATEURS  # noqa: E402 — module pur, sans FastAPI ni base
+
+
+class Assistant(Base):
+    """Le brouillon d'un assistant, et ce qui le rattache à une collection quand il en est le
+    miroir (`collection_name`, unique : la clé d'idempotence de la migration)."""
+
+    __tablename__ = "assistants"
+    __table_args__ = (
+        CheckConstraint("seuil_fiable >= 0 AND seuil_fiable <= 1", name="assistant_seuil_fiable_borne"),
+        UniqueConstraint("collection_name", name="assistant_collection_unique"),
+        Index("assistant_rubrique", "rubrique"),
+        Index("assistant_archive", "archive_le"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    titre: Mapped[str] = mapped_column(String(255), nullable=False)
+    rubrique: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    sources_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    publication_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    validation_requise: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    seuil_fiable: Mapped[float] = mapped_column(Float, default=0.9, server_default="0.9")
+    version_publiee: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    collection_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    cree_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    maj_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    archive_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+    def to_dict(self) -> dict:
+        d = lambda v: v.isoformat() if v else None  # noqa: E731
+        return {
+            "id": self.id,
+            "titre": self.titre,
+            "rubrique": self.rubrique,
+            "description": self.description or "",
+            "sources": json.loads(self.sources_json or "[]"),
+            "publication": json.loads(self.publication_json or "{}"),
+            "validation_requise": bool(self.validation_requise),
+            "seuil_fiable": float(self.seuil_fiable),
+            "version_publiee": self.version_publiee,
+            "collection_name": self.collection_name,
+            "cree_le": d(self.cree_le),
+            "maj_le": d(self.maj_le),
+            "archive_le": d(self.archive_le),
+        }
+
+
+class AssistantVersion(Base):
+    """Une version publiée : immuable, signée d'une personne (condensé) ou d'un robot."""
+
+    __tablename__ = "assistant_versions"
+    __table_args__ = (
+        UniqueConstraint("assistant_id", "numero", name="assistant_version_unique"),
+        CheckConstraint("(publie_par_hash IS NULL) <> (robot IS NULL)", name="assistant_version_auteur_ou_robot"),
+        Index("assistant_version_empreinte", "assistant_id", "empreinte"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    assistant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    numero: Mapped[int] = mapped_column(Integer, nullable=False)
+    empreinte: Mapped[str] = mapped_column(String(64), nullable=False)
+    contenu_json: Mapped[str] = mapped_column(Text, nullable=False)
+    publie_par_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    robot: Mapped[str | None] = mapped_column(String(60), nullable=True, default=None)
+    publie_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "assistant": self.assistant_id,
+            "numero": self.numero,
+            "empreinte": self.empreinte,
+            "robot": self.robot,
+            "publie_le": self.publie_le.isoformat() if self.publie_le else None,
+        }
+
+
+class ConsigneAssistant(Base):
+    """Une consigne du brouillon : éditable une par une (lot B), indexée une par une (lot A)."""
+
+    __tablename__ = "consignes"
+    __table_args__ = (
+        UniqueConstraint("assistant_id", "cle", name="consigne_cle_unique"),
+        Index("consigne_assistant_rang", "assistant_id", "rang"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    assistant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    cle: Mapped[str] = mapped_column(String(64), nullable=False)
+    rang: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    quand: Mapped[str] = mapped_column(Text, nullable=False)
+    exemples_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    chercher_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    repondre: Mapped[str] = mapped_column(Text, default="", server_default="")
+    gabarit: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    maj_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class PlanJournal(Base):
+    """Ce qui s'écrit d'un plan de recherche : identifiants, sources, poids, durées, consigne
+    retenue, réponse fiable ou non. Aucune colonne de contenu — un test le vérifie."""
+
+    __tablename__ = "plans_journal"
+    __table_args__ = (
+        CheckConstraint(_domaine("canal", CANAUX_JOURNAL), name="plans_journal_canal_valide"),
+        CheckConstraint(_domaine("planificateur", PLANIFICATEURS), name="plans_journal_planificateur_valide"),
+        CheckConstraint("(auteur_hash IS NULL) <> (robot IS NULL)", name="plans_journal_auteur_ou_robot"),
+        Index("plans_journal_assistant_date", "assistant_id", "cree_le"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    assistant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    empreinte: Mapped[str] = mapped_column(String(64), nullable=False)
+    canal: Mapped[str] = mapped_column(String(20), nullable=False)
+    planificateur: Mapped[str] = mapped_column(String(30), nullable=False)
+    consigne: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    score_consigne: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    reponse_fiable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    a_valider: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    valide: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    sources_ignorees: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    nb_etapes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    nb_passages: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    etapes_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    duree_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    auteur_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    robot: Mapped[str | None] = mapped_column(String(60), nullable=True, default=None)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# Le réseau d'entraide (lot G) écrit ses tables dans ce module détachable ; l'importer ici
+# suffit à ce que `create_all` les connaisse.
+from app.models import entraide as _entraide  # noqa: E402, F401
