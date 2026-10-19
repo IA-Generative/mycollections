@@ -1,0 +1,59 @@
+{
+  "source": "mycollections",
+  "query": "budget",
+  "total": 1,
+  "truncated": false,
+  "total_is_lower_bound": false,
+  "results": [
+    {
+      "id": "{partagee}:methodes-2024",
+      "title": "Méthodes 2024",
+      "date": "2024-01-15T09:00:00+00:00",
+      "url": "https://mycollections.fake-domain.name/api/openrag/extract/101?<signe>",
+      "score": 0.91,
+      "hits": [
+        {
+          "snippet": "Méthodes Le budget de l'équipe est voté en janvier.",
+          "highlights": [
+            [
+              12,
+              18
+            ]
+          ],
+          "field": "content",
+          "location": {
+            "start_seconds": null,
+            "end_seconds": null,
+            "page": null
+          },
+          "speaker": null,
+          "url": "https://mycollections.fake-domain.name/api/openrag/extract/101?<signe>"
+        },
+        {
+          "snippet": "Le budget se révise en juin, après le bilan.",
+          "highlights": [
+            [
+              3,
+              9
+            ]
+          ],
+          "field": "content",
+          "location": {
+            "start_seconds": null,
+            "end_seconds": null,
+            "page": null
+          },
+          "speaker": null,
+          "url": "https://mycollections.fake-domain.name/api/openrag/extract/102?<signe>"
+        }
+      ],
+      "context": {
+        "collection": {
+          "id": "{partagee}",
+          "title": "Méthodes de l'équipe"
+        },
+        "right": "reader"
+      }
+    }
+  ]
+}

@@ -200,7 +200,12 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/myrag  # prod
 ```bash
 cd myrag && uv run pytest tests/unit/ -v      # backend (via le venv uv)
 cd myrag/frontend && npx vitest run          # frontend
+cd myrag && uv run pytest tests/non_regression/ -q   # filet : les comportements figés (fixtures/*.json)
 ```
+
+Un comportement figé par `tests/non_regression/` qui change se ré-enregistre explicitement, dans
+la PR qui le change : `MYCOLLECTIONS_NONREG_ENREGISTRER=1 uv run pytest tests/non_regression`, puis
+le diff du fichier figé se relit.
 
 Le comportement d'un survol, d'un focus ou d'un defilement ne se prouve pas par un test
 unitaire : le jouer dans un navigateur (voir `docs/sources.md`).

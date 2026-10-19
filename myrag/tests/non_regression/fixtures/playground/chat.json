@@ -1,0 +1,18 @@
+{
+  "fallback_used": "bool",
+  "mention": "null",
+  "model": "str",
+  "repli_recherche": "bool",
+  "response": "str",
+  "source_names": [
+    "str"
+  ],
+  "sources": [
+    {
+      "content": "str",
+      "filename": "str",
+      "page": "int"
+    }
+  ],
+  "system_prompt_used": "bool"
+}

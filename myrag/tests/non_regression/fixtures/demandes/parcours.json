@@ -1,0 +1,167 @@
+{
+  "creation": {
+    "demande": {
+      "abonne": "bool",
+      "acces_actuel": "str",
+      "amorce_id": "null",
+      "collection_name": "null",
+      "confirmation_avant": "null",
+      "confirmation_demandee_le": "null",
+      "cree_le": "str",
+      "doublon_de": "null",
+      "etat": "str",
+      "frequence": "str",
+      "garant": "bool",
+      "id": "str",
+      "je_suis_demandeur": "bool",
+      "maj_le": "str",
+      "mon_role": "null",
+      "motif_cloture": "null",
+      "motif_insatisfaction": "null",
+      "nb_soutiens": "int",
+      "roles": {
+        "demandeur": "int"
+      },
+      "satisfaction": "null",
+      "service": "str",
+      "seuil": "int",
+      "seuil_atteint": "bool",
+      "sommeil": "bool",
+      "soutenue_par_moi": "bool",
+      "temps_declare_min": "int",
+      "titre": "str",
+      "usage": "str"
+    }
+  },
+  "liste": {
+    "demandes": [
+      {
+        "abonne": "bool",
+        "acces_actuel": "str",
+        "amorce_id": "null",
+        "collection_name": "null",
+        "confirmation_avant": "null",
+        "confirmation_demandee_le": "null",
+        "cree_le": "str",
+        "doublon_de": "null",
+        "etat": "str",
+        "frequence": "str",
+        "garant": "bool",
+        "id": "str",
+        "je_suis_demandeur": "bool",
+        "maj_le": "str",
+        "mon_role": "null",
+        "motif_cloture": "null",
+        "motif_insatisfaction": "null",
+        "nb_soutiens": "int",
+        "roles": {
+          "demandeur": "int",
+          "garant": "int"
+        },
+        "satisfaction": "null",
+        "service": "str",
+        "seuil": "int",
+        "seuil_atteint": "bool",
+        "sommeil": "bool",
+        "soutenue_par_moi": "bool",
+        "temps_declare_min": "int",
+        "titre": "str",
+        "usage": "str"
+      }
+    ],
+    "seuil_chantier": "int"
+  },
+  "lecture": {
+    "demande": {
+      "abonne": "bool",
+      "acces_actuel": "str",
+      "amorce_id": "null",
+      "collection_name": "null",
+      "confirmation_avant": "null",
+      "confirmation_demandee_le": "null",
+      "cree_le": "str",
+      "doublon_de": "null",
+      "etat": "str",
+      "frequence": "str",
+      "garant": "bool",
+      "id": "str",
+      "je_suis_demandeur": "bool",
+      "maj_le": "str",
+      "mon_role": "null",
+      "motif_cloture": "null",
+      "motif_insatisfaction": "null",
+      "nb_soutiens": "int",
+      "roles": {
+        "demandeur": "int",
+        "garant": "int"
+      },
+      "satisfaction": "null",
+      "service": "str",
+      "seuil": "int",
+      "seuil_atteint": "bool",
+      "sommeil": "bool",
+      "soutenue_par_moi": "bool",
+      "temps_declare_min": "int",
+      "titre": "str",
+      "usage": "str"
+    }
+  },
+  "soutien": {
+    "demande": {
+      "abonne": "bool",
+      "acces_actuel": "str",
+      "amorce_id": "null",
+      "collection_name": "null",
+      "confirmation_avant": "null",
+      "confirmation_demandee_le": "null",
+      "cree_le": "str",
+      "doublon_de": "null",
+      "etat": "str",
+      "frequence": "str",
+      "garant": "bool",
+      "id": "str",
+      "je_suis_demandeur": "bool",
+      "maj_le": "str",
+      "mon_role": "str",
+      "motif_cloture": "null",
+      "motif_insatisfaction": "null",
+      "nb_soutiens": "int",
+      "roles": {
+        "demandeur": "int",
+        "garant": "int"
+      },
+      "satisfaction": "null",
+      "service": "str",
+      "seuil": "int",
+      "seuil_atteint": "bool",
+      "sommeil": "bool",
+      "soutenue_par_moi": "bool",
+      "temps_declare_min": "int",
+      "titre": "str",
+      "usage": "str"
+    }
+  },
+  "journal": {
+    "evenements": [
+      {
+        "collection": "null",
+        "cree_le": "str",
+        "detail": {
+          "nb_soutiens": "int",
+          "role": "str",
+          "temps_declare_min": "null"
+        },
+        "id": "str",
+        "objet_id": "str",
+        "objet_type": "str",
+        "par": "str",
+        "type": "str"
+      }
+    ],
+    "suivant": "null"
+  },
+  "etats": {
+    "apres_creation": "ouverte",
+    "apres_garant": "ouverte"
+  }
+}
