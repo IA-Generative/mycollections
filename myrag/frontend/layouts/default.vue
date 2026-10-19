@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { libelleEtat } from '~/utils/collectif'
+import { ENTREES_PIED_DE_PAGE } from '~/utils/navigation'
 
 const config = useRuntimeConfig()
 const route = useRoute()
@@ -11,6 +12,16 @@ const { capacites, charger: chargerCapacites } = useCapacites()
 
 // Le menu « Mes collections » : celles dont je suis le créateur ou le garant.
 const menuOuvert = ref(false)
+const btnVolet = ref<HTMLButtonElement | null>(null)
+/** Échap ferme le volet et rend le focus à son bouton. */
+function fermerVolet (e: KeyboardEvent) {
+  if (!menuOuvert.value) {
+    return
+  }
+  e.stopPropagation() // le volet se ferme seul : le menu mobile qui le porte reste ouvert
+  menuOuvert.value = false
+  nextTick(() => btnVolet.value?.focus())
+}
 const menuMobile = ref(false)
 const menuPrincipal = ref<HTMLElement | null>(null)
 const btnFermerMenu = ref<HTMLButtonElement | null>(null)
@@ -20,15 +31,23 @@ function ouvrirMenuMobile () {
 }
 const miennes = ref<any[]>([])
 async function chargerMiennes () {
-  try { miennes.value = (await useApi().get('/api/accueil/mes-collections')).collections || [] }
-  catch (e) {}
+  try {
+    miennes.value = (await useApi().get('/api/accueil/mes-collections')).collections || []
+  }
+  catch {}
 }
-watch(() => route.fullPath, () => { menuOuvert.value = false; menuMobile.value = false; chargerMiennes() })
+watch(() => route.fullPath, () => {
+  menuOuvert.value = false
+  menuMobile.value = false
+  chargerMiennes()
+})
 
 const { serviceIndisponible, rechercheIndisponible, retabli, fenetreOuverte, demarrer: surveillerEtat } = useEtatService()
 // Masqué par l'usager : jusqu'au prochain changement d'état, pas au-delà.
 const bandeauMasque = ref(false)
-watch([serviceIndisponible, rechercheIndisponible], () => { bandeauMasque.value = false })
+watch([serviceIndisponible, rechercheIndisponible], () => {
+  bandeauMasque.value = false
+})
 
 /** Le garde `admin-only` laisse passer tant que le compte n'est pas chargé (il ne peut pas
  *  l'attendre : c'est ce gabarit qui le charge). Une fois chargé, on refait le contrôle :
@@ -36,7 +55,9 @@ watch([serviceIndisponible, rechercheIndisponible], () => { bandeauMasque.value 
 function garderLAdministration () {
   const mw = route.meta.middleware
   const protegee = Array.isArray(mw) ? mw.includes('admin-only') : mw === 'admin-only'
-  if (protegee && !isAdmin.value) { navigateTo('/') }
+  if (protegee && !isAdmin.value) {
+    navigateTo('/')
+  }
 }
 
 onMounted(async () => {
@@ -132,73 +153,82 @@ onMounted(async () => {
           </button>
           <div class="fr-header__menu-links" />
           <NavigationPrincipale :admin="isAdmin">
-            <!-- Les collections que JE gère : dans un menu, sur toutes les pages — l'accueil,
-               lui, invite à découvrir. -->
-            <li
-              class="fr-nav__item myrag-menu-miennes"
-              @keydown.esc="menuOuvert = false"
-            >
-              <button
-                type="button"
-                class="fr-nav__link myrag-menu-miennes__bouton"
-                :aria-expanded="menuOuvert"
-                aria-controls="menu-miennes"
-                @click="menuOuvert = !menuOuvert"
+            <!-- Les collections que JE gère : un volet du menu, sur toutes les pages. -->
+            <template #volet="{ entree, courante }">
+              <li
+                class="fr-nav__item myrag-menu-miennes"
+                @keydown.esc="fermerVolet($event)"
               >
-                Mes collections
-                <span class="myrag-menu-miennes__compte">{{ miennes.length }}</span>
-                <span
-                  class="fr-icon-arrow-down-s-line fr-icon--sm"
-                  aria-hidden="true"
-                />
-              </button>
-              <div
-                v-if="menuOuvert"
-                id="menu-miennes"
-                class="myrag-menu-miennes__volet"
-              >
-                <p class="myrag-menu-miennes__entete">
-                  Celles que je gère
-                </p>
-                <NuxtLink
-                  v-for="c in miennes.slice(0, 6)"
-                  :key="c.name"
-                  :to="`/c/${c.name}`"
-                  class="myrag-menu-miennes__ligne"
-                  @click="menuOuvert = false"
+                <button
+                  ref="btnVolet"
+                  type="button"
+                  class="fr-nav__link myrag-menu-miennes__bouton"
+                  :aria-expanded="menuOuvert"
+                  aria-controls="menu-miennes"
+                  :aria-current="courante ? 'page' : undefined"
+                  @click="menuOuvert = !menuOuvert"
                 >
-                  <b>{{ c.titre }}</b>
-                  <small>
-                    <template v-if="c.categorie_libelle">{{ c.categorie_libelle }} · </template>{{ c.questions }} question{{ c.questions > 1 ? 's' : '' }} en 30 jours<template v-if="c.signalements_ouverts"> · {{ c.signalements_ouverts }} signalement{{ c.signalements_ouverts > 1 ? 's' : '' }} à traiter</template>
-                  </small>
+                  {{ entree.libelle }}
+                  <span class="myrag-menu-miennes__compte">{{ miennes.length }}</span>
                   <span
-                    class="fr-badge fr-badge--sm fr-badge--no-icon"
-                    :class="c.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'"
-                  >{{ libelleEtat(c.etat_collab) }}</span>
-                </NuxtLink>
-                <p
-                  v-if="!miennes.length"
-                  class="myrag-menu-miennes__vide"
+                    class="fr-icon-arrow-down-s-line fr-icon--sm"
+                    aria-hidden="true"
+                  />
+                </button>
+                <div
+                  v-if="menuOuvert"
+                  id="menu-miennes"
+                  class="myrag-menu-miennes__volet"
                 >
-                  Vous ne gérez pas encore de collection.
-                </p>
-                <div class="myrag-menu-miennes__pied">
+                  <p class="myrag-menu-miennes__entete">
+                    Celles que je gère
+                  </p>
                   <NuxtLink
-                    to="/admin/create"
+                    v-for="c in miennes.slice(0, 6)"
+                    :key="c.name"
+                    :to="`/c/${c.name}`"
+                    class="myrag-menu-miennes__ligne"
                     @click="menuOuvert = false"
                   >
-                    + Créer une collection
+                    <b>{{ c.titre }}</b>
+                    <small>
+                      <template v-if="c.categorie_libelle">{{ c.categorie_libelle }} · </template>{{ c.questions }} question{{ c.questions > 1 ? 's' : '' }} en 30 jours<template v-if="c.signalements_ouverts"> · {{ c.signalements_ouverts }} signalement{{ c.signalements_ouverts > 1 ? 's' : '' }} à traiter</template>
+                    </small>
+                    <span
+                      class="fr-badge fr-badge--sm fr-badge--no-icon"
+                      :class="c.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'"
+                    >{{ libelleEtat(c.etat_collab) }}</span>
                   </NuxtLink>
-                  <NuxtLink
-                    v-if="miennes.length"
-                    to="/mes-collections"
-                    @click="menuOuvert = false"
+                  <p
+                    v-if="!miennes.length"
+                    class="myrag-menu-miennes__vide"
                   >
-                    Tout voir et gérer
-                  </NuxtLink>
+                    Vous ne gérez pas encore de collection.
+                  </p>
+                  <div class="myrag-menu-miennes__pied">
+                    <NuxtLink
+                      to="/admin/create"
+                      @click="menuOuvert = false"
+                    >
+                      + Créer
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/mes-collections"
+                      @click="menuOuvert = false"
+                    >
+                      Tout voir et gérer
+                    </NuxtLink>
+                    <NuxtLink
+                      v-if="capacites.assistants"
+                      to="/assistants"
+                      @click="menuOuvert = false"
+                    >
+                      Mes assistants
+                    </NuxtLink>
+                  </div>
                 </div>
-              </div>
-            </li>
+              </li>
+            </template>
           </NavigationPrincipale>
         </div>
       </div>
@@ -327,6 +357,20 @@ onMounted(async () => {
             <p class="fr-footer__content-desc">
               Mes collections — recherche et analyse documentaire assistée par IA. Version bêta.
             </p>
+            <ul class="fr-footer__content-list">
+              <li
+                v-for="e in ENTREES_PIED_DE_PAGE"
+                :key="e.vers"
+                class="fr-footer__content-item"
+              >
+                <NuxtLink
+                  :to="e.vers"
+                  class="fr-footer__content-link"
+                >
+                  {{ e.libelle }}
+                </NuxtLink>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -342,8 +386,8 @@ onMounted(async () => {
   .fr-header { padding-top: 2.75rem; }
   .fr-header__menu.fr-modal--opened { padding-top: 2.75rem; }
 }
-/* Le menu « Mes collections » : poussé à droite de la navigation, volet sous le bouton. */
-.myrag-menu-miennes { margin-left: auto; position: relative; }
+/* Le menu « Mes collections » : troisième entrée de la navigation, volet sous le bouton. */
+.myrag-menu-miennes { position: relative; }
 .myrag-menu-miennes__bouton { display: inline-flex; align-items: center; gap: .35rem; color: var(--text-action-high-blue-france); }
 .myrag-menu-miennes__compte {
   min-width: 1.5em; text-align: center; font-size: .75rem; font-weight: 700; border-radius: 1em; padding: 0 .4em;
@@ -365,7 +409,8 @@ onMounted(async () => {
 .myrag-menu-miennes__vide { margin: 0; padding: .25rem 1rem .9rem; font-size: .9rem; color: var(--text-mention-grey); }
 .myrag-menu-miennes__pied { display: flex; flex-wrap: wrap; gap: .25rem 1rem; padding: .6rem 1rem .75rem; border-top: 1px solid var(--border-default-grey); background: var(--background-alt-grey); }
 .myrag-menu-miennes__pied a { font-size: .85rem; font-weight: 500; color: var(--text-action-high-blue-france); }
-@media (max-width: 62em) { .myrag-menu-miennes { margin-left: 0; } .myrag-menu-miennes__volet { left: 0; right: auto; } }
+.myrag-menu-miennes__volet { left: 0; right: auto; }
+@media (max-width: 62em) { .myrag-menu-miennes__volet { position: static; width: 100%; } }
 
 /* Logo opérateur dans l'en-tête — emplacement DSFR standard (look myvault) */
 .myrag-operator-logo {

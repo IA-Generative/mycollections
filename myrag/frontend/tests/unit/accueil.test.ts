@@ -1,5 +1,6 @@
+import type { BilanPartage } from '../../utils/accueil'
 import { describe, expect, it } from 'vitest'
-import { demandeEnVue, indicateurs, messageMerci, nombre, portes } from '../../utils/accueil'
+import { CLE_NON_CLASSEES, indicateurs, indicateursDeGestion, nombre, porteNonClassees, portes, tuilesAccueil } from '../../utils/accueil'
 
 const CATS = [
   { cle: 'securite', libelle: 'Sécurité et délinquance', description: '', ordre: 20 },
@@ -41,50 +42,90 @@ describe('portes', () => {
   })
 })
 
-describe('demandeEnVue', () => {
-  const d = (id: string, etat: string, nb: number, seuil = 5) => ({ id, titre: id, etat, nb_soutiens: nb, seuil })
-  it('montre l\'ouverte la plus proche du seuil', () => {
-    expect(demandeEnVue([d('loin', 'ouverte', 1), d('proche', 'ouverte', 4), d('chantier', 'chantier', 5), d('close', 'close', 4)])?.id).toBe('proche')
+describe('porteNonClassees', () => {
+  it('compte les collections sans catégorie ou d\'une catégorie disparue', () => {
+    expect(porteNonClassees(COLS, CATS)).toEqual({ cle: CLE_NON_CLASSEES, libelle: 'Non classées', nb: 2 })
   })
-  it('ne montre rien quand aucune n\'est ouverte', () => {
-    expect(demandeEnVue([d('chantier', 'chantier', 6), d('close', 'close', 0)])).toBeNull()
-    expect(demandeEnVue([])).toBeNull()
+  it('rien quand tout est classé', () => {
+    expect(porteNonClassees([{ name: 'a', categorie: 'securite' }], CATS)).toBeNull()
   })
 })
 
-describe('messageMerci', () => {
-  const col = (titre: string, questions: number, publiee = true) => ({ name: titre.toLowerCase(), titre, questions, publiee, signalements_ouverts: 0 })
-  it('ne dit rien à qui ne gère rien', () => {
-    expect(messageMerci(null)).toBeNull()
-    expect(messageMerci({ collections: [], actives: 0, questions: 0, personnes: null, fenetre_jours: 30 })).toBeNull()
+const col = (titre: string, questions: number, publiee = true) => ({ name: titre.toLowerCase(), titre, questions, publiee, signalements_ouverts: 0 })
+const BILAN: BilanPartage = { collections: [col('FAQ', 12), col('Marchés', 3)], actives: 2, questions: 15, personnes: 7, signalements_ouverts: 2, fenetre_jours: 30 }
+
+describe('indicateursDeGestion', () => {
+  it('rien pour qui ne gère rien', () => {
+    expect(indicateursDeGestion(null)).toEqual([])
+    expect(indicateursDeGestion({ ...BILAN, collections: [] })).toEqual([])
   })
-  it('dit à quoi le partage a servi, et nomme la plus consultée', () => {
-    const m = messageMerci({ collections: [col('Marchés', 131), col('FAQ', 268)], actives: 2, questions: 399, personnes: 57, fenetre_jours: 30 })!
-    expect(m.titre).toContain('travaillent pour vos collègues')
-    expect(m.texte).toContain('57 collègues ont trouvé')
-    expect(m.texte).toContain('« FAQ »')
-    expect(m.action.vers).toBe('/admin/create')
+  it('les quatre chiffres de la maquette', () => {
+    expect(indicateursDeGestion(BILAN)).toEqual([
+      { valeur: 2, libelle: 'collections actives' },
+      { valeur: 15, libelle: 'questions de collègues en 30 jours' },
+      { valeur: 7, libelle: 'collègues aidés' },
+      { valeur: 2, libelle: 'signalements à traiter', alerte: true },
+    ])
   })
-  it('sous le seuil de personnes, ne donne pas de nombre', () => {
-    const m = messageMerci({ collections: [col('FAQ', 2)], actives: 1, questions: 2, personnes: null, fenetre_jours: 30 })!
-    expect(m.texte.startsWith('Des collègues ont trouvé')).toBe(true)
+  it('seuil de 3 personnes : sous le seuil le serveur rend null, pas de « collègues aidés »', () => {
+    expect(indicateursDeGestion({ ...BILAN, personnes: null }).map(k => k.libelle)).not.toContain('collègues aidés')
+    expect(indicateursDeGestion({ ...BILAN, personnes: 3 }).find(k => k.libelle === 'collègues aidés')?.valeur).toBe(3)
   })
-  it('sans question, invite à faire connaître — pas un zéro sec', () => {
-    const m = messageMerci({ collections: [col('FAQ', 0)], actives: 1, questions: 0, personnes: null, fenetre_jours: 30 })!
-    expect(m.titre).toContain('faites-les connaître')
-    expect(m.action.vers).toBe('/c/faq')
+  it('la fenêtre du serveur est reprise dans le libellé', () => {
+    expect(indicateursDeGestion(BILAN)[1]!.libelle).toBe('questions de collègues en 30 jours')
+    expect(indicateursDeGestion({ ...BILAN, fenetre_jours: 7 })[1]!.libelle).toBe('questions de collègues en 7 jours')
   })
-  it('ne dit pas « personne » à qui vient d’y poser ses propres questions', () => {
-    const m = messageMerci({ collections: [col('CESEDA', 0)], actives: 1, questions: 0, mes_essais: 6, personnes: null, fenetre_jours: 30 })!
-    expect(m.texte).toContain('Vos 6 essais ne comptent pas')
-    expect(m.texte).toContain('aucun collègue')
-    expect(m.texte).toContain('bac à sable')
-    expect(m.texte).not.toContain('Personne')
-    const un = messageMerci({ collections: [col('CESEDA', 0)], actives: 1, questions: 0, mes_essais: 1, personnes: null, fenetre_jours: 30 })!
-    expect(un.texte).toContain('Votre essai ne compte pas')
+  it('aucun signalement : pas de KPI de signalement', () => {
+    expect(indicateursDeGestion({ ...BILAN, signalements_ouverts: 0 }).some(k => k.alerte)).toBe(false)
+    expect(indicateursDeGestion({ ...BILAN, signalements_ouverts: undefined })).toHaveLength(3)
   })
-  it('rien de publié : invite à finir', () => {
-    const m = messageMerci({ collections: [col('FAQ', 0, false)], actives: 0, questions: 0, personnes: null, fenetre_jours: 30 })!
-    expect(m.titre).toContain('presque là')
+  it('accorde au singulier', () => {
+    const un = indicateursDeGestion({ ...BILAN, actives: 1, questions: 1, signalements_ouverts: 1 })
+    expect(un.map(k => k.libelle)).toEqual(['collection active', 'question de collègues en 30 jours', 'collègues aidés', 'signalement à traiter'])
+  })
+})
+
+describe('tuilesAccueil', () => {
+  const EXEMPLE = { name: 'code-route', titre: 'Code de la route', question: 'Quelle sanction pour un feu rouge ?', autres: true }
+  const CHIFFRES = { collections: 27, categories: 6, documents: 0 }
+  it('exactement quatre tuiles, dans l\'ordre décidé', () => {
+    expect(tuilesAccueil({ assistants: false }, BILAN, EXEMPLE, CHIFFRES).map(t => t.titre)).toEqual([
+      'Découvrir',
+      'Explorer le catalogue',
+      'Gérer mes collections',
+      'Créer une nouvelle collection',
+    ])
+  })
+  it('« & assistants » seulement si le drapeau est vrai', () => {
+    const t = tuilesAccueil({ assistants: true }, BILAN, EXEMPLE, CHIFFRES)
+    expect(t[2]!.titre).toBe('Gérer mes collections & assistants')
+    expect(t[3]!.titre).toBe('Créer une nouvelle collection & assistant')
+    expect(tuilesAccueil({ assistants: false }, BILAN, EXEMPLE, CHIFFRES).some(x => x.titre.includes('assistant'))).toBe(false)
+  })
+  it('les cibles : bac à sable prérempli, catalogue, mes collections, création', () => {
+    const [decouvrir, explorer, gerer, creer] = tuilesAccueil({ assistants: false }, BILAN, EXEMPLE, CHIFFRES)
+    expect(decouvrir!.vers).toEqual({ path: '/c/code-route/playground', query: { q: 'Quelle sanction pour un feu rouge ?' } })
+    expect(decouvrir!.action).toBe('Essayer cette question')
+    expect(explorer!.vers).toBe('/admin/catalog')
+    expect(gerer!.vers).toBe('/mes-collections')
+    expect(creer!.vers).toBe('/admin/create')
+    expect(creer!.mention).toBe('Aucune compétence technique requise.')
+  })
+  it('sans exemple, Découvrir mène au catalogue', () => {
+    const t = tuilesAccueil({ assistants: false }, null, null, null)[0]!
+    expect(t.vers).toBe('/admin/catalog')
+    expect(t.action).toBe('Voir le catalogue')
+  })
+  it('le nombre de collections à interroger, quand il est connu', () => {
+    expect(tuilesAccueil({ assistants: false }, null, null, CHIFFRES)[1]!.kpis).toEqual([{ valeur: 27, libelle: 'collections à interroger' }])
+    expect(tuilesAccueil({ assistants: false }, null, null, null)[1]!.kpis).toEqual([])
+  })
+  it('la tuile Gérer porte les indicateurs de gestion', () => {
+    expect(tuilesAccueil({ assistants: false }, BILAN, null, null)[2]!.kpis).toEqual(indicateursDeGestion(BILAN))
+    expect(tuilesAccueil({ assistants: false }, null, null, null)[2]!.kpis).toEqual([])
+  })
+  it('aucune tuile ne parle d\'une donnée manquante', () => {
+    const textes = tuilesAccueil({ assistants: true }, BILAN, EXEMPLE, CHIFFRES).map(t => `${t.titre} ${t.description} ${t.action} ${t.mention || ''}`).join(' ')
+    expect(textes).not.toMatch(/manque|demande/i)
   })
 })

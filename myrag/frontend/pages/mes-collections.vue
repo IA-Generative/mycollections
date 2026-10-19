@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import type { Collection } from '~/types/collection'
 import type { BilanPartage } from '~/utils/accueil'
+import { libelleMesCollections } from '~/utils/navigation'
 
 const { get } = useApi()
+const { capacites } = useCapacites()
+// « Mes collections & assistants » seulement si les assistants existent (même règle que le menu).
+const titre = computed(() => libelleMesCollections(capacites.value))
 const bilan = ref<BilanPartage | null>(null)
 const collections = ref<Collection[]>([])
 const loading = ref(true)
@@ -18,7 +22,7 @@ onMounted(async () => {
     bilan.value = b
     collections.value = c.collections || []
   }
-  catch (e) {}
+  catch {}
   loading.value = false
 })
 </script>
@@ -43,16 +47,24 @@ onMounted(async () => {
           <a
             class="fr-breadcrumb__link"
             aria-current="page"
-          >Mes collections</a>
+          >{{ titre }}</a>
         </li>
       </ol>
     </nav>
 
-    <h1 class="fr-h3">
-      Les collections que je gère
-    </h1>
+    <div class="mes-collections__tete">
+      <h1 class="fr-h3 fr-mb-0">
+        {{ titre }}
+      </h1>
+      <NuxtLink
+        to="/admin/create"
+        class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-add-line"
+      >
+        Créer
+      </NuxtLink>
+    </div>
     <p
-      class="fr-text--sm fr-mb-3w"
+      class="fr-text--sm fr-mt-2w fr-mb-3w"
       style="max-width:70ch"
     >
       Celles dont vous êtes le créateur ou le garant. Les questions comptées sont celles de vos collègues, au bac à sable,
@@ -120,3 +132,7 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.mes-collections__tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+</style>
