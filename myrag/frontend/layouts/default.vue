@@ -43,29 +43,9 @@
           <div class="fr-header__menu-links"></div>
           <nav class="fr-nav" role="navigation" aria-label="Navigation principale">
             <ul class="fr-nav__list">
-              <li class="fr-nav__item">
-                <NuxtLink to="/" class="fr-nav__link" :aria-current="route.path === '/' ? 'page' : undefined">
-                  Accueil
-                </NuxtLink>
-              </li>
-              <li class="fr-nav__item">
-                <NuxtLink to="/admin/catalog" class="fr-nav__link" :aria-current="route.path === '/admin/catalog' ? 'page' : undefined">
-                  Catalogue
-                </NuxtLink>
-              </li>
-              <li v-if="capacites.demandes" class="fr-nav__item">
-                <NuxtLink to="/demandes" class="fr-nav__link" :aria-current="route.path.startsWith('/demandes') ? 'page' : undefined">
-                  Demandes de la communauté
-                </NuxtLink>
-              </li>
-              <li class="fr-nav__item">
-                <NuxtLink to="/guide" class="fr-nav__link" :aria-current="route.path.startsWith('/guide') ? 'page' : undefined">
-                  Soyez acteurs vous-mêmes
-                </NuxtLink>
-              </li>
-              <li v-if="isAdmin" class="fr-nav__item">
-                <NuxtLink to="/admin" class="fr-nav__link" :aria-current="route.path.startsWith('/admin') ? 'page' : undefined">
-                  Administration
+              <li v-for="e in entrees" :key="e.vers" class="fr-nav__item">
+                <NuxtLink :to="e.vers" class="fr-nav__link" :aria-current="estActive(e, route.path) ? 'page' : undefined">
+                  {{ e.libelle }}
                 </NuxtLink>
               </li>
               <!-- Les collections que JE gère : dans un menu, sur toutes les pages — l'accueil,
@@ -170,6 +150,7 @@
 
 <script setup lang="ts">
 import { libelleEtat } from '~/utils/collectif'
+import { entreesPrincipales, estActive } from '~/utils/navigation'
 
 const config = useRuntimeConfig()
 const route = useRoute()
@@ -178,6 +159,8 @@ const { isAdmin, charger: chargerDroits } = useAdminAuth()
 // Aucun bouton n'apparaît si le service ne sait pas le faire : l'onglet des demandes
 // n'existe que si capacites.json le déclare.
 const { capacites, charger: chargerCapacites } = useCapacites()
+// Les entrées du menu : calculées en pur (utils/navigation.ts), rendues ici telles quelles.
+const entrees = computed(() => entreesPrincipales(capacites.value, isAdmin.value))
 
 // Le menu « Mes collections » : celles dont je suis le créateur ou le garant.
 const menuOuvert = ref(false)
