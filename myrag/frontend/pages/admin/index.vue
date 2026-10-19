@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { titreDe } from '~/utils/catalogue'
 
+import { etapesEnPhrase } from '~/utils/wizard'
+
 definePageMeta({ middleware: 'admin-only' })
 const { get, post } = useApi()
 
@@ -15,7 +17,7 @@ async function syncAll () {
   try {
     syncResult.value = await post('/api/sync')
   }
-  catch (e) {}
+  catch {}
   syncing.value = false
 }
 
@@ -30,7 +32,7 @@ onMounted(async () => {
     const tplData = await get('/api/collections/templates')
     templateCount.value = tplData.templates?.length || 0
   }
-  catch (e) {}
+  catch {}
 })
 </script>
 
@@ -68,7 +70,7 @@ onMounted(async () => {
                 </NuxtLink>
               </h3>
               <p class="fr-card__desc">
-                Assistant guidé en 5 étapes : source, identification, données, évaluation, partage
+                Assistant guidé en 5 étapes : {{ etapesEnPhrase() }}
               </p>
             </div>
           </div>

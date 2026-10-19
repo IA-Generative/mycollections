@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { EtatDepot, Nature } from '~/utils/depot'
-import { ACCEPT, bilan, etatDuTravail, FORMATS_LISIBLES, LIBELLES_DEPOT, trier } from '~/utils/depot'
+import { ACCEPT, bilan, etatAfficheDepuis, etatDuTravail, FORMATS_LISIBLES, libelleEtatDepot, passages, trier } from '~/utils/depot'
 
 /**
  * Déposer plusieurs fichiers ou un dossier entier dans une collection : chaque fichier a sa ligne
@@ -16,7 +16,10 @@ const props = withDefaults(defineProps<{
   desactive?: boolean
   sansBouton?: boolean
 }>(), { strategy: 'auto', sensitivity: 'public', titre: 'Documents à ajouter' })
+
 const emit = defineEmits<{ lance: [], termine: [bilan: Record<EtatDepot, number>], selection: [n: number] }>()
+
+const ERREUR_ENVOI = /^Upload error/
 
 interface Depot { fichier: File, nomDepot: string, taille: number, nature: Nature, etat: EtatDepot, message: string, job?: string }
 const { uploadFile, get } = useApi()
@@ -26,6 +29,7 @@ const ecartes = ref<{ nom: string, raison: string }[]>([])
 const enCours = ref(false)
 const aDeposer = computed(() => depots.value.filter(d => d.etat === 'attente').length)
 const documents = computed(() => depots.value.filter(d => d.nature === 'document').length)
+const indexationEnCours = computed(() => depots.value.some(d => d.etat === 'envoi' || d.etat === 'indexation'))
 const bilanDepot = computed(() => depots.value.some(d => d.etat !== 'attente') ? bilan(depots.value.map(d => d.etat)) : '')
 watch(aDeposer, n => emit('selection', n))
 
@@ -42,7 +46,10 @@ function choisir (e: Event) {
   const { retenus, ecartes: ec } = trier(fichiers.map(f => ({ nom: f.name, taille: f.size, chemin: (f as any).webkitRelativePath || undefined, f })))
   const deja = new Set(depots.value.map(d => d.nomDepot))
   for (const r of retenus) {
-    if (deja.has(r.nomDepot)) { ec.push({ nom: r.chemin || r.nom, raison: 'déjà dans la liste' }); continue }
+    if (deja.has(r.nomDepot)) {
+      ec.push({ nom: r.chemin || r.nom, raison: 'déjà dans la liste' })
+      continue
+    }
     depots.value.push({ fichier: r.f, nomDepot: r.nomDepot, taille: r.taille, nature: r.nature, etat: 'attente', message: '' })
   }
   ecartes.value = [...ecartes.value, ...ec]
@@ -55,7 +62,10 @@ async function suivre (d: Depot) {
       const job = await get(`/api/ingest/jobs/${d.job}`)
       d.etat = etatDuTravail(job)
       if (d.etat !== 'indexation') {
-        if (job.error && d.etat === 'echec') { d.message = job.error } return
+        if (job.error && d.etat === 'echec') {
+          d.message = job.error
+        }
+        return
       }
     }
     catch { /* une lecture manquée n'arrête pas le suivi */ }
@@ -75,18 +85,20 @@ async function deposer () {
       const r = await uploadFile(`/api/ingest/${props.collection}`, fichier, { strategy: props.strategy, sensitivity: props.sensitivity })
       d.job = r.job_id
       d.etat = 'indexation'
-      if (r.total_chunks) { d.message = `${r.total_chunks} passage${r.total_chunks > 1 ? 's' : ''}` }
+      d.message = passages(r.total_chunks) || ''
       suivis.push(suivre(d))
     }
     catch (e: any) {
       d.etat = 'echec'
-      d.message = messageErreur(new Error(String(e?.message || e).replace(/^Upload error/, 'API error')))
+      d.message = messageErreur(new Error(String(e?.message || e).replace(ERREUR_ENVOI, 'API error')))
     }
   }
   enCours.value = false
   await Promise.all(suivis)
   const b = { attente: 0, envoi: 0, indexation: 0, indexe: 0, echec: 0 } as Record<EtatDepot, number>
-  for (const d of depots.value) { b[d.etat]++ }
+  for (const d of depots.value) {
+    b[d.etat]++
+  }
   emit('termine', b)
 }
 
@@ -161,6 +173,12 @@ defineExpose({ deposer, aDeposer, enCours })
           · {{ bilanDepot }}
         </template>
       </p>
+      <p
+        v-if="indexationEnCours"
+        class="fr-badge fr-badge--info fr-badge--no-icon fr-mb-1w"
+      >
+        Indexation en cours, vous pouvez continuer
+      </p>
       <div class="fr-table fr-table--sm fr-table--no-caption depot__liste">
         <table>
           <caption>Fichiers à déposer</caption>
@@ -178,7 +196,7 @@ defineExpose({ deposer, aDeposer, enCours })
                 <span
                   class="fr-badge fr-badge--sm"
                   :class="classe(d.etat)"
-                >{{ LIBELLES_DEPOT[d.etat] }}</span>
+                >{{ libelleEtatDepot(etatAfficheDepuis(d.etat)) }}</span>
                 <p
                   v-if="d.message"
                   class="fr-text--xs fr-mb-0 fr-mt-1v"

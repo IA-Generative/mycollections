@@ -1,87 +1,12 @@
 <script setup lang="ts">
-const router = useRouter()
-const selected = ref('')
+import { cartesDeSource, ligneBientot } from '~/utils/wizard'
 
-const sources = [
-  {
-    key: 'legifrance',
-    icon: '⚖️',
-    name: 'Légifrance',
-    description: 'Code, loi, ordonnance depuis l\'API PISTE, découpés par article.',
-    refresh: true,
-    strategy: 'article',
-    prompt_template: 'juridique',
-    soon: true,
-  },
-  {
-    key: 'file',
-    icon: '📄',
-    name: 'Fichier unique',
-    description: 'Un fichier texte (.txt, .md, .csv), PDF, Word, PowerPoint, un courriel ou une image. Plusieurs fichiers ou un dossier entier : depuis la fiche, une fois la collection créée.',
-    refresh: false,
-    strategy: 'auto',
-    prompt_template: 'generic',
-  },
-  {
-    key: 'directory',
-    icon: '📁',
-    name: 'Répertoire local',
-    description: 'Un dossier de votre poste, sous-dossiers compris : textes, PDF, Word, PowerPoint, courriels, images. Chaque fichier est suivi jusqu\'à son indexation.',
-    refresh: false,
-    strategy: 'auto',
-    prompt_template: 'multi_thematique',
-  },
-  {
-    key: 'drive',
-    icon: '☁️',
-    name: 'Suite Numérique Drive',
-    description: 'Un dossier de Drive (Suite Numérique), resynchronisé quand il change.',
-    refresh: true,
-    strategy: 'auto',
-    prompt_template: 'multi_thematique',
-    soon: true,
-  },
-  {
-    key: 'nextcloud',
-    icon: '📦',
-    name: 'Nextcloud',
-    description: 'Un dossier Nextcloud, resynchronisé quand il change.',
-    refresh: true,
-    strategy: 'auto',
-    prompt_template: 'multi_thematique',
-    soon: true,
-  },
-  {
-    key: 'resana',
-    icon: '🗂️',
-    name: 'Resana',
-    description: 'Connecter un espace Resana. Synchronisation automatique des documents.',
-    refresh: true,
-    strategy: 'auto',
-    prompt_template: 'multi_thematique',
-    soon: true,
-  },
-  {
-    key: 'website',
-    icon: '🌐',
-    name: 'Indexation de site',
-    description: 'Crawler un site web ou un intranet pour indexer ses pages. Suivi des modifications.',
-    refresh: true,
-    strategy: 'section',
-    prompt_template: 'multi_thematique',
-    soon: true,
-  },
-  {
-    key: 'mcp',
-    icon: '🔌',
-    name: 'Ajouter un endpoint MCP',
-    description: 'Brancher un serveur MCP (Model Context Protocol) comme source : ses ressources deviennent des documents de la collection.',
-    refresh: true,
-    strategy: 'auto',
-    prompt_template: 'multi_thematique',
-    soon: true,
-  },
-]
+/** Étape 1 de l'assistant de création : avant de créer, puis d'où viennent les documents. Seules
+ *  les sources que le code sait traiter sont proposées ; les autres sont annoncées sur une ligne. */
+const router = useRouter()
+const cartes = cartesDeSource()
+const bientot = ligneBientot()
+const selected = ref(cartes[0]?.cle || '')
 
 function next () {
   router.push(`/admin/create/step-2?source=${selected.value}`)
@@ -89,112 +14,110 @@ function next () {
 </script>
 
 <template>
-  <div>
-    <nav
-      role="navigation"
-      class="fr-breadcrumb"
-      aria-label="vous etes ici"
-    >
-      <ol class="fr-breadcrumb__list">
-        <li>
-          <NuxtLink
-            class="fr-breadcrumb__link"
-            to="/admin"
-          >
-            Administration
-          </NuxtLink>
-        </li>
-        <li>
-          <a
-            class="fr-breadcrumb__link"
-            aria-current="page"
-          >Créer une collection</a>
-        </li>
-      </ol>
-    </nav>
+  <WizardEtape
+    :numero="1"
+    titre="Créer une nouvelle collection"
+    chapeau="Rassemblez vos documents pour que vos collègues puissent les interroger en langage courant. Vous n'avez rien à préparer : l'assistant découpe, indexe et vérifie pour vous."
+  >
+    <template #formulaire>
+      <h2 class="fr-h4">
+        Avant de créer une collection
+      </h2>
+      <div class="fr-callout fr-mb-6w">
+        <h3 class="fr-callout__title fr-h6">
+          Au préalable
+        </h3>
+        <ul class="fr-callout__text fr-text--md">
+          <li>
+            <strong>Elle n'existe pas déjà :</strong> une collection proche, peut-être plus large, est-elle déjà dans le
+            <NuxtLink
+              to="/admin/catalog"
+              class="fr-link"
+            >
+              catalogue
+            </NuxtLink> ? Contactez son responsable plutôt que de la dupliquer.
+          </li>
+          <li><strong>Elle servira à d'autres :</strong> vos collègues ont-ils les mêmes questions récurrentes que vous ? Une collection utile est une collection interrogée.</li>
+          <li><strong>Vous pouvez la tenir à jour :</strong> qui remplacera les documents quand ils changeront ?</li>
+        </ul>
+      </div>
 
-    <h1 class="fr-h3">
-      Créer une collection
-    </h1>
-    <p class="fr-text--lg fr-mb-2w">
-      Étape 1 sur 5 — D'où viennent vos documents ?
-    </p>
-
-    <div class="fr-callout fr-mb-4w">
-      <p class="fr-callout__text">
-        Avant de creer une collection, consultez le
-        <NuxtLink
-          to="/admin/catalog"
-          class="fr-link"
-        >
-          catalogue des collections existantes
-        </NuxtLink>
-        pour eviter les doublons et contribuer aux efforts en cours.
-      </p>
-    </div>
-
-    <WizardStepper :current-step="1" />
-
-    <div class="myrag-card-grid">
-      <div
-        v-for="src in sources"
-        :key="src.key"
-        class="fr-card"
-        :class="[{
-          'fr-card--shadow': selected === src.key,
-          'fr-enlarge-link': !src.soon,
-        }]"
-        :role="src.soon ? undefined : 'button'"
-        :tabindex="src.soon ? -1 : 0"
-        :aria-pressed="src.soon ? undefined : selected === src.key"
-        :aria-disabled="src.soon ? 'true' : undefined"
-        :style="src.soon ? 'opacity:0.5;cursor:not-allowed;' : 'cursor:pointer;'"
-        @click="!src.soon && (selected = src.key)"
-        @keydown.enter.prevent="!src.soon && (selected = src.key)"
-        @keydown.space.prevent="!src.soon && (selected = src.key)"
+      <fieldset
+        class="fr-fieldset"
+        aria-labelledby="titre-sources"
       >
-        <div class="fr-card__body">
-          <div class="fr-card__content">
-            <h3 class="fr-card__title">
-              <span>{{ src.icon }} {{ src.name }}</span>
-            </h3>
-            <p class="fr-card__desc">
-              {{ src.description }}
-            </p>
-            <div class="fr-card__start">
+        <legend
+          id="titre-sources"
+          class="fr-fieldset__legend"
+        >
+          <h2 class="fr-h4 fr-mb-0">
+            D'où viennent vos documents ?
+          </h2>
+        </legend>
+        <div
+          v-for="s in cartes"
+          :key="s.cle"
+          class="fr-fieldset__element fr-fieldset__element--inline source"
+        >
+          <div class="fr-radio-group fr-radio-rich">
+            <input
+              :id="`source-${s.cle}`"
+              v-model="selected"
+              type="radio"
+              name="source"
+              :value="s.cle"
+            >
+            <label
+              class="fr-label"
+              :for="`source-${s.cle}`"
+            >
+              {{ s.nom }}
+              <span class="fr-hint-text">{{ s.description }}</span>
+            </label>
+            <div class="fr-radio-rich__img">
               <span
-                v-if="src.soon"
-                class="fr-badge fr-badge--sm fr-badge--grey"
-              >Bientôt disponible</span>
-              <span
-                v-if="src.refresh && !src.soon"
-                class="fr-badge fr-badge--sm fr-badge--new"
-              >Refresh auto</span>
-              <span
-                v-if="!src.soon"
-                class="fr-badge fr-badge--sm fr-badge--info"
-              >{{ src.strategy }}</span>
+                class="fr-icon--lg"
+                :class="[s.icone]"
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>
-        <div
-          v-if="selected === src.key && !src.soon"
-          class="fr-card__header"
-          style="background:#000091;padding:4px;text-align:center;"
-        >
-          <span style="color:white;font-size:0.8rem;font-weight:bold;">✓ Sélectionnée</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="fr-btns-group fr-btns-group--right fr-mt-4w">
-      <button
-        class="fr-btn"
-        :disabled="!selected"
-        @click="next"
+      </fieldset>
+      <p
+        v-if="bientot"
+        class="fr-text--sm source__bientot"
       >
-        Suivant →
-      </button>
-    </div>
-  </div>
+        {{ bientot }}
+      </p>
+    </template>
+
+    <template #actions>
+      <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-md">
+        <li>
+          <NuxtLink
+            to="/"
+            class="fr-btn fr-btn--tertiary-no-outline"
+          >
+            Annuler
+          </NuxtLink>
+        </li>
+        <li>
+          <button
+            type="button"
+            class="fr-btn"
+            :disabled="!selected"
+            @click="next"
+          >
+            Commencer la création
+          </button>
+        </li>
+      </ul>
+    </template>
+  </WizardEtape>
 </template>
+
+<style scoped>
+.source { flex: 1 1 18rem; }
+.source__bientot { color: var(--text-mention-grey); }
+</style>

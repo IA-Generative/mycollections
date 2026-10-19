@@ -1,90 +1,30 @@
 <script setup lang="ts">
-defineProps<{
-  currentStep: number
-}>()
+import { ETAPES_ASSISTANT, etapeSuivante } from '~/utils/wizard'
 
-const steps = ['Source', 'Identification', 'Données', 'Questions et qualité', 'Partage']
+/** Le stepper DSFR de l'assistant de création : « Étape n sur 5 », le libellé de l'étape, la jauge
+ *  et « Étape suivante : … ». Les libellés viennent de utils/wizard.ts (testés). */
+const props = defineProps<{ currentStep: number }>()
+const libelle = computed(() => ETAPES_ASSISTANT[props.currentStep - 1] || '')
+const suivante = computed(() => etapeSuivante(props.currentStep))
 </script>
 
 <template>
-  <nav
-    class="fr-stepper fr-mb-4w"
-    aria-label="Étapes de création"
-  >
+  <div class="fr-stepper">
+    <!-- Un paragraphe et non un titre : le titre de la page (h1) suit, et la hiérarchie reste juste. -->
+    <p class="fr-stepper__title">
+      {{ libelle }}
+      <span class="fr-stepper__state">Étape {{ currentStep }} sur {{ ETAPES_ASSISTANT.length }}</span>
+    </p>
     <div
       class="fr-stepper__steps"
       :data-fr-current-step="currentStep"
-      :data-fr-steps="5"
+      :data-fr-steps="ETAPES_ASSISTANT.length"
     />
-    <div class="fr-grid-row fr-grid-row--gutters fr-mt-2w">
-      <div
-        v-for="(step, i) in steps"
-        :key="i"
-        style="flex:1;max-width:20%;text-align:center;"
-      >
-        <div
-          class="myrag-step"
-          :class="[{
-            'myrag-step--active': currentStep === i + 1,
-            'myrag-step--done': currentStep > i + 1,
-            'myrag-step--future': currentStep < i + 1,
-          }]"
-          :aria-current="currentStep === i + 1 ? 'step' : undefined"
-        >
-          <span class="myrag-step__number">{{ i + 1 }}</span>
-          <span class="myrag-step__label">{{ step }}</span>
-          <span class="fr-sr-only">{{ currentStep === i + 1 ? ' (étape en cours)' : currentStep > i + 1 ? ' (faite)' : ' (à venir)' }}</span>
-        </div>
-      </div>
-    </div>
-  </nav>
+    <p
+      v-if="suivante"
+      class="fr-stepper__details"
+    >
+      <span class="fr-text--bold">Étape suivante :</span> {{ suivante }}
+    </p>
+  </div>
 </template>
-
-<style>
-.myrag-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.myrag-step__number {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 0.9rem;
-}
-
-.myrag-step--active .myrag-step__number {
-  background: #000091;
-  color: white;
-}
-
-.myrag-step--done .myrag-step__number {
-  background: #18753c;
-  color: white;
-}
-
-.myrag-step--future .myrag-step__number {
-  background: #e5e5e5;
-  color: #666;
-}
-
-.myrag-step__label {
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.myrag-step--active .myrag-step__label {
-  color: #000091;
-  font-weight: bold;
-}
-
-.myrag-step--done .myrag-step__label {
-  color: #18753c;
-}
-</style>
