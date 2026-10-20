@@ -210,7 +210,7 @@ async def plan(ident: str, demande: DemandePlan, response: Response, user: Curre
 
         return await assistants_doublure.plan(ident, demande, response)
     _, charge, ctx = await _preparer(ident, demande.canal, user, demande.capacites_client)
-    return await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge))
+    return await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge), avec_fiables=True)
 
 
 @router_v1.post("/{ident}/executer")
@@ -223,13 +223,16 @@ async def executer(ident: str, demande: DemandeExecution, response: Response, us
         return await assistants_doublure.executer(ident, demande, response)
     moi, charge, ctx = await _preparer(ident, demande.canal, user)
     if demande.plan is None:
-        plan_ = await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge))
+        plan_ = await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge), avec_fiables=True)
     else:
         plan_ = demande.plan
         sources = {s.id for s in charge.fiche.sources}
         if plan_.assistant != ident or any(e.source not in sources for e in plan_.etapes):
             raise HTTPException(status_code=400, detail="Ce plan ne correspond pas à l'assistant : une étape cherche dans une source qui n'est pas la sienne.")
-    resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
+    try:
+        resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
+    except moteur.ReponseFiableInvalide:
+        raise HTTPException(status_code=400, detail="Ce plan cite une réponse fiable qui n'est pas disponible pour vous.")
     if execution.toutes_en_panne:
         raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.", headers={"Retry-After": "10"})
     return avec_liens(resultat)

@@ -21,7 +21,7 @@ import unicodedata
 from math import ceil
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.database import async_session
@@ -152,6 +152,36 @@ async def compter(name: str) -> ComptesQuestions:
         fiables=fiables,
         hors_sujet=hors,
     )
+
+
+def _conditions_fiables(sources: list[str]) -> list:
+    """Une réponse fiable servable : validée, marquée fiable, pas hors sujet, d'une des `sources`."""
+    return [PaireQA.collection_name.in_(sources), PaireQA.fiable.is_(True), PaireQA.relecture == "valide", PaireQA.hors_sujet.is_(False)]
+
+
+async def reponses_fiables(sources: list[str]) -> list[PaireQA]:
+    """Les réponses fiables servables des `sources` données (l'appelant les a ramenées à ce que la personne lit)."""
+    if not sources:
+        return []
+    async with async_session() as s:
+        r = await s.execute(select(PaireQA).where(*_conditions_fiables(sources)).order_by(PaireQA.cree_le, PaireQA.rang))
+        return list(r.scalars().all())
+
+
+async def lire_fiable(ident: str, sources: list[str]) -> PaireQA | None:
+    """La réponse fiable `ident` si elle est encore servable et d'une des `sources`, sinon None."""
+    if not sources:
+        return None
+    async with async_session() as s:
+        r = await s.execute(select(PaireQA).where(PaireQA.id == ident, *_conditions_fiables(sources)))
+        return r.scalar_one_or_none()
+
+
+async def marquer_servie(ident: str) -> None:
+    """Une fois de plus servie : le compteur monte (en SQL, sans lecture préalable), la date est celle de maintenant."""
+    async with async_session() as s:
+        await s.execute(update(PaireQA).where(PaireQA.id == ident).values(servie_fois=PaireQA.servie_fois + 1, servie_le=utcnow()))
+        await s.commit()
 
 
 async def questions_a_mesurer(name: str, *, seulement_validees: bool = True, origines: list[str] | None = None) -> list[QuestionFiche]:
