@@ -388,8 +388,15 @@ async def delete_source_file(collection: str, source_id: int, user: CurrentUser 
             # ne répond pas, rien n'est effacé et on réessaie ; dans l'autre sens, les
             # passages resteraient sans aucune voie de nettoyage.
             client = OpenRAGClient(timeout=120.0)
-            await client.delete_partition(collection)
-            await client.create_partition(collection)
+            try:
+                await client.delete_partition(collection)
+                await client.create_partition(collection)
+            except httpx.HTTPError as e:
+                logger.warning("Retrait de la dernière source de « %s » : OpenRAG injoignable (%s)", collection, type(e).__name__)
+                raise HTTPException(
+                    status_code=503,
+                    detail="OpenRAG n'est pas accessible : la source n'a pas été retirée, réessayez.",
+                )
         await session.delete(sf)
         await session.commit()
     if partage == 0:

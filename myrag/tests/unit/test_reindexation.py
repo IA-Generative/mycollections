@@ -6,6 +6,8 @@ import pathlib
 import sqlite3
 from unittest.mock import AsyncMock, patch
 
+import httpx
+
 from app.config import settings
 from app.routers import ingest
 from app.services.openrag_client import EnvoiDocument, EtatTache
@@ -192,6 +194,39 @@ def test_un_fichier_partage_par_des_doublons_ne_disparait_avec_la_premiere_ligne
         assert r.status_code == 200, r.text
         assert not (dossier / "note.md").exists(), "avec la dernière ligne, le fichier disparaît"
         cls.return_value.delete_partition.assert_awaited_once_with(nom)
+
+
+def test_openrag_injoignable_au_retrait_de_la_derniere_source(client, en_tant_que, creer_collection, nom):
+    """OpenRAG ne répond pas : rien n'est effacé — ni la ligne, ni le fichier — et la
+    réponse le dit (503, réessayez) au lieu d'un 500 brut ; OpenRAG revient, le
+    retrait passe."""
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    dossier = pathlib.Path(settings.data_dir) / "_sources" / nom
+    with patch("app.routers.ingest.OpenRAGClient") as cls:
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+        cls.return_value.task_state = AsyncMock(return_value=EtatTache(task_state="COMPLETED"))
+        assert _deposer(client, nom).status_code == 200
+        sources = _sources(client, nom)
+        liste = sources.get("sources", sources) if isinstance(sources, dict) else sources
+        source_id = liste[0]["id"]
+
+        cls.return_value.delete_partition = AsyncMock(side_effect=httpx.ConnectError("refusé"))
+        r = client.delete(f"/api/ingest/{nom}/sources/{source_id}")
+        assert r.status_code == 503, r.text
+        assert "réessayez" in r.json()["detail"]
+        assert _sources(client, nom)["sources"], "la ligne est conservée : on réessaie"
+        assert (dossier / "note.md").exists(), "le fichier conservé aussi"
+
+        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.create_partition.reset_mock()
+        r = client.delete(f"/api/ingest/{nom}/sources/{source_id}")
+        assert r.status_code == 200, r.text
+        cls.return_value.delete_partition.assert_awaited_once_with(nom)
+        cls.return_value.create_partition.assert_awaited_once_with(nom)
+        assert not (dossier / "note.md").exists()
 
 
 def test_retirer_une_source_exige_la_gestion_et_connait_la_collection(client, en_tant_que, creer_collection, nom):
