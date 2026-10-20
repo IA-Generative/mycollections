@@ -25,6 +25,7 @@ from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
 from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
+from app.services import liens
 from app.services.fenetre_par_minute import Fenetre
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
@@ -159,6 +160,18 @@ ENTETE_DOUBLURE = "X-Mycollections-Doublure"
 _debit = Fenetre(lambda: settings.assistants_par_minute)
 
 
+def avec_liens(resultat: Resultat) -> Resultat:
+    """Chaque passage reçoit son lien de lecture signé (12 h), absolu, comme dans la recherche v1 :
+    un client hors de l'application (l'extension du navigateur) l'ouvre sans jeton. Les passages
+    sont déjà ramenés au périmètre lisible de la personne."""
+    origine = (settings.recherche_url_publique or settings.myrag_public_url).rstrip("/")
+    passages = [
+        p.model_copy(update={"url": origine + liens.signer(f"/api/openrag/extract/{p.ident}", liens.portee_extrait(p.ident))}) if p.ident and not p.url else p
+        for p in resultat.passages
+    ]
+    return resultat.model_copy(update={"passages": passages})
+
+
 def _limiter(user: CurrentUser) -> None:
     attente = _debit.compter(user.sub or "anonyme")
     if attente is not None:
@@ -219,7 +232,7 @@ async def executer(ident: str, demande: DemandeExecution, response: Response, us
     resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
     if execution.toutes_en_panne:
         raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.", headers={"Retry-After": "10"})
-    return resultat
+    return avec_liens(resultat)
 
 
 # Les adresses absolues de `router_v1` rejoignent `router` : `main.py` n'inclut que celui-ci.

@@ -38,3 +38,21 @@ def test_au_dela_du_plafond_le_moteur_rend_429(client, en_tant_que, monkeypatch)
     assert r.status_code == 429 and 1 <= int(r.headers["retry-after"]) <= 60
     en_tant_que(autre)
     assert client.post("/api/v1/assistants/exemple/executer", json=corps).status_code == 200
+
+
+def test_les_passages_d_executer_portent_un_lien_signe(monkeypatch):
+    from app.config import settings
+    from app.harnais.contrat import Passage, Plan, Resultat
+    from app.routers.assistants import avec_liens
+
+    monkeypatch.setattr(settings, "myrag_liens_sel", "sel-de-test")
+    monkeypatch.setattr(settings, "recherche_url_publique", "https://mescollections.fake-domain.name/")
+    plan = Plan(assistant="exemple", version=1, planificateur="regles")
+    avec, sans = (
+        Passage(source="c", etape=1, rang=1, ident="morceau-1", document="d", texte="t"),
+        Passage(source="c", etape=1, rang=2, document="d", texte="t"),
+    )
+    rendu = avec_liens(Resultat(plan=plan, passages=[avec, sans], duree_ms=1))
+    assert rendu.passages[0].url.startswith("https://mescollections.fake-domain.name/api/openrag/extract/morceau-1?exp=")
+    assert "&sig=" in rendu.passages[0].url
+    assert rendu.passages[1].url is None, "sans identifiant de morceau, pas de lien inventé"
