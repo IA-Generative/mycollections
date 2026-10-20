@@ -51,6 +51,8 @@ class EntraideAppel(Base):
     etat: Mapped[str] = mapped_column(String(20), nullable=False, default="brouillon")
     auteur_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     demande_id: Mapped[str | None] = mapped_column(String(36), nullable=True, default=None)
+    # Un salon Tchap pour échanger : lien https validé (app/services/tchap.py), jamais une adresse de messagerie.
+    lien_tchap: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=maintenant)
     maj_le: Mapped[datetime] = mapped_column(DateTime, default=maintenant, onupdate=maintenant)
     publie_le: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

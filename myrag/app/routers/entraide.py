@@ -12,6 +12,7 @@ from app.models.entraide import ETATS_APPEL, TYPES_APPEL, TYPES_REDIGES
 from app.routers._commun import Identite, capacite, identite
 from app.services import entraide_recommandations as recommandations
 from app.services import entraide_store as store
+from app.services import tchap
 
 router = APIRouter(prefix="/api/entraide", tags=["entraide"], dependencies=[Depends(capacite("entraide"))])
 
@@ -28,6 +29,7 @@ class AppelEntree(BaseModel):
     type: str
     titre: str
     texte: str = ""
+    lien_tchap: str | None = None
 
     @field_validator("type")
     @classmethod
@@ -45,6 +47,11 @@ class AppelEntree(BaseModel):
     @classmethod
     def _texte(cls, v):
         return (v or "").strip()[:5000]
+
+    @field_validator("lien_tchap")
+    @classmethod
+    def _lien(cls, v):
+        return tchap.valider(v)
 
 
 class ReponseEntree(BaseModel):

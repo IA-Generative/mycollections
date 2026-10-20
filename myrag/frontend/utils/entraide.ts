@@ -6,10 +6,10 @@ import type { Capacites } from './capacites'
 
 export type TypeAppel = 'donnee' | 'cherche' | 'propose'
 
-export const LIBELLES_TYPE: Record<TypeAppel, { libelle: string, badge: string, invite: string }> = {
-  donnee: { libelle: 'Il manque une donnée', badge: 'fr-badge--blue-ecume', invite: 'Dites que vous aussi en avez besoin.' },
-  cherche: { libelle: 'Je cherche quelqu’un', badge: 'fr-badge--purple-glycine', invite: 'Vous connaissez ce sujet ? Répondez.' },
-  propose: { libelle: 'Je propose mon aide', badge: 'fr-badge--green-menthe', invite: 'Cette aide vous intéresse ? Répondez.' },
+export const LIBELLES_TYPE: Record<TypeAppel, { libelle: string, badge: string, invite: string, exemple: string }> = {
+  donnee: { libelle: 'Il manque une donnée', badge: 'fr-badge--blue-ecume', invite: 'Dites que vous aussi en avez besoin.', exemple: 'La donnée qui me manque' },
+  cherche: { libelle: 'Je cherche quelqu’un', badge: 'fr-badge--purple-glycine', invite: 'Vous connaissez ce sujet ? Répondez.', exemple: 'Qui connaît la base Sirene ?' },
+  propose: { libelle: 'Je propose mon aide', badge: 'fr-badge--green-menthe', invite: 'Cette aide vous intéresse ? Répondez.', exemple: 'Je peux aider à lire les marchés publics' },
 }
 
 export const LIBELLES_ETAT_APPEL: Record<string, { libelle: string, badge: string }> = {
@@ -63,4 +63,12 @@ export function libelleRoles (roles: Record<string, number>): string {
   const pluriel: Record<string, string> = { soutien: 'soutiens', fournisseur: 'fournisseurs', relecteur: 'relecteurs', garant: 'garants' }
   const parts = Object.entries(roles).map(([role, n]) => `${n} ${n > 1 ? (pluriel[role] ?? role) : role}`)
   return parts.length ? parts.join(', ') : 'personne encore'
+}
+
+const BLANC = /\s/
+
+/** Le lien Tchap, côté écran : une vérification de forme avant l'envoi ; la règle qui fait foi est celle du serveur. */
+export function lienTchapPlausible (lien: string): boolean {
+  const l = lien.trim()
+  return l === '' || (l.startsWith('https://') && !l.includes('@') && !BLANC.test(l))
 }
