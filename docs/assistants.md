@@ -24,7 +24,20 @@ collection publiée a son assistant miroir à une source.
 
 ## L'interface (lot B)
 
-À écrire par le lot B.
+Sous le drapeau `assistants`, l'entrée « Assistants » du menu mène à `/assistants` (liste,
+création). Un assistant a ses rubriques (`frontend/pages/assistants/[id]/`) :
+
+- **Sources** et **Publication** (B1) : quelles collections, quand les interroger, dans quel
+  ordre ; canaux, versions.
+- **Consignes** (B2) : quand (une phrase ou « pour toute question »), exemples, étapes de
+  recherche, consigne de rédaction ; enregistrées par `PUT /api/assistants/{id}` (la fiche
+  entière). « Tester » appelle `POST /api/v1/assistants/{id}/executer`.
+- **Bac à sable** (B4) : les briques du bac à sable d'une collection (`components/playground/`)
+  pointées sur `executer` ; sous chaque réponse, « Comment l'assistant a cherché » (consigne
+  retenue, étapes, sources non interrogées, sources écartées comptées sans être nommées).
+
+Les calculs d'écran sont des fonctions pures de `frontend/utils/assistants.ts` (`validerConsigne`,
+`ordonnerEtapes`, `traceDuPlan`…), testées dans `frontend/tests/unit/assistants*.test.ts`.
 
 
 ## Travailler sans le harnais

@@ -1,34 +1,10 @@
-<template>
-  <details v-if="model || (sources && sources.length)" class="myrag-debug">
-    <summary class="myrag-debug__summary">
-      Voir comment cette réponse a été construite
-    </summary>
-    <div class="myrag-debug__body">
-      <p class="fr-text--xs" style="margin:0.3rem 0;">
-        <strong>Modèle :</strong> {{ model || '—' }}
-        <span v-if="fallbackUsed" style="color:#b34000;"> — réponse de secours : la recherche habituelle n'a trouvé aucun passage</span>
-      </p>
-      <p v-if="sources?.length" class="fr-text--xs" style="margin:0.3rem 0;">
-        <strong>{{ sources.length }} source(s) retrouvée(s)</strong> — extraits injectés au modèle :
-      </p>
-      <div v-for="(chunk, i) in sources" :key="i" class="myrag-debug__chunk">
-        <div class="myrag-debug__chunk-header">
-          {{ chunk.libelle || prettyName(chunk.original_filename || chunk.filename || '') || `Source ${i + 1}` }}
-          <span v-if="chunk.page" style="color:#666;font-weight:normal;"> · p. {{ chunk.page }}</span>
-        </div>
-        <div class="myrag-debug__chunk-body myrag-md" v-html="rendu(chunk.content)"></div>
-      </div>
-      <!-- Ce qu'un écran ajoute à la trace (le plan de recherche d'un assistant, par exemple). -->
-      <slot name="complement" />
-    </div>
-  </details>
-</template>
-
 <script setup lang="ts">
 import { prettyName } from '~/utils/playground'
 import { renderMarkdownSafe } from '~/utils/sanitize'
 
 defineProps<{
+  /** Le titre du repli ; par défaut « Voir comment cette réponse a été construite ». */
+  titre?: string
   model?: string
   sources?: any[]
   fallbackUsed?: boolean
@@ -36,10 +12,62 @@ defineProps<{
 
 /** Le morceau est du Markdown (titres, gras, listes) : on le rend en entier, assaini,
  *  dans un cadre à hauteur bornée plutôt que de le couper au milieu d'une balise. */
-function rendu(s: string | undefined): string {
+function rendu (s: string | undefined): string {
   return renderMarkdownSafe(s) || '<p><em>(pas de contenu)</em></p>'
 }
 </script>
+
+<template>
+  <details
+    v-if="model || (sources && sources.length) || $slots.complement"
+    class="myrag-debug"
+  >
+    <summary class="myrag-debug__summary">
+      {{ titre || 'Voir comment cette réponse a été construite' }}
+    </summary>
+    <div class="myrag-debug__body">
+      <!-- Le complément porte sa propre trace : sans modèle annoncé, pas de ligne « Modèle : — ». -->
+      <slot name="complement" />
+      <p
+        v-if="model || !$slots.complement"
+        class="fr-text--xs"
+        style="margin:0.3rem 0;"
+      >
+        <strong>Modèle :</strong> {{ model || '—' }}
+        <span
+          v-if="fallbackUsed"
+          style="color:#b34000;"
+        > — réponse de secours : la recherche habituelle n'a trouvé aucun passage</span>
+      </p>
+      <p
+        v-if="sources?.length"
+        class="fr-text--xs"
+        style="margin:0.3rem 0;"
+      >
+        <strong>{{ sources.length }} source(s) retrouvée(s)</strong><template v-if="!$slots.complement">
+          — extraits injectés au modèle
+        </template> :
+      </p>
+      <div
+        v-for="(chunk, i) in sources"
+        :key="i"
+        class="myrag-debug__chunk"
+      >
+        <div class="myrag-debug__chunk-header">
+          {{ chunk.libelle || prettyName(chunk.original_filename || chunk.filename || '') || `Source ${i + 1}` }}
+          <span
+            v-if="chunk.page"
+            style="color:#666;font-weight:normal;"
+          > · p. {{ chunk.page }}</span>
+        </div>
+        <div
+          class="myrag-debug__chunk-body myrag-md"
+          v-html="rendu(chunk.content)"
+        />
+      </div>
+    </div>
+  </details>
+</template>
 
 <style scoped>
 .myrag-debug {
