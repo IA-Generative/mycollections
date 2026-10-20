@@ -384,9 +384,11 @@ async def delete_source_file(collection: str, source_id: int, user: CurrentUser 
         partage = (await session.execute(select(func.count()).select_from(SourceFile).where(SourceFile.storage_path == chemin, SourceFile.id != sf.id))).scalar_one()
         restantes = (await session.execute(select(func.count()).select_from(SourceFile).where(SourceFile.collection_name == collection, SourceFile.id != sf.id))).scalar_one()
         if restantes == 0:
-            # Dernière source : vider la partition AVANT d'oublier la ligne. Si OpenRAG
-            # ne répond pas, rien n'est effacé et on réessaie ; dans l'autre sens, les
-            # passages resteraient sans aucune voie de nettoyage.
+            # Dernière source : vider la partition AVANT d'oublier la ligne — dans
+            # l'autre sens, les passages resteraient sans aucune voie de nettoyage.
+            # OpenRAG injoignable en plein retrait : la ligne et le fichier restent
+            # (le retrait se rejoue) ; la partition, elle, ne peut qu'être vidée —
+            # c'est le but — et se recrée au retrait repris comme au dépôt.
             client = OpenRAGClient(timeout=120.0)
             try:
                 await client.delete_partition(collection)
