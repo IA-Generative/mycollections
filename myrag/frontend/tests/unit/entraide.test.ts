@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adresseAppel, compteReponses, destinationDemandes, LIBELLES_ETAT_APPEL, LIBELLES_TYPE, libelleType } from '../../utils/entraide'
+import { adresseAppel, compteReponses, destinationDemandes, libelleRoles, LIBELLES_ETAT_APPEL, LIBELLES_TYPE, libelleType, sansRecommandation } from '../../utils/entraide'
 
 describe('/demandes mène au réseau d’entraide seulement si le drapeau est vrai', () => {
   it('drapeau vrai : /entraide', () => {
@@ -39,5 +39,19 @@ describe('l’adresse d’un appel', () => {
   })
   it('un appel s’ouvre sur la sienne', () => {
     expect(adresseAppel({ id: 'x1', demande_id: null, par_reference: false })).toBe('/entraide/x1')
+  })
+})
+
+describe('les recommandations avant de publier', () => {
+  it('rien à montrer : pas de bloc', () => {
+    expect(sansRecommandation(null)).toBe(true)
+    expect(sansRecommandation({ collections: [], assistants: [], demandes_voisines: [] })).toBe(true)
+  })
+  it('une collection suffit à montrer le bloc', () => {
+    expect(sansRecommandation({ collections: [{ id: 'a', titre: 'A', description: '', vers: '/c/a' }], assistants: [], demandes_voisines: [] })).toBe(false)
+  })
+  it('les rôles se lisent sans identité', () => {
+    expect(libelleRoles({ soutien: 2, fournisseur: 1 })).toBe('2 soutiens, 1 fournisseur')
+    expect(libelleRoles({})).toBe('personne encore')
   })
 })

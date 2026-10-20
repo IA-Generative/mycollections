@@ -130,3 +130,70 @@ def test_le_routeur_n_est_importe_que_par_main():
         if fichier.name != "entraide.py" and "app.routers import entraide" in fichier.read_text(encoding="utf-8"):
             importeurs.add(fichier.name)
     assert importeurs == {"main.py"}
+
+
+# ── G2 : recommander avant de publier ────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def existant(creer_collection, purger, ident_assistant, client, en_tant_que):
+    """Une collection lisible, une collection privée de quelqu'un d'autre, un assistant publié."""
+    import uuid
+
+    n = uuid.uuid4().hex[:6]
+    lisible, privee = f"t-reco-{n}-a", f"t-reco-{n}-b"
+    creer_collection(lisible, personne("gestionnaire"), titre="Registre Sirene des entreprises", description="Base Sirene : établissements et entreprises")
+    creer_collection(privee, personne("gestionnaire"), scope="private", scope_groups=[], titre="Sirene confidentielle", description="Base Sirene interne")
+    en_tant_que(personne("gestionnaire"))
+    fiche = {
+        "assistant": ident_assistant,
+        "titre": "Assistant Sirene",
+        "description": "Répond sur la base Sirene",
+        "sources": [{"id": lisible, "type": "collection", "regime": "toujours", "rang": 1}],
+        "consignes": [{"id": "defaut", "quand": "toujours"}],
+    }
+    assert client.put(f"/api/assistants/{ident_assistant}", json=fiche).status_code == 200
+    assert client.post(f"/api/assistants/{ident_assistant}/publier").status_code == 200
+    yield {"lisible": lisible, "privee": privee, "assistant": ident_assistant}
+    purger(lisible)
+    purger(privee)
+
+
+def test_les_recommandations_montrent_ce_que_la_personne_peut_lire(client, en_tant_que, existant):
+    appel = _creer(client, en_tant_que, auteur="chercheur")
+    r = client.get(f"/api/entraide/appels/{appel['id']}/recommandations")
+    assert r.status_code == 200, r.text
+    corps = r.json()
+    assert existant["lisible"] in [c["id"] for c in corps["collections"]]
+    assert existant["privee"] not in [c["id"] for c in corps["collections"]]
+    assert existant["assistant"] in [a["id"] for a in corps["assistants"]]
+    # L'appel est toujours un brouillon : les recommandations précèdent la publication.
+    assert client.get(f"/api/entraide/appels/{appel['id']}").json()["appel"]["etat"] == "brouillon"
+
+
+def test_les_recommandations_reviennent_a_l_auteur(client, en_tant_que, existant):
+    appel = _creer(client, en_tant_que)
+    en_tant_que(personne("autre"))
+    assert client.get(f"/api/entraide/appels/{appel['id']}/recommandations").status_code == 404  # brouillon d'autrui
+    en_tant_que(personne("auteur"))
+    client.post(f"/api/entraide/appels/{appel['id']}/publier")
+    en_tant_que(personne("autre"))
+    assert client.get(f"/api/entraide/appels/{appel['id']}/recommandations").status_code == 403
+
+
+def test_les_roles_anonymes_des_soutiens_d_une_demande_voisine(client, en_tant_que):
+    en_tant_que(personne("demandeur"))
+    demande = client.post("/api/demandes", json=DEMANDE).json()["demande"]
+    en_tant_que(personne("fournisseur"))
+    client.post(f"/api/demandes/{demande['id']}/soutenir", json={"role": "fournisseur"})
+    appel = _creer(client, en_tant_que, auteur="chercheur", titre=demande["titre"], texte=demande["usage"])
+    corps = client.get(f"/api/entraide/appels/{appel['id']}/recommandations").json()
+    voisine = next(d for d in corps["demandes_voisines"] if d["demande_id"] == demande["id"])
+    assert voisine["roles"].get("fournisseur") == 1
+    assert "sub_hash" not in str(corps) and "hash" not in " ".join(voisine)
+
+
+def test_recommandations_drapeau_faux(client, en_tant_que, capacites):
+    appel = _creer(client, en_tant_que)
+    capacites(entraide=False)
+    assert client.get(f"/api/entraide/appels/{appel['id']}/recommandations").status_code == 404
