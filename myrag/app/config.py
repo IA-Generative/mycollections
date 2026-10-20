@@ -128,6 +128,10 @@ class Settings(BaseSettings):
     # La doublure du harnais (plan et exécution servis depuis app/doublure/assistants/) : pour
     # que l'interface des assistants avance sans le harnais. Jamais en production.
     doublure_assistants: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_DOUBLURE_ASSISTANTS", "doublure_assistants"))
+    #: `GET /api/v1/sites` sans jeton : les sites des seules collections ouvertes à tous, pour le
+    #: débogage de l'extension. Coupé par défaut (une liste anonyme dit quels sites intéressent
+    #: quelles collections) ; les questions, elles, demandent toujours un jeton.
+    sites_anonymes: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_SITES_ANONYMES", "sites_anonymes"))
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)

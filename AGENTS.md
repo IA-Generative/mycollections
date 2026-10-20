@@ -268,6 +268,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
 | `MYCOLLECTIONS_CAPACITES_SURCHARGE` | `` | Objet JSON posé par-dessus capacites.json (ex. `{"assistants": true}`) : allumer une fonction sur une prévisualisation ou un poste ; illisible ⇒ ignorée |
 | `MYCOLLECTIONS_DOUBLURE_ASSISTANTS` | `false` | Doublure du harnais (`/api/v1/assistants/{id}/plan|executer` depuis `app/doublure/assistants/`) ; jamais en production |
+| `MYCOLLECTIONS_SITES_ANONYMES` | `false` | `GET /api/v1/sites` sans jeton : sites des seules collections ouvertes à tous, pour le débogage de l'extension ; coupé en production |
 
 ## Groupes et droits
 
