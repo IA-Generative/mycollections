@@ -136,7 +136,7 @@ const dateVersion = (iso: string) => iso ? new Date(FUSEAU.test(iso) ? iso : `${
           </div>
           <ul
             v-if="donnees.mes_droits.ecrire"
-            class="fr-btns-group fr-btns-group--inline-md"
+            class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left"
           >
             <li>
               <button
