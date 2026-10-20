@@ -167,6 +167,18 @@ async def publier(ident: str, *, auteur_hash: str | None = None, robot: str | No
 # ─── Le miroir d'une collection ──────────────────────────────────────────────────────────────
 
 
+async def archiver(ident: str, *, archive: bool = True) -> bool:
+    """Met l'assistant en sommeil (`archive=True`) ou le réveille. Rien n'est effacé : ses versions,
+    consignes et journal restent. Rend False s'il n'existe pas."""
+    async with async_session() as s:
+        a = await s.get(Assistant, ident)
+        if a is None:
+            return False
+        a.archive_le = (a.archive_le or utcnow()) if archive else None
+        await s.commit()
+        return True
+
+
 def deriver_identifiant(name: str) -> str:
     """L'identifiant d'assistant dérivé d'un nom de collection : le nom lui-même quand il est
     conforme (c'est le cas des noms que `nommage` accepte), sinon normalisé."""

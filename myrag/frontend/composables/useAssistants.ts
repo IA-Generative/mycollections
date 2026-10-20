@@ -15,6 +15,8 @@ export function useAssistants () {
     lire: (id: string) => get(`/api/assistants/${ident(id)}`),
     enregistrer: (fiche: FicheAssistant) => put(`/api/assistants/${ident(fiche.assistant)}`, fiche),
     publier: (id: string) => post(`/api/assistants/${ident(id)}/publier`),
+    /** Retire l'assistant (rien n'est effacé) ; un assistant miroir suit sa collection et refuse (409). */
+    archiver: (id: string) => post(`/api/assistants/${ident(id)}/archiver`),
     /** Le jeu de questions réuni des sources que la personne lit (lecture seule) ; filtres `relecture`, `fiable`, `q`. */
     questionsQualite: (id: string, params?: Record<string, string>) => get(`/api/assistants/${ident(id)}/qualite/questions`, params),
     /** Par source lisible : la synthèse de qualité, les réponses fiables et combien de fois elles ont été servies. */
