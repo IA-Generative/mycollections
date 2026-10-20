@@ -10,6 +10,8 @@ const props = defineProps<{
   titreTrace?: string
   /** Pas de barre d'avis (aucune route ne recueille encore l'avis sur un assistant). */
   sansAvis?: boolean
+  /** La réponse est une réponse fiable servie telle quelle : badge, et pas d'alerte « aucune source ». */
+  reponseFiable?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -46,6 +48,12 @@ function onVote (v: 'up' | 'down') {
     <div class="myrag-msg__role">
       {{ message.role === 'user' ? 'Vous' : '🤖 Assistant' }}
     </div>
+    <p
+      v-if="reponseFiable && message.role === 'assistant'"
+      class="fr-mb-1v"
+    >
+      <span class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon">Réponse fiable</span>
+    </p>
     <div
       v-if="message.role === 'user'"
       class="myrag-msg__body"
@@ -72,7 +80,7 @@ function onVote (v: 'up' | 'down') {
 
     <!-- No-source warning when RAG returned nothing -->
     <p
-      v-if="message.role === 'assistant' && !message.error && !message.sources?.length && message.content"
+      v-if="message.role === 'assistant' && !reponseFiable && !message.error && !message.sources?.length && message.content"
       class="fr-text--xs"
       style="color:#b34000;margin-top:0.4rem;"
     >

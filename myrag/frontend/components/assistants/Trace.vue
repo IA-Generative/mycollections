@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TracePlan } from '~/utils/assistants'
+import { phraseFiable } from '~/utils/assistants'
 
 /**
  * Comment l'assistant a cherché : la consigne retenue, les étapes (source, ce dont chacune part,
@@ -26,7 +27,7 @@ function pluriel (n: number, mot: string): string {
       class="fr-text--sm fr-mb-1w"
     >
       <span class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon">Réponse fiable</span>
-      Une réponse déjà vérifiée a été servie, sans nouvelle recherche.
+      {{ phraseFiable(trace.scoreFiable) }}.
     </p>
     <p
       v-if="trace.consigne"
