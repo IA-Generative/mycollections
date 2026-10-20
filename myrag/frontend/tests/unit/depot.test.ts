@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCEPT, bilan, etatDuTravail, natureFichier, nomDepuisChemin, trier } from '../../utils/depot'
+import { ACCEPT, bilan, etatAfficheDepuis, etatDepot, etatDuTravail, libelleEtatDepot, natureFichier, nomDepuisChemin, passages, trier } from '../../utils/depot'
 
 describe('formats', () => {
   it('distingue texte et documents, refuse le reste', () => {
@@ -49,5 +49,33 @@ describe('suivi', () => {
   })
   it('fait le bilan', () => {
     expect(bilan(['indexe', 'indexe', 'echec', 'attente', 'indexation'])).toBe('2 indexés, 1 en échec, 2 en cours')
+  })
+})
+
+describe('etatDepot', () => {
+  it.each([
+    [null, 'attente', 'en attente'],
+    [{ status: 'chunking' }, 'decoupage', 'découpage en cours'],
+    [{ status: 'chunking_done' }, 'decoupage', 'découpage en cours'],
+    [{ status: 'uploading', total_chunks: 4 }, 'decoupage', 'découpage en cours'],
+    [{ status: 'done', total_chunks: 4 }, 'pret', 'prêt'],
+    [{ status: 'done_with_errors', total_chunks: 4, failed_chunks: 1 }, 'pret', 'prêt'],
+    [{ status: 'done_with_errors', total_chunks: 4, failed_chunks: 4 }, 'echec', 'en échec'],
+    [{ status: 'interrupted' }, 'echec', 'en échec'],
+  ])('%o → %s', (job, etat, libelle) => {
+    expect(etatDepot(job as never)).toBe(etat)
+    expect(libelleEtatDepot(etatDepot(job as never))).toBe(libelle)
+  })
+  it('chaque état de la zone de dépôt a son état affiché', () => {
+    expect((['attente', 'envoi', 'indexation', 'indexe', 'echec'] as const).map(etatAfficheDepuis)).toEqual(['attente', 'decoupage', 'decoupage', 'pret', 'echec'])
+  })
+})
+
+describe('passages', () => {
+  it('affichés seulement quand ils sont connus', () => {
+    expect(passages(312)).toBe('312 passages')
+    expect(passages(1)).toBe('1 passage')
+    expect(passages(0)).toBeNull()
+    expect(passages(undefined)).toBeNull()
   })
 })

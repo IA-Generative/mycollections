@@ -1,322 +1,54 @@
-<template>
-  <div>
-    <nav role="navigation" class="fr-breadcrumb" aria-label="vous etes ici">
-      <ol class="fr-breadcrumb__list">
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin">Administration</NuxtLink></li>
-        <li><NuxtLink class="fr-breadcrumb__link" to="/admin/create">Créer</NuxtLink></li>
-        <li><a class="fr-breadcrumb__link" aria-current="page">Identification</a></li>
-      </ol>
-    </nav>
-
-    <h1 class="fr-h3">Identification de la collection</h1>
-    <p class="fr-text--lg fr-mb-4w">Étape 2 sur 5 — Source : {{ sourceLabel }}</p>
-
-    <WizardStepper :current-step="2" />
-
-    <!-- Duplicate warning -->
-    <div v-if="duplicateWarning" class="fr-alert fr-alert--warning fr-mb-4w">
-      <h3 class="fr-alert__title">Collection similaire detectee</h3>
-      <p>{{ duplicateWarning.message }}</p>
-      <div v-if="duplicateWarning.existing" class="fr-mt-2w">
-        <p><strong>Collection existante :</strong> {{ duplicateWarning.existing.name }}
-          <span v-if="duplicateWarning.existing.description"> — {{ duplicateWarning.existing.description }}</span>
-        </p>
-        <p v-if="duplicateWarning.existing.contact_name">
-          <strong>Responsable :</strong> {{ duplicateWarning.existing.contact_name }}
-          <a v-if="duplicateWarning.existing.contact_email"
-             :href="`mailto:${duplicateWarning.existing.contact_email}?subject=Demande d'acces a la collection ${duplicateWarning.existing.name}&body=Bonjour,%0A%0AJe souhaitais creer une collection similaire (${form.name}).%0APourriez-vous m'accorder l'acces a la votre pour federer nos efforts ?%0A%0AMerci.`"
-             class="fr-link">
-            📧 {{ duplicateWarning.existing.contact_email }}
-          </a>
-        </p>
-      </div>
-      <div class="fr-callout fr-callout--brown-caramel fr-mt-2w">
-        <p class="fr-callout__text">
-          <strong>Pourquoi eviter les doublons ?</strong> Dupliquer une collection degrade la qualite des reponses
-          (sources contradictoires), double le cout d'indexation et de maintenance, et disperse les efforts
-          d'amelioration (feedback, evaluation, prompt). Preferez contribuer a la collection existante.
-        </p>
-      </div>
-      <div class="fr-btns-group fr-btns-group--inline fr-mt-2w">
-        <NuxtLink :to="`/c/${duplicateWarning.existing?.name}`" class="fr-btn fr-btn--secondary">
-          Voir la collection existante
-        </NuxtLink>
-        <button class="fr-btn fr-btn--tertiary" @click="duplicateWarning = null">
-          Je veux quand meme creer la mienne
-        </button>
-      </div>
-    </div>
-
-    <div class="fr-col-8">
-      <div class="fr-input-group">
-        <label class="fr-label" for="titre">
-          Titre de la collection *
-          <span class="fr-hint-text">Ce que liront vos collègues, au catalogue et dans l'assistant — par exemple « Codes NATINF ».</span>
-        </label>
-        <input id="titre" class="fr-input" v-model="form.titre" maxlength="255" placeholder="Un titre qui dit ce qu'elle contient"
-               @input="surTitre" />
-      </div>
-
-      <div class="fr-input-group fr-mt-2w" :class="nameStatus === 'taken' ? 'fr-input-group--error' : nameStatus === 'available' ? 'fr-input-group--valid' : ''">
-        <label class="fr-label" for="name">
-          Identifiant *
-          <span class="fr-hint-text">
-            Proposé d'après le titre, modifiable. C'est ce que taperont les applications :
-            <code>openrag-{{ form.name || 'identifiant' }}</code>. Il ne changera plus.
-          </span>
-        </label>
-        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
-          <input id="name" class="fr-input" v-model="form.name" placeholder="codes-natinf"
-                 @blur="checkDuplicates" @input="identifiantTouche = true; nameStatus = ''; programmerVerification()" style="flex:1;" />
-          <button class="fr-btn fr-btn--sm fr-btn--secondary" @click="checkNameAvailability" :disabled="!form.name.trim()">
-            Verifier
-          </button>
-        </div>
-        <p v-if="nameStatus === 'available'" class="fr-valid-text">✓ Cet identifiant est disponible</p>
-        <p v-if="nameStatus === 'taken'" class="fr-error-text">{{ messageRefus || 'Cet identifiant est déjà pris' }}</p>
-        <div v-if="nameSuggestion" class="fr-mt-1w" style="display:flex;align-items:center;gap:0.5rem;">
-          <span class="fr-text--sm" style="color:#666;">Suggestion :</span>
-          <code class="fr-text--sm">{{ nameSuggestion }}</code>
-          <button class="fr-btn fr-btn--sm fr-btn--tertiary" @click="form.name = nameSuggestion; nameSuggestion = ''; checkNameAvailability()">
-            Utiliser
-          </button>
-        </div>
-      </div>
-
-      <div class="fr-input-group fr-mt-2w">
-        <label class="fr-label" for="desc">
-          Description
-          <span class="fr-hint-text">Décrivez le contenu et l'objectif de cette collection. Ce texte apparaîtra dans le catalogue et aidera vos collègues à la trouver.</span>
-        </label>
-        <textarea id="desc" class="fr-input" v-model="form.description" rows="2"
-               :placeholder="descPlaceholders[source] || 'Ex: Documentation juridique sur le droit des etrangers, mise a jour quotidiennement depuis Legifrance.'"></textarea>
-      </div>
-
-      <div class="fr-select-group fr-mt-2w">
-        <label class="fr-label">Type de collection (découpage et consignes)</label>
-        <select class="fr-select" v-model="selectedProfile" @change="applyProfile">
-          <option v-for="p in profiles" :key="p.key" :value="p.key">
-            {{ p.icon }} {{ p.label }}
-          </option>
-        </select>
-        <p class="fr-hint-text">{{ currentProfileDesc }}</p>
-      </div>
-
-      <fieldset class="fr-fieldset fr-mt-2w">
-        <legend class="fr-fieldset__legend">Options</legend>
-        <div class="fr-fieldset__element">
-          <div class="fr-checkbox-group">
-            <input type="checkbox" id="graph" v-model="form.graph_enabled"
-                   @change="onGraphToggle" />
-            <label class="fr-label" for="graph">Activer le graph de references</label>
-          </div>
-          <details class="fr-mt-1w fr-ml-4w">
-            <summary class="fr-text--sm" style="cursor:pointer;color:#000091;">En savoir plus sur le graph</summary>
-            <div class="fr-callout fr-callout--green-emeraude fr-mt-1w">
-              <p class="fr-callout__text fr-text--sm">
-                Le <strong>graph de references</strong> cartographie les liens entre les documents de votre collection
-                (par exemple, les renvois entre articles d'un code juridique).
-                Il permet de naviguer visuellement dans les relations entre documents
-                et d'enrichir les reponses du RAG avec le contexte des documents lies.
-              </p>
-              <p class="fr-callout__text fr-text--sm fr-mt-1w">
-                <strong>Quand l'activer ?</strong>
-              </p>
-              <ul class="fr-text--sm">
-                <li>✅ Codes juridiques (references croisees entre articles)</li>
-                <li>✅ Documentation technique avec renvois entre sections</li>
-                <li>✅ Corpus de normes ou specifications liees entre elles</li>
-                <li>❌ Pas utile pour les FAQ, fichiers independants, ou corpus sans liens internes</li>
-              </ul>
-            </div>
-          </details>
-        </div>
-        <div v-if="form.graph_enabled" class="fr-fieldset__element">
-          <div class="fr-checkbox-group">
-            <input type="checkbox" id="ai_summary" v-model="form.ai_summary_enabled" />
-            <label class="fr-label" for="ai_summary">Résumé IA des articles longs dans le graphe</label>
-          </div>
-          <details class="fr-mt-1w fr-ml-4w">
-            <summary class="fr-text--sm" style="cursor:pointer;color:#000091;">En savoir plus</summary>
-            <div class="fr-callout fr-mt-1w">
-              <p class="fr-callout__text fr-text--sm">
-                Quand un article est tres long, le graph affiche un <strong>résumé généré par l'IA</strong>
-                pour ameliorer la lisibilite. <strong>L'article original n'est jamais modifie</strong> —
-                le RAG utilise toujours le texte integral.
-              </p>
-            </div>
-          </details>
-        </div>
-      </fieldset>
-
-      <div class="fr-grid-row fr-grid-row--gutters fr-mt-2w" style="align-items:flex-start;">
-        <div class="fr-col-6">
-          <div class="fr-select-group">
-            <label class="fr-label">
-              Sensibilite
-              <span class="fr-hint-text">Niveau de classification des documents de la collection</span>
-            </label>
-            <select class="fr-select" v-model="form.sensitivity">
-              <option value="public">Données ouvertes</option>
-              <option value="internal">Interne au ministeriel</option>
-              <option value="personal">Données personnelles</option>
-              <option value="confidential">Confidentiel</option>
-              <option value="restricted">Diffusion restreinte</option>
-            </select>
-          </div>
-        </div>
-        <div class="fr-col-6">
-          <div class="fr-select-group">
-            <label class="fr-label">
-              Portee
-              <span class="fr-hint-text">Qui pourra accéder à cette collection</span>
-            </label>
-            <select class="fr-select" v-model="form.scope">
-              <option value="public">Tout le ministere</option>
-              <option value="group">Un ou plusieurs groupes</option>
-              <option value="private">Privé (pour évaluation)</option>
-            </select>
-          </div>
-
-          <!-- Group selector when scope = group -->
-          <div v-if="form.scope === 'group'" class="fr-mt-2w">
-            <label class="fr-label">
-              Groupes autorises
-              <span class="fr-hint-text">Recherchez parmi vos groupes Keycloak</span>
-            </label>
-            <div style="display:flex;gap:0.5rem;">
-              <input class="fr-input" v-model="groupSearch" placeholder="Rechercher un groupe..."
-                     @input="searchGroups" style="flex:1;" />
-            </div>
-
-            <!-- Search results -->
-            <div v-if="groupResults.length > 0" class="fr-mt-1w"
-                 style="border:1px solid var(--border-default-grey);border-radius:4px;max-height:150px;overflow-y:auto;">
-              <button v-for="g in groupResults" :key="g.id"
-                      class="fr-text--sm"
-                      style="display:block;width:100%;text-align:left;padding:0.5rem 0.75rem;border:none;background:none;cursor:pointer;"
-                      @mouseover="$event.target.style.background='#f6f6f6'"
-                      @mouseleave="$event.target.style.background='none'"
-                      @click="addGroup(g)">
-                {{ g.path || g.name }}
-              </button>
-            </div>
-
-            <!-- Selected groups -->
-            <div v-if="form.scope_groups.length > 0" class="fr-mt-1w" style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-              <span v-for="(g, i) in form.scope_groups" :key="i"
-                    class="fr-tag fr-tag--sm fr-tag--dismiss"
-                    @click="form.scope_groups.splice(i, 1)">
-                {{ g }}
-              </span>
-            </div>
-            <p v-else class="fr-text--sm fr-mt-1w" style="color:#666;">Aucun groupe sélectionné</p>
-          </div>
-
-          <!-- Private info -->
-          <div v-if="form.scope === 'private'" class="fr-mt-1w">
-            <p class="fr-text--sm" style="color:#666;">
-              Seul vous pourrez voir et utiliser cette collection. Utile pour tester
-              avant de publier a un groupe ou au ministere.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div class="fr-input-group fr-mt-3w">
-        <label class="fr-label">Responsable / contact</label>
-        <input class="fr-input" v-model="form.contact_name" placeholder="Nom du responsable" />
-      </div>
-      <div class="fr-input-group fr-mt-1w">
-        <label class="fr-label">Email de contact</label>
-        <input class="fr-input" type="email" v-model="form.contact_email" placeholder="responsable@example.com" />
-      </div>
-
-      <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
-        <NuxtLink to="/admin/create" class="fr-btn fr-btn--secondary">← Précédent</NuxtLink>
-        <button class="fr-btn" @click="createAndNext" :disabled="creating || !form.name.trim() || !form.titre.trim() || nameStatus === 'taken'">
-          {{ creating ? 'Création…' : 'Suivant →' }}
-        </button>
-      </div>
-
-      <div v-if="error" class="fr-alert fr-alert--error fr-mt-2w"><p>{{ error }}</p></div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { slugifyCollectionName, isConflictError, deriverIdentifiant, motifRefus, REGLES_PAR_DEFAUT, type ReglesNommage } from '~/utils/collectionName'
+import type { Categorie } from '~/types/collection'
+import type { ReglesNommage } from '~/utils/collectionName'
+import { isConflictError, motifRefus, REGLES_PAR_DEFAUT, slugifyCollectionName } from '~/utils/collectionName'
+import { identifiantPropose, reglagesAvancesDefaut, replierReglagesAvances } from '~/utils/wizard'
 
+/**
+ * Étape 2 de l'assistant : décrire la collection. Visibles : titre, identifiant proposé (lecture
+ * seule), description, catégorie, qui peut l'interroger, responsable, courriel. Le reste (type de
+ * collection, sensibilité, liens entre documents, identifiant choisi à la main) est replié sous
+ * « Réglages avancés », qui s'ouvre seul si une valeur diffère du défaut ou porte une erreur.
+ */
 const route = useRoute()
 const router = useRouter()
 const { get, post } = useApi()
-const { getUserName, user } = useAuth()
+const { user } = useAuth()
+const { lister: listerCategories } = useCategories()
 
 const source = (route.query.source as string) || 'file'
+const defaut = reglagesAvancesDefaut(source)
 
-const sourceLabels: Record<string, string> = {
-  legifrance: '⚖️ Legifrance', file: '📄 Fichier unique', directory: '📁 Repertoire',
-  drive: '☁️ Drive', nextcloud: '📦 Nextcloud', resana: '🗂️ Resana',
-}
-const sourceLabel = sourceLabels[source] || source
-
-const descPlaceholders: Record<string, string> = {
-  legifrance: 'Code de l\'entree et du sejour des etrangers',
-  file: 'Description du document', directory: 'Description du corpus',
-  drive: 'Dossier Drive a synchroniser', nextcloud: 'Dossier Nextcloud', resana: 'Espace Resana',
-}
-
-// Group search
-const groupSearch = ref('')
-const groupResults = ref<any[]>([])
-const userGroups = ref<any[]>([])
-
-async function searchGroups() {
-  if (!groupSearch.value.trim()) {
-    groupResults.value = []
-    return
-  }
-  const q = groupSearch.value.toLowerCase()
-  groupResults.value = userGroups.value.filter(g =>
-    (g.name || '').toLowerCase().includes(q) ||
-    (g.path || '').toLowerCase().includes(q)
-  ).filter(g => !form.value.scope_groups.includes(g.path || g.name))
-}
-
-function addGroup(g: any) {
-  const name = g.path || g.name
-  if (!form.value.scope_groups.includes(name)) {
-    form.value.scope_groups.push(name)
-  }
-  groupSearch.value = ''
-  groupResults.value = []
-}
-
-function onGraphToggle() {
-  if (!form.value.graph_enabled) {
-    form.value.ai_summary_enabled = false
-  }
-}
-
-// Profils couples : strategie + prompt + options
+// Types de collection : découpage et consignes réglés ensemble.
 const profiles = [
-  { key: 'juridique', icon: '⚖️', label: 'Code juridique (articles + citations)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Decoupage par article avec hierarchie Livre/Titre/Chapitre. Le LLM cite les numeros d\'articles.' },
-  { key: 'faq', icon: '❓', label: 'FAQ / Questions-reponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Decoupage par question-reponse. Le LLM donne des reponses directes avec la source.' },
-  { key: 'rapport', icon: '📊', label: 'Rapport / Document structure', strategy: 'section', prompt: 'technique', graph: false, desc: 'Decoupage par section (titres markdown). Le LLM cite les sections et pages.' },
-  { key: 'corpus', icon: '📚', label: 'Corpus multi-documents', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Detection automatique du type. Le LLM croise les sources de plusieurs documents.' },
-  { key: 'multimedia', icon: '🎬', label: 'Multimedia (images, audio, video)', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions audio, descriptions d\'images. Le LLM cite les timecodes et fichiers.' },
-  { key: 'generique', icon: '📄', label: 'Generique (detection automatique)', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Decoupage et prompt automatiques. Adapte a tout type de document.' },
+  { key: 'generique', label: 'Générique (détection automatique)', strategy: 'auto', prompt: 'generic', graph: false, desc: 'Découpage et consignes automatiques, adaptés à tout type de document.' },
+  { key: 'juridique', label: 'Code juridique (articles et citations)', strategy: 'article', prompt: 'juridique', graph: true, desc: 'Un passage par article, avec sa place dans le code ; l\'assistant cite les numéros d\'articles.' },
+  { key: 'faq', label: 'FAQ, questions-réponses', strategy: 'qr', prompt: 'faq', graph: false, desc: 'Un passage par question ; l\'assistant répond directement, avec la source.' },
+  { key: 'rapport', label: 'Rapport, document structuré', strategy: 'section', prompt: 'technique', graph: false, desc: 'Un passage par section ; l\'assistant cite les sections et les pages.' },
+  { key: 'corpus', label: 'Plusieurs documents variés', strategy: 'auto', prompt: 'multi_thematique', graph: false, desc: 'Le type de chaque document est détecté ; l\'assistant croise les sources.' },
+  { key: 'multimedia', label: 'Images, audio, vidéo', strategy: 'auto', prompt: 'multimedia', graph: false, desc: 'Transcriptions et descriptions ; l\'assistant cite les fichiers et les minutages.' },
 ]
-
-const defaultProfile: Record<string, string> = {
-  legifrance: 'juridique', file: 'generique', directory: 'corpus',
-  drive: 'corpus', nextcloud: 'corpus', resana: 'corpus',
-}
-
-const selectedProfile = ref(defaultProfile[source] || 'generique')
+const profilInitial = profiles.find(p => p.key === defaut.profil) || profiles[0]!
+const selectedProfile = ref(profilInitial.key)
 const currentProfileDesc = computed(() => profiles.find(p => p.key === selectedProfile.value)?.desc || '')
 
-function applyProfile() {
+const form = ref({
+  titre: '',
+  name: '',
+  description: '',
+  categorie: '',
+  strategy: profilInitial.strategy,
+  sensitivity: defaut.sensitivity,
+  prompt_template: profilInitial.prompt,
+  scope: 'group',
+  graph_enabled: profilInitial.graph,
+  ai_summary_enabled: defaut.ai_summary_enabled,
+  contact_name: '',
+  contact_email: '',
+  scope_groups: [] as string[],
+})
+
+function applyProfile () {
   const p = profiles.find(pr => pr.key === selectedProfile.value)
   if (p) {
     form.value.strategy = p.strategy
@@ -324,65 +56,49 @@ function applyProfile() {
     form.value.graph_enabled = p.graph
   }
 }
+function onGraphToggle () {
+  if (!form.value.graph_enabled) {
+    form.value.ai_summary_enabled = false
+  }
+}
 
-const initProfile = profiles.find(p => p.key === (defaultProfile[source] || 'generique'))
-
-const form = ref({
-  titre: '', name: '', description: '',
-  strategy: initProfile?.strategy || 'auto',
-  sensitivity: 'public',
-  prompt_template: initProfile?.prompt || 'generic',
-  scope: 'group',
-  graph_enabled: initProfile?.graph || false,
-  ai_summary_enabled: false,
-  contact_name: '', contact_email: '',
-  scope_groups: [] as string[],
-})
-
-const templates = ref<any[]>([])
-const allCollections = ref<any[]>([])
-const creating = ref(false)
-const error = ref('')
-const duplicateWarning = ref<any>(null)
-const nameStatus = ref('')  // '' | 'available' | 'taken'
-const nameSuggestion = ref('')
-const messageRefus = ref('')
+// ─── Identifiant ─────────────────────────────────────────────────────────────
 const regles = ref<ReglesNommage>(REGLES_PAR_DEFAUT)
-/** Tant que l'identifiant n'a pas été retouché à la main, il suit le titre. */
-const identifiantTouche = ref(false)
+const identifiantManuel = ref(false)
+const pris = ref(new Set<string>())
+const nameStatus = ref('') // '' | 'available' | 'taken'
+const messageRefus = ref('')
 let minuterie: ReturnType<typeof setTimeout> | null = null
 
-function surTitre() {
-  if (identifiantTouche.value) return
-  form.value.name = deriverIdentifiant(form.value.titre, regles.value.max, regles.value.prefixe_impose || '')
+/** Tant que l'identifiant n'est pas choisi à la main, il suit le titre ; s'il est pris, un suffixe libre. */
+function proposerIdentifiant () {
+  if (identifiantManuel.value) {
+    return
+  }
+  form.value.name = identifiantPropose(form.value.titre, pris.value, regles.value)
   nameStatus.value = ''
   programmerVerification()
 }
 
-/** Vérifie seul, une demi-seconde après la dernière frappe. */
-function programmerVerification() {
-  if (minuterie) clearTimeout(minuterie)
-  // Pas de réécriture du champ pendant la frappe (un tiret final disparaîtrait sous les doigts).
+function programmerVerification () {
+  if (minuterie) {
+    clearTimeout(minuterie)
+  }
   minuterie = setTimeout(() => {
-    if (form.value.name.trim() && !form.value.name.endsWith('-')) checkNameAvailability(false)
+    if (form.value.name.trim() && !form.value.name.endsWith('-')) {
+      checkNameAvailability(false)
+    }
   }, 500)
 }
 
-/** Un identifiant pris : on ne propose PAS `-v2` (c'est exactement le genre de nom qu'on ne
- *  veut plus) — on invite à préciser le contenu. */
-function suggestName(_name: string): string {
-  return ''
-}
-
-async function checkNameAvailability(reecrire: boolean | Event = true) {
-  if (!form.value.name.trim()) return
+async function checkNameAvailability (reecrire = true) {
+  if (!form.value.name.trim()) {
+    return
+  }
   const name = slugifyCollectionName(form.value.name)
-  if (reecrire !== false) form.value.name = name  // normalize
-
-  // Vérif AUTORITAIRE côté serveur : la liste locale est filtrée par groupe, donc
-  // un nom déjà pris mais invisible y paraîtrait « disponible » puis échouerait
-  // en 409 à la création.
-  // D'abord les règles de forme, sans aller au serveur (il reste l'autorité à la création).
+  if (reecrire) {
+    form.value.name = name
+  }
   const motif = motifRefus(name, regles.value)
   if (motif) {
     nameStatus.value = 'taken'
@@ -393,72 +109,104 @@ async function checkNameAvailability(reecrire: boolean | Event = true) {
     const { available, message } = await get('/api/collections/check-name', { name })
     if (available) {
       nameStatus.value = 'available'
-      nameSuggestion.value = ''
       messageRefus.value = ''
-    } else {
+    }
+    else if (!identifiantManuel.value) {
+      // Proposé et pris : on retient qu'il l'est, et on propose le suffixe libre suivant.
+      pris.value = new Set([...pris.value, name])
+      proposerIdentifiant()
+    }
+    else {
       nameStatus.value = 'taken'
-      messageRefus.value = (message || 'Cet identifiant est déjà pris.') + ' Précisez le contenu (un périmètre, une année, un service).'
-      nameSuggestion.value = ''
+      messageRefus.value = `${message || 'Cet identifiant est déjà pris.'} Précisez le contenu (un périmètre, une année, un service).`
     }
-  } catch {
-    // En cas d'échec de la vérif, on ne bloque pas : la création reste protégée
-    // côté serveur (409 géré dans createAndNext).
+  }
+  catch {
+    // La vérification a échoué : on ne bloque pas, la création reste protégée par le serveur (409).
     nameStatus.value = ''
-    nameSuggestion.value = ''
   }
 }
 
-/**
- * Strip common versioning suffixes so "ceseda-v2" and "ceseda" collide
- * while "test-drive" and "test" do not. We only collapse real version
- * markers (-v<digits>, -<digits>, bare trailing digits), not arbitrary
- * hyphen segments which typically carry semantic meaning.
- */
-function normalizeCollectionName(s: string): string {
-  return s.toLowerCase()
-    .replace(/-v\d+$/, '')   // -v2, -v10
-    .replace(/-\d+$/, '')    // -2, -10
-    .replace(/\d+$/, '')     // trailing digits without separator
+// ─── Réglages avancés ────────────────────────────────────────────────────────
+const erreurs = computed(() => ({ name: nameStatus.value === 'taken' ? messageRefus.value : '' }))
+const replie = computed(() => replierReglagesAvances({
+  profil: selectedProfile.value,
+  sensitivity: form.value.sensitivity,
+  graph_enabled: form.value.graph_enabled,
+  ai_summary_enabled: form.value.ai_summary_enabled,
+  identifiant_manuel: identifiantManuel.value,
+}, erreurs.value, defaut))
+const avancesOuverts = ref(false)
+// Le repli s'ouvre seul quand il cache un choix ou une erreur ; la personne peut le refermer.
+watch(replie, (r) => {
+  if (!r) {
+    avancesOuverts.value = true
+  }
+}, { immediate: true })
+
+// ─── Qui peut l'interroger ───────────────────────────────────────────────────
+const groupSearch = ref('')
+const groupResults = ref<{ name: string, path: string }[]>([])
+const userGroups = ref<{ name: string, path: string }[]>([])
+function searchGroups () {
+  const q = groupSearch.value.trim().toLowerCase()
+  groupResults.value = q
+    ? userGroups.value.filter(g => (g.name || '').toLowerCase().includes(q) || (g.path || '').toLowerCase().includes(q)).filter(g => !form.value.scope_groups.includes(g.path))
+    : []
+}
+function addGroup (g: { path: string }) {
+  if (!form.value.scope_groups.includes(g.path)) {
+    form.value.scope_groups.push(g.path)
+  }
+  groupSearch.value = ''
+  groupResults.value = []
 }
 
-async function checkDuplicates() {
-  if (!form.value.name.trim()) return
+// ─── Doublons ────────────────────────────────────────────────────────────────
+const categories = ref<Categorie[]>([])
+const allCollections = ref<any[]>([])
+const duplicateWarning = ref<any>(null)
+const VERSION_FINALE = /-v\d+$/
+const NUMERO_FINAL = /-\d+$/
+const CHIFFRES_FINAUX = /\d+$/
+/** « ceseda-v2 » et « ceseda » se ressemblent ; « test-drive » et « test » non. */
+function normalizeCollectionName (s: string): string {
+  return s.toLowerCase().replace(VERSION_FINALE, '').replace(NUMERO_FINAL, '').replace(CHIFFRES_FINAUX, '')
+}
+function checkDuplicates () {
+  if (!form.value.name.trim()) {
+    return
+  }
   const name = form.value.name.toLowerCase()
-  const normName = normalizeCollectionName(name)
-
-  // Exact match wins — shows "existe deja" to block duplicate creation.
-  const exact = allCollections.value.find(c => c.name.toLowerCase() === name)
-
-  // Otherwise flag a soft "similar" only if the *normalized* names collide:
-  // e.g. "ceseda-v2" vs "ceseda" -> warning, but "test-drive" vs "test" -> no warning.
-  const similar = exact
-    || allCollections.value.find(c => normalizeCollectionName(c.name) === normName)
-
-  if (similar) {
-    duplicateWarning.value = {
-      message: similar.name.toLowerCase() === name
-        ? `Une collection "${similar.name}" existe deja.`
-        : `Une collection similaire "${similar.name}" existe deja.`,
-      existing: similar,
-    }
-  } else {
-    duplicateWarning.value = null
-  }
+  const similar = allCollections.value.find(c => c.name.toLowerCase() === name)
+    || allCollections.value.find(c => normalizeCollectionName(c.name) === normalizeCollectionName(name))
+  duplicateWarning.value = similar
+    ? { message: similar.name.toLowerCase() === name ? `Une collection « ${similar.name} » existe déjà.` : `Une collection proche, « ${similar.name} », existe déjà.`, existing: similar }
+    : null
 }
 
-async function createAndNext() {
+const creating = ref(false)
+const error = ref('')
+const pret = computed(() => !!form.value.name.trim() && !!form.value.titre.trim() && nameStatus.value !== 'taken')
+
+async function createAndNext () {
   creating.value = true
   error.value = ''
+  const corps: Record<string, unknown> = { ...form.value }
+  if (!form.value.categorie) {
+    delete corps.categorie // « Non classée »
+  }
   try {
-    await post('/api/collections', form.value)
+    await post('/api/collections', corps)
     router.push(`/admin/create/step-3?collection=${form.value.name}&source=${source}`)
-  } catch (e: any) {
+  }
+  catch (e: any) {
     if (isConflictError(e)) {
-      // Nom déjà pris (ex. collection invisible car cloisonnée) : on guide vers
-      // un autre nom au lieu d'afficher l'erreur API brute, et on reste sur l'étape.
       nameStatus.value = 'taken'
-      error.value = `L'identifiant « ${form.value.name} » est déjà pris. Précisez le contenu (un périmètre, une année, un service).`
-    } else {
+      messageRefus.value = `L'identifiant « ${form.value.name} » est déjà pris. Précisez le contenu (un périmètre, une année, un service).`
+      error.value = messageRefus.value
+    }
+    else {
       error.value = messageErreur(e)
     }
   }
@@ -466,33 +214,515 @@ async function createAndNext() {
 }
 
 onMounted(async () => {
-  // Les règles d'identifiant du serveur (préfixes refusés réglables) — demandées À PART : la
-  // liste des collections, elle, attend OpenRAG et peut tarder.
   get('/api/collections/regles-nommage')
-    .then((r) => { regles.value = { ...REGLES_PAR_DEFAUT, ...r } })
+    .then((r) => {
+      regles.value = { ...REGLES_PAR_DEFAUT, ...r }
+    })
+    .catch(() => {})
+  listerCategories()
+    .then((r) => {
+      categories.value = r
+    })
     .catch(() => {})
   try {
-    const [tplData, colData] = await Promise.all([
-      get('/api/collections/templates'),
-      get('/api/collections'),
-    ])
-    templates.value = tplData.templates || []
-    allCollections.value = colData.collections || []
-  } catch (e) {}
-
-  // Groupes proposés : chemins complets seulement, les seuls que l'API sait comparer
-  // (un nom court enregistré ne donnerait jamais accès — cf. utils/groupes.ts).
-  userGroups.value = groupPaths(user.value?.profile?.groups).map((g: string) => ({ name: g.split('/').pop(), path: g }))
-
-  // Pre-fill contact from session
+    allCollections.value = (await get('/api/collections')).collections || []
+    pris.value = new Set(allCollections.value.map(c => c.name))
+  }
+  catch {}
+  // Groupes proposés : chemins complets seulement, les seuls que l'API sait comparer.
+  userGroups.value = groupPaths(user.value?.profile?.groups).map((g: string) => ({ name: g.split('/').pop() || g, path: g }))
   if (user.value?.profile) {
     const p = user.value.profile
-    if (!form.value.contact_name) {
-      form.value.contact_name = p.name || p.preferred_username || ''
-    }
-    if (!form.value.contact_email) {
-      form.value.contact_email = p.email || ''
-    }
+    form.value.contact_name ||= p.name || p.preferred_username || ''
+    form.value.contact_email ||= p.email || ''
   }
 })
 </script>
+
+<template>
+  <WizardEtape
+    :numero="2"
+    titre="Décrivez votre collection"
+    chapeau="Une collection utile doit pouvoir être retrouvée et comprise en quelques secondes."
+  >
+    <template #formulaire>
+      <!-- Doublon : l'alerte reste, avant le formulaire. -->
+      <div
+        v-if="duplicateWarning"
+        class="fr-alert fr-alert--warning fr-mb-4w"
+      >
+        <h2 class="fr-alert__title fr-h6">
+          Une collection proche existe déjà
+        </h2>
+        <p>{{ duplicateWarning.message }}</p>
+        <p
+          v-if="duplicateWarning.existing?.contact_name"
+          class="fr-mt-1w"
+        >
+          <strong>Responsable :</strong> {{ duplicateWarning.existing.contact_name }}
+          <a
+            v-if="duplicateWarning.existing.contact_email"
+            :href="`mailto:${duplicateWarning.existing.contact_email}`"
+            class="fr-link"
+          >
+            {{ duplicateWarning.existing.contact_email }}
+          </a>
+        </p>
+        <p class="fr-text--sm fr-mt-1w">
+          Compléter une collection vaut mieux que la dupliquer : les sources ne se contredisent pas et les efforts ne se dispersent pas.
+        </p>
+        <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm fr-mt-2w">
+          <li>
+            <NuxtLink
+              :to="`/c/${duplicateWarning.existing?.name}`"
+              class="fr-btn fr-btn--secondary fr-btn--sm"
+            >
+              Voir la collection existante
+            </NuxtLink>
+          </li>
+          <li>
+            <button
+              type="button"
+              class="fr-btn fr-btn--tertiary fr-btn--sm"
+              @click="duplicateWarning = null"
+            >
+              Je crée quand même la mienne
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="fr-input-group">
+        <label
+          class="fr-label"
+          for="titre"
+        >
+          Titre de la collection *
+          <span class="fr-hint-text">Ce que liront vos collègues dans l'assistant. Soyez précis et différenciant : reprenez le nom habituel du document.</span>
+        </label>
+        <input
+          id="titre"
+          v-model="form.titre"
+          class="fr-input"
+          maxlength="255"
+          placeholder="Ex. : Codes NATINF"
+          required
+          @input="proposerIdentifiant"
+          @blur="checkDuplicates"
+        >
+      </div>
+
+      <div
+        class="fr-input-group"
+        :class="{ 'fr-input-group--error': nameStatus === 'taken', 'fr-input-group--valid': nameStatus === 'available' }"
+      >
+        <label
+          class="fr-label"
+          for="name-propose"
+        >
+          Identifiant
+          <span class="fr-hint-text">Proposé d'après le titre. Il ne changera plus une fois la collection créée. Pour le choisir vous-même : « Réglages avancés ».</span>
+        </label>
+        <input
+          id="name-propose"
+          :value="form.name"
+          class="fr-input"
+          readonly
+          aria-readonly="true"
+        >
+        <p
+          v-if="nameStatus === 'available'"
+          class="fr-valid-text"
+        >
+          Cet identifiant est disponible.
+        </p>
+        <p
+          v-if="nameStatus === 'taken'"
+          class="fr-error-text"
+        >
+          {{ messageRefus || 'Cet identifiant est déjà pris.' }}
+        </p>
+      </div>
+
+      <div class="fr-input-group">
+        <label
+          class="fr-label"
+          for="desc"
+        >
+          Description
+          <span class="fr-hint-text">Dites à quoi elle sert, ce qu'elle couvre et ce qu'elle ne couvre pas.</span>
+        </label>
+        <textarea
+          id="desc"
+          v-model="form.description"
+          class="fr-input"
+          rows="3"
+          placeholder="Ex. : à utiliser pour retrouver la qualification d'une infraction et la peine encourue."
+        />
+      </div>
+
+      <div class="fr-grid-row fr-grid-row--gutters">
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-select-group">
+            <label
+              class="fr-label"
+              for="categorie"
+            >Catégorie
+              <span class="fr-hint-text">Où la ranger dans le catalogue.</span>
+            </label>
+            <select
+              id="categorie"
+              v-model="form.categorie"
+              class="fr-select"
+            >
+              <option value="">
+                Non classée
+              </option>
+              <option
+                v-for="c in categories"
+                :key="c.cle"
+                :value="c.cle"
+              >
+                {{ c.libelle }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-select-group">
+            <label
+              class="fr-label"
+              for="scope"
+            >Qui peut l'interroger ?
+              <span class="fr-hint-text">Vous pourrez l'ouvrir plus largement ensuite.</span>
+            </label>
+            <select
+              id="scope"
+              v-model="form.scope"
+              class="fr-select"
+            >
+              <option value="public">
+                Tout le ministère
+              </option>
+              <option value="group">
+                Un ou plusieurs groupes
+              </option>
+              <option value="private">
+                Moi seulement, pour l'instant
+              </option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="form.scope === 'group'"
+        class="fr-input-group"
+      >
+        <label
+          class="fr-label"
+          for="groupes"
+        >Groupes autorisés
+          <span class="fr-hint-text">Cherchez parmi vos groupes.</span>
+        </label>
+        <input
+          id="groupes"
+          v-model="groupSearch"
+          class="fr-input"
+          placeholder="Rechercher un groupe…"
+          autocomplete="off"
+          @input="searchGroups"
+        >
+        <ul
+          v-if="groupResults.length"
+          class="etape2-groupes"
+        >
+          <li
+            v-for="g in groupResults"
+            :key="g.path"
+          >
+            <button
+              type="button"
+              class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm"
+              @click="addGroup(g)"
+            >
+              {{ g.path }}
+            </button>
+          </li>
+        </ul>
+        <ul
+          v-if="form.scope_groups.length"
+          class="fr-tags-group fr-mt-1w"
+        >
+          <li
+            v-for="(g, i) in form.scope_groups"
+            :key="g"
+          >
+            <button
+              type="button"
+              class="fr-tag fr-tag--sm fr-tag--dismiss"
+              :aria-label="`Retirer ${g}`"
+              @click="form.scope_groups.splice(i, 1)"
+            >
+              {{ g }}
+            </button>
+          </li>
+        </ul>
+        <p
+          v-else
+          class="fr-text--sm fr-mt-1w etape2-discret"
+        >
+          Aucun groupe choisi.
+        </p>
+      </div>
+      <p
+        v-if="form.scope === 'private'"
+        class="fr-text--sm etape2-discret"
+      >
+        Vous seul la verrez : utile pour la tester avant de l'ouvrir.
+      </p>
+
+      <div class="fr-grid-row fr-grid-row--gutters">
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label
+              class="fr-label"
+              for="responsable"
+            >Responsable
+              <span class="fr-hint-text">Le service ou la personne que vos collègues contacteront.</span>
+            </label>
+            <input
+              id="responsable"
+              v-model="form.contact_name"
+              class="fr-input"
+              placeholder="Service ou personne à contacter"
+            >
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label
+              class="fr-label"
+              for="courriel"
+            >Courriel de contact</label>
+            <input
+              id="courriel"
+              v-model="form.contact_email"
+              class="fr-input"
+              type="email"
+              placeholder="service@fake-domain.name"
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Réglages avancés : valeurs par défaut posées ; le repli s'ouvre seul s'il cache un choix ou une erreur. -->
+      <section class="fr-accordion fr-mt-2w">
+        <h2 class="fr-accordion__title">
+          <button
+            type="button"
+            class="fr-accordion__btn"
+            :aria-expanded="avancesOuverts ? 'true' : 'false'"
+            aria-controls="reglages-avances"
+            @click="avancesOuverts = !avancesOuverts"
+          >
+            Réglages avancés (facultatif)
+          </button>
+        </h2>
+        <div
+          id="reglages-avances"
+          class="fr-collapse"
+          :class="{ 'fr-collapse--expanded': avancesOuverts }"
+        >
+          <p class="fr-text--sm">
+            Des valeurs raisonnables sont déjà choisies ; vous pourrez y revenir depuis les réglages de la collection.
+          </p>
+          <div class="fr-select-group">
+            <label
+              class="fr-label"
+              for="profil"
+            >Type de collection
+              <span class="fr-hint-text">Il règle ensemble la façon de découper les documents et les consignes données à l'assistant.</span>
+            </label>
+            <select
+              id="profil"
+              v-model="selectedProfile"
+              class="fr-select"
+              @change="applyProfile"
+            >
+              <option
+                v-for="p in profiles"
+                :key="p.key"
+                :value="p.key"
+              >
+                {{ p.label }}
+              </option>
+            </select>
+            <p class="fr-hint-text fr-mt-1v">
+              {{ currentProfileDesc }}
+            </p>
+          </div>
+          <div class="fr-select-group">
+            <label
+              class="fr-label"
+              for="sensibilite"
+            >Sensibilité des documents</label>
+            <select
+              id="sensibilite"
+              v-model="form.sensitivity"
+              class="fr-select"
+            >
+              <option value="public">
+                Données ouvertes
+              </option>
+              <option value="internal">
+                Interne au ministère
+              </option>
+              <option value="personal">
+                Données personnelles
+              </option>
+              <option value="confidential">
+                Confidentiel
+              </option>
+              <option value="restricted">
+                Diffusion restreinte
+              </option>
+            </select>
+          </div>
+          <fieldset class="fr-fieldset">
+            <legend class="fr-fieldset__legend fr-text--regular">
+              Options
+            </legend>
+            <div class="fr-fieldset__element">
+              <div class="fr-checkbox-group">
+                <input
+                  id="graph"
+                  v-model="form.graph_enabled"
+                  type="checkbox"
+                  @change="onGraphToggle"
+                >
+                <label
+                  class="fr-label"
+                  for="graph"
+                >Liens entre documents
+                  <span class="fr-hint-text">Cartographier les renvois entre documents (utile pour un code juridique).</span>
+                </label>
+              </div>
+            </div>
+            <div
+              v-if="form.graph_enabled"
+              class="fr-fieldset__element"
+            >
+              <div class="fr-checkbox-group">
+                <input
+                  id="ai_summary"
+                  v-model="form.ai_summary_enabled"
+                  type="checkbox"
+                >
+                <label
+                  class="fr-label"
+                  for="ai_summary"
+                >Résumé IA des articles longs dans la carte des liens
+                  <span class="fr-hint-text">Le texte d'origine n'est jamais modifié.</span>
+                </label>
+              </div>
+            </div>
+            <div class="fr-fieldset__element">
+              <div class="fr-checkbox-group">
+                <input
+                  id="identifiant-manuel"
+                  v-model="identifiantManuel"
+                  type="checkbox"
+                  @change="identifiantManuel || proposerIdentifiant()"
+                >
+                <label
+                  class="fr-label"
+                  for="identifiant-manuel"
+                >Choisir l'identifiant moi-même</label>
+              </div>
+            </div>
+          </fieldset>
+          <div
+            v-if="identifiantManuel"
+            class="fr-input-group"
+            :class="{ 'fr-input-group--error': nameStatus === 'taken' }"
+          >
+            <label
+              class="fr-label"
+              for="name"
+            >Identifiant
+              <span class="fr-hint-text">Minuscules, chiffres et tirets. C'est ce que taperont les applications : <code>openrag-{{ form.name || 'identifiant' }}</code>.</span>
+            </label>
+            <input
+              id="name"
+              v-model="form.name"
+              class="fr-input"
+              placeholder="codes-natinf"
+              @input="nameStatus = ''; programmerVerification()"
+              @blur="checkDuplicates"
+            >
+          </div>
+        </div>
+      </section>
+
+      <div
+        v-if="error"
+        class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"
+        role="alert"
+      >
+        <p>{{ error }}</p>
+      </div>
+    </template>
+
+    <template #encadre>
+      <h2 class="fr-callout__title fr-h6">
+        Les étapes
+      </h2>
+      <ol class="fr-callout__text fr-text--sm">
+        <li><strong>Titre :</strong> donnez un nom explicite pour retrouver la collection facilement.</li>
+        <li><strong>Description :</strong> expliquez son contexte d'utilisation et ce qu'on peut lui demander.</li>
+        <li><strong>Catégorie et accès :</strong> rangez-la dans le catalogue et dites qui peut l'interroger.</li>
+        <li><strong>Responsable :</strong> la personne que vos collègues contacteront pour contribuer.</li>
+      </ol>
+      <p class="fr-text--xs fr-mb-0">
+        Une collection proche existe déjà ? Nous vous le dirons avant de créer la vôtre.
+      </p>
+    </template>
+
+    <template #actions>
+      <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-md">
+        <li>
+          <NuxtLink
+            to="/"
+            class="fr-btn fr-btn--tertiary-no-outline"
+          >
+            Annuler
+          </NuxtLink>
+        </li>
+        <li>
+          <NuxtLink
+            to="/admin/create"
+            class="fr-btn fr-btn--secondary"
+          >
+            Étape précédente
+          </NuxtLink>
+        </li>
+        <li>
+          <button
+            type="button"
+            class="fr-btn"
+            :disabled="creating || !pret"
+            @click="createAndNext"
+          >
+            {{ creating ? 'Création…' : 'Étape suivante' }}
+          </button>
+        </li>
+      </ul>
+    </template>
+  </WizardEtape>
+</template>
+
+<style scoped>
+.etape2-groupes { list-style: none; margin: .5rem 0 0; padding: 0; border: 1px solid var(--border-default-grey); max-height: 10rem; overflow-y: auto; }
+.etape2-discret { color: var(--text-mention-grey); }
+</style>
