@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REGLES_PAR_DEFAUT } from '../../utils/collectionName'
-import { cartesDeSource, chargeAuJeu, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
+import { cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
 
 describe('les étapes de l\'assistant', () => {
   it('les cinq libellés, dans l\'ordre', () => {
@@ -123,5 +123,14 @@ describe('chargeAuJeu', () => {
   it('rien pour une question trop courte', () => {
     expect(chargeAuJeu('ab')).toBeNull()
     expect(chargeAuJeu('')).toBeNull()
+  })
+})
+
+describe('completerQuestions', () => {
+  it('remplit les cases vides avec les suggestions, dans l\'ordre', () => {
+    expect(completerQuestions(['', '', ''], ['A ?', 'B ?'])).toEqual(['A ?', 'B ?', ''])
+  })
+  it('garde une question déjà tapée quand la suggestion arrive après', () => {
+    expect(completerQuestions(['Ma question ?', ' ', ''], ['A ?', 'B ?', 'C ?'])).toEqual(['Ma question ?', 'B ?', 'C ?'])
   })
 })
