@@ -109,13 +109,16 @@ def test_une_rubrique_ou_une_collection_inconnue_n_ecrit_rien(client, en_tant_qu
     assert client.get(f"/api/collections/{nom}").json()["categorie"] is None, "le lot entier est annulé"
 
 
-def test_le_proprietaire_regle_le_titre_mais_pas_la_rubrique(client, en_tant_que, creer_collection, nom):
+def test_le_proprietaire_regle_le_titre_et_la_rubrique_parmi_celles_qui_existent(client, en_tant_que, creer_collection, nom):
+    # Décision du 2026-10-19 (refonte) : le créateur choisit la catégorie, l'administration
+    # peut toujours reclasser. Il la choisit parmi les existantes : il n'en crée pas.
     createur = personne("createur")
     creer_collection(nom, createur)
     r = client.patch(f"/api/collections/{nom}", json={"titre": "Mon beau titre", "categorie": "droit-etrangers"})
     assert r.status_code == 200, r.text
     fiche = client.get(f"/api/collections/{nom}").json()
-    assert fiche["titre"] == "Mon beau titre" and fiche["categorie"] is None
+    assert fiche["titre"] == "Mon beau titre" and fiche["categorie"] == "droit-etrangers"
+    assert client.patch(f"/api/collections/{nom}", json={"categorie": "rubrique-du-proprietaire"}).status_code == 422
 
 
 def test_l_ordre_se_regle_et_les_absentes_passent_apres(client, en_tant_que):

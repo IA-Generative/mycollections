@@ -21,6 +21,10 @@ from app.services.collection_store import (
     create_collection as db_create_collection,
 )
 from app.services.collection_store import (
+    derniere_mise_a_jour,
+    derniers_depots,
+)
+from app.services.collection_store import (
     get_collection as db_get_collection,
 )
 from app.services.collection_store import (
@@ -35,6 +39,7 @@ from app.services.collection_store import (
 from app.services.collection_store import (
     update_system_prompt as db_update_system_prompt,
 )
+from app.services.feedback_store import stats_par_collection
 from app.services.keycloak_client import KeycloakClient
 from app.services.openrag_client import OpenRAGClient
 from app.services.sync_service import SyncService
@@ -95,6 +100,17 @@ class CreateCollectionRequest(BaseModel):
     scope_groups: list[str] = []
     contact_name: str = ""
     contact_email: str = ""
+    #: Clé d'une catégorie existante (étape 2 de l'assistant de création) ; absente = « Non classées ».
+    categorie: str | None = None
+
+
+async def _exiger_categorie(cle: str | None) -> None:
+    """Une catégorie se CHOISIT parmi celles du catalogue : une clé inconnue est refusée (422).
+    Les créer reste un geste d'administration (/api/categories)."""
+    from app.services import categorie_store
+
+    if cle is not None and not await categorie_store.existe(cle):
+        raise HTTPException(status_code=422, detail={"reason": "categorie", "message": f"Catégorie inconnue : {cle}"})
 
 
 class UpdateSystemPromptRequest(BaseModel):
@@ -251,10 +267,17 @@ async def list_collections_endpoint(
 
     # L'état de partage, joint en une requête — sans lui, le badge « Publie »
     # du catalogue ne peut jamais s'allumer.
-    partages = await _etats_de_partage([c["name"] for c in collections])
+    noms = [c["name"] for c in collections]
+    partages = await _etats_de_partage(noms)
+    # Le catalogue : l'avis des usagers et la fraîcheur, chacun en UNE requête groupée.
+    avis = await stats_par_collection(noms)
+    depots = await derniers_depots(noms)
     for c in collections:
         c["publication"] = partages.get(c["name"]) or {"state": "draft", "targets": []}
         c["mes_droits"] = _droits(c, user)
+        stats = avis.get(c["name"])
+        c["avis"] = {"total": stats.total, "satisfaction_rate": stats.satisfaction_rate} if stats else {"total": 0, "satisfaction_rate": None}
+        c["derniere_mise_a_jour"] = derniere_mise_a_jour(c, depots.get(c["name"]))
 
     return {"collections": collections}
 
@@ -309,6 +332,7 @@ async def create_collection_endpoint(
     existing = await db_get_collection(req.name)
     if existing:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
+    await _exiger_categorie(req.categorie)
 
     system_prompt = req.system_prompt
     if not system_prompt:
@@ -408,6 +432,17 @@ async def get_collection_endpoint(name: str, user: CurrentUser = Depends(current
     return collection
 
 
+@router.get("/{name}/usage")
+async def usage_collection_endpoint(name: str, user: CurrentUser = Depends(current_user)):
+    """Ce que les collègues ont fait de la collection en `fenetre_jours` jours (fiche d'une
+    collection) : questions, personnes (None sous le seuil). Lecture requise, sinon 404."""
+    from app.routers.publication import _fiche_pour
+    from app.services import accueil
+
+    await _fiche_pour(name, user, ecrire=False)
+    return await accueil.usage_collection(name)
+
+
 @router.patch("/{name}")
 async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
@@ -420,6 +455,21 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
         user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
+    if "categorie" in updates:
+        # Qui gère la collection la range lui-même parmi les catégories existantes ; le changement
+        # s'écrit au journal comme un reclassement de l'administration.
+        from app.services import categorie_store
+        from app.services.pseudo import condenser
+
+        cle = updates["categorie"]
+        if cle is not None and not isinstance(cle, str):
+            raise HTTPException(status_code=422, detail={"reason": "categorie", "message": "Catégorie invalide"})
+        await _exiger_categorie(cle)
+        try:
+            auteur = condenser(user.sub)
+        except Exception:  # noqa: BLE001 — sel absent : le journal n'attribue pas, le classement passe
+            auteur = None
+        await categorie_store.classer(name, cle, auteur)
     collection = await db_update_collection(name, updates)
     return collection
 

@@ -2,9 +2,10 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 
 from app.database import async_session
@@ -55,6 +56,28 @@ async def list_collections(
         return [c.to_dict() for c in result.scalars().all()]
 
 
+async def derniers_depots(noms: list[str]) -> dict[str, datetime]:
+    """Le dernier document déposé de chaque collection, en une requête groupée : un dépôt
+    compte comme une mise à jour au catalogue."""
+    if not noms:
+        return {}
+    async with async_session() as session:
+        lignes = (
+            await session.execute(
+                select(SourceFile.collection_name, func.max(SourceFile.created_at)).where(SourceFile.collection_name.in_(noms)).group_by(SourceFile.collection_name)
+            )
+        ).all()
+    return {nom: quand for nom, quand in lignes if quand is not None}
+
+
+def derniere_mise_a_jour(collection: dict, dernier_depot: datetime | None) -> str | None:
+    """La plus récente de la fiche (`updated_at`) et du dernier document déposé, en ISO 8601."""
+    dates = [d for d in (dernier_depot,) if d is not None]
+    if collection.get("updated_at"):
+        dates.append(datetime.fromisoformat(collection["updated_at"]))
+    return max(dates).isoformat() if dates else None
+
+
 async def get_collection(name: str) -> dict | None:
     async with async_session() as session:
         c = await session.get(Collection, name)
@@ -84,8 +107,8 @@ async def create_collection(data: dict) -> dict:
 
 
 async def update_collection(name: str, updates: dict) -> dict | None:
-    # `categorie` n'y est pas, exprès : le classement est un geste d'administration
-    # (PUT /api/categories/affectations), pas un réglage du propriétaire.
+    # `categorie` n'y est pas, exprès : elle se valide contre le catalogue et s'écrit au journal
+    # (app.services.categorie_store.classer / affecter), jamais en champ libre.
     allowed = {
         "titre",
         "description",

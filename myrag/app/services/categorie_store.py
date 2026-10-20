@@ -44,6 +44,11 @@ async def lister() -> list[dict]:
         return [{**c.to_dict(), "nb_collections": comptes.get(c.cle, 0)} for c in cats]
 
 
+async def existe(cle: str) -> bool:
+    async with async_session() as session:
+        return await session.get(Categorie, cle) is not None
+
+
 async def creer(cle: str, libelle: str, description: str = "") -> dict:
     async with async_session() as session:
         if await session.get(Categorie, cle):
@@ -122,3 +127,14 @@ async def affecter(affectations: dict[str, str | None], auteur_hash: str) -> dic
             raise Introuvable("collection inconnue : " + ", ".join(sorted(absentes)))
         await session.commit()
         return {"changees": changees, "inchangees": inchangees}
+
+
+async def classer(name: str, cle: str | None, auteur_hash: str | None) -> None:
+    """Range UNE collection (réglages de qui la gère). Avec une identité, le changement s'écrit
+    au journal comme un reclassement de l'administration ; sans sel, il passe sans journal."""
+    if auteur_hash:
+        await affecter({name: cle}, auteur_hash)
+        return
+    async with async_session() as session:
+        await session.execute(update(Collection).where(Collection.name == name).values(categorie=cle))
+        await session.commit()

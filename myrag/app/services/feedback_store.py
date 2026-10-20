@@ -3,7 +3,9 @@
 Replaces file-based FeedbackService.
 """
 
-from sqlalchemy import select
+from dataclasses import asdict, dataclass
+
+from sqlalchemy import case, func, select
 
 from app.database import async_session
 from app.models.db import Feedback, utcnow
@@ -50,13 +52,16 @@ async def list_feedback(
     collection: str,
     status: str | None = None,
     rating: int | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     async with async_session() as session:
-        query = select(Feedback).where(Feedback.collection_name == collection).order_by(Feedback.created_at.desc())
+        query = select(Feedback).where(Feedback.collection_name == collection).order_by(Feedback.created_at.desc(), Feedback.id.desc())
         if status:
             query = query.where(Feedback.status == status)
         if rating is not None:
             query = query.where(Feedback.rating == rating)
+        if limit is not None:
+            query = query.limit(limit)
         result = await session.execute(query)
         return [f.to_dict() for f in result.scalars().all()]
 
@@ -93,22 +98,60 @@ async def promote_feedback(feedback_id: int, promote_to: str = "qr") -> dict | N
         return fb.to_dict()
 
 
-async def feedback_stats(collection: str) -> dict:
+@dataclass(frozen=True)
+class StatsAvis:
+    """Les avis d'une collection, comptés. `satisfaction_rate` vaut None sans avis : un « 0 % »
+    se lirait comme un échec, alors que personne n'a encore rien dit."""
+
+    total: int = 0
+    positive: int = 0
+    negative: int = 0
+    pending_review: int = 0
+    promoted: int = 0
+
+    @property
+    def satisfaction_rate(self) -> float | None:
+        return self.positive / self.total if self.total else None
+
+    def to_dict(self) -> dict:
+        return {**asdict(self), "satisfaction_rate": self.satisfaction_rate}
+
+
+async def stats_par_collection(noms: list[str]) -> dict[str, StatsAvis]:
+    """Les avis de plusieurs collections en UNE requête groupée (le catalogue en affiche des
+    dizaines) ; une collection sans avis a des compteurs à zéro."""
+    noms = list(dict.fromkeys(noms))
+    if not noms:
+        return {}
+
+    def _compte(condition):
+        return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
+
     async with async_session() as session:
-        base = select(Feedback).where(Feedback.collection_name == collection)
-        all_result = await session.execute(base)
-        items = all_result.scalars().all()
+        lignes = (
+            await session.execute(
+                select(
+                    Feedback.collection_name,
+                    func.count(),
+                    _compte(Feedback.rating > 0),
+                    _compte(Feedback.rating < 0),
+                    _compte(Feedback.status == "pending"),
+                    _compte(Feedback.status == "promoted"),
+                )
+                .where(Feedback.collection_name.in_(noms))
+                .group_by(Feedback.collection_name)
+            )
+        ).all()
+    stats = {nom: StatsAvis() for nom in noms}
+    for nom, total, pos, neg, pending, promus in lignes:
+        stats[nom] = StatsAvis(total=int(total), positive=int(pos), negative=int(neg), pending_review=int(pending), promoted=int(promus))
+    return stats
 
-        total = len(items)
-        positive = sum(1 for f in items if f.rating > 0)
-        negative = sum(1 for f in items if f.rating < 0)
-        pending = sum(1 for f in items if f.status == "pending")
 
-        return {
-            "total": total,
-            "positive": positive,
-            "negative": negative,
-            "satisfaction_rate": positive / total if total > 0 else 0,
-            "pending_review": pending,
-            "promoted": sum(1 for f in items if f.status == "promoted"),
-        }
+async def feedback_stats(collection: str) -> dict:
+    """Les avis d'UNE collection : la même formule que le catalogue. Sans avis, la route
+    historique garde `satisfaction_rate: 0` (ses écrans multiplient par 100)."""
+    stats = (await stats_par_collection([collection]))[collection].to_dict()
+    if stats["satisfaction_rate"] is None:
+        stats["satisfaction_rate"] = 0
+    return stats
