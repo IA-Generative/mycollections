@@ -141,7 +141,8 @@ def test_etape_5_dit_ce_qui_suit_et_mene_a_la_fiche(session_testeur, collection_
     page.locator("h1").first.wait_for(state="visible", timeout=30_000)
     assert "Note de contrôle" in page.locator("h1").first.inner_text()
     if CATEGORIE.get("libelle"):
-        assert CATEGORIE["libelle"] in session_testeur.texte(), "la catégorie choisie à l'étape 2 n'est pas sur la fiche"
+        # Le libellé de la catégorie arrive un instant après le titre (liste des catégories).
+        attendre(lambda: CATEGORIE["libelle"] in session_testeur.texte(), delai=15, pas=1, motif="la catégorie choisie à l'étape 2 sur la fiche")
     captures.prendre(page, "05-creation-6-fiche-creee")
 
 
