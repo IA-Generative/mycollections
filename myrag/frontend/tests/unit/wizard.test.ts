@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REGLES_PAR_DEFAUT } from '../../utils/collectionName'
-import { cartesDeSource, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, ligneBientot, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES } from '../../utils/wizard'
+import { cartesDeSource, chargeAuJeu, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
 
 describe('les étapes de l\'assistant', () => {
   it('les cinq libellés, dans l\'ordre', () => {
@@ -80,5 +80,48 @@ describe('identifiantPropose', () => {
   it('un titre qui ne donne rien d\'acceptable ne propose rien', () => {
     expect(identifiantPropose('', [])).toBe('')
     expect(identifiantPropose('!!', [])).toBe('')
+  })
+})
+
+describe('questionsSuggerees', () => {
+  it('trois au plus, sans vide ni doublon', () => {
+    expect(questionsSuggerees({ questions: [' A quoi sert ? ', 'A quoi sert ?', '', 'x', 'Q2 ?', 'Q3 ?', 'Q4 ?'] })).toEqual(['A quoi sert ?', 'Q2 ?', 'Q3 ?'])
+  })
+  it('une réponse inattendue ne casse rien', () => {
+    expect(questionsSuggerees(null)).toEqual([])
+    expect(questionsSuggerees({ questions: 'pas une liste' })).toEqual([])
+    expect(questionsSuggerees({ questions: [1, null, 'Vraie question ?'] })).toEqual(['Vraie question ?'])
+  })
+})
+
+describe('verdictTechnique', () => {
+  it('répond : un texte, au moins un passage, pas de refus', () => {
+    expect(verdictTechnique({ response: 'Le délai est de deux mois.', source_names: ['note.md'] }).cle).toBe('repond')
+    expect(verdictTechnique({ response: 'Deux mois.', sources: [{}] }).cle).toBe('repond')
+  })
+  it('ne répond pas sans passage, et dit pourquoi', () => {
+    const v = verdictTechnique({ response: 'Deux mois.', source_names: [] })
+    expect(v.cle).toBe('ne_repond_pas')
+    expect(v.aide).toContain('indexation')
+  })
+  it('ne répond pas sur un refus, même avec des passages', () => {
+    const v = verdictTechnique({ response: 'Je ne trouve pas cette information dans les documents.', source_names: ['note.md'] })
+    expect(v.cle).toBe('ne_repond_pas')
+    expect(v.aide).toContain('sort peut-être')
+    expect(verdictTechnique({ response: 'Les documents ne contiennent pas de réponse.', source_names: ['a'] }).cle).toBe('ne_repond_pas')
+  })
+  it('ne répond pas sans texte', () => {
+    expect(verdictTechnique({ response: '  ', source_names: ['a'] }).cle).toBe('ne_repond_pas')
+    expect(verdictTechnique(null).cle).toBe('ne_repond_pas')
+  })
+})
+
+describe('chargeAuJeu', () => {
+  it('une question posée entre au jeu « à relire », sans réponse de référence', () => {
+    expect(chargeAuJeu('  Quel délai ?  ')).toEqual({ question: 'Quel délai ?', relecture: 'brut' })
+  })
+  it('rien pour une question trop courte', () => {
+    expect(chargeAuJeu('ab')).toBeNull()
+    expect(chargeAuJeu('')).toBeNull()
   })
 })

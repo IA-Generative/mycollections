@@ -205,3 +205,130 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest, user: Cur
         "fallback_used": rep.fallback_used,
         "repli_recherche": rep.repli == "recherche",
     }
+
+
+# ─── Étape 4 de l'assistant de création : le test technique ──────────────────────────────────
+
+#: Trois questions suffisent à voir si la collection répond ; au-delà, c'est la page Qualité.
+NB_SUGGESTIONS = 3
+_EXTENSION = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_SEPARATEURS = re.compile(r"[-_]+")
+
+
+_PREFIXE_SECTION = re.compile(r"^section\s+", re.IGNORECASE)
+
+
+def titre_lisible(titre: str) -> str:
+    """« circulaire-peines_2026.pdf » → « circulaire peines 2026 » : un nom de fichier qui se lit.
+    Le préfixe « section- » que pose le découpage par section (app.services.chunker) est retiré."""
+    t = _SEPARATEURS.sub(" ", _EXTENSION.sub("", (titre or "").strip())).strip()
+    return _PREFIXE_SECTION.sub("", " ".join(t.split()))
+
+
+def questions_depuis_documents(titres: list[str], n: int = NB_SUGGESTIONS) -> list[str]:
+    """Des questions qui ne supposent rien du contenu : une par document, d'après son titre."""
+    vues: set[str] = set()
+    questions: list[str] = []
+    for brut in titres:
+        t = titre_lisible(brut)
+        if len(t) < 3 or t.lower() in vues:
+            continue
+        vues.add(t.lower())
+        questions.append(f"Que dit le document « {t[:100]} » ?")
+        if len(questions) >= n:
+            break
+    return questions
+
+
+_INTERTITRE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
+_EMPHASE = re.compile(r"[*_`]+")
+
+
+def _intertitre(contenu: str, metadonnees: dict | None) -> str:
+    """Le titre de section d'un passage : celui que le découpage a gardé en métadonnée
+    (`section_title`), sinon le premier intertitre Markdown du texte."""
+    titre = str((metadonnees or {}).get("section_title") or "")
+    if not titre:
+        m = _INTERTITRE.search(contenu or "")
+        titre = m.group(1) if m else ""
+    return " ".join(_EMPHASE.sub("", titre).split()).strip(" :.-")
+
+
+def questions_depuis_intertitres(passages: list[tuple[str, dict | None]], n: int = NB_SUGGESTIONS) -> list[str]:
+    """Une question par titre de section : le passage dit de quoi il parle, mieux qu'un nom de
+    fichier fabriqué par le découpage (qui perd les accents : « contr-le »)."""
+    vus: set[str] = set()
+    questions: list[str] = []
+    for contenu, metadonnees in passages:
+        intertitre = _intertitre(contenu, metadonnees)
+        if not 3 <= len(intertitre) <= 100 or intertitre.lower() in vus:
+            continue
+        vus.add(intertitre.lower())
+        questions.append(f"Que dit le texte sur « {intertitre} » ?")
+        if len(questions) >= n:
+            break
+    return questions
+
+
+async def _questions_du_jeu(collection: str, n: int) -> list[str]:
+    """Les questions du jeu de la collection — jamais celles d'un usager (origine « avis »)."""
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.db import PaireQA
+
+    async with async_session() as session:
+        lignes = (
+            (
+                await session.execute(
+                    select(PaireQA.question)
+                    .where(
+                        PaireQA.collection_name == collection,
+                        PaireQA.origine != "avis",
+                        PaireQA.hors_sujet.is_(False),
+                        PaireQA.relecture != "rejete",
+                    )
+                    .limit(50)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    propres = [q.strip() for q in lignes if q and 3 <= len(q.strip()) <= 160]
+    return list(dict.fromkeys(propres))[:n]
+
+
+@router.get("/{collection}/suggestions")
+async def suggestions(collection: str, user: CurrentUser = Depends(current_user)):
+    """Trois questions pour le test technique de l'étape 4 : d'abord celles du jeu de la collection
+    (hors questions d'usagers), puis une par intertitre de passage, puis une par document d'après
+    son titre. Lecture requise.
+    OpenRAG injoignable : on rend ce qu'on a, la personne tape sa question."""
+    from app.routers.publication import _fiche_pour
+    from app.services import corpus
+
+    await _fiche_pour(collection, user, ecrire=False)
+    questions = await _questions_du_jeu(collection, NB_SUGGESTIONS)
+    origine = "jeu" if questions else "documents"
+
+    def completer(autres: list[str]) -> None:
+        for q in autres:
+            if len(questions) >= NB_SUGGESTIONS:
+                return
+            if q not in questions:
+                questions.append(q)
+
+    client = OpenRAGClient(timeout=10.0)
+    if len(questions) < NB_SUGGESTIONS:
+        try:
+            morceaux = await client.partition_chunks(collection, limit=50) or []
+        except Exception:  # noqa: BLE001 — sans passages, on passe aux titres
+            morceaux = []
+        completer(questions_depuis_intertitres([(m.content, m.metadata) for m in morceaux]))
+    if len(questions) < NB_SUGGESTIONS:
+        try:
+            fichiers = await client.list_files(collection)
+        except Exception:  # noqa: BLE001 — sans liste de documents, pas de suggestion de plus
+            fichiers = []
+        completer(questions_depuis_documents([corpus.resumer_fichier(f)["titre"] for f in fichiers]))
+    return {"questions": questions, "origine": origine if questions else None}
