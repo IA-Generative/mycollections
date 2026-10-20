@@ -131,6 +131,10 @@ class Settings(BaseSettings):
     # Embeddings d'OpenRAG pour apparier une question aux consignes d'un assistant (POST {openrag_url}/v1/embeddings).
     # Vide (défaut) ⇒ sac de mots déterministe ; renseigné mais injoignable ⇒ repli sur le sac de mots, sans erreur.
     assistants_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE", "assistants_embeddings_modele"))
+    #: `GET /api/v1/sites` sans jeton : les sites des seules collections ouvertes à tous, pour le
+    #: débogage de l'extension. Coupé par défaut (une liste anonyme dit quels sites intéressent
+    #: quelles collections) ; les questions, elles, demandent toujours un jeton.
+    sites_anonymes: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_SITES_ANONYMES", "sites_anonymes"))
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)

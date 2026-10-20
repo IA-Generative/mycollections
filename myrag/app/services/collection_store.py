@@ -254,6 +254,10 @@ async def purge_collection(name: str) -> dict:
     from app.services.collectif_store import delier_collection
 
     await delier_collection(name)
+    # Les sites où l'extension proposait cette collection.
+    from app.services.sites import supprimer_cible
+
+    counts["sites_declares"] = await supprimer_cible("collection", name)
     # L'assistant miroir de la collection (ADR-0003) et ses versions, consignes, journal.
     from app.services.assistant_store import purger_miroir
 

@@ -159,6 +159,12 @@ const dateVersion = (iso: string) => iso ? new Date(FUSEAU.test(iso) ? iso : `${
               </button>
             </li>
           </ul>
+          <SitesDeclares
+            class="fr-mt-4w"
+            :chemin="`/api/assistants/${encodeURIComponent(id)}/sites`"
+            objet="cet assistant"
+            :ecrire="donnees.mes_droits.ecrire"
+          />
         </div>
 
         <div class="fr-col-12 fr-col-lg-5">
