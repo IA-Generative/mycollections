@@ -72,3 +72,17 @@ def test_un_assistant_miroir_suit_sa_collection(client, en_tant_que, col):
     en_tant_que(ALICE)
     r = client.post(f"/api/assistants/{ident}/archiver")
     assert r.status_code == 409 and "collection" in r.json()["detail"]
+
+
+def test_une_collection_supprimee_ne_bloque_pas_son_createur(client, en_tant_que, creer_collection, purger, ident_assistant):
+    """Le parcours de bout en bout purge ses collections : l'assistant qui s'appuyait dessus doit
+    rester retirable par qui l'a créé (avant, seule l'administration le pouvait)."""
+    nom = f"t-archive-purgee-{uuid.uuid4().hex[:6]}"
+    creer_collection(nom, ALICE, titre="Collection d'exemple")
+    en_tant_que(ALICE)
+    assert client.put(f"/api/assistants/{ident_assistant}", json=_fiche(ident_assistant, nom)).status_code == 200
+    purger(nom)
+    en_tant_que(LECTEUR)
+    assert client.post(f"/api/assistants/{ident_assistant}/archiver").status_code == 404, "un tiers ne le voit toujours pas"
+    en_tant_que(ALICE)
+    assert client.post(f"/api/assistants/{ident_assistant}/archiver").status_code == 200

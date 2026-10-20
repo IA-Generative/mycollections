@@ -30,5 +30,9 @@ async def droits(fiche: FicheAssistant, createur_hash: str | None, *, user: Curr
     if superadmin:
         return True, True, cols
     voir = createur or any(lisible(c, user) for c in cols.values())
-    modifier = all(gerable(c, user) for c in cols.values()) if cols else createur
+    # Une collection supprimée ne retient plus rien : on juge sur celles qui existent encore. Sans
+    # aucune (toutes supprimées), l'assistant revient à qui l'a créé, sans quoi personne hors
+    # administration ne pourrait plus le retirer.
+    presentes = [c for c in cols.values() if c is not None]
+    modifier = all(gerable(c, user) for c in presentes) if presentes else createur
     return voir, modifier, cols
