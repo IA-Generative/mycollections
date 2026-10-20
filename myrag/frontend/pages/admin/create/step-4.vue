@@ -2,7 +2,7 @@
 import type { VerdictTechnique } from '~/utils/wizard'
 import { messageErreur } from '~/utils/collectif'
 import { renderMarkdownSafe } from '~/utils/sanitize'
-import { chargeAuJeu, NB_QUESTIONS_TEST, questionsSuggerees, verdictTechnique } from '~/utils/wizard'
+import { chargeAuJeu, completerQuestions, NB_QUESTIONS_TEST, questionsSuggerees, verdictTechnique } from '~/utils/wizard'
 
 /**
  * Étape 4 de l'assistant : un test technique, pas encore la qualité. Trois questions (suggérées
@@ -77,8 +77,10 @@ async function poserTout () {
 onMounted(async () => {
   try {
     const qs = questionsSuggerees(await get(`/api/playground/${encodeURIComponent(collection)}/suggestions`))
-    qs.forEach((q, i) => {
-      essais.value[i]!.question = q
+    // Une suggestion arrivée tard n'écrase pas une question déjà tapée.
+    const questions = completerQuestions(essais.value.map(e => e.question), qs)
+    essais.value.forEach((e, i) => {
+      e.question = questions[i]!
     })
   }
   catch { /* pas de suggestion : la personne tape ses questions */ }

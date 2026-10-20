@@ -139,6 +139,14 @@ export function questionsSuggerees (brut: unknown): string[] {
   return [...new Set(propres)].slice(0, NB_QUESTIONS_TEST)
 }
 
+/**
+ * Les questions de l'étape 4 une fois les suggestions arrivées : une suggestion ne remplit qu'une
+ * case vide. Les suggestions arrivent après l'affichage ; ce que la personne a déjà tapé reste.
+ */
+export function completerQuestions (actuelles: readonly string[], suggestions: readonly string[]): string[] {
+  return actuelles.map((q, i) => (q.trim() ? q : (suggestions[i] ?? q)))
+}
+
 export type CleVerdict = 'repond' | 'ne_repond_pas'
 
 export interface VerdictTechnique { cle: CleVerdict, libelle: string, aide?: string }
