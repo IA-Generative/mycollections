@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ChatMessage } from '~/composables/useChat'
 import type { FicheAssistant, ResultatAssistant } from '~/utils/assistants'
-import { sourceDuPassage, traceDuPlan } from '~/utils/assistants'
+import { messageErreurMoteur, sourceDuPassage, traceDuPlan } from '~/utils/assistants'
 
 /**
  * Le bac à sable d'un assistant (B4) : poser des questions comme un collègue et voir, sous chaque
@@ -21,6 +21,8 @@ type Tour = ChatMessage & { resultat?: ResultatAssistant }
 const messages = ref<Tour[]>([])
 const brouillon = ref('')
 const enCours = ref(false)
+/** La dernière réponse vient de la doublure du moteur : un exemple, pas une vraie recherche. */
+const doublure = ref(false)
 const zoneMessages = ref<HTMLElement | null>(null)
 const peutEnvoyer = computed(() => !enCours.value && brouillon.value.trim().length > 0)
 
@@ -58,10 +60,12 @@ async function envoyer (texte?: string) {
   enCours.value = true
   defiler()
   try {
-    messages.value.push(tourDepuis(await executer(id, q)))
+    const r = await executer(id, q)
+    doublure.value = r.doublure
+    messages.value.push(tourDepuis(r.resultat))
   }
   catch (e) {
-    messages.value.push({ role: 'assistant', content: `La question n'a pas pu aboutir : ${messageErreur(e)}`, error: true })
+    messages.value.push({ role: 'assistant', content: `La question n'a pas pu aboutir : ${messageErreurMoteur(e)}`, error: true })
   }
   finally {
     enCours.value = false
@@ -117,6 +121,8 @@ onMounted(() => {
           </li>
         </ul>
       </div>
+
+      <AssistantsEncadreDoublure v-if="doublure && messages.length" />
 
       <div
         v-if="messages.length"

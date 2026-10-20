@@ -10,15 +10,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from app.auth import CurrentUser
+from app.config import settings
 from app.harnais import journal, perimetre
+from app.harnais.apparieur import ApparieurEmbeddings, ApparieurSacDeMots
 from app.harnais.connecteurs.openrag import ConnecteurOpenRAG
 from app.harnais.contrat import Appelant, Canal, CapaciteClient, Contexte, FicheAssistant, Plan, Resultat
 from app.harnais.execution import Execution
 from app.harnais.execution import executer as executer_plan
 from app.harnais.fusion import fusionner
-from app.harnais.interfaces import Connecteur, Planificateur
+from app.harnais.interfaces import Apparieur, Connecteur, Planificateur
+from app.harnais.plan.regles import Regles
 from app.harnais.plan.toutes_les_sources import ToutesLesSources
 from app.services import assistant_droits, assistant_store
+from app.services.nommage import titre_de
 
 
 class AssistantIntrouvable(Exception):
@@ -44,11 +48,10 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
         raise AssistantIntrouvable(ident)
     courante = FicheAssistant.model_validate(ligne["fiche"])
     voir, modifier, cols = await assistant_droits.droits(courante, ligne.get("cree_par_hash"), user=user, hash_=hash_, superadmin=superadmin)
-    if not voir:
-        raise AssistantIntrouvable(ident)
-    if brouillon and modifier:
+    if brouillon and voir and modifier:
         fiche, version = courante, ligne.get("version_publiee") or 1
     else:
+        # Qui ne gère pas le brouillon (ou ne le lit pas) a droit à la version publiée, s'il la lit.
         publiee = await assistant_store.version_publiee(ident)
         if publiee is None:
             raise AssistantIntrouvable(ident)
@@ -56,6 +59,7 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
         voir, _, cols = await assistant_droits.droits(fiche, ligne.get("cree_par_hash"), user=user, hash_=hash_, superadmin=superadmin)
         if not voir:
             raise AssistantIntrouvable(ident)
+        modifier = False
     lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub)
     return Charge(fiche=fiche, version=version, modifier=modifier, lisibles=lisibles, collections=cols)
 
@@ -64,7 +68,22 @@ def contexte(charge: Charge, canal: Canal, *, capacites_client: set[CapaciteClie
     return Contexte(canal=canal, capacites_client=capacites_client or set(), sources_lisibles=charge.lisibles, top_k=top_k)
 
 
+def apparieur() -> Apparieur:
+    """Les embeddings d'OpenRAG s'ils sont configurés (repli sur le sac de mots s'ils ne répondent pas), sinon le sac de mots."""
+    if settings.assistants_embeddings_modele:
+        return ApparieurEmbeddings(settings.openrag_url, settings.assistants_embeddings_modele, jeton=settings.openrag_admin_token, delai_s=settings.recherche_delai_s)
+    return ApparieurSacDeMots()
+
+
+def planificateur_regles(charge: Charge, app: Apparieur | None = None) -> Regles:
+    """Le planificateur par règles, avec de quoi juger si une source `selon_question` ressemble à la question."""
+    descriptions = {n: f"{titre_de(c)}. {c.get('description') or ''}".strip() for n, c in charge.collections.items() if c}
+    return Regles(app or apparieur(), version=charge.version, descriptions=descriptions)
+
+
 async def planifier(charge: Charge, question: str, ctx: Contexte, planificateur: Planificateur | None = None) -> Plan:
+    """Le plan de la recherche v1 (`?assistant=`) : toutes les sources lisibles. Les routes `plan` /
+    `executer` passent `planificateur_regles(charge)`."""
     return await (planificateur or ToutesLesSources(charge.version)).plan(charge.fiche, question, ctx)
 
 

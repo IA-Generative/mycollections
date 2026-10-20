@@ -13,14 +13,22 @@ Droits, calculés ici à partir du jeton — jamais d'un paramètre du client :
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Literal
 
-from app.harnais.contrat import FicheAssistant
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, Field
+
+from app.auth import CurrentUser, current_user
+from app.config import settings
+from app.harnais.contrat import CAPACITES_CLIENT, FicheAssistant, Plan, Resultat
 from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
+from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
+#: Les routes du harnais, sous /api/v1 : `plan` et `executer`. Elles s'ajoutent à `router` (voir le bas du fichier).
+router_v1 = APIRouter(prefix="/api/v1/assistants", tags=["assistants (moteur)"], dependencies=[Depends(capacite("assistants"))])
 
 
 async def _collections(fiche: FicheAssistant) -> dict[str, dict | None]:
@@ -138,3 +146,70 @@ async def publier(ident: str, moi: Identite = Depends(identite)):
 async def versions(ident: str, moi: Identite = Depends(identite)):
     await _charger(ident, moi)
     return {"versions": await store.versions(ident)}
+
+
+# ─── Le moteur : plan et exécution (lot A) ───────────────────────────────────────────────────
+# Servi à la dernière version ENREGISTRÉE (le brouillon) pour qui peut modifier l'assistant, à sa
+# version publiée pour les autres. Avec MYCOLLECTIONS_DOUBLURE_ASSISTANTS, c'est la doublure qui
+# répond (les prévisualisations restent montrables), avec l'en-tête `X-Mycollections-Doublure: 1`.
+
+ENTETE_DOUBLURE = "X-Mycollections-Doublure"
+
+
+class DemandePlan(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    capacites_client: list[str] = Field(default_factory=list)
+    #: Porté par le contexte et le journal : le bac à sable et « Tester » disent `bac-a-sable`.
+    canal: Literal["bac-a-sable", "api"] = "api"
+
+
+class DemandeExecution(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    plan: Plan | None = None
+    canal: Literal["bac-a-sable", "api"] = "api"
+
+
+async def _preparer(ident: str, canal: str, user: CurrentUser, capacites_client: list[str] | None = None):
+    moi = await identite(user)
+    try:
+        charge = await moteur.charger(ident, user, moi.hash, moi.superadmin, brouillon=True)
+    except moteur.AssistantIntrouvable:
+        raise HTTPException(status_code=404, detail=f"Assistant « {ident} » introuvable")
+    ctx = moteur.contexte(charge, canal, capacites_client={c for c in (capacites_client or []) if c in CAPACITES_CLIENT})
+    return moi, charge, ctx
+
+
+@router_v1.post("/{ident}/plan")
+async def plan(ident: str, demande: DemandePlan, response: Response, user: CurrentUser = Depends(current_user)) -> Plan:
+    """Le plan de recherche pour cette question, sans l'exécuter."""
+    if settings.doublure_assistants:
+        from app.routers import assistants_doublure
+
+        return await assistants_doublure.plan(ident, demande, response)
+    _, charge, ctx = await _preparer(ident, demande.canal, user, demande.capacites_client)
+    return await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge))
+
+
+@router_v1.post("/{ident}/executer")
+async def executer(ident: str, demande: DemandeExecution, response: Response, user: CurrentUser = Depends(current_user)) -> Resultat:
+    """Exécute le plan (celui du client, re-validé, sinon un plan neuf) : les passages, la fusion, la trace."""
+    if settings.doublure_assistants:
+        from app.routers import assistants_doublure
+
+        return await assistants_doublure.executer(ident, demande, response)
+    moi, charge, ctx = await _preparer(ident, demande.canal, user)
+    if demande.plan is None:
+        plan_ = await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge))
+    else:
+        plan_ = demande.plan
+        sources = {s.id for s in charge.fiche.sources}
+        if plan_.assistant != ident or any(e.source not in sources for e in plan_.etapes):
+            raise HTTPException(status_code=400, detail="Ce plan ne correspond pas à l'assistant : une étape cherche dans une source qui n'est pas la sienne.")
+    resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
+    if execution.toutes_en_panne:
+        raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.")
+    return resultat
+
+
+# Les adresses absolues de `router_v1` rejoignent `router` : `main.py` n'inclut que celui-ci.
+router.routes.extend(router_v1.routes)
