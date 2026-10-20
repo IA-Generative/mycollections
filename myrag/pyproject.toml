@@ -29,13 +29,16 @@ generation = [
 ]
 
 # Le serveur MCP des assistants (ADR-0003, lot A, pas 7) : rempli par le lot A.
-mcp = []
+mcp = [
+    "mcp>=1.12,<2",
+]
 
 # Le connecteur Resana (ADR-0003, lot F) : rempli par le lot F.
 resana = []
 
 [dependency-groups]
 dev = [
+    "mcp>=1.12,<2",
     "pytest>=8.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.17.0",

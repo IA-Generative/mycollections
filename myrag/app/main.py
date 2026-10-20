@@ -240,6 +240,9 @@ app.include_router(openai_compat_routeur.router, dependencies=AUTH_REQUIRED)
 
 
 # [lot A] montage du serveur MCP
+from app.mcp import monter as monter_mcp  # noqa: E402
+
+monter_mcp(app)
 
 
 # La fenêtre de recherche embarquée (lot C) : sans jeton, son CORS est le sien.
