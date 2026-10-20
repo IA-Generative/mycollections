@@ -25,7 +25,13 @@ ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure rép
 
 ## Le banc (lot A)
 
-À écrire par le lot A.
+`scripts/banc.py` joue un jeu figé (`tests/harnais/fixtures/banc/`) sans HTTP ni réseau et compare les planificateurs :
+rappel du passage témoin (`rappel@1`, `rappel@5`), part des sources contactées, score, incidents de droits (un passage
+d'une source que la personne ne lit pas), durée p95 (non bloquante). Le juge « doublure » est déterministe (conforme si le
+témoin attendu est rendu, partiel si c'est celui d'une autre source) ; le juge « réel » n'est pas branché. Seuils : `seuils.json`.
+
+    cd myrag && uv run python -m scripts.banc tests/harnais/fixtures/banc/sejour-des-etrangers.json --juge doublure --planificateur regles --rapport json
+    cd myrag && uv run pytest tests -q -m banc
 
 
 ## L'interface (lot B)

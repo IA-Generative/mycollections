@@ -1,0 +1,261 @@
+{
+  "assistant": {
+    "assistant": "sejour-des-etrangers",
+    "titre": "Séjour des étrangers",
+    "description": "Exemple pour le banc.",
+    "sources": [
+      {
+        "id": "titres-de-sejour",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 1
+      },
+      {
+        "id": "naturalisation",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 2
+      },
+      {
+        "id": "asile",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 3
+      },
+      {
+        "id": "eloignement",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 4
+      },
+      {
+        "id": "dossiers-internes",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 5
+      }
+    ]
+  },
+  "collections": {
+    "titres-de-sejour": {
+      "titre": "Titres de séjour",
+      "description": "Titres de séjour : carte de séjour temporaire, carte de résident, renouvellement du titre, rendez-vous en préfecture",
+      "scope": "group",
+      "scope_groups": [
+        "/g/agents"
+      ],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "ts-fiche",
+          "titre": "Fiche pratique des titres de séjour",
+          "texte": "Le conjoint d'un Français reçoit une carte de séjour temporaire après le mariage. Le renouvellement du titre se demande deux mois avant son expiration, en préfecture.",
+          "temoin": true
+        },
+        {
+          "document": "ts-visa",
+          "titre": "Visa long séjour",
+          "texte": "Le visa long séjour se valide en ligne dans les trois mois."
+        },
+        {
+          "document": "ts-resident",
+          "titre": "Carte de résident",
+          "texte": "La carte de résident dure dix ans."
+        },
+        {
+          "document": "ts-rdv",
+          "titre": "Rendez-vous",
+          "texte": "Les rendez-vous se prennent sur le site du ministère."
+        }
+      ]
+    },
+    "naturalisation": {
+      "titre": "Naturalisation",
+      "description": "Naturalisation : acquisition de la nationalité française, décret, déclaration, entretien d'assimilation",
+      "scope": "public",
+      "scope_groups": [],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "na-fiche",
+          "titre": "Fiche pratique de la naturalisation",
+          "texte": "La naturalisation par décret exige cinq ans de résidence. La déclaration de nationalité française concerne le mariage, après quatre ans de vie commune.",
+          "temoin": true
+        },
+        {
+          "document": "na-entretien",
+          "titre": "Entretien",
+          "texte": "L'entretien d'assimilation vérifie la langue et les valeurs."
+        },
+        {
+          "document": "na-frais",
+          "titre": "Frais",
+          "texte": "Le timbre fiscal est exigé au dépôt du dossier."
+        },
+        {
+          "document": "na-delai",
+          "titre": "Délais",
+          "texte": "Le délai d'instruction dépasse un an."
+        }
+      ]
+    },
+    "asile": {
+      "titre": "Droit d'asile",
+      "description": "Droit d'asile : demande d'asile, réfugié, protection subsidiaire, OFPRA, CNDA",
+      "scope": "group",
+      "scope_groups": [
+        "/g/agents"
+      ],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "as-fiche",
+          "titre": "Fiche pratique de l'asile",
+          "texte": "La demande d'asile s'enregistre en guichet unique avant l'OFPRA. Le réfugié obtient une carte de dix ans ; la protection subsidiaire dure quatre ans.",
+          "temoin": true
+        },
+        {
+          "document": "as-cnda",
+          "titre": "Cour nationale",
+          "texte": "La CNDA juge les recours contre un rejet de l'OFPRA."
+        },
+        {
+          "document": "as-hebergement",
+          "titre": "Hébergement",
+          "texte": "L'hébergement se demande auprès de l'office."
+        },
+        {
+          "document": "as-dublin",
+          "titre": "Dublin",
+          "texte": "Le règlement Dublin désigne l'État responsable."
+        }
+      ]
+    },
+    "eloignement": {
+      "titre": "Éloignement",
+      "description": "Éloignement : obligation de quitter le territoire, rétention administrative, assignation, contentieux",
+      "scope": "group",
+      "scope_groups": [
+        "/g/agents"
+      ],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "el-fiche",
+          "titre": "Fiche pratique de l'éloignement",
+          "texte": "Une obligation de quitter le territoire se conteste devant le tribunal administratif en quinze jours. La rétention administrative est limitée à quatre-vingt-dix jours.",
+          "temoin": true
+        },
+        {
+          "document": "el-assignation",
+          "titre": "Assignation",
+          "texte": "L'assignation à résidence suppose un passeport."
+        },
+        {
+          "document": "el-interdiction",
+          "titre": "Interdiction",
+          "texte": "L'interdiction de retour dure trois ans."
+        },
+        {
+          "document": "el-aide",
+          "titre": "Aide",
+          "texte": "L'aide juridictionnelle s'obtient au tribunal."
+        }
+      ]
+    },
+    "dossiers-internes": {
+      "titre": "Dossiers internes",
+      "description": "Dossiers internes : notes confidentielles, avis réservés, instructions de service",
+      "scope": "private",
+      "scope_groups": [],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "di-fiche",
+          "titre": "Notes confidentielles",
+          "texte": "Les notes confidentielles sur les dossiers sensibles et les avis réservés ne sortent pas du service.",
+          "temoin": true
+        },
+        {
+          "document": "di-instr",
+          "titre": "Instructions",
+          "texte": "Les instructions de service sont réservées à l'équipe d'instruction."
+        }
+      ]
+    }
+  },
+  "identites": {
+    "agent": {
+      "sub": "agent-1",
+      "groupes": [
+        "/g/agents"
+      ]
+    },
+    "dehors": {
+      "sub": "dehors-1",
+      "groupes": []
+    }
+  },
+  "questions": [
+    {
+      "id": "q01",
+      "texte": "Quelle carte de séjour pour le conjoint d'un Français après le mariage ?",
+      "identite": "agent",
+      "source": "titres-de-sejour"
+    },
+    {
+      "id": "q02",
+      "texte": "Quand demander le renouvellement du titre de séjour en préfecture ?",
+      "identite": "agent",
+      "source": "titres-de-sejour"
+    },
+    {
+      "id": "q03",
+      "texte": "Comment obtenir la nationalité française par décret de naturalisation ?",
+      "identite": "agent",
+      "source": "naturalisation"
+    },
+    {
+      "id": "q04",
+      "texte": "Quelle déclaration de nationalité française après le mariage ?",
+      "identite": "agent",
+      "source": "naturalisation"
+    },
+    {
+      "id": "q05",
+      "texte": "Comment déposer une demande d'asile devant l'OFPRA ?",
+      "identite": "agent",
+      "source": "asile"
+    },
+    {
+      "id": "q06",
+      "texte": "Quelle durée pour la protection subsidiaire d'un réfugié ?",
+      "identite": "agent",
+      "source": "asile"
+    },
+    {
+      "id": "q07",
+      "texte": "Comment contester une obligation de quitter le territoire ?",
+      "identite": "agent",
+      "source": "eloignement"
+    },
+    {
+      "id": "q08",
+      "texte": "Quelle est la durée de la rétention administrative ?",
+      "identite": "agent",
+      "source": "eloignement"
+    },
+    {
+      "id": "d01",
+      "texte": "Que disent les notes confidentielles et les avis réservés sur les dossiers internes ?",
+      "identite": "dehors",
+      "source": null
+    },
+    {
+      "id": "d02",
+      "texte": "Quelles instructions de service sur les dossiers internes ?",
+      "identite": "dehors",
+      "source": null
+    }
+  ]
+}

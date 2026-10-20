@@ -1,0 +1,20 @@
+{
+  "rappel@1": {
+    "min": 0.9
+  },
+  "rappel@5": {
+    "min": 0.9
+  },
+  "sources_contactees_pct": {
+    "max": 50
+  },
+  "ecart_score_vs_toutes": {
+    "min": -1
+  },
+  "incidents_droits": {
+    "max": 0
+  },
+  "duree_p95_ms": {
+    "bloquant": false
+  }
+}
