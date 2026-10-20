@@ -110,7 +110,8 @@ onMounted(async () => {
       Créer un assistant
     </h1>
     <p class="fr-mb-3w nouveau-discret">
-      Réunissez plusieurs de vos collections derrière un seul assistant. Vous écrirez ensuite ses consignes : quand chercher où, et comment répondre.
+      Un assistant ne contient pas de documents : il interroge les collections que vous choisissez ici. Vous écrirez ensuite
+      ses consignes : quand chercher où, et comment répondre.
     </p>
 
     <div class="fr-grid-row fr-grid-row--gutters">

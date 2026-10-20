@@ -33,7 +33,7 @@ onMounted(async () => {
           Assistants de recherche
         </h1>
         <p class="fr-text--sm fr-mb-0 assistants-discret">
-          Un assistant interroge plusieurs collections à la fois, selon vos consignes, et cite ses sources.
+          Une seule question, la bonne collection : l'assistant cherche pour vos collègues.
         </p>
       </div>
       <NuxtLink
@@ -43,6 +43,60 @@ onMounted(async () => {
         Créer un assistant
       </NuxtLink>
     </div>
+
+    <!-- Ce qu'est un assistant, et en quoi il diffère d'une collection : deux objets distincts. -->
+    <section
+      class="assistants-explication fr-mb-3w"
+      aria-labelledby="titre-explication"
+    >
+      <h2
+        id="titre-explication"
+        class="fr-sr-only"
+      >
+        Qu'est-ce qu'un assistant de recherche ?
+      </h2>
+      <div class="assistants-comparaison">
+        <div>
+          <p class="fr-text--sm fr-text--bold fr-mb-1v">
+            <span
+              class="fr-icon-folder-2-line fr-icon--sm fr-mr-1v"
+              aria-hidden="true"
+            />Une collection
+          </p>
+          <p class="fr-text--sm fr-mb-0">
+            Des documents que vous déposez : un code, un guide, un dossier. On l'interroge seule, sur son sujet.
+          </p>
+        </div>
+        <div>
+          <p class="fr-text--sm fr-text--bold fr-mb-1v">
+            <span
+              class="fr-icon-question-answer-line fr-icon--sm fr-mr-1v"
+              aria-hidden="true"
+            />Un assistant
+          </p>
+          <p class="fr-text--sm fr-mb-0">
+            Il ne contient pas de documents : il réunit plusieurs collections et décide, pour chaque question, où chercher, selon vos consignes.
+          </p>
+        </div>
+      </div>
+      <details
+        class="fr-mt-1w"
+        :open="charge && !assembles.length"
+      >
+        <summary class="fr-text--sm">
+          Ce qu'un assistant apporte à vos collègues
+        </summary>
+        <ul class="fr-text--sm fr-mt-1w fr-mb-0">
+          <li><strong>Une seule porte d'entrée.</strong> On pose sa question sans savoir dans quelle collection chercher.</li>
+          <li><strong>Vos consignes.</strong> Par exemple : « pour une question de titre de séjour, chercher d'abord dans le code, puis dans le guide des préfectures ».</li>
+          <li><strong>Les droits de chacun.</strong> Il ne cite que ce que la personne qui pose la question a le droit de lire.</li>
+          <li><strong>Des sources citées.</strong> Chaque réponse indique les passages sur lesquels elle s'appuie, et de quelle collection ils viennent.</li>
+        </ul>
+        <p class="fr-text--xs fr-mt-1w fr-mb-0 assistants-discret">
+          Exemple : un assistant « Séjour des étrangers » réunit le code, le guide des titres de séjour et la foire aux questions des préfectures.
+        </p>
+      </details>
+    </section>
 
     <div
       v-if="erreur"
@@ -158,6 +212,10 @@ onMounted(async () => {
 <style scoped>
 .assistants-tete { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1.5rem; }
 .assistants-discret { color: var(--text-mention-grey); }
+.assistants-explication { padding: .75rem 1.25rem; background: var(--background-alt-blue-france); }
+.assistants-comparaison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 2rem; }
+.assistants-explication summary { cursor: pointer; }
+@media (max-width: 48em) { .assistants-comparaison { grid-template-columns: 1fr; } }
 .assistants-liste { list-style: none; padding: 0; }
 .assistant-carte { height: 100%; display: flex; flex-direction: column; gap: .5rem; padding: 1rem 1.25rem; border: 1px solid var(--border-default-grey); border-bottom: 3px solid var(--border-plain-blue-france); }
 .assistant-carte__tete { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
