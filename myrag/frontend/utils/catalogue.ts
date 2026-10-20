@@ -197,7 +197,7 @@ export function ligneCatalogue (c: Collection, maintenant: Date): LigneCatalogue
 export type CleTri = 'recente' | 'satisfaction' | 'titre'
 
 export const TRIS: readonly { cle: CleTri, libelle: string }[] = [
-  { cle: 'recente', libelle: 'Mise à jour récente' },
+  { cle: 'recente', libelle: 'Plus récentes' },
   { cle: 'satisfaction', libelle: 'Satisfaction' },
   { cle: 'titre', libelle: 'Titre' },
 ]

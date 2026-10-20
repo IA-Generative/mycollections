@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * Le gabarit commun des cinq étapes de l'assistant de création (maquette du 2026-10-19) : fil
- * d'Ariane, stepper, titre, chapeau, formulaire à gauche et encadré à droite, actions en bas à
- * droite (Annuler · Étape précédente · Étape suivante).
+ * Le gabarit commun des cinq étapes de l'assistant de création (maquette du 2026-10-19) : stepper, titre, chapeau, formulaire à gauche et encadré à droite,
+ * actions en bas à droite (Annuler · Étape précédente · Étape suivante).
  */
 defineProps<{
   numero: number
@@ -14,37 +13,6 @@ const slots = useSlots()
 
 <template>
   <div class="etape">
-    <nav
-      role="navigation"
-      class="fr-breadcrumb"
-      aria-label="vous êtes ici :"
-    >
-      <ol class="fr-breadcrumb__list">
-        <li>
-          <NuxtLink
-            class="fr-breadcrumb__link"
-            to="/"
-          >
-            Accueil
-          </NuxtLink>
-        </li>
-        <li>
-          <NuxtLink
-            class="fr-breadcrumb__link"
-            to="/mes-collections"
-          >
-            Mes collections
-          </NuxtLink>
-        </li>
-        <li>
-          <a
-            class="fr-breadcrumb__link"
-            aria-current="page"
-          >Création d'une collection</a>
-        </li>
-      </ol>
-    </nav>
-
     <WizardStepper
       :current-step="numero"
       class="etape__stepper"

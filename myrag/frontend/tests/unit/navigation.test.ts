@@ -11,7 +11,7 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
     expect(entreesPrincipales(RIEN, false)).toEqual([
       { libelle: 'Accueil', vers: '/', exact: true },
       { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
-      { libelle: 'Mes collections', vers: '/mes-collections', pastille: true },
+      { libelle: 'Mes collections', vers: '/mes-collections', pastille: true, aussi: ['/admin/create'] },
     ])
   })
   it('tous les drapeaux et l\'administration : six entrées, dans l\'ordre', () => {
@@ -30,11 +30,11 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
   })
   it('« Mes collections » est un lien simple vers la liste, avec sa pastille, en troisième position', () => {
     const e = entreesPrincipales(RIEN, false)[2]!
-    expect(e).toEqual({ libelle: 'Mes collections', vers: '/mes-collections', pastille: true })
+    expect(e).toEqual({ libelle: 'Mes collections', vers: '/mes-collections', pastille: true, aussi: ['/admin/create'] })
     expect(entreesPrincipales(TOUT, true).filter(x => x.pastille)).toHaveLength(1)
   })
   it('l\'administration ferme la liste pour qui en a le droit, et seulement pour lui', () => {
-    expect(entreesPrincipales(AVEC_DEMANDES, true).at(-1)).toEqual({ libelle: 'Administration', vers: '/admin' })
+    expect(entreesPrincipales(AVEC_DEMANDES, true).at(-1)).toEqual({ libelle: 'Administration', vers: '/admin', sauf: ['/admin/catalog', '/admin/create'] })
     expect(entreesPrincipales(AVEC_DEMANDES, false).map(e => e.libelle)).not.toContain('Administration')
   })
   it('un drapeau inconnu ne change rien', () => {
@@ -87,11 +87,21 @@ describe('estActive', () => {
   it('mes collections, Entraide et Administration sur tout leur sous-arbre', () => {
     expect(estActive(miennes!, '/mes-collections')).toBe(true)
     expect(estActive(entraide!, '/demandes/42')).toBe(true)
-    expect(estActive(admin!, '/admin/create/step-4')).toBe(true)
+    expect(estActive(admin!, '/admin/users')).toBe(true)
     expect(estActive(entraide!, '/')).toBe(false)
   })
-  it('le Catalogue vit sous /admin : l\'Administration y est courante aussi (comportement actuel)', () => {
-    expect(estActive(admin!, '/admin/catalog')).toBe(true)
+  it('le Catalogue vit sous /admin sans en être l\'administration : une seule entrée courante', () => {
+    expect(estActive(admin!, '/admin/catalog')).toBe(false)
+    expect(estActive(catalogue!, '/admin/catalog')).toBe(true)
+    expect(estActive(admin!, '/admin')).toBe(true)
+  })
+  it('pendant la création d\'une collection, « Mes collections » est courante, pas « Administration »', () => {
+    for (const chemin of ['/admin/create', '/admin/create/step-4']) {
+      expect(estActive(miennes!, chemin)).toBe(true)
+      expect(estActive(admin!, chemin)).toBe(false)
+      expect(estActive(catalogue!, chemin)).toBe(false)
+    }
+    expect(estActive(admin!, '/admin/createur')).toBe(true)
   })
 })
 

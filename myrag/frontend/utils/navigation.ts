@@ -15,11 +15,19 @@ export interface EntreeMenu {
   vers: string
   /** La page n'est « courante » que sur cette adresse exacte (sinon : tout son sous-arbre). */
   exact?: boolean
+  /** Sous-arbres où l'entrée n'est PAS courante, bien qu'ils soient sous son adresse. */
+  sauf?: readonly string[]
+  /** Sous-arbres hors de son adresse où elle est courante quand même. */
+  aussi?: readonly string[]
   /** Classe d'icône DSFR (`fr-icon-…`) affichée devant le libellé. */
   icone?: string
   /** L'entrée porte une pastille : le nombre de collections que je gère, fourni par le gabarit. */
   pastille?: boolean
 }
+
+/** Le catalogue et la création d'une collection vivent sous /admin sans en être l'administration. */
+const CATALOGUE = '/admin/catalog'
+const CREATION = '/admin/create'
 
 type CapacitesMenu = Pick<Capacites, 'demandes' | 'assistants' | 'entraide'>
 
@@ -35,8 +43,8 @@ export function entreeEntraide (c: Pick<Capacites, 'demandes' | 'entraide'>): En
 export function entreesPrincipales (c: CapacitesMenu, admin: boolean): EntreeMenu[] {
   const entrees: EntreeMenu[] = [
     { libelle: 'Accueil', vers: '/', exact: true },
-    { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
-    { libelle: 'Mes collections', vers: '/mes-collections', pastille: true },
+    { libelle: 'Catalogue', vers: CATALOGUE, exact: true },
+    { libelle: 'Mes collections', vers: '/mes-collections', pastille: true, aussi: [CREATION] },
   ]
   if (c.assistants) {
     entrees.push({ libelle: 'Assistants', vers: '/assistants' })
@@ -46,7 +54,7 @@ export function entreesPrincipales (c: CapacitesMenu, admin: boolean): EntreeMen
     entrees.push(entraide)
   }
   if (admin) {
-    entrees.push({ libelle: 'Administration', vers: '/admin' })
+    entrees.push({ libelle: 'Administration', vers: '/admin', sauf: [CATALOGUE, CREATION] })
   }
   return entrees
 }
@@ -57,6 +65,13 @@ export const ENTREES_PIED_DE_PAGE: readonly EntreeMenu[] = [
 ]
 
 export function estActive (e: EntreeMenu, chemin: string): boolean {
+  const sous = (racine: string) => chemin === racine || chemin.startsWith(`${racine}/`) || chemin.startsWith(`${racine}?`)
+  if (e.sauf?.some(sous)) {
+    return false
+  }
+  if (e.aussi?.some(sous)) {
+    return true
+  }
   return e.exact ? chemin === e.vers : chemin.startsWith(e.vers)
 }
 

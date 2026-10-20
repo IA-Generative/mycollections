@@ -157,22 +157,6 @@ async function terminer () {
           extension du navigateur) sont prévues ; elles n'existent pas encore et ne sont donc pas proposées ici.
         </p>
 
-        <div class="fr-btns-group fr-btns-group--inline fr-mt-4w">
-          <NuxtLink
-            :to="`/admin/create/step-4?collection=${collection}`"
-            class="fr-btn fr-btn--secondary"
-          >
-            ← Précédent
-          </NuxtLink>
-          <button
-            class="fr-btn"
-            :disabled="envoi || (choix === 'groupe' && !groupe.trim())"
-            @click="terminer"
-          >
-            {{ envoi ? 'Enregistrement…' : choix === 'groupe' ? 'Partager avec ce groupe' : 'Terminer' }}
-          </button>
-        </div>
-
         <div
           v-if="resultat"
           class="fr-alert fr-mt-2w"
@@ -188,6 +172,35 @@ async function terminer () {
           </NuxtLink>
         </div>
       </div>
+    </template>
+    <template #actions>
+      <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-md">
+        <li>
+          <NuxtLink
+            to="/"
+            class="fr-btn fr-btn--tertiary-no-outline"
+          >
+            Annuler
+          </NuxtLink>
+        </li>
+        <li>
+          <NuxtLink
+            :to="`/admin/create/step-4?collection=${collection}`"
+            class="fr-btn fr-btn--secondary"
+          >
+            Étape précédente
+          </NuxtLink>
+        </li>
+        <li>
+          <button
+            class="fr-btn"
+            :disabled="!collection || envoi || (choix === 'groupe' && !groupe.trim())"
+            @click="terminer"
+          >
+            {{ envoi ? 'Enregistrement…' : choix === 'groupe' ? 'Partager avec ce groupe' : 'Terminer' }}
+          </button>
+        </li>
+      </ul>
     </template>
   </WizardEtape>
 </template>
