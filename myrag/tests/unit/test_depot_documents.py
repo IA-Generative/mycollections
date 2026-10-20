@@ -147,6 +147,28 @@ def test_trop_gros(client, en_tant_que, creer_collection, nom, monkeypatch):
     assert r.status_code == 413
 
 
+def test_le_nom_d_une_url_ne_prend_ni_la_requete_ni_le_fragment(client, en_tant_que, creer_collection, nom):
+    """« note.md?download=1 » n'est pas un fichier « .md?download=1 » : le nom se déduit
+    du chemin de l'URL, sinon le dépôt refuserait (415) des textes acceptés avant."""
+    from unittest.mock import MagicMock
+
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    telecharge = MagicMock()
+    telecharge.get = AsyncMock(return_value=httpx.Response(200, content=b"# Titre\n\nTexte.", request=httpx.Request("GET", "https://fake-domain.name/note.md")))
+    telecharge.__aenter__ = AsyncMock(return_value=telecharge)
+    telecharge.__aexit__ = AsyncMock(return_value=False)
+    with (
+        patch("app.routers.ingest.assert_public_http_url", side_effect=lambda u: u),
+        patch("app.routers.ingest.httpx.AsyncClient", return_value=telecharge),
+        patch("app.routers.ingest.OpenRAGClient") as cls,
+    ):
+        cls.return_value = _client()
+        r = client.post(f"/api/ingest/{nom}/from-url", json={"url": "https://fake-domain.name/note.md?download=1#section"})
+        assert r.status_code == 200, r.text
+        assert r.json()["filename"] == "note.md"
+
+
 def test_reindexer_une_collection(client, en_tant_que, creer_collection, nom):
     """Réindexer = maintenance (ADR-0005) : partition vidée, sources renvoyées telles
     quelles, sensibilité reprise par fichier — sans paramètre de découpage."""

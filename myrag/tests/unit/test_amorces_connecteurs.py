@@ -13,6 +13,7 @@ import pytest
 from app.services.amorces import baac, ingestion, natinf, reseau, rne, sdis, ssmsi
 from app.services.amorces import justice_administrative as ja
 from app.services.amorces.tabulaire import lire_csv, nombre
+from app.services.openrag_client import EnvoiDocument, EtatTache
 
 SSMSI = (
     '﻿"Code_departement";"Code_region";"annee";"indicateur";"unite_de_compte";"nombre";"taux_pour_mille";"insee_pop";"insee_pop_millesime";"insee_log";"insee_log_millesime"\n'
@@ -79,7 +80,9 @@ def sans_reseau(monkeypatch):
     monkeypatch.setattr(reseau, "telecharger", _tele)
     with patch("app.services.amorces.ingestion.OpenRAGClient") as cls:
         cls.return_value.create_partition = AsyncMock(return_value={})
-        cls.return_value.upload_document = AsyncMock(return_value={"ok": True})
+        cls.return_value.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+        cls.return_value.task_state = AsyncMock(return_value=EtatTache(task_state="COMPLETED"))
+        cls.return_value.task_error = AsyncMock(return_value="")
         fichiers["_client"] = cls.return_value  # type: ignore[assignment]
         yield fichiers
 
@@ -215,6 +218,22 @@ async def test_un_ancien_decoupage_repasse_en_nouvelle_version(sans_reseau, cree
     b = await ingestion.ingerer(nom, docs)
     assert b.versions == 1 and b.ignores == 0
     assert (await ingestion.ingerer(nom, docs)).ignores == 1
+
+
+@pytest.mark.asyncio
+async def test_un_echec_d_indexation_ne_marque_pas_le_document(sans_reseau, creer_collection, nom):
+    """La tâche d'OpenRAG est suivie jusqu'au bout : un échec ne marque rien — sinon le
+    document manquant serait ignoré au prochain import, empreinte en poche."""
+    creer_collection(nom)
+    client = sans_reseau["_client"]
+    client.task_state = AsyncMock(return_value=EtatTache(task_state="FAILED"))
+    client.task_error = AsyncMock(return_value="illisible")
+    docs = [ingestion.Document("a.md", "# A\n\ntexte a")]
+    b = await ingestion.ingerer(nom, docs)
+    assert b.echecs == 1 and b.documents == 0
+    client.task_state = AsyncMock(return_value=EtatTache(task_state="COMPLETED"))
+    b2 = await ingestion.ingerer(nom, docs)
+    assert b2.documents == 1 and b2.ignores == 0, "rien n'avait été marqué : le prochain import réessaie"
 
 
 @pytest.mark.asyncio

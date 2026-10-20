@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -16,7 +17,7 @@ from app.security_utils import assert_public_http_url, ensure_within, safe_filen
 from app.services import formats
 from app.services.chunker import Sensitivity, valider_sensibilite
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
-from app.services.openrag_client import OpenRAGClient
+from app.services.openrag_client import EnvoiDocument, OpenRAGClient
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -49,29 +50,36 @@ _ETATS_REUSSIS = ("COMPLETED", "SUCCESS")
 _ETATS_ECHOUES = ("FAILED", "CANCELLED")
 
 
+async def attendre_indexation(client: OpenRAGClient, envoi: EnvoiDocument, filename: str) -> str | None:
+    """Suit la tâche d'indexation d'un document confié à OpenRAG, jusqu'à sa fin : rend
+    None s'il est indexé, la raison sinon (échec dit par OpenRAG, ou lecture trop longue).
+    Sans tâche rendue, c'est réussi : OpenRAG a fait le travail de suite. Partagé par le
+    dépôt (travaux) et les amorces (imports rejouables)."""
+    import time
+
+    tache, debut = envoi.task_id, time.monotonic()
+    while tache:
+        etat = str((await client.task_state(tache)).task_state or "").upper()
+        if etat in _ETATS_REUSSIS:
+            return None
+        if etat in _ETATS_ECHOUES:
+            return f"OpenRAG n'a pas pu lire « {filename} » : {await client.task_error(tache) or etat}"
+        if time.monotonic() - debut > SUIVI_DOCUMENT_MAX_S:
+            return f"OpenRAG n'a pas fini de lire « {filename} » en {int(SUIVI_DOCUMENT_MAX_S // 60)} minutes."
+        await asyncio.sleep(SUIVI_DOCUMENT_S)
+    return None
+
+
 async def _indexer_document_background(job_id: str, collection: str, filename: str, content: bytes, sensitivity: str) -> None:
     """Le fichier part entier vers OpenRAG, qui le lit et le découpe ; on suit sa tâche jusqu'au
     bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG). La
     sensibilité voyage en métadonnée — elle n'était jamais transmise du temps des morceaux."""
-    import time
-
     client = OpenRAGClient(timeout=300.0)
     await update_job(job_id, status="uploading")
     erreur = None
     try:
         envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename, "sensitivity": sensitivity})
-        tache, debut = envoi.task_id, time.monotonic()
-        while tache:
-            etat = str((await client.task_state(tache)).task_state or "").upper()
-            if etat in _ETATS_REUSSIS:
-                break
-            if etat in _ETATS_ECHOUES:
-                erreur = f"OpenRAG n'a pas pu lire « {filename} » : {await client.task_error(tache) or etat}"
-                break
-            if time.monotonic() - debut > SUIVI_DOCUMENT_MAX_S:
-                erreur = f"OpenRAG n'a pas fini de lire « {filename} » en {int(SUIVI_DOCUMENT_MAX_S // 60)} minutes."
-                break
-            await asyncio.sleep(SUIVI_DOCUMENT_S)
+        erreur = await attendre_indexation(client, envoi, filename)
     except httpx.HTTPStatusError as e:
         # 409 : OpenRAG a déjà ce document (reprise après arrêt) — compté comme réussi.
         if e.response is None or e.response.status_code != 409:
@@ -244,7 +252,9 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
     except httpx.HTTPError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    filename = req.url.rstrip("/").split("/")[-1] or "remote-file"
+    # Le nom se déduit du chemin de l'URL, sans la requête ni le fragment : « note.md?download=1 »
+    # ne serait pas un .md, et le dépôt refuserait (415) des textes acceptés avant.
+    filename = urlsplit(req.url).path.rstrip("/").split("/")[-1] or "remote-file"
 
     return await _ingest_document(
         collection=collection,
@@ -274,7 +284,8 @@ async def reindex_collection(collection: str, user: CurrentUser = Depends(curren
         raise HTTPException(status_code=400, detail="Aucun fichier source enregistre pour cette collection. Re-uploadez vos documents.")
 
     # Tout vérifier AVANT d'effacer : chaque source est présente, lisible et acceptable par
-    # OpenRAG. Sinon on refuse, et la collection reste intacte.
+    # OpenRAG — format et taille, que l'envoi ne dirait qu'après coup. Sinon on refuse, et
+    # la collection reste intacte.
     uniques: dict[str, SourceFile] = {}
     for sf in source_files:
         uniques.setdefault(sf.filename, sf)  # d'anciennes lignes en double : une seule par fichier
@@ -286,9 +297,14 @@ async def reindex_collection(collection: str, user: CurrentUser = Depends(curren
         content = path.read_bytes()
         if not content:
             raise HTTPException(status_code=400, detail=f"Le fichier source « {sf.filename} » est vide : redéposez-le avant de réindexer.")
+        if len(content) > DOCUMENT_MAX_OCTETS:
+            raise HTTPException(
+                status_code=413, detail=f"Le fichier source « {sf.filename} » dépasse {DOCUMENT_MAX_OCTETS // 1024 // 1024} Mo : redéposez-le en plus petit avant de réindexer."
+            )
         if formats.nature(sf.filename, content) is not formats.Nature.DOCUMENT:
             raise HTTPException(
-                status_code=415, detail=f"Le fichier source « {sf.filename} » n'est plus accepté (CSV, par exemple) : convertissez-le en .txt ou .md avant de réindexer."
+                status_code=415,
+                detail=f"Le fichier source « {sf.filename} » n'est plus accepté (CSV, par exemple) : retirez cette source de la collection, puis redéposez le fichier converti en .txt ou .md avant de réindexer.",
             )
         contenus.append((sf, content))
 
@@ -330,6 +346,31 @@ async def list_source_files(collection: str, user: CurrentUser = Depends(current
         result = await session.execute(select(SourceFile).where(SourceFile.collection_name == collection).order_by(SourceFile.created_at.desc()))
         files = result.scalars().all()
         return {"sources": [f.to_dict() for f in files]}
+
+
+@router.delete("/{collection}/sources/{source_id}")
+async def delete_source_file(collection: str, source_id: int, user: CurrentUser = Depends(current_user)):
+    """Retirer un fichier source de la collection : sa ligne et le fichier conservé
+    disparaissent. Ses passages restent dans OpenRAG jusqu'à la prochaine réindexation
+    (elle vide la partition) — OpenRAG ne sait pas retirer les morceaux d'un document.
+    C'est la sortie de secours d'une source devenue inacceptable au dépôt (CSV,
+    .markdown — ADR-0005) : sans elle, la réindexation la refuserait pour toujours."""
+    await _exiger_gestion(collection, user)
+    from app.database import async_session as db_session
+    from app.models.db import SourceFile
+
+    async with db_session() as session:
+        sf = (await session.execute(select(SourceFile).where(SourceFile.id == source_id, SourceFile.collection_name == collection))).scalars().first()
+        if sf is None:
+            raise HTTPException(status_code=404, detail="Fichier source inconnu dans cette collection.")
+        nom, chemin = sf.filename, sf.storage_path
+        await session.delete(sf)
+        await session.commit()
+    try:
+        Path(chemin).unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning("Source « %s » : le fichier conservé %s n'a pas pu être effacé du disque (%s)", nom, chemin, e)
+    return {"status": "deleted", "collection": collection, "filename": nom}
 
 
 @router.get("/jobs/{job_id}")

@@ -34,6 +34,7 @@ onMounted(async () => {
     templateCount.value = tplData.templates?.length || 0
   }
   catch {}
+})
 </script>
 
 <template>

@@ -68,8 +68,9 @@ async def init_db():
         await _creer_index_questions(conn)
         # Découpage d'indexation délégué à OpenRAG (ADR-0005) : la sensibilité se garde
         # par fichier source — la réindexation la reprend au lieu d'un paramètre global.
-        # `DEFAULT 'public'` est côté SQL, exprès : les lignes existantes le reçoivent.
-        await _migrate_add_column(conn, "sensitivity", "VARCHAR(20) DEFAULT 'public'", "VARCHAR(20) DEFAULT 'public'", table="source_files")
+        # Les sources existantes la récupèrent de leur dernier dépôt (ingest_jobs la
+        # gardait, pas les fichiers) ; sans historique de dépôt, « public », le défaut.
+        await _migrer_sensibilite_sources(conn)
         # ADR-0005 : la colonne strategy ne dit plus un réglage, elle dit un fait —
         # c'est OpenRAG qui découpe. Les anciennes valeurs ne désignent plus rien.
         await conn.execute(text("UPDATE collections SET strategy = 'openrag' WHERE strategy IS NULL OR strategy != 'openrag'"))
@@ -141,6 +142,46 @@ async def _creer_index_questions(conn):
 
     await conn.execute(text("CREATE INDEX IF NOT EXISTS paire_qa_collection_origine ON paire_qa (collection_name, origine)"))
     await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS paire_qa_source_ref ON paire_qa (collection_name, source_ref)"))
+
+
+async def _migrer_sensibilite_sources(conn):
+    """source_files.sensitivity (ADR-0005) : la sensibilité d'une source, reprise telle
+    quelle à la réindexation.
+
+    Au premier passage seulement (colonne absente) : chaque source existante récupère
+    celle de son dernier dépôt — c'est ingest_jobs qui la gardait, pas les fichiers ; la
+    réindexation, qui ne lit plus que la ligne du fichier, l'aurait crue « public ». Sans
+    dépôt connu, la source reste « public », le défaut du dépôt. Aux passages suivants la
+    colonne existe et rien ne bouge : une sensibilité posée par fichier n'est jamais
+    écrasée par un redémarrage.
+    """
+    from sqlalchemy import text
+
+    def _sync(sync_conn):
+        if sync_conn.dialect.name == "sqlite":
+            colonnes = {r[1] for r in sync_conn.exec_driver_sql("PRAGMA table_info(source_files)").fetchall()}
+            if "sensitivity" in colonnes:
+                return
+            sync_conn.exec_driver_sql("ALTER TABLE source_files ADD COLUMN sensitivity VARCHAR(20) DEFAULT 'public'")
+        else:
+            presente = sync_conn.execute(text("SELECT 1 FROM information_schema.columns WHERE table_name = 'source_files' AND column_name = 'sensitivity'")).scalar()
+            if presente:
+                return
+            sync_conn.execute(text("ALTER TABLE source_files ADD COLUMN sensitivity VARCHAR(20) DEFAULT 'public'"))
+        sync_conn.execute(
+            text(
+                "UPDATE source_files SET sensitivity = COALESCE(("
+                "  SELECT ij.sensitivity FROM ingest_jobs ij"
+                "  WHERE ij.collection_name = source_files.collection_name"
+                "    AND ij.filename = source_files.filename"
+                "    AND ij.sensitivity IS NOT NULL AND ij.sensitivity != ''"
+                "  ORDER BY ij.created_at DESC, ij.job_id DESC"
+                "  LIMIT 1"
+                "), 'public')"
+            )
+        )
+
+    await conn.run_sync(_sync)
 
 
 async def _elargir_etats_demande(conn):

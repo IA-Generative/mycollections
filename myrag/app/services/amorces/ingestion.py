@@ -44,7 +44,7 @@ class Document:
 
 
 class Bilan(BaseModel):
-    """Ce qu'un import a fait : documents envoyés, ignorés (déjà là), échecs, versions."""
+    """Ce qu'un import a fait : documents indexés, ignorés (déjà là), échecs, versions."""
 
     documents: int = 0
     ignores: int = 0
@@ -64,6 +64,16 @@ def _sauver(collection: str, nom: str, contenu: bytes) -> str:
     return _save_source_file(collection, nom, contenu)
 
 
+async def _envoyer(client: OpenRAGClient, collection: str, doc: Document, contenu: bytes) -> str | None:
+    """Confie le document à OpenRAG et suit sa tâche d'indexation jusqu'au bout : rend
+    None s'il est indexé, la raison sinon. Même règle que le dépôt (travaux) : rien
+    n'est marqué réussi tant qu'OpenRAG n'a pas fini de lire."""
+    from app.routers.ingest import attendre_indexation
+
+    envoi = await client.upload_document(collection, doc.nom, contenu, "text/markdown", metadata={"title": doc.nom, "sensitivity": Sensitivity.PUBLIC})
+    return await attendre_indexation(client, envoi, doc.nom)
+
+
 async def purger(collection: str) -> BilanPurge:
     """Vider la partition OpenRAG et oublier les documents connus : le prochain
     import réindexe tout, proprement. Les fichiers sources sur disque restent."""
@@ -79,7 +89,7 @@ async def purger(collection: str) -> BilanPurge:
 
 
 async def ingerer(collection: str, documents: list[Document], *, max_documents: int | None = None) -> Bilan:
-    """Rend un bilan chiffré : documents envoyés, ignorés (déjà là), échecs, versions."""
+    """Rend un bilan chiffré : documents indexés, ignorés (déjà là), échecs, versions."""
     bilan = Bilan()
     client = OpenRAGClient(timeout=120.0)
     try:
@@ -101,12 +111,16 @@ async def ingerer(collection: str, documents: list[Document], *, max_documents: 
                 bilan.ignores += 1
                 continue
             chemin = _sauver(collection, doc.nom, contenu)
-            echecs = 0
             try:
-                await client.upload_document(collection, doc.nom, contenu, "text/markdown", metadata={"title": doc.nom, "sensitivity": Sensitivity.PUBLIC})
+                erreur = await _envoyer(client, collection, doc, contenu)
             except Exception as e:  # noqa: BLE001 — on compte, on continue
-                echecs += 1
-                logger.warning("amorce %s : document refusé (%s)", collection, e)
+                erreur = str(e)
+            if erreur:
+                # Rien n'est marqué — ni empreinte, ni étiquette : le prochain import
+                # réessaie ce document au lieu de l'ignorer pour toujours.
+                bilan.echecs += 1
+                logger.warning("amorce %s : « %s » non indexé (%s)", collection, doc.nom, erreur)
+                continue
             if existant:
                 existant.checksum, existant.storage_path = empreinte, chemin
                 existant.file_size, existant.chunks_produced = len(contenu), 0
@@ -131,6 +145,5 @@ async def ingerer(collection: str, documents: list[Document], *, max_documents: 
                 )
                 connus[doc.nom] = None
             bilan.documents += 1
-            bilan.echecs += echecs
         await session.commit()
     return bilan
