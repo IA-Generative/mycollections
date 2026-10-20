@@ -1,10 +1,11 @@
 /**
  * Les entrées du menu principal et des sous-menus : ce que l'en-tête et les fiches affichent,
  * calculé en pur pour être testé. Une entrée sous drapeau n'existe que si le serveur la déclare
- * (capacités) ; drapeaux à faux, le menu est exactement celui d'avant le chantier des assistants.
+ * (capacités).
  *
- * Architecture cible (ADR-0003), appliquée au menu par le lot D : Accueil · Collections ·
- * Assistants · Réseau d'entraide · Catalogue · Guide.
+ * Menu décidé par la refonte ergonomique (ADR-0003, amendée le 2026-10-19) : Accueil · Catalogue ·
+ * Mes collections[ & assistants] (le volet) · Entraide · [Administration]. « Soyez acteurs
+ * vous-mêmes » passe en pied de page (`ENTREES_PIED_DE_PAGE`).
  */
 import type { Capacites } from './capacites'
 
@@ -13,26 +14,51 @@ export interface EntreeMenu {
   vers: string
   /** La page n'est « courante » que sur cette adresse exacte (sinon : tout son sous-arbre). */
   exact?: boolean
+  /** Classe d'icône DSFR (`fr-icon-…`) affichée devant le libellé. */
+  icone?: string
+  /** L'entrée s'ouvre en volet (« Mes collections ») : le gabarit en fournit le contenu. */
+  volet?: boolean
 }
 
-export function entreesPrincipales (c: Pick<Capacites, 'demandes' | 'assistants' | 'entraide'>, admin: boolean): EntreeMenu[] {
-  const entrees: EntreeMenu[] = [{ libelle: 'Accueil', vers: '/', exact: true }]
-  if (c.assistants) {
-    entrees.push({ libelle: 'Assistants', vers: '/assistants' })
+type CapacitesMenu = Pick<Capacites, 'demandes' | 'assistants' | 'entraide'>
+
+/**
+ * « Mes collections & assistants » quand les assistants existent ; sinon « Mes collections » :
+ *  rien n'annonce une fonction éteinte.
+ */
+export function libelleMesCollections (c: Pick<Capacites, 'assistants'>): string {
+  return c.assistants ? 'Mes collections & assistants' : 'Mes collections'
+}
+
+/**
+ * L'entrée Entraide : le réseau d'entraide s'il est allumé, sinon les demandes de la
+ *  communauté, sinon rien.
+ */
+export function entreeEntraide (c: Pick<Capacites, 'demandes' | 'entraide'>): EntreeMenu | null {
+  const vers = c.entraide ? '/entraide' : c.demandes ? '/demandes' : null
+  return vers ? { libelle: 'Entraide', vers, icone: 'fr-icon-team-line' } : null
+}
+
+export function entreesPrincipales (c: CapacitesMenu, admin: boolean): EntreeMenu[] {
+  const entrees: EntreeMenu[] = [
+    { libelle: 'Accueil', vers: '/', exact: true },
+    { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
+    { libelle: libelleMesCollections(c), vers: '/mes-collections', volet: true },
+  ]
+  const entraide = entreeEntraide(c)
+  if (entraide) {
+    entrees.push(entraide)
   }
-  entrees.push({ libelle: 'Catalogue', vers: '/admin/catalog', exact: true })
-  if (c.entraide) {
-    entrees.push({ libelle: 'Réseau d\'entraide', vers: '/entraide' })
-  }
-  else if (c.demandes) {
-    entrees.push({ libelle: 'Demandes de la communauté', vers: '/demandes' })
-  }
-  entrees.push({ libelle: 'Soyez acteurs vous-mêmes', vers: '/guide' })
   if (admin) {
     entrees.push({ libelle: 'Administration', vers: '/admin' })
   }
   return entrees
 }
+
+/** Les liens du pied de page. */
+export const ENTREES_PIED_DE_PAGE: readonly EntreeMenu[] = [
+  { libelle: 'Soyez acteurs vous-mêmes', vers: '/guide' },
+]
 
 export function estActive (e: EntreeMenu, chemin: string): boolean {
   return e.exact ? chemin === e.vers : chemin.startsWith(e.vers)

@@ -10,20 +10,19 @@ import pytest
 
 def test_l_accueil_dit_quoi_faire(session_testeur, captures):
     page = session_testeur.aller("/")
-    assert page.locator("h1").first.inner_text().strip() == "Mes collections"
+    assert page.locator("h1").first.inner_text().strip() == "Que souhaitez-vous faire ?"
     texte = session_testeur.texte()
-    assert "Que souhaitez-vous faire" in texte
-    for bloc in ("Découvrir", "Explorer le catalogue", "Créer une collection"):
-        assert bloc in texte, f"le bloc « {bloc} » manque à l'accueil"
-    assert "Il vous manque une donnée pour travailler" in texte
+    for bloc in ("Découvrir", "Explorer le catalogue", "Gérer mes collections", "Créer une nouvelle collection"):
+        assert bloc in texte, f"la tuile « {bloc} » manque à l'accueil"
+    assert "Il vous manque une donnée pour travailler" not in texte, "le cadre a quitté l'accueil (l'entrée Entraide du menu y mène)"
     captures.prendre(page, "02-accueil")
 
 
 def test_l_exemple_de_l_accueil_ouvre_le_bac_a_sable_prerempli(session_testeur, collection_publiee, captures):
-    """« Poser cette question » mène au bac à sable de la collection, la question déjà écrite."""
+    """« Essayer cette question » mène au bac à sable de la collection, la question déjà écrite."""
     page = session_testeur.aller("/")
-    bouton = page.get_by_role("link", name=re.compile("Poser cette question"))
-    assert bouton.count() == 1, "l'accueil n'offre pas « Poser cette question »"
+    bouton = page.locator("[data-tuile=decouvrir]").get_by_role("link", name=re.compile("Essayer cette question"))
+    assert bouton.count() == 1, "l'accueil n'offre pas « Essayer cette question »"
     bouton.click()
     page.wait_for_url(re.compile(r"/c/[^/]+/playground"), timeout=30_000)
     page.locator("#question").wait_for(state="visible", timeout=30_000)
