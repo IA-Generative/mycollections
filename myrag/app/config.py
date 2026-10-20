@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     # La doublure du harnais (plan et exécution servis depuis app/doublure/assistants/) : pour
     # que l'interface des assistants avance sans le harnais. Jamais en production.
     doublure_assistants: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_DOUBLURE_ASSISTANTS", "doublure_assistants"))
+    # Embeddings d'OpenRAG pour apparier une question aux consignes d'un assistant (POST {openrag_url}/v1/embeddings).
+    # Vide (défaut) ⇒ sac de mots déterministe ; renseigné mais injoignable ⇒ repli sur le sac de mots, sans erreur.
+    assistants_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE", "assistants_embeddings_modele"))
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)

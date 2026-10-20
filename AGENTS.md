@@ -267,6 +267,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_MESURE_JUGE_MODELE` / `_PARALLELISME` / `_QUESTIONS_MAX` / `_DUREE_MAX_S` / `_DELAI_APPEL_S` | `` / `2` / `200` / `1800` / `120` | Mesure de la qualite (docs/qualite.md) : modele du juge (vide ⇒ celui de la generation), questions en parallele, plafond, duree max, delai par appel |
 | `MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE` | `20` | Débit maximal vers la passerelle (quota compté par jeton) ; voir `docs/generation.md` pour les autres réglages |
 | `MYCOLLECTIONS_CAPACITES_SURCHARGE` | `` | Objet JSON posé par-dessus capacites.json (ex. `{"assistants": true}`) : allumer une fonction sur une prévisualisation ou un poste ; illisible ⇒ ignorée |
+| `MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE` | `` | Modele d'embeddings (`POST {OPENRAG_URL}/v1/embeddings`) pour apparier une question aux consignes d'un assistant ; vide ⇒ sac de mots deterministe ; injoignable ⇒ repli sur le sac de mots |
 | `MYCOLLECTIONS_DOUBLURE_ASSISTANTS` | `false` | Doublure du harnais (`/api/v1/assistants/{id}/plan|executer` depuis `app/doublure/assistants/`) ; jamais en production |
 
 ## Groupes et droits
