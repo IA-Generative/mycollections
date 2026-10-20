@@ -1,6 +1,7 @@
 """MyRAG chunker — intelligent document splitting strategies."""
 
 import re
+import unicodedata
 from enum import StrEnum
 
 # --- Regex patterns ---
@@ -180,6 +181,14 @@ def chunk_by_article(text: str, sensitivity: Sensitivity = Sensitivity.PUBLIC) -
     return chunks
 
 
+def slug_de_section(titre: str) -> str:
+    """Le nom de fichier d'une section, d'après son titre : « Le code de contrôle » →
+    `le-code-de-controle`. Les accents sont translittérés, pas supprimés : OpenRAG ne garde que ce
+    nom (pas nos métadonnées), et « contr-le » ne se lisait plus nulle part."""
+    ascii_ = unicodedata.normalize("NFKD", titre).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", ascii_.lower()).strip("-")[:50]
+
+
 def chunk_by_section(text: str, sensitivity: Sensitivity = Sensitivity.INTERNAL) -> list[dict]:
     """Split a document by markdown headers (##, ###)."""
     if not text.strip():
@@ -200,7 +209,7 @@ def chunk_by_section(text: str, sensitivity: Sensitivity = Sensitivity.INTERNAL)
         if not content:
             continue
 
-        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:50]
+        slug = slug_de_section(title)
         chunks.append(
             {
                 "content": content,
