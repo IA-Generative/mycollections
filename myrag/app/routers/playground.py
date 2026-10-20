@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
 from app.services import accueil, liens
+from app.services.nommage import nom_de_fichier_lisible
 from app.services.openrag_client import FichierOpenRAG, OpenRAGClient
 from app.services.reponse import ErreurReponse, repondre
 
@@ -211,18 +212,12 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest, user: Cur
 
 #: Trois questions suffisent à voir si la collection répond ; au-delà, c'est la page Qualité.
 NB_SUGGESTIONS = 3
-_EXTENSION = re.compile(r"\.[A-Za-z0-9]{1,5}$")
-_SEPARATEURS = re.compile(r"[-_]+")
-
-
-_PREFIXE_SECTION = re.compile(r"^section\s+", re.IGNORECASE)
 
 
 def titre_lisible(titre: str) -> str:
     """« circulaire-peines_2026.pdf » → « circulaire peines 2026 » : un nom de fichier qui se lit.
     Le préfixe « section- » que pose le découpage par section (app.services.chunker) est retiré."""
-    t = _SEPARATEURS.sub(" ", _EXTENSION.sub("", (titre or "").strip())).strip()
-    return _PREFIXE_SECTION.sub("", " ".join(t.split()))
+    return nom_de_fichier_lisible(titre)
 
 
 def questions_depuis_documents(titres: list[str], n: int = NB_SUGGESTIONS) -> list[str]:

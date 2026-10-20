@@ -15,6 +15,7 @@ from app.config import settings
 from app.harnais.contrat import IDENT_MORCEAU, Appelant, Etape, FicheSource, Passage
 from app.harnais.interfaces import Connecteur
 from app.services.morceau import decouper_morceau
+from app.services.nommage import titre_affiche
 from app.services.openrag_client import DocumentRecherche, OpenRAGClient
 
 _CLES_SCORE = ("relevance_score", "rerank_score", "combined_score", "score")
@@ -64,7 +65,8 @@ def vers_passage(doc: DocumentRecherche, *, etape: int, rang: int) -> Passage | 
         return None
     ident = _ident(doc, meta)
     titre = meta.get("title") if isinstance(meta.get("title"), str) else ""
-    nom = titre or (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier or ""
+    fichier_nom = (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier or ""
+    nom = titre.strip() or titre_affiche(fichier_nom)
     page = meta.get("page")
     return Passage(
         source=partition,

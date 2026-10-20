@@ -44,7 +44,7 @@ from app.routers._commun import capacite
 from app.services import access, assistant_recherche, liens
 from app.services.collection_store import list_collections
 from app.services.morceau import decouper_morceau
-from app.services.nommage import titre_de
+from app.services.nommage import titre_affiche, titre_de
 from app.services.openrag_client import DocumentRecherche, OpenRAGClient
 from app.services.pseudo import SelAbsent, condenser
 
@@ -425,10 +425,13 @@ def _lien(ident: str | None) -> str | None:
 
 
 def _titre_du_document(meta: dict, fichier: str) -> str:
+    """Le titre du document s'il en porte un ; sinon son nom de fichier, et un nom lisible pour
+    un morceau nommé par le découpage (« section_wikipedia_extract.md » → « Wikipedia extract »)."""
     titre = meta.get("title") if isinstance(meta.get("title"), str) else ""
-    nom = titre or (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier
-    nom = re.sub(r"\.(md|txt|markdown)$", "", (nom or "").strip(), flags=re.I)
-    return _texte_brut(nom)[:200]
+    if titre.strip():
+        return _texte_brut(re.sub(r"\.(md|txt|markdown)$", "", titre.strip(), flags=re.I))[:200]
+    nom = (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier
+    return _texte_brut(titre_affiche(nom or ""))[:200]
 
 
 def _page(meta: dict) -> int | None:
