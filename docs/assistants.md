@@ -48,6 +48,9 @@ Les calculs d'écran sont des fonctions pures de `frontend/utils/assistants.ts` 
 
 ## Travailler sans le harnais
 
+Le moteur répond sur la bêta depuis la fusion des lots A1 et A3. La doublure reste utile pour
+montrer les écrans sans OpenRAG, en local ou sur une prévisualisation :
+
 ```bash
 cd myrag
 MYCOLLECTIONS_DOUBLURE_ASSISTANTS=true \
@@ -56,4 +59,9 @@ AUTH_ENABLED=false MYRAG_PSEUDO_SEL=dev-sel uv run uvicorn app.main:app --port 8
 ```
 
 `POST /api/v1/assistants/{id}/plan` et `/executer` rendent alors le plan et le résultat de
-`myrag/app/doublure/assistants/` (conformes au contrat, vérifiés par les tests). Jamais en production.
+`myrag/app/doublure/assistants/`, avec l'en-tête `X-Mycollections-Doublure: 1` ; l'interface
+l'annonce par un encadré « Réponse d'exemple ». Jamais sur la bêta ni en production.
+
+Les deux routes du moteur sont limitées par personne : `MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE`
+(30 par défaut, par processus) ; au-delà, 429 avec `Retry-After`. Un moteur entièrement en panne
+rend 503 avec `Retry-After: 10`.
