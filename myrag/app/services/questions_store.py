@@ -88,8 +88,8 @@ def _appliquer_relecture(q: PaireQA, relecture: str, sub: str | None) -> None:
 # ─── Lecture ──────────────────────────────────────────────────────────────────────
 
 
-def _filtres(name: str, *, origine=None, relecture=None, fiable=None, hors_sujet=None, verdict=None, persona=None, texte=None, run_id=None) -> list:
-    f = [PaireQA.collection_name == name]
+def _filtres(name: str | list[str], *, origine=None, relecture=None, fiable=None, hors_sujet=None, verdict=None, persona=None, texte=None, run_id=None) -> list:
+    f = [PaireQA.collection_name.in_(name) if isinstance(name, list) else PaireQA.collection_name == name]
     if origine:
         f.append(PaireQA.origine == origine)
     if relecture:
@@ -112,7 +112,7 @@ def _filtres(name: str, *, origine=None, relecture=None, fiable=None, hors_sujet
     return f
 
 
-async def lister_questions(name: str, *, page: int = 1, par_page: int = 50, **filtres) -> PageQuestions:
+async def lister_questions(name: str | list[str], *, page: int = 1, par_page: int = 50, **filtres) -> PageQuestions:
     par_page = max(1, min(int(par_page), 200))
     conditions = _filtres(name, **filtres)
     async with async_session() as s:
@@ -129,6 +129,17 @@ async def lire_question(name: str, ident: str) -> QuestionFiche:
         if not q or q.collection_name != name:
             raise Introuvable("Question introuvable")
         return QuestionFiche.depuis(q)
+
+
+async def compter_fiables(sources: list[str]) -> dict[str, tuple[int, int]]:
+    """Par collection : (réponses fiables servables, fois où elles ont été servies)."""
+    if not sources:
+        return {}
+    async with async_session() as s:
+        r = await s.execute(
+            select(PaireQA.collection_name, func.count(), func.coalesce(func.sum(PaireQA.servie_fois), 0)).where(*_conditions_fiables(sources)).group_by(PaireQA.collection_name)
+        )
+        return {nom: (int(n), int(servies)) for nom, n, servies in r.all()}
 
 
 async def compter(name: str) -> ComptesQuestions:

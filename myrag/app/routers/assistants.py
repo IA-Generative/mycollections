@@ -15,18 +15,20 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.harnais.contrat import CAPACITES_CLIENT, FicheAssistant, Plan, Resultat
+from app.models.db import RELECTURES_PAIRE
 from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
 from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
-from app.services import liens
+from app.services import liens, qualite, questions_store
 from app.services.fenetre_par_minute import Fenetre
+from app.services.nommage import titre_de
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
 #: Les routes du harnais, sous /api/v1 : `plan` et `executer`. Elles s'ajoutent à `router` (voir le bas du fichier).
@@ -148,6 +150,70 @@ async def publier(ident: str, moi: Identite = Depends(identite)):
 async def versions(ident: str, moi: Identite = Depends(identite)):
     await _charger(ident, moi)
     return {"versions": await store.versions(ident)}
+
+
+# ─── La qualité d'un assistant : la lecture des jeux de questions de ses sources ────────────────
+# Rien ne s'écrit ici : marquer ou retirer une réponse fiable passe par le `PATCH` de la collection,
+# avec ses droits. Les sources que la personne ne lit pas sont absentes, sans que rien le dise.
+
+
+async def _sources_lues(ident: str, moi: Identite, user: CurrentUser):
+    try:
+        charge = await moteur.charger(ident, user, moi.hash, moi.superadmin, brouillon=True)
+    except moteur.AssistantIntrouvable:
+        raise HTTPException(status_code=404, detail=f"Assistant « {ident} » introuvable")
+    return charge
+
+
+@router.get("/{ident}/qualite/questions")
+async def qualite_questions(
+    ident: str,
+    relecture: str | None = Query(None, pattern="^(" + "|".join(RELECTURES_PAIRE) + ")$"),
+    fiable: bool | None = None,
+    q: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    par_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(current_user),
+):
+    """L'union, en lecture, des jeux de questions des sources lisibles, chaque question avec sa collection."""
+    moi = await identite(user)
+    charge = await _sources_lues(ident, moi, user)
+    if not charge.lisibles:
+        return {"total": 0, "page": 1, "pages": 1, "par_page": par_page, "questions": []}
+    page_ = await questions_store.lister_questions(charge.lisibles, relecture=relecture, fiable=fiable, texte=q, page=page, par_page=par_page)
+    cols = charge.collections
+    questions = [
+        {
+            **f.model_dump(),
+            "collection_titre": titre_de(cols[f.collection]) if cols.get(f.collection) else f.collection,
+            "peut_gerer": droits_service.gerable(cols.get(f.collection), user),
+        }
+        for f in page_.questions
+    ]
+    return {**page_.model_dump(exclude={"questions"}), "questions": questions}
+
+
+@router.get("/{ident}/qualite")
+async def qualite_assistant(ident: str, user: CurrentUser = Depends(current_user)):
+    """Par source lisible : la synthèse de qualité de la collection, ses réponses fiables et combien de fois elles ont été servies."""
+    moi = await identite(user)
+    charge = await _sources_lues(ident, moi, user)
+    fiables = await questions_store.compter_fiables(charge.lisibles)
+    sources = []
+    for nom in charge.lisibles:
+        col = charge.collections.get(nom)
+        n, servies = fiables.get(nom, (0, 0))
+        sources.append(
+            {
+                "collection": nom,
+                "collection_titre": titre_de(col) if col else nom,
+                "peut_gerer": droits_service.gerable(col, user),
+                "synthese": await qualite.synthese(nom),
+                "reponses_fiables": n,
+                "servie_fois": servies,
+            }
+        )
+    return {"assistant": ident, "seuil_fiable": charge.fiche.seuil_fiable, "sources": sources}
 
 
 # ─── Le moteur : plan et exécution (lot A) ───────────────────────────────────────────────────
