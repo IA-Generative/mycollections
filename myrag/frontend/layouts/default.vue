@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { libelleEtat } from '~/utils/collectif'
 import { ENTREES_PIED_DE_PAGE } from '~/utils/navigation'
 
 const config = useRuntimeConfig()
@@ -8,20 +7,9 @@ const { loading: authLoading, authError, init: initAuth } = useAuth()
 const { isAdmin, charger: chargerDroits } = useAdminAuth()
 // Aucun bouton n'apparaît si le service ne sait pas le faire : l'onglet des demandes
 // n'existe que si capacites.json le déclare.
-const { capacites, charger: chargerCapacites } = useCapacites()
+const { charger: chargerCapacites } = useCapacites()
 
-// Le menu « Mes collections » : celles dont je suis le créateur ou le garant.
-const menuOuvert = ref(false)
-const btnVolet = ref<HTMLButtonElement | null>(null)
-/** Échap ferme le volet et rend le focus à son bouton. */
-function fermerVolet (e: KeyboardEvent) {
-  if (!menuOuvert.value) {
-    return
-  }
-  e.stopPropagation() // le volet se ferme seul : le menu mobile qui le porte reste ouvert
-  menuOuvert.value = false
-  nextTick(() => btnVolet.value?.focus())
-}
+// La pastille de « Mes collections » : le nombre de collections dont je suis le créateur ou le garant.
 const menuMobile = ref(false)
 const menuPrincipal = ref<HTMLElement | null>(null)
 const btnFermerMenu = ref<HTMLButtonElement | null>(null)
@@ -37,7 +25,6 @@ async function chargerMiennes () {
   catch {}
 }
 watch(() => route.fullPath, () => {
-  menuOuvert.value = false
   menuMobile.value = false
   chargerMiennes()
 })
@@ -122,7 +109,7 @@ onMounted(async () => {
                   Mes collections
                 </NuxtLink>
                 <p class="fr-header__service-tagline">
-                  Interrogez les documents de votre ministère
+                  Valorisons ensemble la donnée du ministère
                 </p>
               </div>
             </div>
@@ -152,84 +139,10 @@ onMounted(async () => {
             Fermer
           </button>
           <div class="fr-header__menu-links" />
-          <NavigationPrincipale :admin="isAdmin">
-            <!-- Les collections que JE gère : un volet du menu, sur toutes les pages. -->
-            <template #volet="{ entree, courante }">
-              <li
-                class="fr-nav__item myrag-menu-miennes"
-                @keydown.esc="fermerVolet($event)"
-              >
-                <button
-                  ref="btnVolet"
-                  type="button"
-                  class="fr-nav__link myrag-menu-miennes__bouton"
-                  :aria-expanded="menuOuvert"
-                  aria-controls="menu-miennes"
-                  :aria-current="courante ? 'page' : undefined"
-                  @click="menuOuvert = !menuOuvert"
-                >
-                  {{ entree.libelle }}
-                  <span class="myrag-menu-miennes__compte">{{ miennes.length }}</span>
-                  <span
-                    class="fr-icon-arrow-down-s-line fr-icon--sm"
-                    aria-hidden="true"
-                  />
-                </button>
-                <div
-                  v-if="menuOuvert"
-                  id="menu-miennes"
-                  class="myrag-menu-miennes__volet"
-                >
-                  <p class="myrag-menu-miennes__entete">
-                    Celles que je gère
-                  </p>
-                  <NuxtLink
-                    v-for="c in miennes.slice(0, 6)"
-                    :key="c.name"
-                    :to="`/c/${c.name}`"
-                    class="myrag-menu-miennes__ligne"
-                    @click="menuOuvert = false"
-                  >
-                    <b>{{ c.titre }}</b>
-                    <small>
-                      <template v-if="c.categorie_libelle">{{ c.categorie_libelle }} · </template>{{ c.questions }} question{{ c.questions > 1 ? 's' : '' }} en 30 jours<template v-if="c.signalements_ouverts"> · {{ c.signalements_ouverts }} signalement{{ c.signalements_ouverts > 1 ? 's' : '' }} à traiter</template>
-                    </small>
-                    <span
-                      class="fr-badge fr-badge--sm fr-badge--no-icon"
-                      :class="c.etat_collab === 'publiee_tous' ? 'fr-badge--success' : 'fr-badge--warning'"
-                    >{{ libelleEtat(c.etat_collab) }}</span>
-                  </NuxtLink>
-                  <p
-                    v-if="!miennes.length"
-                    class="myrag-menu-miennes__vide"
-                  >
-                    Vous ne gérez pas encore de collection.
-                  </p>
-                  <div class="myrag-menu-miennes__pied">
-                    <NuxtLink
-                      to="/admin/create"
-                      @click="menuOuvert = false"
-                    >
-                      + Créer
-                    </NuxtLink>
-                    <NuxtLink
-                      to="/mes-collections"
-                      @click="menuOuvert = false"
-                    >
-                      Tout voir et gérer
-                    </NuxtLink>
-                    <NuxtLink
-                      v-if="capacites.assistants"
-                      to="/assistants"
-                      @click="menuOuvert = false"
-                    >
-                      Mes assistants
-                    </NuxtLink>
-                  </div>
-                </div>
-              </li>
-            </template>
-          </NavigationPrincipale>
+          <NavigationPrincipale
+            :admin="isAdmin"
+            :compte-miennes="miennes.length"
+          />
         </div>
       </div>
     </header>
@@ -331,7 +244,7 @@ onMounted(async () => {
     <main
       v-else
       id="main-content"
-      class="fr-container fr-mt-4w fr-mb-8w"
+      class="fr-container fr-mt-3w fr-mb-6w"
     >
       <slot />
     </main>
@@ -386,32 +299,6 @@ onMounted(async () => {
   .fr-header { padding-top: 2.75rem; }
   .fr-header__menu.fr-modal--opened { padding-top: 2.75rem; }
 }
-/* Le menu « Mes collections » : troisième entrée de la navigation, volet sous le bouton. */
-.myrag-menu-miennes { position: relative; }
-.myrag-menu-miennes__bouton { display: inline-flex; align-items: center; gap: .35rem; color: var(--text-action-high-blue-france); }
-.myrag-menu-miennes__compte {
-  min-width: 1.5em; text-align: center; font-size: .75rem; font-weight: 700; border-radius: 1em; padding: 0 .4em;
-  background: var(--background-action-high-blue-france); color: var(--text-inverted-blue-france); font-variant-numeric: tabular-nums;
-}
-.myrag-menu-miennes__volet {
-  position: absolute; right: 0; top: 100%; z-index: 750; width: min(24rem, calc(100vw - 2rem));
-  background: var(--background-overlap-grey); border: 1px solid var(--border-default-grey); box-shadow: 0 6px 18px rgba(0, 0, 18, .16);
-}
-.myrag-menu-miennes__entete { margin: 0; padding: .75rem 1rem .4rem; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-mention-grey); }
-.myrag-menu-miennes__ligne {
-  display: grid; grid-template-columns: 1fr auto; gap: .1rem .75rem; padding: .6rem 1rem; font-size: .92rem;
-  border-top: 1px solid var(--border-default-grey); background-image: none; color: var(--text-default-grey);
-}
-.myrag-menu-miennes__ligne:hover { background: var(--background-alt-grey); }
-.myrag-menu-miennes__ligne b { font-weight: 500; }
-.myrag-menu-miennes__ligne small { grid-column: 1; font-size: .78rem; color: var(--text-mention-grey); }
-.myrag-menu-miennes__ligne .fr-badge { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-.myrag-menu-miennes__vide { margin: 0; padding: .25rem 1rem .9rem; font-size: .9rem; color: var(--text-mention-grey); }
-.myrag-menu-miennes__pied { display: flex; flex-wrap: wrap; gap: .25rem 1rem; padding: .6rem 1rem .75rem; border-top: 1px solid var(--border-default-grey); background: var(--background-alt-grey); }
-.myrag-menu-miennes__pied a { font-size: .85rem; font-weight: 500; color: var(--text-action-high-blue-france); }
-.myrag-menu-miennes__volet { left: 0; right: auto; }
-@media (max-width: 62em) { .myrag-menu-miennes__volet { position: static; width: 100%; } }
-
 /* Logo opérateur dans l'en-tête — emplacement DSFR standard (look myvault) */
 .myrag-operator-logo {
   width: auto;

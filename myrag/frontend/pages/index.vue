@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import type { Categorie, Collection } from '~/types/collection'
 import type { BilanPartage, Exemple } from '~/utils/accueil'
-import { indicateurs, nombre, porteNonClassees, portes, tuilesAccueil } from '~/utils/accueil'
+import { impactDuPartage, indicateurs, messageImpact, nombre, porteNonClassees, portes, tuilesAccueil } from '~/utils/accueil'
+import { BANDEAU, bandeauAffiche, CLE_BANDEAUX_FERMES, lireFermes } from '~/utils/bandeau'
+import { entreeEntraide } from '~/utils/navigation'
 
+/**
+ * L'accueil, compact (2026-10-20) : un bandeau d'information qu'on peut fermer, le titre et une
+ * phrase, ce que mes collections ont rendu possible (collègues aidés, note des usagers), quatre
+ * tuiles basses, les catégories et l'entraide. Tout tient sur un petit écran de portable.
+ * Ce que la page dit vient de utils/accueil.ts et utils/bandeau.ts (testés).
+ */
 const { get } = useApi()
 const { capacites } = useCapacites()
 const { lister: listerCategories } = useCategories()
@@ -10,40 +18,48 @@ const { lister: listerCategories } = useCategories()
 const collections = ref<Collection[]>([])
 const categories = ref<Categorie[]>([])
 const bilan = ref<BilanPartage | null>(null)
-const bilanCharge = ref(false)
 const exemple = ref<Exemple | null>(null)
 const catalogueCharge = ref(false)
-const tirage = ref(false)
 
 const chiffres = computed(() => catalogueCharge.value ? indicateurs(collections.value, categories.value) : null)
-const tuiles = computed(() => tuilesAccueil(capacites.value, bilan.value, exemple.value, chiffres.value))
+const tuiles = computed(() => tuilesAccueil(capacites.value, exemple.value, chiffres.value))
+const impact = computed(() => impactDuPartage(bilan.value, collections.value))
+const message = computed(() => impact.value ? messageImpact(impact.value) : null)
+const entraide = computed(() => entreeEntraide(capacites.value))
 const puces = computed(() => {
   const nonClassees = porteNonClassees(collections.value, categories.value)
   return [...portes(collections.value, categories.value), ...(nonClassees ? [nonClassees] : [])]
 })
 
-async function autreIdee () {
-  tirage.value = true
-  try {
-    const r = await get('/api/accueil/exemple', exemple.value ? { sauf: exemple.value.name } : undefined)
-    if (r.exemple) {
-      exemple.value = r.exemple
-    }
+// Le bandeau d'information : fermé, il ne revient pas (préférence de ce navigateur seulement).
+const fermes = ref<string[]>([])
+const bandeauVisible = computed(() => bandeauAffiche(BANDEAU, fermes.value))
+function fermerBandeau () {
+  if (!BANDEAU) {
+    return
   }
-  catch {}
-  tirage.value = false
+  fermes.value = [...fermes.value, BANDEAU.id]
+  try {
+    localStorage.setItem(CLE_BANDEAUX_FERMES, JSON.stringify(fermes.value))
+  }
+  catch { /* stockage indisponible : fermé pour cette visite */ }
 }
 
 onMounted(() => {
-  autreIdee()
+  try {
+    fermes.value = lireFermes(localStorage.getItem(CLE_BANDEAUX_FERMES))
+  }
+  catch { /* stockage indisponible : le bandeau s'affiche */ }
+  get('/api/accueil/exemple')
+    .then((r) => {
+      exemple.value = r.exemple || null
+    })
+    .catch(() => {})
   get('/api/accueil/mes-collections')
     .then((r) => {
       bilan.value = r
     })
     .catch(() => {})
-    .finally(() => {
-      bilanCharge.value = true
-    })
   listerCategories()
     .then((r) => {
       categories.value = r
@@ -60,31 +76,119 @@ onMounted(() => {
 
 <template>
   <div class="accueil">
-    <div class="fr-mb-5w">
-      <h1>Que souhaitez-vous faire ?</h1>
-      <p
-        class="fr-text--lead fr-mb-0"
-        style="max-width:48rem"
-      >
-        Interrogez les données de votre ministère en langage courant, ou constituez les vôtres.
-        Pas besoin d'être spécialiste : déposez vos documents, l'assistant s'occupe du reste.
-      </p>
+    <!-- Bandeau d'information éditorial, que chacun peut fermer. -->
+    <div
+      v-if="bandeauVisible && BANDEAU"
+      class="fr-notice fr-notice--info fr-mb-2w accueil-bandeau"
+      role="region"
+      aria-label="Information"
+    >
+      <div class="fr-notice__body">
+        <p>
+          <span class="fr-notice__title">{{ BANDEAU.titre }}</span>
+          <span class="fr-notice__desc">{{ BANDEAU.texte }}</span>
+          <NuxtLink
+            v-if="BANDEAU.lien"
+            :to="BANDEAU.lien.vers"
+            class="fr-notice__link"
+          >
+            {{ BANDEAU.lien.libelle }}
+          </NuxtLink>
+        </p>
+        <button
+          type="button"
+          class="fr-btn--close fr-btn"
+          title="Masquer le message"
+          @click="fermerBandeau"
+        >
+          Masquer le message
+        </button>
+      </div>
     </div>
 
-    <!-- Quatre tuiles (refonte du 2026-10-19) : ce qu'elles disent vient de utils/accueil.ts (testé).
-         Chaque bloc tombe seul : une panne d'un appel ne vide jamais la page. -->
+    <h1 class="fr-h3 fr-mb-1v">
+      Que souhaitez-vous faire ?
+    </h1>
+    <p class="fr-mb-2w accueil-chapeau">
+      Découvrez les collections de vos collègues, partagez les vôtres sans rien préparer, entraidez-vous.
+    </p>
+
+    <!-- Ce que mes collections ont rendu possible : la raison de continuer. -->
+    <section
+      v-if="impact && message"
+      class="accueil-impact fr-mb-3w"
+      aria-labelledby="titre-impact"
+    >
+      <div class="accueil-impact__message">
+        <h2
+          id="titre-impact"
+          class="fr-h6 fr-mb-1v"
+        >
+          {{ message.titre }}
+        </h2>
+        <p class="fr-text--sm fr-mb-0">
+          {{ message.texte }}
+          <template v-if="impact.plusUtile">
+            La plus utile : <NuxtLink
+              :to="`/c/${impact.plusUtile.name}`"
+              class="fr-link fr-text--sm"
+            >
+              {{ impact.plusUtile.titre }}
+            </NuxtLink>.
+          </template>
+        </p>
+      </div>
+      <dl class="accueil-impact__chiffres">
+        <div v-if="impact.personnes">
+          <dt class="fr-sr-only">
+            Collègues aidés
+          </dt>
+          <dd><b>{{ nombre(impact.personnes) }}</b><span>collègue{{ impact.personnes > 1 ? 's' : '' }} aidé{{ impact.personnes > 1 ? 's' : '' }}</span></dd>
+        </div>
+        <div>
+          <dt class="fr-sr-only">
+            Questions
+          </dt>
+          <dd><b>{{ nombre(impact.questions) }}</b><span>question{{ impact.questions > 1 ? 's' : '' }} en {{ impact.fenetre_jours }} jours</span></dd>
+        </div>
+        <div v-if="impact.satisfaction !== null">
+          <dt class="fr-sr-only">
+            Note des usagers
+          </dt>
+          <dd><b>{{ impact.satisfaction }} %</b><span>de réponses utiles · {{ nombre(impact.avis) }} avis</span></dd>
+        </div>
+        <div
+          v-if="impact.signalements"
+          class="accueil-impact__alerte"
+        >
+          <dt class="fr-sr-only">
+            Signalements
+          </dt>
+          <dd>
+            <b>{{ impact.signalements }}</b>
+            <NuxtLink
+              to="/mes-collections"
+              class="fr-link fr-text--xs"
+            >
+              signalement{{ impact.signalements > 1 ? 's' : '' }} à traiter
+            </NuxtLink>
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- Quatre tuiles basses : un titre, une phrase. -->
     <ul
-      class="accueil-tuiles fr-grid-row fr-grid-row--gutters fr-mb-6w"
+      class="accueil-tuiles fr-grid-row fr-grid-row--gutters fr-mb-2w"
       role="list"
     >
       <li
         v-for="t in tuiles"
         :key="t.cle"
-        class="fr-col-12 fr-col-md-6 fr-col-xl-3"
+        class="fr-col-12 fr-col-md-6 fr-col-lg-3"
       >
         <div
-          class="fr-tile fr-tile--vertical accueil-tuile"
-          :class="{ 'fr-enlarge-link': t.cle !== 'decouvrir' }"
+          class="fr-tile fr-tile--sm fr-tile--horizontal fr-enlarge-link accueil-tuile"
           :data-tuile="t.cle"
         >
           <div class="fr-tile__body">
@@ -100,75 +204,11 @@ onMounted(() => {
               <p class="fr-tile__desc">
                 {{ t.description }}
               </p>
-
-              <!-- Découvrir : la question d'exemple, à essayer en un geste. -->
-              <div
-                v-if="t.cle === 'decouvrir' && exemple"
-                class="accueil-exemple"
-                aria-live="polite"
-              >
-                <p class="fr-text--xs fr-mb-0 accueil-exemple__collection">
-                  {{ exemple.titre }}
-                </p>
-                <p class="fr-text--sm fr-mb-0">
-                  « {{ exemple.question }} »
-                </p>
-              </div>
-
-              <dl
-                v-if="t.kpis.length"
-                class="accueil-kpis"
-              >
-                <div
-                  v-for="k in t.kpis"
-                  :key="k.libelle"
-                  class="accueil-kpi"
-                  :class="{ 'accueil-kpi--alerte': k.alerte }"
-                >
-                  <dt class="fr-sr-only">
-                    {{ k.libelle }}
-                  </dt>
-                  <dd><b>{{ nombre(k.valeur) }}</b><span aria-hidden="true">{{ k.libelle }}</span></dd>
-                </div>
-              </dl>
-              <p
-                v-else-if="t.cle === 'gerer' && bilanCharge"
-                class="fr-text--sm fr-mb-0 accueil-mention"
-              >
-                Vous ne gérez pas encore de collection.
-              </p>
               <p
                 v-if="t.mention"
-                class="fr-text--sm fr-mb-0 accueil-mention accueil-mention--forte"
+                class="fr-tile__detail"
               >
                 {{ t.mention }}
-              </p>
-
-              <div
-                v-if="t.cle === 'decouvrir'"
-                class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm fr-mt-1w accueil-actions"
-              >
-                <NuxtLink
-                  :to="t.vers"
-                  class="fr-btn fr-btn--sm"
-                >
-                  {{ t.action }}
-                </NuxtLink>
-                <button
-                  v-if="exemple?.autres"
-                  type="button"
-                  class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-btn--icon-left fr-icon-refresh-line"
-                  :disabled="tirage"
-                  @click="autreIdee"
-                >
-                  Une autre idée
-                </button>
-              </div>
-              <p
-                v-else
-                class="fr-tile__detail accueil-action"
-              >
-                {{ t.action }}
               </p>
             </div>
           </div>
@@ -185,53 +225,73 @@ onMounted(() => {
       </li>
     </ul>
 
-    <!-- Les portes d'entrée du catalogue : une puce par catégorie non vide, puis les non classées. -->
-    <section
-      v-if="puces.length"
-      aria-labelledby="titre-categories"
-    >
-      <h2
-        id="titre-categories"
-        class="fr-h4"
+    <!-- Les catégories du catalogue, et l'entraide, sur un seul bloc. -->
+    <div class="accueil-pied">
+      <section
+        v-if="puces.length"
+        class="accueil-categories"
+        aria-labelledby="titre-categories"
       >
-        Parcourir par catégorie
-      </h2>
-      <ul class="fr-tags-group">
-        <li
-          v-for="p in puces"
-          :key="p.cle"
+        <h2
+          id="titre-categories"
+          class="fr-text--sm fr-text--bold fr-mb-1v"
         >
-          <NuxtLink
-            :to="{ path: '/admin/catalog', query: { categorie: p.cle } }"
-            class="fr-tag"
+          Parcourir par catégorie
+        </h2>
+        <ul class="fr-tags-group">
+          <li
+            v-for="p in puces"
+            :key="p.cle"
           >
-            {{ p.libelle }}&nbsp;<span class="accueil-puce__nb">{{ p.nb }}</span>
-          </NuxtLink>
-        </li>
-      </ul>
-    </section>
+            <NuxtLink
+              :to="{ path: '/admin/catalog', query: { categorie: p.cle } }"
+              class="fr-tag fr-tag--sm"
+            >
+              {{ p.libelle }}&nbsp;<span class="accueil-discret">{{ p.nb }}</span>
+            </NuxtLink>
+          </li>
+        </ul>
+      </section>
+      <p
+        v-if="entraide"
+        class="fr-text--sm fr-mb-0 accueil-entraide"
+      >
+        <span
+          class="fr-icon-team-line fr-icon--sm fr-mr-1v"
+          aria-hidden="true"
+        /><strong>Une donnée vous manque ?</strong>
+        <NuxtLink
+          :to="entraide.vers"
+          class="fr-link fr-text--sm"
+        >
+          Demandez au réseau
+        </NuxtLink>
+      </p>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.accueil-chapeau { color: var(--text-mention-grey); max-width: 60rem; }
+.accueil-impact {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 2rem; padding: .75rem 1.25rem;
+  background: var(--background-alt-blue-france); border-left: 4px solid var(--border-plain-blue-france);
+}
+.accueil-impact__message { flex: 1 1 22rem; min-width: 0; }
+.accueil-impact__chiffres { display: flex; flex-wrap: wrap; gap: .5rem 2rem; margin: 0; padding: 0; }
+.accueil-impact__chiffres dd { margin: 0; display: flex; flex-direction: column; }
+.accueil-impact__chiffres b { font-size: 1.75rem; line-height: 1.1; color: var(--text-title-blue-france); font-variant-numeric: tabular-nums; }
+.accueil-impact__chiffres span { font-size: .8rem; color: var(--text-mention-grey); }
+.accueil-impact__alerte b { color: var(--text-default-warning); }
 .accueil-tuiles { list-style: none; padding: 0; }
-.accueil-tuile { height: 100%; text-align: left; }
-/* Le DSFR ordonne titre (2), description (3), détail (4) et centre le contenu : les blocs
-   ajoutés (exemple, chiffres, mention) se rangent après la description, l'action en bas. */
-.accueil-tuile .fr-tile__content { align-items: stretch; gap: .75rem; }
-.accueil-tuile .fr-tile__desc { flex: 0 0 auto; }
-.accueil-exemple, .accueil-kpis, .accueil-mention { order: 3; }
-.accueil-actions, .accueil-action { order: 4; }
-.accueil-exemple { padding: .5rem .75rem; background: var(--background-alt-blue-france); }
-.accueil-exemple__collection { color: var(--text-mention-grey); }
-.accueil-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .75rem; margin: 0; padding: 0; }
-.accueil-kpi dd { margin: 0; display: flex; flex-direction: column; }
-.accueil-kpi b { font-size: 1.5rem; line-height: 1.2; color: var(--text-title-blue-france); font-variant-numeric: tabular-nums; }
-.accueil-kpi span { font-size: .8rem; line-height: 1.3; color: var(--text-mention-grey); }
-.accueil-kpi--alerte b { color: var(--text-default-warning); }
-.accueil-mention { color: var(--text-mention-grey); }
-.accueil-mention--forte { color: var(--text-default-success); font-weight: 500; }
-.accueil-action { margin-top: auto; color: var(--text-action-high-blue-france); font-weight: 500; }
-.accueil-actions { margin-top: auto; justify-content: flex-start; }
-.accueil-puce__nb { color: var(--text-mention-grey); font-variant-numeric: tabular-nums; }
+.accueil-tuile { height: 100%; }
+/* Des tuiles basses : moins de marge que le DSFR, une phrase sur une ou deux lignes. */
+.accueil-tuile.fr-tile--sm { padding: .75rem 1rem; }
+.accueil-tuile :deep(.fr-tile__content) { padding-bottom: 0; }
+.accueil-tuile :deep(.fr-tile__title) { margin-bottom: .25rem; }
+.accueil-tuile :deep(.fr-tile__desc) { font-size: .85rem; line-height: 1.3rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.accueil-pied { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 2rem; }
+.accueil-entraide { padding: .5rem .75rem; background: var(--background-alt-blue-france); }
+.accueil-discret { color: var(--text-mention-grey); font-variant-numeric: tabular-nums; }
+.accueil-categories .fr-tags-group { margin-bottom: -.5rem; }
 </style>

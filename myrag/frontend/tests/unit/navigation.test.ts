@@ -11,7 +11,7 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
     expect(entreesPrincipales(RIEN, false)).toEqual([
       { libelle: 'Accueil', vers: '/', exact: true },
       { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
-      { libelle: 'Mes collections', vers: '/mes-collections', volet: true },
+      { libelle: 'Mes collections', vers: '/mes-collections', pastille: true },
     ])
   })
   it('tous les drapeaux et l\'administration : cinq entrées, dans l\'ordre', () => {
@@ -27,10 +27,10 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
     expect(entreesPrincipales(TOUT, true).map(e => e.libelle)).not.toContain('Soyez acteurs vous-mêmes')
     expect(ENTREES_PIED_DE_PAGE).toEqual([{ libelle: 'Soyez acteurs vous-mêmes', vers: '/guide' }])
   })
-  it('« Mes collections » est le volet, en troisième position', () => {
+  it('« Mes collections » est un lien simple vers la liste, avec sa pastille, en troisième position', () => {
     const e = entreesPrincipales(RIEN, false)[2]!
-    expect(e.volet).toBe(true)
-    expect(entreesPrincipales(TOUT, true).filter(x => x.volet)).toHaveLength(1)
+    expect(e).toEqual({ libelle: 'Mes collections', vers: '/mes-collections', pastille: true })
+    expect(entreesPrincipales(TOUT, true).filter(x => x.pastille)).toHaveLength(1)
   })
   it('l\'administration ferme la liste pour qui en a le droit, et seulement pour lui', () => {
     expect(entreesPrincipales(AVEC_DEMANDES, true).at(-1)).toEqual({ libelle: 'Administration', vers: '/admin' })

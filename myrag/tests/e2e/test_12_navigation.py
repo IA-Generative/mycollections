@@ -32,7 +32,7 @@ def test_le_menu_est_celui_que_les_capacites_annoncent(session_testeur, captures
     page = session_testeur.aller("/")
     page.locator("nav.fr-nav .fr-nav__link").first.wait_for(state="visible", timeout=15_000)
     page.wait_for_timeout(1_000)
-    # Le volet « Mes collections » est un bouton : son libellé, sans le compteur qui le suit.
+    # « Mes collections » porte une pastille : son libellé, sans le compteur qui le suit.
     liens = [re.sub(r"\s*\d+$", "", t.strip()) for t in page.locator("nav.fr-nav > ul > li > .fr-nav__link").all_inner_texts()]
     assert liens == _attendues(capacites, session_testeur.superadmin()), liens
     entraide = page.locator("nav.fr-nav a.fr-nav__link", has_text="Entraide")
