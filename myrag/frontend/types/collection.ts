@@ -18,8 +18,21 @@ export interface Collection {
   file_count?: number
   orphan?: boolean
   archived_at?: string | null
-  publication?: { state?: string; visibility?: string; alias_name?: string; targets?: string[] }
+  created_at?: string
+  updated_at?: string
+  /** La plus récente de `updated_at` et du dernier document déposé (catalogue). */
+  derniere_mise_a_jour?: string | null
+  /** L'avis des usagers (catalogue) : `satisfaction_rate` null sans avis. */
+  avis?: AvisCollection
+  /** Ce que l'appelant peut faire de la collection : l'interface n'offre que ces gestes. */
+  mes_droits?: { lire: boolean, ecrire: boolean, garant: boolean, superadmin: boolean }
+  publication?: { state?: string, visibility?: string, alias_name?: string, targets?: { app: string, model_id: string }[] }
   [cle: string]: unknown
+}
+
+export interface AvisCollection {
+  total: number
+  satisfaction_rate: number | null
 }
 
 export interface Categorie {
