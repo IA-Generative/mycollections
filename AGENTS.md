@@ -270,6 +270,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE` | `` | Modele d'embeddings (`POST {OPENRAG_URL}/v1/embeddings`) pour apparier une question aux consignes d'un assistant ; vide ⇒ sac de mots deterministe ; injoignable ⇒ repli sur le sac de mots |
 | `MYCOLLECTIONS_DOUBLURE_ASSISTANTS` | `false` | Doublure du harnais (`/api/v1/assistants/{id}/plan|executer` depuis `app/doublure/assistants/`) ; jamais en production |
 | `MYCOLLECTIONS_SITES_ANONYMES` | `false` | `GET /api/v1/sites` sans jeton : sites des seules collections ouvertes à tous, pour le débogage de l'extension ; coupé en production |
+| `MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE` | `30` | Questions aux assistants (`plan`, `executer`) par personne et par minute, par processus (au-delà : 429 + Retry-After) ; 0 = sans limite |
 
 ## Groupes et droits
 

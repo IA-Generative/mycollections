@@ -25,6 +25,7 @@ from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
 from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
+from app.services.fenetre_par_minute import Fenetre
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
 #: Les routes du harnais, sous /api/v1 : `plan` et `executer`. Elles s'ajoutent à `router` (voir le bas du fichier).
@@ -154,6 +155,14 @@ async def versions(ident: str, moi: Identite = Depends(identite)):
 # répond (les prévisualisations restent montrables), avec l'en-tête `X-Mycollections-Doublure: 1`.
 
 ENTETE_DOUBLURE = "X-Mycollections-Doublure"
+#: Le moteur interroge plusieurs collections par question : un débit par personne le protège.
+_debit = Fenetre(lambda: settings.assistants_par_minute)
+
+
+def _limiter(user: CurrentUser) -> None:
+    attente = _debit.compter(user.sub or "anonyme")
+    if attente is not None:
+        raise HTTPException(status_code=429, detail="Trop de questions posées à la suite. Réessayez dans un instant.", headers={"Retry-After": str(attente)})
 
 
 class DemandePlan(BaseModel):
@@ -182,6 +191,7 @@ async def _preparer(ident: str, canal: str, user: CurrentUser, capacites_client:
 @router_v1.post("/{ident}/plan")
 async def plan(ident: str, demande: DemandePlan, response: Response, user: CurrentUser = Depends(current_user)) -> Plan:
     """Le plan de recherche pour cette question, sans l'exécuter."""
+    _limiter(user)
     if settings.doublure_assistants:
         from app.routers import assistants_doublure
 
@@ -193,6 +203,7 @@ async def plan(ident: str, demande: DemandePlan, response: Response, user: Curre
 @router_v1.post("/{ident}/executer")
 async def executer(ident: str, demande: DemandeExecution, response: Response, user: CurrentUser = Depends(current_user)) -> Resultat:
     """Exécute le plan (celui du client, re-validé, sinon un plan neuf) : les passages, la fusion, la trace."""
+    _limiter(user)
     if settings.doublure_assistants:
         from app.routers import assistants_doublure
 
@@ -207,7 +218,7 @@ async def executer(ident: str, demande: DemandeExecution, response: Response, us
             raise HTTPException(status_code=400, detail="Ce plan ne correspond pas à l'assistant : une étape cherche dans une source qui n'est pas la sienne.")
     resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
     if execution.toutes_en_panne:
-        raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.")
+        raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.", headers={"Retry-After": "10"})
     return resultat
 
 

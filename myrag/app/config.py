@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     assistants_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE", "assistants_embeddings_modele"))
     #: `GET /api/v1/sites` sans jeton : les sites des seules collections ouvertes à tous, pour le
     #: débogage de l'extension. Coupé par défaut (une liste anonyme dit quels sites intéressent
+    #: Questions posées aux assistants (`plan` et `executer`) par personne et par minute, par
+    #: processus ; au-delà : 429 avec Retry-After. 0 = sans limite.
+    assistants_par_minute: int = Field(default=30, validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE", "assistants_par_minute"))
     #: quelles collections) ; les questions, elles, demandent toujours un jeton.
     sites_anonymes: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_SITES_ANONYMES", "sites_anonymes"))
     seuil_chantier_defaut: int = Field(default=5)
