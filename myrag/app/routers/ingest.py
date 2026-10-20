@@ -119,7 +119,18 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
             await update_job(job_id, status="interrupted", error="Indexation interrompue par un redémarrage du service, et le fichier n'est plus conservé : redéposez-le.")
             continue
         await update_job(job_id, status="uploading", total_chunks=1, uploaded_chunks=0, failed_chunks=0, error="Repris après un redémarrage du service.")
-        await _indexer_document_background(job_id, collection, filename, chemin.read_bytes(), sensitivity or Sensitivity.PUBLIC)
+        try:
+            contenu = chemin.read_bytes()
+        except OSError as e:
+            # Un fichier illisible ne doit pas arrêter toute la reprise : ce travail dit
+            # quoi faire, les suivants reprennent.
+            await update_job(
+                job_id,
+                status="interrupted",
+                error=f"Indexation interrompue par un redémarrage du service, et le fichier conservé ne se lit plus ({type(e).__name__}) : redéposez-le.",
+            )
+            continue
+        await _indexer_document_background(job_id, collection, filename, contenu, sensitivity or Sensitivity.PUBLIC)
         repris.append(job_id)
     if travaux:
         logger.info("Reprise au démarrage : %d travail(aux) interrompu(s), %d repris", len(travaux), len(repris))
@@ -350,12 +361,18 @@ async def list_source_files(collection: str, user: CurrentUser = Depends(current
 
 @router.delete("/{collection}/sources/{source_id}")
 async def delete_source_file(collection: str, source_id: int, user: CurrentUser = Depends(current_user)):
-    """Retirer un fichier source de la collection : sa ligne et le fichier conservé
-    disparaissent. Ses passages restent dans OpenRAG jusqu'à la prochaine réindexation
-    (elle vide la partition) — OpenRAG ne sait pas retirer les morceaux d'un document.
-    C'est la sortie de secours d'une source devenue inacceptable au dépôt (CSV,
+    """Retirer un fichier source de la collection : sa ligne disparaît, et le fichier
+    conservé avec elle — sauf si une autre ligne le désigne encore (les doublons
+    d'avant l'ADR-0005 partagent le même fichier ; la réindexation n'en garde qu'une).
+    Ses passages restent dans OpenRAG jusqu'à la prochaine réindexation (elle vide la
+    partition) — OpenRAG ne sait pas retirer les morceaux d'un document —, sauf si
+    c'est la dernière source : la partition est vidée d'abord, sinon ses passages
+    seraient indépurables (la réindexation refuse une collection sans sources). C'est
+    la sortie de secours d'une source devenue inacceptable au dépôt (CSV,
     .markdown — ADR-0005) : sans elle, la réindexation la refuserait pour toujours."""
     await _exiger_gestion(collection, user)
+    from sqlalchemy import func
+
     from app.database import async_session as db_session
     from app.models.db import SourceFile
 
@@ -364,12 +381,22 @@ async def delete_source_file(collection: str, source_id: int, user: CurrentUser 
         if sf is None:
             raise HTTPException(status_code=404, detail="Fichier source inconnu dans cette collection.")
         nom, chemin = sf.filename, sf.storage_path
+        partage = (await session.execute(select(func.count()).select_from(SourceFile).where(SourceFile.storage_path == chemin, SourceFile.id != sf.id))).scalar_one()
+        restantes = (await session.execute(select(func.count()).select_from(SourceFile).where(SourceFile.collection_name == collection, SourceFile.id != sf.id))).scalar_one()
+        if restantes == 0:
+            # Dernière source : vider la partition AVANT d'oublier la ligne. Si OpenRAG
+            # ne répond pas, rien n'est effacé et on réessaie ; dans l'autre sens, les
+            # passages resteraient sans aucune voie de nettoyage.
+            client = OpenRAGClient(timeout=120.0)
+            await client.delete_partition(collection)
+            await client.create_partition(collection)
         await session.delete(sf)
         await session.commit()
-    try:
-        Path(chemin).unlink(missing_ok=True)
-    except OSError as e:
-        logger.warning("Source « %s » : le fichier conservé %s n'a pas pu être effacé du disque (%s)", nom, chemin, e)
+    if partage == 0:
+        try:
+            Path(chemin).unlink(missing_ok=True)
+        except OSError as e:
+            logger.warning("Source « %s » : le fichier conservé %s n'a pas pu être effacé du disque (%s)", nom, chemin, e)
     return {"status": "deleted", "collection": collection, "filename": nom}
 
 

@@ -67,10 +67,19 @@ def _sauver(collection: str, nom: str, contenu: bytes) -> str:
 async def _envoyer(client: OpenRAGClient, collection: str, doc: Document, contenu: bytes) -> str | None:
     """Confie le document à OpenRAG et suit sa tâche d'indexation jusqu'au bout : rend
     None s'il est indexé, la raison sinon. Même règle que le dépôt (travaux) : rien
-    n'est marqué réussi tant qu'OpenRAG n'a pas fini de lire."""
+    n'est marqué réussi tant qu'OpenRAG n'a pas fini de lire — et un 409 (« déjà là »)
+    est réussi, comme au dépôt : un import arrêté avant sa dernière écriture ne doit
+    pas réessayer pour toujours ce qu'OpenRAG a déjà indexé."""
+    import httpx
+
     from app.routers.ingest import attendre_indexation
 
-    envoi = await client.upload_document(collection, doc.nom, contenu, "text/markdown", metadata={"title": doc.nom, "sensitivity": Sensitivity.PUBLIC})
+    try:
+        envoi = await client.upload_document(collection, doc.nom, contenu, "text/markdown", metadata={"title": doc.nom, "sensitivity": Sensitivity.PUBLIC})
+    except httpx.HTTPStatusError as e:
+        if e.response is not None and e.response.status_code == 409:
+            return None
+        raise
     return await attendre_indexation(client, envoi, doc.nom)
 
 
@@ -114,7 +123,7 @@ async def ingerer(collection: str, documents: list[Document], *, max_documents: 
             try:
                 erreur = await _envoyer(client, collection, doc, contenu)
             except Exception as e:  # noqa: BLE001 — on compte, on continue
-                erreur = str(e)
+                erreur = str(e) or type(e).__name__  # une exception sans message compte aussi
             if erreur:
                 # Rien n'est marqué — ni empreinte, ni étiquette : le prochain import
                 # réessaie ce document au lieu de l'ignorer pour toujours.

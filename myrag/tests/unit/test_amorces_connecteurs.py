@@ -237,6 +237,39 @@ async def test_un_echec_d_indexation_ne_marque_pas_le_document(sans_reseau, cree
 
 
 @pytest.mark.asyncio
+async def test_une_exception_sans_message_compte_comme_un_echec(sans_reseau, creer_collection, nom):
+    """str(e) peut être vide : l'échec serait pris pour une réussite, et le document
+    manquant marqué indexé — ignoré pour toujours au prochain import."""
+    creer_collection(nom)
+    client = sans_reseau["_client"]
+    client.upload_document = AsyncMock(side_effect=RuntimeError())  # message vide
+    docs = [ingestion.Document("a.md", "# A\n\ntexte a")]
+    b = await ingestion.ingerer(nom, docs)
+    assert b.echecs == 1 and b.documents == 0
+    client.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+    b2 = await ingestion.ingerer(nom, docs)
+    assert b2.documents == 1 and b2.ignores == 0, "rien n'avait été marqué : le prochain import réessaie"
+
+
+@pytest.mark.asyncio
+async def test_un_document_deja_indexe_apres_un_arret_est_compte_reussi(sans_reseau, creer_collection, nom):
+    """Un import arrêté après l'envoi mais avant la dernière écriture : OpenRAG répond
+    409 au réessai. Compté réussi, comme au dépôt — sinon il réessaierait pour
+    toujours, sans jamais marquer le document."""
+    import httpx
+
+    creer_collection(nom)
+    client = sans_reseau["_client"]
+    conflit = httpx.HTTPStatusError("409", request=httpx.Request("POST", "http://o"), response=httpx.Response(409))
+    client.upload_document = AsyncMock(side_effect=conflit)
+    docs = [ingestion.Document("a.md", "# A\n\ntexte a")]
+    b = await ingestion.ingerer(nom, docs)
+    assert b.documents == 1 and b.echecs == 0
+    client.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+    assert (await ingestion.ingerer(nom, docs)).ignores == 1, "marqué indexé : le prochain import passe"
+
+
+@pytest.mark.asyncio
 async def test_la_purge_vide_la_partition_et_oublie_les_documents(sans_reseau, creer_collection, nom):
     creer_collection(nom)
     client = sans_reseau["_client"]

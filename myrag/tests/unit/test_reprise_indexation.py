@@ -58,6 +58,43 @@ async def test_sans_fichier_source_le_travail_est_dit_interrompu(client, en_tant
 
 
 @pytest.mark.asyncio
+async def test_un_fichier_illisible_n_arrete_pas_la_reprise(client, en_tant_que, creer_collection, nom):
+    """Un fichier conservé illisible (permissions, secteur défaillant) tuait la reprise
+    entière : ce travail dit quoi faire, les suivants reprennent."""
+    from pathlib import Path
+
+    from app.config import settings
+    from app.routers import ingest
+    from app.services.job_store import get_job, update_job
+
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    with patch("app.routers.ingest.OpenRAGClient") as cls, patch("app.routers.ingest._indexer_document_background", new=AsyncMock(return_value=None)):
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        bon = _deposer(client, nom).json()["job_id"]
+        mauvais = client.post(f"/api/ingest/{nom}", files={"file": ("annexe.md", b"# A\n\nTexte.", "text/markdown")}).json()["job_id"]
+    await update_job(bon, status="uploading", uploaded_chunks=0, failed_chunks=0)
+    await update_job(mauvais, status="uploading", uploaded_chunks=0, failed_chunks=0)
+
+    # Le fichier du second travail devient illisible : un répertoire à sa place.
+    chemin = Path(settings.data_dir) / "_sources" / nom / "annexe.md"
+    chemin.unlink()
+    chemin.mkdir()
+    try:
+        with patch("app.routers.ingest.OpenRAGClient") as cls:
+            cls.return_value.upload_document = AsyncMock(return_value=SimpleNamespace(task_id="t1"))
+            cls.return_value.task_state = AsyncMock(return_value=SimpleNamespace(task_state="COMPLETED"))
+            repris = await ingest.reprendre_les_travaux_interrompus()
+    finally:
+        chemin.rmdir()
+    assert mauvais not in repris and bon in repris
+    j = await get_job(mauvais)
+    assert j is not None and j["status"] == "interrupted" and "redéposez" in (j.get("error") or "")
+    j = await get_job(bon)
+    assert j is not None and j["status"] == "done"
+
+
+@pytest.mark.asyncio
 async def test_un_document_deja_indexe_compte_comme_reussi(client, en_tant_que, creer_collection, nom):
     from app.routers import ingest
     from app.services.job_store import create_job, get_job

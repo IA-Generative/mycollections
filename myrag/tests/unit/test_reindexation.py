@@ -119,6 +119,81 @@ def test_une_source_devenue_inacceptable_se_retire_puis_la_reindexation_passe(cl
         assert r.status_code == 200 and r.json()["files_reindexed"] == 1, r.text
 
 
+def test_retirer_la_derniere_source_vide_aussi_la_partition(client, en_tant_que, creer_collection, nom):
+    """La réindexation refuse une collection sans sources (400) : les passages de la
+    dernière source retirée seraient restés indépurables. La partition est vidée
+    d'abord — si OpenRAG ne répond pas, rien n'est effacé."""
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    with patch("app.routers.ingest.OpenRAGClient") as cls:
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+        cls.return_value.task_state = AsyncMock(return_value=EtatTache(task_state="COMPLETED"))
+        assert _deposer(client, nom).status_code == 200
+        assert client.post(f"/api/ingest/{nom}", files={"file": ("annexe.md", b"# A\n\nTexte.", "text/markdown")}).status_code == 200
+        sources = _sources(client, nom)
+        liste = sources.get("sources", sources) if isinstance(sources, dict) else sources
+        ids = {s["filename"]: s["id"] for s in liste}
+
+        r = client.delete(f"/api/ingest/{nom}/sources/{ids['note.md']}")
+        assert r.status_code == 200, r.text
+        cls.return_value.delete_partition.assert_not_awaited(), "il reste une source : la partition garde ses passages"
+
+        cls.return_value.delete_partition.reset_mock()
+        cls.return_value.create_partition.reset_mock()
+        r = client.delete(f"/api/ingest/{nom}/sources/{ids['annexe.md']}")
+        assert r.status_code == 200, r.text
+        cls.return_value.delete_partition.assert_awaited_once_with(nom)
+        cls.return_value.create_partition.assert_awaited_once_with(nom)
+        assert _sources(client, nom)["sources"] == []
+
+
+def test_un_fichier_partage_par_des_doublons_ne_disparait_avec_la_premiere_ligne(client, en_tant_que, creer_collection, nom):
+    """Avant l'ADR-0005, des lignes en double désignaient le même fichier ; la
+    réindexation n'en garde qu'une. Retirer l'une ne doit pas effacer le fichier sous
+    l'autre — seulement avec la dernière."""
+    creer_collection(nom)
+    en_tant_que(personne("createur"))
+    with patch("app.routers.ingest.OpenRAGClient") as cls:
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value={})
+        cls.return_value.upload_document = AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
+        cls.return_value.task_state = AsyncMock(return_value=EtatTache(task_state="COMPLETED"))
+        assert _deposer(client, nom).status_code == 200
+
+    # Un doublon d'avant l'ADR-0005 : deux lignes, un même fichier conservé.
+    dossier = pathlib.Path(settings.data_dir) / "_sources" / nom
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    chemin = con.execute("SELECT storage_path FROM source_files WHERE collection_name=? AND filename='note.md'", (nom,)).fetchone()[0]
+    con.execute(
+        "INSERT INTO source_files (collection_name, filename, original_url, storage_path, file_size, content_type, "
+        "checksum, strategy_used, chunks_produced, sensitivity, created_at) "
+        "VALUES (?, 'note.md', '', ?, 10, 'text/markdown', 'x', 'section-v2', 0, 'public', datetime('now'))",
+        (nom, chemin),
+    )
+    con.commit()
+    con.close()
+
+    with patch("app.routers.ingest.OpenRAGClient") as cls:
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        cls.return_value.delete_partition = AsyncMock(return_value={})
+        sources = _sources(client, nom)
+        liste = sources.get("sources", sources) if isinstance(sources, dict) else sources
+        ids = [s["id"] for s in liste if s["filename"] == "note.md"]
+        assert len(ids) == 2
+
+        r = client.delete(f"/api/ingest/{nom}/sources/{ids[0]}")
+        assert r.status_code == 200, r.text
+        assert (dossier / "note.md").exists(), "l'autre ligne désigne encore ce fichier"
+        cls.return_value.delete_partition.assert_not_awaited(), "une ligne reste : la partition garde ses passages"
+
+        r = client.delete(f"/api/ingest/{nom}/sources/{ids[1]}")
+        assert r.status_code == 200, r.text
+        assert not (dossier / "note.md").exists(), "avec la dernière ligne, le fichier disparaît"
+        cls.return_value.delete_partition.assert_awaited_once_with(nom)
+
+
 def test_retirer_une_source_exige_la_gestion_et_connait_la_collection(client, en_tant_que, creer_collection, nom):
     creer_collection(nom)
     en_tant_que(personne("createur"))
