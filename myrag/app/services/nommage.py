@@ -162,3 +162,30 @@ def deriver_identifiant(titre: str) -> str:
 def regles() -> dict:
     """Ce que le formulaire de création doit savoir — servi tel quel au front."""
     return {"min": IDENT_MIN, "max": IDENT_MAX, "prefixes_bannis": list(prefixes_bannis()), "reserves": sorted(RESERVES), "motifs": MOTIFS, "prefixe_impose": prefixe_impose()}
+
+
+# ─── Un nom de fichier qui se lit ────────────────────────────────────────────────────────────
+
+_EXTENSION_FICHIER = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_SEPARATEURS_FICHIER = re.compile(r"[-_]+")
+_PREFIXE_SECTION = re.compile(r"^section\s+", re.IGNORECASE)
+_NOM_DE_SECTION = re.compile(r"^section[-_]", re.IGNORECASE)
+
+
+def nom_de_fichier_lisible(nom: str, *, majuscule: bool = False) -> str:
+    """« section_wikipedia_extract.md » → « wikipedia extract » (« Wikipedia extract » avec
+    `majuscule`) : l'extension, les tirets et soulignés, et le préfixe « section » que pose le
+    découpage par section (app.services.chunker) disparaissent. Pour un titre affiché quand le
+    document n'en porte pas dans ses métadonnées."""
+    t = _SEPARATEURS_FICHIER.sub(" ", _EXTENSION_FICHIER.sub("", (nom or "").strip())).strip()
+    t = _PREFIXE_SECTION.sub("", " ".join(t.split()))
+    return t[:1].upper() + t[1:] if majuscule else t
+
+
+def titre_affiche(nom: str) -> str:
+    """Le titre affiché d'un document sans titre : son nom de fichier sans extension, et, pour un
+    morceau que le découpage par section a nommé (« section_wikipedia_extract »), un nom lisible
+    (« Wikipedia extract »). Les autres noms de fichiers restent tels quels : le contrat de la
+    recherche v1 les rend ainsi (tests de non-régression)."""
+    brut = re.sub(r"\.(md|txt|markdown)$", "", (nom or "").strip(), flags=re.I)
+    return nom_de_fichier_lisible(brut, majuscule=True) if _NOM_DE_SECTION.match(brut) else brut
