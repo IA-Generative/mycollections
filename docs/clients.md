@@ -46,3 +46,38 @@ toujours un jeton.
 `GET /api/v1/search?q=…&scope=a,b`. Liens cités signés, valables 12 h. 429 porte `Retry-After`
 (recherche v1).
 
+
+
+## Serveur MCP
+
+Un client MCP (un agent conversationnel) cherche dans les assistants de recherche avec les droits de la personne,
+sans modèle de langage côté Mes collections : le client choisit l'assistant, lit les passages et rédige lui-même.
+
+- **Adresse** : `POST /mcp`, transport Streamable HTTP, sans état (une requête, une session).
+- **Jeton** : le jeton Bearer de la personne (`Authorization: Bearer …`). Mêmes contrôles que la recherche v1 :
+  signature, émetteur, groupe exigé, et **audience** (`MYCOLLECTIONS_RECHERCHE_AUDIENCE`). Sans jeton : 401 ; audience
+  d'un autre service : 403. L'identité relayée aux outils est celle du jeton, jamais un argument.
+- **Drapeau** : `assistants` à faux dans capacites.json ⇒ 404. Sans le paquet `mcp` (extra `mcp`), `/mcp` n'est pas monté.
+- **Débit** : le plafond par personne de `plan` et `executer` (`MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE`), partagé.
+
+| Outil | Rôle |
+|-------|------|
+| `lister_sources()` | Les assistants publiés que la personne lit, et leurs collections lisibles (id, titre, description). |
+| `proposer_sources(question, assistant)` | Le plan (sources retenues, poids, consigne) sans lancer la recherche. |
+| `rechercher(question, assistant, sources?)` | Les passages (titre, texte, lien signé, collection) et le plan. `sources` impose les collections ; une réponse de référence fiable est rendue telle quelle dans `reponse`. |
+
+Exemple de configuration d'un client (adresse d'exemple) :
+
+```json
+{
+  "mcpServers": {
+    "mes-collections": {
+      "type": "http",
+      "url": "https://mescollections.fake-domain.name/mcp",
+      "headers": { "Authorization": "Bearer <jeton-de-la-personne>" }
+    }
+  }
+}
+```
+
+La route compatible OpenAI (`routers/openai_compat.py`) n'est pas concernée : elle attend une décision produit sur la rédaction des réponses.
