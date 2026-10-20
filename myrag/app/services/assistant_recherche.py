@@ -44,8 +44,8 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
     """La fiche servie à cette personne : le brouillon (la dernière version enregistrée) si elle
     peut le demander ET le modifier, sinon la version publiée."""
     ligne = await assistant_store.lire(ident)
-    if ligne is None:
-        raise AssistantIntrouvable(ident)
+    if ligne is None or ligne.get("archive_le"):
+        raise AssistantIntrouvable(ident)  # un assistant archivé ne répond plus, à personne
     courante = FicheAssistant.model_validate(ligne["fiche"])
     voir, modifier, cols = await assistant_droits.droits(courante, ligne.get("cree_par_hash"), user=user, hash_=hash_, superadmin=superadmin)
     if brouillon and voir and modifier:

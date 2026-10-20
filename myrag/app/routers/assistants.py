@@ -120,6 +120,8 @@ async def enregistrer(ident: str, fiche: FicheAssistant, moi: Identite = Depends
     if fiche.assistant != ident:
         raise HTTPException(status_code=422, detail="L'identifiant de la fiche diffère de celui de l'adresse")
     existante = await store.lire(ident)
+    if existante is not None and existante.get("archive_le"):
+        raise HTTPException(status_code=409, detail="Cet assistant est archivé : désarchivez-le avant de le modifier")
     if existante is not None:
         _, _, modifier_avant, _ = await _charger(ident, moi)
         if not modifier_avant:
@@ -144,6 +146,28 @@ async def publier(ident: str, moi: Identite = Depends(identite)):
     if not modifier:
         raise HTTPException(status_code=403, detail="Publier cet assistant demande de gérer toutes ses collections")
     return await store.publier(ident, auteur_hash=moi.hash)
+
+
+@router.post("/{ident}/archiver")
+async def archiver(ident: str, moi: Identite = Depends(identite)):
+    """Retire l'assistant : il disparaît de la liste, ne répond plus et n'est plus proposé par
+    l'extension du navigateur. Rien n'est effacé ; `…/desarchiver` le rétablit."""
+    ligne, _, modifier, _ = await _charger(ident, moi)
+    if not modifier:
+        raise HTTPException(status_code=403, detail="Archiver cet assistant demande de gérer toutes ses collections")
+    if ligne.get("collection_name"):
+        raise HTTPException(status_code=409, detail="Cet assistant suit sa collection : archivez la collection pour le retirer")
+    await store.archiver(ident)
+    return {"assistant": ident, "archive": True}
+
+
+@router.post("/{ident}/desarchiver")
+async def desarchiver(ident: str, moi: Identite = Depends(identite)):
+    _, _, modifier, _ = await _charger(ident, moi)
+    if not modifier:
+        raise HTTPException(status_code=403, detail="Désarchiver cet assistant demande de gérer toutes ses collections")
+    await store.archiver(ident, archive=False)
+    return {"assistant": ident, "archive": False}
 
 
 @router.get("/{ident}/versions")

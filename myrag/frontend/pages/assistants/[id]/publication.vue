@@ -8,13 +8,35 @@ definePageMeta({ middleware: 'capacite', capacite: 'assistants' })
 const id = useRoute().params.id as string
 useHead({ title: `Publication — ${id} — Mes collections` })
 
-const { enregistrer, publier, versions: lireVersions } = useAssistants()
+const { archiver, enregistrer, publier, versions: lireVersions } = useAssistants()
 const versions = ref<any[]>([])
 const message = ref('')
 const erreur = ref('')
 const envoi = ref(false)
 const copie = ref(false)
 const base = ref('')
+/** Archiver se confirme en deux temps : le premier bouton ouvre la confirmation, jamais l'inverse. */
+const confirmerArchivage = ref(false)
+const btnConfirmer = ref<HTMLButtonElement | null>(null)
+function demanderArchivage () {
+  confirmerArchivage.value = true
+  nextTick(() => btnConfirmer.value?.focus())
+}
+async function archiverAssistant () {
+  envoi.value = true
+  erreur.value = ''
+  try {
+    await archiver(id)
+    await navigateTo('/assistants')
+  }
+  catch (e) {
+    erreur.value = messageErreur(e)
+    confirmerArchivage.value = false
+  }
+  finally {
+    envoi.value = false
+  }
+}
 
 async function chargerVersions () {
   try {
@@ -159,6 +181,57 @@ const dateVersion = (iso: string) => iso ? new Date(FUSEAU.test(iso) ? iso : `${
               </button>
             </li>
           </ul>
+          <section
+            v-if="donnees.mes_droits.ecrire && !donnees.assistant.collection_name"
+            class="publication-retrait fr-mt-4w"
+            aria-labelledby="titre-retrait"
+          >
+            <h2
+              id="titre-retrait"
+              class="fr-h6 fr-mb-1v"
+            >
+              Retirer l'assistant
+            </h2>
+            <p class="fr-text--sm fr-mb-2w">
+              Archiver le retire de la liste : il ne répond plus et l'extension ne le propose plus. Rien
+              n'est effacé : ses versions et ses consignes sont conservées.
+            </p>
+            <button
+              v-if="!confirmerArchivage"
+              type="button"
+              class="fr-btn fr-btn--tertiary fr-btn--sm"
+              :disabled="envoi"
+              @click="demanderArchivage"
+            >
+              Archiver l'assistant…
+            </button>
+            <ul
+              v-else
+              class="fr-btns-group fr-btns-group--inline-sm"
+              @keydown.esc="confirmerArchivage = false"
+            >
+              <li>
+                <button
+                  ref="btnConfirmer"
+                  type="button"
+                  class="fr-btn fr-btn--sm"
+                  :disabled="envoi"
+                  @click="archiverAssistant"
+                >
+                  Confirmer l'archivage
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  class="fr-btn fr-btn--secondary fr-btn--sm"
+                  @click="confirmerArchivage = false"
+                >
+                  Annuler
+                </button>
+              </li>
+            </ul>
+          </section>
           <SitesDeclares
             class="fr-mt-4w"
             :chemin="`/api/assistants/${encodeURIComponent(id)}/sites`"
@@ -196,6 +269,7 @@ const dateVersion = (iso: string) => iso ? new Date(FUSEAU.test(iso) ? iso : `${
 </template>
 
 <style scoped>
+.publication-retrait { border-top: 1px solid var(--border-default-grey); padding-top: 1.5rem; }
 .publication-ligne { margin: 0 0 .5rem; padding: .75rem; font-size: .8rem; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--background-alt-grey); }
 .publication-discret { color: var(--text-mention-grey); }
 .publication-versions { margin: 0; padding-left: 1.25rem; }
