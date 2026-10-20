@@ -17,36 +17,23 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.harnais.contrat import FicheAssistant
 from app.routers._commun import Identite, capacite, identite
-from app.services import access
+from app.services import assistant_droits as droits_service
 from app.services import assistant_store as store
-from app.services.collection_store import get_collection
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
 
 
 async def _collections(fiche: FicheAssistant) -> dict[str, dict | None]:
-    return {s.id: await get_collection(s.id) for s in fiche.sources if s.type == "collection"}
+    return await droits_service.collections_de(fiche)
 
 
 def _lisible(col: dict | None, moi: Identite) -> bool:
-    if not col or col.get("archived_at"):
-        return False
-    return access.can_read(name=col["name"], scope=col["scope"], scope_groups=col["scope_groups"], created_by=col["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub)
-
-
-def _gerable(col: dict | None, moi: Identite) -> bool:
-    return bool(col) and access.can_write(name=col["name"], created_by=col["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub)
+    return droits_service.lisible(col, moi.user)
 
 
 async def _droits(fiche: FicheAssistant, createur_hash: str | None, moi: Identite) -> tuple[bool, bool, dict[str, dict | None]]:
     """(voir, modifier, collections) pour cette fiche et cette personne."""
-    cols = await _collections(fiche)
-    createur = bool(createur_hash) and createur_hash == moi.hash
-    if moi.superadmin:
-        return True, True, cols
-    voir = createur or any(_lisible(c, moi) for c in cols.values())
-    modifier = all(_gerable(c, moi) for c in cols.values()) if cols else createur
-    return voir, modifier, cols
+    return await droits_service.droits(fiche, createur_hash, user=moi.user, hash_=moi.hash, superadmin=moi.superadmin)
 
 
 def _vue(fiche: FicheAssistant, cols: dict[str, dict | None], moi: Identite, modifier: bool) -> tuple[dict, int]:
