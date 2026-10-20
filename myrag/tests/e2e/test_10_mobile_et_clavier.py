@@ -49,3 +49,19 @@ def test_les_filtres_de_la_banque_ont_un_nom(session_testeur, collection_publiee
     for i in range(onglets.count()):
         nom = (onglets.nth(i).get_attribute("aria-label") or onglets.nth(i).inner_text()).strip()
         assert re.search(r"[A-Za-zÀ-ÿ]{3,}", nom), f"filtre sans nom lisible : {nom!r}"
+
+
+def test_le_menu_plus_de_la_fiche_s_ouvre_au_clavier(session_testeur, collection_publiee):
+    """Refonte du 2026-10-19 : le menu « Plus » de la fiche est un bouton à divulgation ;
+    Entrée l'ouvre, Échap le ferme et rend le focus au bouton."""
+    page = session_testeur.aller(f"/c/{collection_publiee['name']}")
+    bouton = page.get_by_role("button", name="Plus", exact=True)
+    bouton.wait_for(state="visible", timeout=30_000)
+    bouton.focus()
+    page.keyboard.press("Enter")
+    assert bouton.get_attribute("aria-expanded") == "true"
+    liste = page.locator("#menu-plus-liste")
+    assert liste.is_visible() and "Liens entre documents" in liste.inner_text()
+    page.keyboard.press("Escape")
+    assert bouton.get_attribute("aria-expanded") == "false"
+    assert page.evaluate("document.activeElement.textContent.trim()") == "Plus", "le focus revient au bouton"

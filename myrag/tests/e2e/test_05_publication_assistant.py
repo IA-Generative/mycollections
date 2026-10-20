@@ -23,8 +23,9 @@ LIGNES = {
 
 
 def test_la_grille_de_controle_se_complete(session_testeur, collection_essai, captures):
+    # Refonte du 2026-10-19 : la grille et « Je relis cette collection » vivent dans Historique.
     page = session_testeur.aller(f"/c/{collection_essai}")
-    page.get_by_role("tab", name=re.compile("Consulter")).click()
+    page.get_by_role("tab", name="Historique").click()
     page.get_by_role("button", name="Compléter la grille").click()
     for libelle, valeur in LIGNES.items():
         page.get_by_label(libelle).fill(valeur)
@@ -39,7 +40,8 @@ def test_la_grille_de_controle_se_complete(session_testeur, collection_essai, ca
 
 
 def test_la_collection_avance_jusqu_a_publiee_a_tous(session_testeur, collection_essai, captures):
-    page = session_testeur.aller(f"/c/{collection_essai}")
+    # Le circuit de vérification est en tête de l'onglet Historique.
+    page = session_testeur.aller(f"/c/{collection_essai}?onglet=historique")
     for attendu in ("en_controle", "publiee_groupe", "publiee_tous"):
         bouton = page.get_by_role("button", name=re.compile(r"^Passer en «")).first
         bouton.wait_for(state="visible", timeout=30_000)
