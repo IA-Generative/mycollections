@@ -48,7 +48,8 @@ def test_le_menu_est_celui_que_les_capacites_annoncent(session_testeur, captures
 
 def test_une_page_sous_drapeau_faux_est_introuvable_sinon_elle_s_ouvre(session_testeur):
     capacites = _capacites(session_testeur)
-    for drapeau, chemin, titre in (("assistants", "/assistants", "Assistants"), ("entraide", "/entraide", "Réseau d'entraide")):
+    # Le titre de la page des assistants est « Assistants de recherche » depuis B1 (l'entrée du menu reste « Assistants »).
+    for drapeau, chemin, titre in (("assistants", "/assistants", "Assistants de recherche"), ("entraide", "/entraide", "Réseau d'entraide")):
         page = session_testeur.aller(chemin)
         page.wait_for_timeout(1_500)
         if capacites.get(drapeau) is True:
