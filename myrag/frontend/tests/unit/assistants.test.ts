@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canauxActifs, etatAssistant, ficheDepuisFormulaire, libelleRegime, ligneFenetre, resumeSources, validerFormulaire } from '../../utils/assistants'
+import { canauxActifs, etatAssistant, ficheDepuisFormulaire, libelleRegime, ligneFenetre, MESSAGE_DOUBLURE, messageErreurMoteur, reponseDoublure, resumeSources, validerFormulaire } from '../../utils/assistants'
 
 const FORM = { titre: ' Séjour des étrangers ', identifiant: 'sejour-etrangers', description: ' Titres et procédures. ', rubrique: 'droit-etrangers', sources: [{ id: 'ceseda', regime: 'toujours' as const }, { id: 'guide-titres', regime: 'selon_question' as const }] }
 
@@ -52,5 +52,30 @@ describe('ligneFenetre', () => {
   it('la ligne à coller, échappée', () => {
     expect(ligneFenetre('sejour-etrangers', 'https://collections.fake-domain.name/')).toBe('<script src="https://collections.fake-domain.name/fenetre.js" data-assistant="sejour-etrangers" defer></script>')
     expect(ligneFenetre('a"b', 'https://x')).toContain('data-assistant="a&quot;b"')
+  })
+})
+
+describe('le moteur et sa doublure', () => {
+  const entetes = (valeurs: Record<string, string>) => new Headers(valeurs)
+  it('la doublure se reconnaît à son en-tête, quelle que soit la casse', () => {
+    expect(reponseDoublure(entetes({ 'X-Mycollections-Doublure': '1' }))).toBe(true)
+    expect(reponseDoublure(entetes({ 'x-mycollections-doublure': '1' }))).toBe(true)
+  })
+  it('sans l\'en-tête, ou avec une autre valeur : le moteur a répondu', () => {
+    expect(reponseDoublure(entetes({}))).toBe(false)
+    expect(reponseDoublure(entetes({ 'X-Mycollections-Doublure': '0' }))).toBe(false)
+    expect(reponseDoublure(null)).toBe(false)
+    expect(reponseDoublure(undefined)).toBe(false)
+  })
+  it('l\'encadré le dit sans jargon', () => {
+    expect(MESSAGE_DOUBLURE).toBe('Réponse d\'exemple : le moteur n\'est pas branché sur cette installation.')
+    expect(MESSAGE_DOUBLURE).not.toMatch(/doublure|harnais|LLM/i)
+  })
+  it('les erreurs du moteur parlent français', () => {
+    expect(messageErreurMoteur(new Error('API error 503: {"detail":"Not Found"}'))).toBe('Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.')
+    expect(messageErreurMoteur(new Error('API error 404: {"detail":"Assistant « x » introuvable"}'))).toBe('Cet assistant est introuvable, ou vous n\'avez pas le droit de l\'interroger.')
+    expect(messageErreurMoteur(new Error('API error 429: {}'))).toContain('Trop de questions')
+    expect(messageErreurMoteur(new Error('API error 400: {"detail":"Ce plan ne correspond pas à l\'assistant."}'))).toBe('Ce plan ne correspond pas à l\'assistant.')
+    expect(messageErreurMoteur(new TypeError('Failed to fetch'))).toContain('Le service ne répond pas')
   })
 })

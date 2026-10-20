@@ -153,6 +153,7 @@ const question = ref('')
 const essai = ref(false)
 const erreurEssai = ref('')
 const resultat = ref<ResultatAssistant | null>(null)
+const doublure = ref(false)
 const zoneEssai = ref<HTMLElement | null>(null)
 
 async function tester (q?: string) {
@@ -167,11 +168,14 @@ async function tester (q?: string) {
   essai.value = true
   erreurEssai.value = ''
   resultat.value = null
+  doublure.value = false
   try {
-    resultat.value = await executer(id, texte.slice(0, 1000))
+    const r = await executer(id, texte.slice(0, 1000))
+    resultat.value = r.resultat
+    doublure.value = r.doublure
   }
   catch (e) {
-    erreurEssai.value = messageErreur(e)
+    erreurEssai.value = messageErreurMoteur(e)
   }
   finally {
     essai.value = false
@@ -621,6 +625,7 @@ async function tester (q?: string) {
           >
             <p>{{ erreurEssai }}</p>
           </div>
+          <AssistantsEncadreDoublure v-if="resultat && doublure" />
           <AssistantsResultat
             v-if="resultat"
             :resultat="resultat"

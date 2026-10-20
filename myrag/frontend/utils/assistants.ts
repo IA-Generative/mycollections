@@ -5,6 +5,8 @@
  * (FicheAssistant, Consigne, Plan, Resultat) ; le serveur reste seul juge des droits.
  */
 
+import { messageErreur } from './collectif'
+
 export type Regime = 'toujours' | 'selon_question' | 'sur_consigne'
 export type TypeSource = 'collection' | 'connecteur'
 export type Canal = 'socle' | 'portail' | 'fenetre_js' | 'api'
@@ -374,5 +376,32 @@ export function sourceDuPassage (p: PassageAssistant, titreSource: (id: string) 
     page: p.page ?? undefined,
     content: p.texte,
     chunk_url: p.url || undefined,
+  }
+}
+
+// ─── Le moteur : réponse d'exemple et erreurs ────────────────────────────────────────────────
+
+/** L'en-tête que pose la doublure du moteur (prévisualisations) sur chacune de ses réponses. */
+export const ENTETE_DOUBLURE = 'X-Mycollections-Doublure'
+export const MESSAGE_DOUBLURE = 'Réponse d\'exemple : le moteur n\'est pas branché sur cette installation.'
+
+/** Ce que rend une question posée à un assistant : le résultat, et s'il vient de la doublure du moteur. */
+export interface ReponseMoteur { resultat: ResultatAssistant, doublure: boolean }
+
+/** La réponse vient-elle de la doublure ? Se lit dans l'en-tête de la réponse HTTP (insensible à la casse). */
+export function reponseDoublure (entetes: { get: (nom: string) => string | null } | null | undefined): boolean {
+  return entetes?.get(ENTETE_DOUBLURE) === '1'
+}
+
+const STATUT_API = /^API error (\d+):/
+
+/** Le message d'une erreur du moteur, en français et sans jargon. */
+export function messageErreurMoteur (e: unknown): string {
+  const statut = STATUT_API.exec(e instanceof Error ? e.message : String(e))?.[1]
+  switch (statut) {
+    case '404': return 'Cet assistant est introuvable, ou vous n\'avez pas le droit de l\'interroger.'
+    case '503': return 'Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.'
+    case '429': return 'Trop de questions à la suite : réessayez dans un instant.'
+    default: return messageErreur(e)
   }
 }
