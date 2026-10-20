@@ -15,14 +15,9 @@ def _capacites(session) -> dict:
     return session.get("/api/config").json()
 
 
-def _titres_attendus(assistants: bool) -> list[str]:
-    suffixe = " & assistants" if assistants else ""
-    return [
-        "Découvrir",
-        "Explorer le catalogue",
-        f"Gérer mes collections{suffixe}",
-        "Créer une nouvelle collection" + (" & assistant" if assistants else ""),
-    ]
+def _titres_attendus() -> list[str]:
+    # Les tuiles parlent des collections ; les assistants sont un objet distinct, avec leur menu.
+    return ["Découvrir", "Explorer le catalogue", "Suivre mes collections", "Partager une nouvelle collection"]
 
 
 def _tuiles(page):
@@ -36,7 +31,7 @@ def test_quatre_tuiles_dans_l_ordre_et_leurs_cibles(session_testeur, captures):
     tuiles = _tuiles(page)
     assert [tuiles.nth(i).get_attribute("data-tuile") for i in range(tuiles.count())] == list(TUILES)
     titres = [t.strip() for t in page.locator("[data-tuile] .fr-tile__title").all_inner_texts()]
-    assert titres == _titres_attendus(_capacites(session_testeur).get("assistants") is True), titres
+    assert titres == _titres_attendus(), titres
     cibles = {cle: page.locator(f"[data-tuile={cle}] .fr-tile__link").get_attribute("href") for cle in TUILES}
     assert cibles["explorer"] == "/admin/catalog"
     assert cibles["gerer"] == "/mes-collections"
@@ -62,16 +57,20 @@ def test_les_puces_de_categorie_menent_au_catalogue_filtre(session_testeur, coll
     page.wait_for_url(re.compile(r"/admin/catalog\?categorie="), timeout=15_000)
 
 
-def test_qui_gere_voit_ses_chiffres_dans_la_tuile_gerer(session_testeur, collection_publiee):
+def test_qui_gere_voit_ce_que_ses_collections_ont_rendu_possible(session_testeur, collection_publiee):
+    """Le bandeau de l'accueil donne envie de continuer : collègues aidés (au-dessus du seuil de 3,
+    que le serveur applique), questions sur la fenêtre, note des usagers."""
     bilan = session_testeur.get("/api/accueil/mes-collections").json()
     page = session_testeur.aller("/")
-    tuile = _tuiles(page).filter(has=page.locator(".fr-tile__title", has_text="Gérer"))
-    texte = tuile.inner_text()
+    page.locator("[data-tuile]").first.wait_for(state="visible", timeout=15_000)
+    impact = page.locator(".accueil-impact")
     if not bilan.get("collections"):
-        assert "Vous ne gérez pas encore de collection" in texte
+        assert impact.count() == 0, "rien à dire à qui ne gère rien"
         return
-    assert f"questions de collègues en {bilan['fenetre_jours']} jours" in texte or f"question de collègues en {bilan['fenetre_jours']} jours" in texte
-    assert ("collègues aidés" in texte) == bool(bilan.get("personnes")), "le seuil de 3 personnes vient du serveur"
+    impact.wait_for(state="visible", timeout=15_000)
+    texte = impact.inner_text()
+    assert f"en {bilan['fenetre_jours']} jours" in texte
+    assert ("collègue" in texte and "aidé" in texte) == bool(bilan.get("personnes")), "le seuil de 3 personnes vient du serveur"
 
 
 def test_a_390_px_les_tuiles_s_empilent_et_le_menu_s_ouvre(session_testeur, captures):

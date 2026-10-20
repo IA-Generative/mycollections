@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT } from '../../utils/capacites'
-import { entreeEntraide, ENTREES_PIED_DE_PAGE, entreesPrincipales, estActive, libelleMesCollections, RUBRIQUES_ASSISTANT, sousMenuAssistant, sousMenuCollection } from '../../utils/navigation'
+import { entreeEntraide, ENTREES_PIED_DE_PAGE, entreesPrincipales, estActive, RUBRIQUES_ASSISTANT, sousMenuAssistant, sousMenuCollection } from '../../utils/navigation'
 
 const RIEN = { ...CAPACITES_DEFAUT }
 const AVEC_DEMANDES = { ...CAPACITES_DEFAUT, demandes: true }
@@ -11,14 +11,15 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
     expect(entreesPrincipales(RIEN, false)).toEqual([
       { libelle: 'Accueil', vers: '/', exact: true },
       { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
-      { libelle: 'Mes collections', vers: '/mes-collections', volet: true },
+      { libelle: 'Mes collections', vers: '/mes-collections', pastille: true },
     ])
   })
-  it('tous les drapeaux et l\'administration : cinq entrées, dans l\'ordre', () => {
+  it('tous les drapeaux et l\'administration : six entrées, dans l\'ordre', () => {
     expect(entreesPrincipales(TOUT, true).map(e => `${e.libelle} ${e.vers}`)).toEqual([
       'Accueil /',
       'Catalogue /admin/catalog',
-      'Mes collections & assistants /mes-collections',
+      'Mes collections /mes-collections',
+      'Assistants /assistants',
       'Entraide /entraide',
       'Administration /admin',
     ])
@@ -27,10 +28,10 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
     expect(entreesPrincipales(TOUT, true).map(e => e.libelle)).not.toContain('Soyez acteurs vous-mêmes')
     expect(ENTREES_PIED_DE_PAGE).toEqual([{ libelle: 'Soyez acteurs vous-mêmes', vers: '/guide' }])
   })
-  it('« Mes collections » est le volet, en troisième position', () => {
+  it('« Mes collections » est un lien simple vers la liste, avec sa pastille, en troisième position', () => {
     const e = entreesPrincipales(RIEN, false)[2]!
-    expect(e.volet).toBe(true)
-    expect(entreesPrincipales(TOUT, true).filter(x => x.volet)).toHaveLength(1)
+    expect(e).toEqual({ libelle: 'Mes collections', vers: '/mes-collections', pastille: true })
+    expect(entreesPrincipales(TOUT, true).filter(x => x.pastille)).toHaveLength(1)
   })
   it('l\'administration ferme la liste pour qui en a le droit, et seulement pour lui', () => {
     expect(entreesPrincipales(AVEC_DEMANDES, true).at(-1)).toEqual({ libelle: 'Administration', vers: '/admin' })
@@ -41,10 +42,18 @@ describe('entreesPrincipales — le menu décidé (refonte du 2026-10-19)', () =
   })
 })
 
-describe('libelleMesCollections', () => {
-  it('« & assistants » seulement si le drapeau est vrai', () => {
-    expect(libelleMesCollections({ assistants: true })).toBe('Mes collections & assistants')
-    expect(libelleMesCollections({ assistants: false })).toBe('Mes collections')
+describe('les assistants, un objet distinct des collections', () => {
+  it('une entrée « Assistants » à part, seulement si le drapeau est vrai', () => {
+    expect(entreesPrincipales({ ...RIEN, assistants: true }, false).map(e => e.libelle)).toEqual(['Accueil', 'Catalogue', 'Mes collections', 'Assistants'])
+    expect(entreesPrincipales(RIEN, false).map(e => e.libelle)).not.toContain('Assistants')
+  })
+  it('« Mes collections » ne parle jamais des assistants', () => {
+    expect(entreesPrincipales(TOUT, true).find(e => e.pastille)!.libelle).toBe('Mes collections')
+  })
+  it('« Assistants » est courante sur toute la fiche d\'un assistant', () => {
+    const a = entreesPrincipales(TOUT, false).find(e => e.libelle === 'Assistants')!
+    expect(estActive(a, '/assistants/sejour/consignes')).toBe(true)
+    expect(estActive(a, '/mes-collections')).toBe(false)
   })
 })
 

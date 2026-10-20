@@ -32,16 +32,21 @@ def demande_essai(session_testeur, capacite_demandes):
 
 
 def test_la_page_explique_le_seuil_et_le_garant(session_testeur, capacite_demandes, captures):
+    """La page met d'abord en avant l'appel à la communauté ; le seuil et le garant se lisent dans
+    « Combien de collègues faut-il ? », en mots simples."""
     page = session_testeur.aller("/demandes")
-    assert "Demandes de la communauté" in page.locator("h1").first.inner_text()
-    texte = session_testeur.texte()
-    assert re.search(r"garant", texte, re.I) and re.search(r"chantier", texte, re.I)
+    assert page.locator("h1").first.inner_text().startswith("Entraide")
+    assert "Faites appel à la communauté" in session_testeur.texte()
+    page.get_by_text("Combien de collègues faut-il ?").click()
+    detail = page.locator("details", has_text="Combien de collègues").inner_text()
+    assert re.search(r"\d+ collègues intéressés", detail), detail
+    assert "à jour" in detail, "le rôle du garant se dit en mots simples"
     captures.prendre(page, "08-demandes")
 
 
 def test_deposer_une_demande(session_testeur, demande_essai, captures):
     page = session_testeur.aller("/demandes")
-    page.get_by_role("button", name=re.compile("Demander un jeu de données")).click()
+    page.get_by_role("button", name=re.compile("Demander une donnée")).click()
     page.locator("#d-titre").wait_for(state="visible", timeout=10_000)
     page.locator("#d-titre").fill(TITRE)
     page.locator("#d-usage").fill("Vérifier qu'une demande se dépose depuis l'interface.")

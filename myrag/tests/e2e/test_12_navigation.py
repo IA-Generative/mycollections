@@ -1,5 +1,5 @@
 """La navigation sous drapeaux (ADR-0003, amendée le 2026-10-19) : le menu affiché est celui que
-les capacités du serveur annoncent (Accueil · Catalogue · Mes collections[ & assistants] ·
+les capacités du serveur annoncent (Accueil · Catalogue · Mes collections · [Assistants] ·
 Entraide · Administration) ; une page sous drapeau faux est une 404 en français ; drapeau vrai,
 ses pages et son sous-menu existent.
 
@@ -12,8 +12,9 @@ import re
 
 
 def _attendues(capacites: dict, admin: bool) -> list[str]:
-    entrees = ["Accueil", "Catalogue"]
-    entrees.append("Mes collections & assistants" if capacites.get("assistants") is True else "Mes collections")
+    entrees = ["Accueil", "Catalogue", "Mes collections"]
+    if capacites.get("assistants") is True:
+        entrees.append("Assistants")
     if capacites.get("entraide") is True or capacites.get("demandes") is True:
         entrees.append("Entraide")
     if admin:
@@ -32,7 +33,7 @@ def test_le_menu_est_celui_que_les_capacites_annoncent(session_testeur, captures
     page = session_testeur.aller("/")
     page.locator("nav.fr-nav .fr-nav__link").first.wait_for(state="visible", timeout=15_000)
     page.wait_for_timeout(1_000)
-    # Le volet « Mes collections » est un bouton : son libellé, sans le compteur qui le suit.
+    # « Mes collections » porte une pastille : son libellé, sans le compteur qui le suit.
     liens = [re.sub(r"\s*\d+$", "", t.strip()) for t in page.locator("nav.fr-nav > ul > li > .fr-nav__link").all_inner_texts()]
     assert liens == _attendues(capacites, session_testeur.superadmin()), liens
     entraide = page.locator("nav.fr-nav a.fr-nav__link", has_text="Entraide")

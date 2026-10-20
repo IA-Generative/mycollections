@@ -2,8 +2,12 @@
 import type { Categorie, Collection } from '~/types/collection'
 import type { CleTri } from '~/utils/catalogue'
 import { COLONNES_CATALOGUE, filtrerCollections, grouperParCategorie, ligneCatalogue, NON_CLASSEES, trierCollections, TRIS } from '~/utils/catalogue'
+import { entreeEntraide } from '~/utils/navigation'
 
 const { get } = useApi()
+const { capacites } = useCapacites()
+// « Besoin d'une donnée ? » mène où mène l'entrée Entraide du menu (réseau, sinon demandes).
+const entraide = computed(() => entreeEntraide(capacites.value))
 const { isAdmin } = useAdminAuth()
 const { lister: listerCategories } = useCategories()
 
@@ -102,44 +106,39 @@ onMounted(async () => {
 
 <template>
   <div>
-    <nav
-      role="navigation"
-      class="fr-breadcrumb"
-      aria-label="vous êtes ici :"
-    >
-      <ol class="fr-breadcrumb__list">
-        <li>
-          <NuxtLink
-            class="fr-breadcrumb__link"
-            to="/"
-          >
-            Accueil
-          </NuxtLink>
-        </li>
-        <li>
-          <a
-            class="fr-breadcrumb__link"
-            aria-current="page"
-          >Catalogue</a>
-        </li>
-      </ol>
-    </nav>
-
-    <div class="catalogue-tete fr-mb-3w">
-      <h1 class="fr-h2 fr-mb-0">
-        Catalogue des collections
-      </h1>
+    <!-- Pas de fil d'Ariane : le menu dit déjà où l'on est. -->
+    <div class="catalogue-tete fr-mb-2w">
+      <div>
+        <h1 class="fr-h3 fr-mb-0">
+          Catalogue des collections
+        </h1>
+        <p
+          v-if="!chargement || collections.length"
+          class="fr-text--sm fr-mb-0 catalogue-tete__compte"
+        >
+          {{ compte.collections }} collection{{ compte.collections > 1 ? 's' : '' }} · {{ compte.categories }} catégorie{{ compte.categories > 1 ? 's' : '' }}
+        </p>
+      </div>
       <p
-        v-if="!chargement || collections.length"
-        class="fr-text--sm fr-mb-0 catalogue-tete__compte"
+        v-if="entraide"
+        class="fr-text--sm fr-mb-0 catalogue-tete__entraide"
       >
-        {{ compte.collections }} collection{{ compte.collections > 1 ? 's' : '' }} · {{ compte.categories }} catégorie{{ compte.categories > 1 ? 's' : '' }}
+        <span
+          class="fr-icon-team-line fr-icon--sm fr-mr-1v"
+          aria-hidden="true"
+        /><strong>Besoin d'une donnée ?</strong>
+        <NuxtLink
+          :to="entraide.vers"
+          class="fr-link fr-text--sm"
+        >
+          Demandez au réseau
+        </NuxtLink>
       </p>
     </div>
 
     <!-- Les filtres : recherche, catégorie, tri, archivées. -->
     <form
-      class="catalogue-filtres fr-background-alt--grey fr-p-2w fr-mb-3w"
+      class="catalogue-filtres fr-background-alt--grey fr-px-2w fr-py-1w fr-mb-2w"
       role="search"
       aria-label="Filtrer le catalogue"
       @submit.prevent
@@ -477,6 +476,7 @@ onMounted(async () => {
 
 <style scoped>
 .catalogue-tete { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .5rem 1.5rem; }
+.catalogue-tete__entraide { padding: .5rem .75rem; background: var(--background-alt-blue-france); }
 .catalogue-tete__compte, .catalogue-mention { color: var(--text-mention-grey); }
 .catalogue-date { white-space: nowrap; }
 .catalogue-date__depuis { display: block; }

@@ -1,18 +1,24 @@
 <template>
   <div>
     <div class="fr-mb-3w">
-      <h1 class="fr-h2">Demandes de la communauté</h1>
-      <p class="fr-text--lead" style="max-width:65ch">
-        Dites quel jeu de données vous manque, rassemblez {{ capacites.seuil_chantier }} collègues et un garant, et le chantier démarre.
-        Un chantier sans nouvelle depuis trente jours est marqué <strong>en sommeil</strong>.
-        <NuxtLink to="/guide" class="fr-link">Comment ça se passe ?</NuxtLink>
+      <h1 class="fr-h3 fr-mb-1v">Entraide : trouvez la donnée qui vous manque</h1>
+      <p class="fr-mb-2w demandes-chapeau">
+        Une donnée vous manque pour votre travail quotidien ? Faites appel à la communauté : un collègue la connaît
+        peut-être déjà, ou d'autres en ont besoin aussi et vous aideront à la rassembler.
       </p>
-      <p class="fr-text--sm" style="color:var(--text-mention-grey)">
-        <strong>Quand une demande devient-elle un chantier ?</strong>
-        Quand <strong>{{ capacites.seuil_chantier }} collègues</strong> l’ont soutenue — la preuve que le besoin est partagé —
-        et qu’<strong>un garant</strong> s’est proposé : la personne qui veille à ce que les données restent justes et à jour (environ deux heures par mois).
-        Ce nombre est fixé au dépôt de la demande : s’il change plus tard, les demandes déjà ouvertes gardent le leur.
-      </p>
+      <ol class="demandes-etapes">
+        <li><b>Décrivez ce qui vous manque</b><span>La donnée, et à quoi elle vous servirait.</span></li>
+        <li><b>La communauté répond</b><span>Un collègue indique une source qui existe déjà, ou dit « moi aussi ».</span></li>
+        <li><b>La collection est constituée</b><span>Quand plusieurs collègues en ont besoin et qu'une personne accepte de la tenir à jour.</span></li>
+      </ol>
+      <details class="fr-mt-1w demandes-detail">
+        <summary class="fr-text--sm">Combien de collègues faut-il ?</summary>
+        <p class="fr-text--sm fr-mt-1w fr-mb-0">
+          {{ capacites.seuil_chantier }} collègues intéressés, et une personne qui accepte de veiller à ce que la donnée reste juste
+          et à jour (environ deux heures par mois). Une demande sans nouvelle depuis trente jours est marquée « en sommeil ».
+          <NuxtLink to="/guide" class="fr-link fr-text--sm">Le guide</NuxtLink>
+        </p>
+      </details>
     </div>
 
     <div v-if="!chargees" class="fr-callout"><p>Chargement…</p></div>
@@ -24,14 +30,14 @@
       <section class="demande-depot fr-mb-4w" :class="{ ouvert: formulaireOuvert }">
         <div class="demande-depot__tete">
           <div>
-            <h2 class="fr-h6 fr-mb-0">Un jeu de données vous manque ?</h2>
+            <h2 class="fr-h6 fr-mb-0">Faire une demande</h2>
             <p v-if="!formulaireOuvert" class="fr-text--sm fr-mb-0" style="color:var(--text-mention-grey)">
-              Regardez d'abord la liste ci-dessous : s'il est déjà demandé, un « Moi aussi » compte davantage qu'une nouvelle demande.
+              Regardez d'abord la liste ci-dessous : si elle est déjà demandée, un « Moi aussi » compte davantage qu'une nouvelle demande.
             </p>
           </div>
           <button type="button" class="fr-btn fr-btn--sm fr-btn--icon-left" :class="formulaireOuvert ? 'fr-btn--tertiary fr-icon-arrow-up-s-line' : 'fr-icon-add-line'"
                   aria-controls="formulaire-demande" :aria-expanded="formulaireOuvert" @click="basculer">
-            {{ formulaireOuvert ? 'Replier le formulaire' : 'Demander un jeu de données' }}
+            {{ formulaireOuvert ? 'Replier le formulaire' : 'Demander une donnée' }}
           </button>
         </div>
         <div v-show="formulaireOuvert" id="formulaire-demande" class="fr-mt-2w">
@@ -54,7 +60,7 @@
       <div v-else class="fr-table fr-table--no-caption" style="overflow-x:auto">
         <table>
           <caption>Demandes</caption>
-          <thead><tr><th>Demande</th><th>Fréquence</th><th>Soutiens</th><th>Garant</th><th>État</th><th>Je peux aider</th><th></th></tr></thead>
+          <thead><tr><th>Demande</th><th>Fréquence</th><th>Collègues intéressés</th><th>Garant</th><th>État</th><th>Je peux aider</th><th></th></tr></thead>
           <tbody>
             <tr v-for="d in demandesFiltrees" :key="d.id">
               <td>
@@ -138,4 +144,11 @@ onMounted(async () => {
 /* Replié dans un encadré, le formulaire n'a plus besoin de son propre cadre de mise en avant. */
 .demande-depot :deep(form.fr-callout) { margin-bottom: 0; }
 .demande-depot :deep(form.fr-callout > .fr-callout__title) { display: none; }
+.demandes-chapeau { max-width: 60rem; }
+.demandes-etapes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; counter-reset: etape; }
+.demandes-etapes li { counter-increment: etape; display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; padding-top: .5rem; border-top: 2px solid var(--border-active-blue-france); }
+.demandes-etapes li::before { content: counter(etape); font-weight: 700; color: var(--text-title-blue-france); }
+.demandes-etapes span { color: var(--text-mention-grey); }
+.demandes-detail summary { cursor: pointer; }
+@media (max-width: 48em) { .demandes-etapes { grid-template-columns: 1fr; } }
 </style>
