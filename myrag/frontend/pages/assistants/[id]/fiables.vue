@@ -8,5 +8,12 @@ useHead({ title: `Réponses fiables — ${id} — Mes collections` })
   <AssistantsCadre
     :id="id"
     rubrique="Réponses fiables"
-  />
+  >
+    <template #default="{ donnees }">
+      <AssistantsFiables
+        :id="id"
+        :seuil="donnees.fiche.seuil_fiable"
+      />
+    </template>
+  </AssistantsCadre>
 </template>

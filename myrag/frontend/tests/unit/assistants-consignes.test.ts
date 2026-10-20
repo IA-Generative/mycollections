@@ -1,14 +1,21 @@
-import type { Consigne, PlanAssistant } from '../../utils/assistants'
+import type { Consigne, PlanAssistant, QuestionSource } from '../../utils/assistants'
 import { describe, expect, it } from 'vitest'
 import {
+  candidatesFiables,
   consignePourEnvoi,
   consigneVide,
   deplacer,
   exemplesDepuisTexte,
   libelleQuand,
+  libelleServie,
+  libelleSeuil,
+  lienQualite,
   ordonnerEtapes,
+  phraseFiable,
   QUAND_TOUJOURS,
+  reponsesFiables,
   resumeConsigne,
+  resumeQualiteSource,
   sourceDuPassage,
   traceDuPlan,
   validerConsigne,
@@ -212,5 +219,65 @@ describe('sourceDuPassage', () => {
   })
   it('sans titre : le document', () => {
     expect(sourceDuPassage({ source: 's', etape: 1, rang: 1, document: 'doc', texte: '' }).libelle).toBe('doc')
+  })
+})
+
+describe('réponses fiables et qualité d\'un assistant', () => {
+  const q = (champs: Partial<QuestionSource> = {}): QuestionSource => ({
+    id: 'q1',
+    collection: 'col-a',
+    collection_titre: 'Collection A',
+    peut_gerer: true,
+    question: 'Quel délai ?',
+    reponse: 'Trente jours.',
+    relecture: 'valide',
+    hors_sujet: false,
+    fiable: false,
+    servie_fois: 0,
+    dernier_verdict: null,
+    ...champs,
+  })
+
+  it('le seuil se dit en mots', () => {
+    expect(libelleSeuil(0.9)).toContain('au moins 90 %')
+    expect(libelleSeuil(0.755)).toContain('au moins 76 %')
+    expect(libelleSeuil(undefined)).toContain('90 %')
+  })
+  it('combien de fois servie', () => {
+    expect(libelleServie(0)).toBe('Jamais servie')
+    expect(libelleServie(1)).toBe('Servie 1 fois')
+    expect(libelleServie(12)).toBe('Servie 12 fois')
+  })
+  it('les réponses fiables : les plus servies d\'abord', () => {
+    const l = reponsesFiables([q({ id: 'a', fiable: true, servie_fois: 1 }), q({ id: 'b' }), q({ id: 'c', fiable: true, servie_fois: 5 })])
+    expect(l.map(x => x.id)).toEqual(['c', 'a'])
+  })
+  it('les candidates : validées, avec réponse, ni hors sujet ni déjà fiables', () => {
+    const l = candidatesFiables([
+      q({ id: 'ok' }),
+      q({ id: 'fiable', fiable: true }),
+      q({ id: 'brut', relecture: 'brut' }),
+      q({ id: 'rejete', relecture: 'rejete' }),
+      q({ id: 'hs', hors_sujet: true }),
+      q({ id: 'vide', reponse: '  ' }),
+    ])
+    expect(l.map(x => x.id)).toEqual(['ok'])
+  })
+  it('la phrase de la trace', () => {
+    expect(phraseFiable(95)).toBe('Réponse fiable retenue (ressemblance 95 %) : aucune recherche')
+    expect(phraseFiable(null)).toBe('Réponse fiable retenue : aucune recherche')
+  })
+  it('la trace d\'une réponse fiable porte la ressemblance en pourcentage', () => {
+    const plan: PlanAssistant = { assistant: 'a', version: 1, planificateur: 'regles', reponse_fiable: { id: 'qa-1', score: 0.946 }, etapes: [] }
+    expect(traceDuPlan(plan, null).scoreFiable).toBe(95)
+    expect(traceDuPlan({ ...plan, reponse_fiable: null }, null).scoreFiable).toBeNull()
+  })
+  it('le lien vers la page Qualité d\'une collection', () => {
+    expect(lienQualite('ma-col')).toBe('/c/ma-col/qualite')
+  })
+  it('le résumé d\'une source, au singulier comme au pluriel', () => {
+    expect(resumeQualiteSource({ reponses_fiables: 0, servie_fois: 0, synthese: { questions: { total: 0 } } })).toBe('Aucune question de référence ; aucune réponse fiable.')
+    expect(resumeQualiteSource({ reponses_fiables: 2, servie_fois: 3, synthese: { questions: { total: 4, par_relecture: { valide: 3 } } } }))
+      .toBe('4 questions de référence, dont 3 validées ; 2 réponses fiables (servie 3 fois au total).')
   })
 })

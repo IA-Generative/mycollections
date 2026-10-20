@@ -304,6 +304,8 @@ export interface ResultatAssistant {
   par_source?: Record<string, number>
 }
 
+const pourcent = (x: number): number => Math.round(x * 100)
+
 const METHODES: Record<string, string> = {
   toutes_les_sources: 'Toutes les sources, sans tri',
   regles: 'Selon les consignes',
@@ -317,6 +319,8 @@ export interface TracePlan {
   /** La consigne retenue (son « quand ») et la confiance, en pourcentage, s'il y en a une. */
   consigne: { id: string, libelle: string, score: number | null } | null
   reponseFiable: boolean
+  /** Ressemblance (en %) de la question à la question de référence servie, si une réponse fiable a été retenue. */
+  scoreFiable: number | null
   etapes: TraceEtape[]
   /** Les sources de l'assistant que ce plan n'a pas interrogées (titres). */
   nonInterrogees: string[]
@@ -351,6 +355,7 @@ export function traceDuPlan (
         }
       : null,
     reponseFiable: !!plan.reponse_fiable,
+    scoreFiable: plan.reponse_fiable ? pourcent(plan.reponse_fiable.score) : null,
     etapes: [...plan.etapes].sort((a, b) => a.n - b.n).map(e => ({
       n: e.n,
       source: e.source,
@@ -404,4 +409,64 @@ export function messageErreurMoteur (e: unknown): string {
     case '429': return 'Trop de questions à la suite : réessayez dans un instant.'
     default: return messageErreur(e)
   }
+}
+
+// ─── Réponses fiables et qualité d'un assistant (B3) ────────────────────────────────────────
+
+/** Une question du jeu réuni des sources (`GET /api/assistants/{id}/qualite/questions`). */
+export interface QuestionSource {
+  id: string
+  collection: string
+  collection_titre: string
+  /** Dit par le serveur : la personne gère-t-elle cette collection ? */
+  peut_gerer: boolean
+  question: string
+  reponse: string
+  relecture: 'brut' | 'valide' | 'rejete'
+  hors_sujet: boolean
+  fiable: boolean
+  servie_fois: number
+  dernier_verdict: string | null
+}
+
+/** Le seuil de l'assistant, en mots : « servie si la question ressemble à au moins 90 % ». */
+export function libelleSeuil (seuil: number | null | undefined): string {
+  const n = pourcent(typeof seuil === 'number' ? seuil : 0.9)
+  return `Une réponse fiable est servie si la question ressemble à au moins ${n} % à la sienne.`
+}
+
+/** Combien de fois une réponse fiable a été servie, dit simplement. */
+export function libelleServie (n: number | null | undefined): string {
+  const fois = n || 0
+  if (fois === 0) {
+    return 'Jamais servie'
+  }
+  return fois === 1 ? 'Servie 1 fois' : `Servie ${fois} fois`
+}
+
+/** Les réponses fiables : les questions marquées fiables, les plus servies d'abord. */
+export function reponsesFiables (questions: readonly QuestionSource[]): QuestionSource[] {
+  return questions.filter(q => q.fiable).sort((a, b) => b.servie_fois - a.servie_fois)
+}
+
+/** Les questions validées qui pourraient le devenir : validées, avec une réponse, pas hors sujet, pas déjà fiables. */
+export function candidatesFiables (questions: readonly QuestionSource[]): QuestionSource[] {
+  return questions.filter(q => !q.fiable && q.relecture === 'valide' && !q.hors_sujet && q.reponse.trim().length > 0)
+}
+
+/** Ce que dit la trace d'une réponse fiable : « Réponse fiable retenue (ressemblance 95 %) : aucune recherche ». */
+export function phraseFiable (score: number | null | undefined): string {
+  return typeof score === 'number' ? `Réponse fiable retenue (ressemblance ${score} %) : aucune recherche` : 'Réponse fiable retenue : aucune recherche'
+}
+
+/** Le « lien » vers la page Qualité d'une collection. */
+export const lienQualite = (collection: string): string => `/c/${encodeURIComponent(collection)}/qualite`
+
+/** Une source de la synthèse d'assistant (`GET /api/assistants/{id}/qualite`) : en une ligne, sans jargon. */
+export function resumeQualiteSource (s: { reponses_fiables: number, servie_fois: number, synthese?: { questions?: { total?: number, par_relecture?: Record<string, number> } } }): string {
+  const total = s.synthese?.questions?.total || 0
+  const validees = s.synthese?.questions?.par_relecture?.valide || 0
+  const questions = total === 0 ? 'Aucune question de référence' : `${total} question${total > 1 ? 's' : ''} de référence, dont ${validees} validée${validees > 1 ? 's' : ''}`
+  const fiables = s.reponses_fiables === 0 ? 'aucune réponse fiable' : `${s.reponses_fiables} réponse${s.reponses_fiables > 1 ? 's' : ''} fiable${s.reponses_fiables > 1 ? 's' : ''} (${libelleServie(s.servie_fois).toLowerCase()} au total)`
+  return `${questions} ; ${fiables}.`
 }

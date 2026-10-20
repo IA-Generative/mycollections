@@ -8,13 +8,20 @@ import { reponseDoublure } from '~/utils/assistants'
  * le serveur juge des droits.
  */
 export function useAssistants () {
-  const { get, put, post, fetchWithAuth, baseUrl } = useApi()
+  const { get, put, post, patch, fetchWithAuth, baseUrl } = useApi()
   const ident = (id: string) => encodeURIComponent(id)
   return {
     lister: async () => (await get('/api/assistants')).assistants || [],
     lire: (id: string) => get(`/api/assistants/${ident(id)}`),
     enregistrer: (fiche: FicheAssistant) => put(`/api/assistants/${ident(fiche.assistant)}`, fiche),
     publier: (id: string) => post(`/api/assistants/${ident(id)}/publier`),
+    /** Le jeu de questions réuni des sources que la personne lit (lecture seule) ; filtres `relecture`, `fiable`, `q`. */
+    questionsQualite: (id: string, params?: Record<string, string>) => get(`/api/assistants/${ident(id)}/qualite/questions`, params),
+    /** Par source lisible : la synthèse de qualité, les réponses fiables et combien de fois elles ont été servies. */
+    qualite: (id: string) => get(`/api/assistants/${ident(id)}/qualite`),
+    /** Marquer ou retirer une réponse fiable : le `PATCH` de la collection, avec ses droits (le serveur refuse qui ne la gère pas). */
+    marquerFiable: (collection: string, question: string, fiable: boolean) =>
+      patch(`/api/collections/${encodeURIComponent(collection)}/qualite/questions/${encodeURIComponent(question)}`, { fiable }),
     versions: async (id: string) => (await get(`/api/assistants/${ident(id)}/versions`)).versions || [],
     /**
      * Pose une question à l'assistant (depuis « Tester » ou le bac à sable) : le plan suivi, les passages, la réponse
