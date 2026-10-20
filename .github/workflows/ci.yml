@@ -19,7 +19,11 @@ jobs:
     permissions:
       contents: read
     with:
-      MAX_SUBJECT_LENGTH: 120
+      # commitlint.config.js est lue telle quelle par le hook pre-commit
+      # commitlint (.pre-commit-config.yaml) : une seule source de vérité, ce
+      # que le hook laisse passer, la CI le laisse passer. Posée, cette entrée
+      # rend MAX_SUBJECT_LENGTH et les autres réglages du job sans effet.
+      CONFIG_FILE: commitlint.config.js
 
   # ruff : le backend est formaté et vérifié (pre-commit en local, ici pour ce qu'il ne voit pas).
   lint-backend:
