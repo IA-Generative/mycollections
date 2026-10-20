@@ -135,6 +135,7 @@ onMounted(() => {
           :key="m.turnId || i"
           :message="m"
           titre-trace="Comment l'assistant a cherché"
+          :reponse-fiable="!!m.resultat?.plan.reponse_fiable"
           sans-avis
         >
           <template

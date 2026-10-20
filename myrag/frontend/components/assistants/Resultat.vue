@@ -22,6 +22,10 @@ const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(
   <div class="assistant-resultat">
     <h3 class="fr-h6 fr-mb-1w">
       Réponse
+      <span
+        v-if="resultat.plan.reponse_fiable"
+        class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon fr-ml-1w"
+      >Réponse fiable</span>
     </h3>
     <!-- eslint-disable-next-line vue/no-v-html -- Markdown assaini par renderMarkdownSafe -->
     <div
@@ -35,6 +39,12 @@ const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(
     >
       L'assistant a rendu les passages ci-dessous, sans rédiger de réponse.
     </p>
+    <p
+      v-if="resultat.plan.reponse_fiable"
+      class="fr-text--sm"
+    >
+      Une réponse déjà vérifiée a été servie telle quelle : aucun passage n'a été cherché.
+    </p>
     <div
       v-if="sources.length"
       class="assistant-resultat__sources"
@@ -46,7 +56,7 @@ const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(
       />
     </div>
     <p
-      v-else
+      v-else-if="!resultat.plan.reponse_fiable"
       class="fr-text--sm"
     >
       Aucun passage trouvé.

@@ -8,5 +8,7 @@ useHead({ title: `Qualité — ${id} — Mes collections` })
   <AssistantsCadre
     :id="id"
     rubrique="Qualité"
-  />
+  >
+    <AssistantsQualiteSources :id="id" />
+  </AssistantsCadre>
 </template>
