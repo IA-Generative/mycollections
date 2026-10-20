@@ -4,16 +4,13 @@ import type { BilanPartage } from '~/utils/accueil'
 import { indicateursCollection, nombre } from '~/utils/accueil'
 import { titreDe } from '~/utils/catalogue'
 import { libelleEtat } from '~/utils/collectif'
-import { libelleMesCollections } from '~/utils/navigation'
 
 /**
  * Les collections que je gère, chacune avec ce qu'elle rend : questions de collègues sur la
  * fenêtre, note des usagers, signalements à traiter. Pas de fil d'Ariane : le menu dit où l'on est.
  */
 const { get } = useApi()
-const { capacites } = useCapacites()
-// « Mes collections & assistants » seulement si les assistants existent (même règle que le menu).
-const titre = computed(() => libelleMesCollections(capacites.value))
+const titre = 'Mes collections'
 const bilan = ref<BilanPartage | null>(null)
 const collections = ref<Collection[]>([])
 const loading = ref(true)
@@ -47,13 +44,6 @@ onMounted(async () => {
         </p>
       </div>
       <div class="mes-collections__actions">
-        <NuxtLink
-          v-if="capacites.assistants"
-          to="/assistants"
-          class="fr-btn fr-btn--tertiary fr-btn--sm"
-        >
-          Mes assistants
-        </NuxtLink>
         <NuxtLink
           to="/admin/create"
           class="fr-btn fr-btn--sm fr-btn--icon-left fr-icon-add-line"

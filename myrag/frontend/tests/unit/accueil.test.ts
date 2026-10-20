@@ -101,21 +101,18 @@ describe('tuilesAccueil', () => {
   const EXEMPLE = { name: 'code-route', titre: 'Code de la route', question: 'Quelle sanction pour un feu rouge ?', autres: true }
   const CHIFFRES = { collections: 27, categories: 6, documents: 0 }
   it('exactement quatre tuiles, dans l\'ordre décidé', () => {
-    expect(tuilesAccueil({ assistants: false }, EXEMPLE, CHIFFRES).map(t => t.titre)).toEqual([
+    expect(tuilesAccueil(EXEMPLE, CHIFFRES).map(t => t.titre)).toEqual([
       'Découvrir',
       'Explorer le catalogue',
       'Suivre mes collections',
       'Partager une nouvelle collection',
     ])
   })
-  it('« & assistants » seulement si le drapeau est vrai', () => {
-    const t = tuilesAccueil({ assistants: true }, EXEMPLE, CHIFFRES)
-    expect(t[2]!.titre).toBe('Suivre mes collections & assistants')
-    expect(t[3]!.titre).toBe('Partager une nouvelle collection & assistant')
-    expect(tuilesAccueil({ assistants: false }, EXEMPLE, CHIFFRES).some(x => x.titre.includes('assistant'))).toBe(false)
+  it('les tuiles parlent des collections, jamais des assistants (objet distinct)', () => {
+    expect(tuilesAccueil(EXEMPLE, CHIFFRES).some(x => x.titre.includes('assistant'))).toBe(false)
   })
   it('les cibles : bac à sable prérempli, catalogue, mes collections, création', () => {
-    const [decouvrir, explorer, gerer, creer] = tuilesAccueil({ assistants: false }, EXEMPLE, CHIFFRES)
+    const [decouvrir, explorer, gerer, creer] = tuilesAccueil(EXEMPLE, CHIFFRES)
     expect(decouvrir!.vers).toEqual({ path: '/c/code-route/playground', query: { q: 'Quelle sanction pour un feu rouge ?' } })
     expect(decouvrir!.description).toBe('« Quelle sanction pour un feu rouge ? »')
     expect(explorer!.vers).toBe('/admin/catalog')
@@ -124,16 +121,16 @@ describe('tuilesAccueil', () => {
     expect(creer!.description).toContain('sans compétence technique')
   })
   it('sans exemple, Découvrir mène au catalogue', () => {
-    const t = tuilesAccueil({ assistants: false }, null, null)[0]!
+    const t = tuilesAccueil(null, null)[0]!
     expect(t.vers).toBe('/admin/catalog')
     expect(t.action).toBe('Voir le catalogue')
   })
   it('le nombre de collections dans la phrase du catalogue, quand il est connu', () => {
-    expect(tuilesAccueil({ assistants: false }, null, CHIFFRES)[1]!.description).toContain('27 collections')
-    expect(tuilesAccueil({ assistants: false }, null, null)[1]!.description).not.toMatch(/\d/)
+    expect(tuilesAccueil(null, CHIFFRES)[1]!.description).toContain('27 collections')
+    expect(tuilesAccueil(null, null)[1]!.description).not.toMatch(/\d/)
   })
   it('aucune tuile ne parle d\'une donnée manquante', () => {
-    const textes = tuilesAccueil({ assistants: true }, EXEMPLE, CHIFFRES).map(t => `${t.titre} ${t.description} ${t.action} ${t.mention || ''}`).join(' ')
+    const textes = tuilesAccueil(EXEMPLE, CHIFFRES).map(t => `${t.titre} ${t.description} ${t.action} ${t.mention || ''}`).join(' ')
     expect(textes).not.toMatch(/manque|demande/i)
   })
 })

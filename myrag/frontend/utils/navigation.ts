@@ -3,9 +3,10 @@
  * calculé en pur pour être testé. Une entrée sous drapeau n'existe que si le serveur la déclare
  * (capacités).
  *
- * Menu décidé par la refonte ergonomique (ADR-0003, amendée le 2026-10-19) : Accueil · Catalogue ·
- * Mes collections[ & assistants] (avec sa pastille) · Entraide · [Administration]. « Soyez acteurs
- * vous-mêmes » passe en pied de page (`ENTREES_PIED_DE_PAGE`).
+ * Menu (ADR-0003, amendée le 2026-10-20) : Accueil · Catalogue · Mes collections (avec sa pastille) ·
+ * [Assistants] · Entraide · [Administration]. Une collection et un assistant sont deux objets
+ * distincts : chacun a son entrée. « Soyez acteurs vous-mêmes » est en pied de page
+ * (`ENTREES_PIED_DE_PAGE`).
  */
 import type { Capacites } from './capacites'
 
@@ -23,14 +24,6 @@ export interface EntreeMenu {
 type CapacitesMenu = Pick<Capacites, 'demandes' | 'assistants' | 'entraide'>
 
 /**
- * « Mes collections & assistants » quand les assistants existent ; sinon « Mes collections » :
- *  rien n'annonce une fonction éteinte.
- */
-export function libelleMesCollections (c: Pick<Capacites, 'assistants'>): string {
-  return c.assistants ? 'Mes collections & assistants' : 'Mes collections'
-}
-
-/**
  * L'entrée Entraide : le réseau d'entraide s'il est allumé, sinon les demandes de la
  *  communauté, sinon rien.
  */
@@ -43,8 +36,11 @@ export function entreesPrincipales (c: CapacitesMenu, admin: boolean): EntreeMen
   const entrees: EntreeMenu[] = [
     { libelle: 'Accueil', vers: '/', exact: true },
     { libelle: 'Catalogue', vers: '/admin/catalog', exact: true },
-    { libelle: libelleMesCollections(c), vers: '/mes-collections', pastille: true },
+    { libelle: 'Mes collections', vers: '/mes-collections', pastille: true },
   ]
+  if (c.assistants) {
+    entrees.push({ libelle: 'Assistants', vers: '/assistants' })
+  }
   const entraide = entreeEntraide(c)
   if (entraide) {
     entrees.push(entraide)

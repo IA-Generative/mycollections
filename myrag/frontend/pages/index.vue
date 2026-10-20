@@ -22,7 +22,7 @@ const exemple = ref<Exemple | null>(null)
 const catalogueCharge = ref(false)
 
 const chiffres = computed(() => catalogueCharge.value ? indicateurs(collections.value, categories.value) : null)
-const tuiles = computed(() => tuilesAccueil(capacites.value, exemple.value, chiffres.value))
+const tuiles = computed(() => tuilesAccueil(exemple.value, chiffres.value))
 const impact = computed(() => impactDuPartage(bilan.value, collections.value))
 const message = computed(() => impact.value ? messageImpact(impact.value) : null)
 const entraide = computed(() => entreeEntraide(capacites.value))

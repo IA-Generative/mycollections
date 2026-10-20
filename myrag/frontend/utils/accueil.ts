@@ -3,7 +3,6 @@
  * Quatre tuiles (refonte du 2026-10-19) : Découvrir · Explorer le catalogue · Gérer mes
  * collections · Créer une nouvelle collection. Il ne reproche rien à qui ne gère rien.
  */
-import type { Capacites } from './capacites'
 import type { Categorie, Collection } from '~/types/collection'
 
 export interface Indicateurs { collections: number, categories: number, documents: number }
@@ -83,14 +82,12 @@ export interface Tuile {
 /**
  * Les quatre tuiles de l'accueil, dans l'ordre décidé, en version compacte : un titre, une phrase.
  * Les chiffres de celui qui partage ne sont plus dans une tuile : ils ont leur bandeau (`impactDuPartage`).
- * « & assistants » ne s'affiche que si le drapeau `assistants` est vrai.
+ * Elles parlent des collections ; les assistants ont leur entrée de menu (objet distinct).
  */
 export function tuilesAccueil (
-  capacites: Pick<Capacites, 'assistants'>,
   exemple: Exemple | null,
   chiffres: Indicateurs | null,
 ): Tuile[] {
-  const assistants = capacites.assistants === true
   const nb = chiffres?.collections ?? null
   return [
     {
@@ -115,7 +112,7 @@ export function tuilesAccueil (
     },
     {
       cle: 'gerer',
-      titre: assistants ? 'Suivre mes collections & assistants' : 'Suivre mes collections',
+      titre: 'Suivre mes collections',
       description: 'Usage, avis des collègues et qualité.',
       vers: '/mes-collections',
       action: 'Ouvrir',
@@ -124,7 +121,7 @@ export function tuilesAccueil (
     },
     {
       cle: 'creer',
-      titre: assistants ? 'Partager une nouvelle collection & assistant' : 'Partager une nouvelle collection',
+      titre: 'Partager une nouvelle collection',
       description: 'En 5 étapes, sans compétence technique.',
       vers: '/admin/create',
       action: 'Commencer',

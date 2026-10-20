@@ -1,5 +1,5 @@
 """La navigation sous drapeaux (ADR-0003, amendée le 2026-10-19) : le menu affiché est celui que
-les capacités du serveur annoncent (Accueil · Catalogue · Mes collections[ & assistants] ·
+les capacités du serveur annoncent (Accueil · Catalogue · Mes collections · [Assistants] ·
 Entraide · Administration) ; une page sous drapeau faux est une 404 en français ; drapeau vrai,
 ses pages et son sous-menu existent.
 
@@ -12,8 +12,9 @@ import re
 
 
 def _attendues(capacites: dict, admin: bool) -> list[str]:
-    entrees = ["Accueil", "Catalogue"]
-    entrees.append("Mes collections & assistants" if capacites.get("assistants") is True else "Mes collections")
+    entrees = ["Accueil", "Catalogue", "Mes collections"]
+    if capacites.get("assistants") is True:
+        entrees.append("Assistants")
     if capacites.get("entraide") is True or capacites.get("demandes") is True:
         entrees.append("Entraide")
     if admin:

@@ -15,14 +15,9 @@ def _capacites(session) -> dict:
     return session.get("/api/config").json()
 
 
-def _titres_attendus(assistants: bool) -> list[str]:
-    suffixe = " & assistants" if assistants else ""
-    return [
-        "Découvrir",
-        "Explorer le catalogue",
-        f"Suivre mes collections{suffixe}",
-        "Partager une nouvelle collection" + (" & assistant" if assistants else ""),
-    ]
+def _titres_attendus() -> list[str]:
+    # Les tuiles parlent des collections ; les assistants sont un objet distinct, avec leur menu.
+    return ["Découvrir", "Explorer le catalogue", "Suivre mes collections", "Partager une nouvelle collection"]
 
 
 def _tuiles(page):
@@ -36,7 +31,7 @@ def test_quatre_tuiles_dans_l_ordre_et_leurs_cibles(session_testeur, captures):
     tuiles = _tuiles(page)
     assert [tuiles.nth(i).get_attribute("data-tuile") for i in range(tuiles.count())] == list(TUILES)
     titres = [t.strip() for t in page.locator("[data-tuile] .fr-tile__title").all_inner_texts()]
-    assert titres == _titres_attendus(_capacites(session_testeur).get("assistants") is True), titres
+    assert titres == _titres_attendus(), titres
     cibles = {cle: page.locator(f"[data-tuile={cle}] .fr-tile__link").get_attribute("href") for cle in TUILES}
     assert cibles["explorer"] == "/admin/catalog"
     assert cibles["gerer"] == "/mes-collections"
