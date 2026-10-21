@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { messageErreur } from '~/utils/collectif'
-import { compteReponses, LIBELLES_ETAT_APPEL, LIBELLES_TYPE } from '~/utils/entraide'
+import { compteReponses, libelleRoles, LIBELLES_ETAT_APPEL, LIBELLES_TYPE, sansRecommandation } from '~/utils/entraide'
 
 definePageMeta({ middleware: 'capacite', capacite: 'entraide' })
 
 const route = useRoute()
 const id = computed(() => String(route.params.id))
-const { lireAppel, publierAppel, cloreAppel, repondre } = useEntraide()
+const { lireAppel, recommandations: lireRecommandations, publierAppel, cloreAppel, repondre } = useEntraide()
 const appel = ref<any | null>(null)
 const chargement = ref(true)
 const erreur = ref('')
 const message = ref('')
 const reponse = ref('')
+const recommandations = ref<any | null>(null)
 
 useHead({ title: computed(() => `${appel.value?.titre || 'Appel'} — Mes collections`) })
 
@@ -20,6 +21,8 @@ async function charger () {
   chargement.value = true
   try {
     appel.value = (await lireAppel(id.value)).appel
+    // Avant de publier, le réseau montre ce qui existe déjà.
+    recommandations.value = appel.value.est_mon_appel && appel.value.etat === 'brouillon' ? await lireRecommandations(id.value) : null
   }
   catch {
     appel.value = null
@@ -115,6 +118,58 @@ onMounted(charger)
       >
         <p>{{ erreur }}</p>
       </div>
+
+      <section
+        v-if="appel.etat === 'brouillon' && !sansRecommandation(recommandations)"
+        class="fr-callout fr-mb-3w"
+        aria-labelledby="existe-titre"
+      >
+        <h2
+          id="existe-titre"
+          class="fr-callout__title fr-h5"
+        >
+          Ceci existe peut-être déjà
+        </h2>
+        <p class="fr-text--sm">
+          Avant de publier, regardez si une de ces ressources répond à votre besoin.
+        </p>
+        <ul class="fr-raw-list">
+          <li
+            v-for="c in recommandations.collections"
+            :key="`c-${c.id}`"
+          >
+            <NuxtLink
+              class="fr-link"
+              :to="c.vers"
+            >
+              Collection : {{ c.titre }}
+            </NuxtLink>
+          </li>
+          <li
+            v-for="a in recommandations.assistants"
+            :key="`a-${a.id}`"
+          >
+            <NuxtLink
+              class="fr-link"
+              :to="a.vers"
+            >
+              Assistant : {{ a.titre }}
+            </NuxtLink>
+          </li>
+          <li
+            v-for="d in recommandations.demandes_voisines"
+            :key="`d-${d.demande_id}`"
+          >
+            <NuxtLink
+              class="fr-link"
+              :to="d.vers"
+            >
+              Demande voisine : {{ d.titre }}
+            </NuxtLink>
+            <span class="fr-text--xs"> — déjà soutenue par : {{ libelleRoles(d.roles) }}</span>
+          </li>
+        </ul>
+      </section>
 
       <ul
         v-if="appel.est_mon_appel && appel.etat !== 'clos'"

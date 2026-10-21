@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.entraide import ETATS_APPEL, TYPES_APPEL, TYPES_REDIGES
 from app.routers._commun import Identite, capacite, identite
+from app.services import entraide_recommandations as recommandations
 from app.services import entraide_store as store
 
 router = APIRouter(prefix="/api/entraide", tags=["entraide"], dependencies=[Depends(capacite("entraide"))])
@@ -109,6 +110,21 @@ async def lire(ident: str, moi: Identite = Depends(identite)):
         return {"appel": await store.lire(ident, moi.hash)}
     except store.Introuvable as e:
         raise _404(e)
+
+
+@router.get("/appels/{ident}/recommandations")
+async def recommander(ident: str, moi: Identite = Depends(identite)):
+    """« Ceci existe peut-être déjà » : ce que la personne peut lire et qui ressemble à l'appel.
+    Réservé à l'auteur — c'est l'étape d'avant `publier`."""
+    if ident.startswith(store.PREFIXE_DEMANDE):
+        raise HTTPException(status_code=409, detail="Cette demande du collectif se gère depuis sa page")
+    try:
+        appel = await store.lire(ident, moi.hash)
+    except store.Introuvable as e:
+        raise _404(e)
+    if not appel["est_mon_appel"]:
+        raise HTTPException(status_code=403, detail="Les recommandations reviennent à la personne qui a lancé l'appel")
+    return await recommandations.recommander(appel, moi.user, moi.hash, moi.superadmin)
 
 
 @router.post("/appels/{ident}/publier")

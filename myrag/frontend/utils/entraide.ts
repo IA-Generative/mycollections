@@ -46,3 +46,21 @@ export function compteReponses (a: { nb_reponses: number, par_reference?: boolea
   }
   return n === 0 ? 'aucune réponse' : `${n} réponse${n > 1 ? 's' : ''}`
 }
+
+export interface Recommandations {
+  collections: { id: string, titre: string, description: string, vers: string }[]
+  assistants: { id: string, titre: string, description: string, vers: string }[]
+  demandes_voisines: { demande_id: string, titre: string, vers: string, roles: Record<string, number> }[]
+}
+
+/** Vrai quand le réseau n'a rien à montrer : l'écran n'affiche alors pas « Ceci existe peut-être déjà ». */
+export function sansRecommandation (r: Recommandations | null): boolean {
+  return !r || (r.collections.length + r.assistants.length + r.demandes_voisines.length === 0)
+}
+
+/** Les rôles de ceux qui ont soutenu une demande voisine, sans identité : « 2 soutiens, 1 fournisseur ». */
+export function libelleRoles (roles: Record<string, number>): string {
+  const pluriel: Record<string, string> = { soutien: 'soutiens', fournisseur: 'fournisseurs', relecteur: 'relecteurs', garant: 'garants' }
+  const parts = Object.entries(roles).map(([role, n]) => `${n} ${n > 1 ? (pluriel[role] ?? role) : role}`)
+  return parts.length ? parts.join(', ') : 'personne encore'
+}
