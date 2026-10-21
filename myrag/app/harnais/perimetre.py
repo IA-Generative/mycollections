@@ -7,7 +7,7 @@ passées par l'appelant (le harnais ne lit pas la base)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 
 from app.harnais.contrat import Etape, FicheAssistant, Passage, Plan
 from app.services import access
@@ -26,10 +26,23 @@ def collection_lisible(col: Mapping | None, *, groupes: Sequence[str] | None, su
     )
 
 
-def sources_lisibles(fiche: FicheAssistant, collections: Mapping[str, Mapping | None], *, groupes: Sequence[str] | None, sub: str | None) -> list[str]:
-    """Les sources `collection` de la fiche que la personne lit, par rang. Une source
-    `connecteur` n'est pas encore servie : elle n'est pas lisible."""
-    return [s.id for s in fiche.sources_ordonnees() if s.type == "collection" and collection_lisible(collections.get(s.id), groupes=groupes, sub=sub)]
+def sources_lisibles(
+    fiche: FicheAssistant,
+    collections: Mapping[str, Mapping | None],
+    *,
+    groupes: Sequence[str] | None,
+    sub: str | None,
+    connecteurs: Collection[str] = (),
+) -> list[str]:
+    """Les sources de la fiche que la personne lit, par rang. Une source `collection` suit
+    les droits de la collection. Une source `connecteur` est lisible si, et seulement si, elle est
+    déclarée en configuration (`connecteurs`) : le référentiel n'a pas de droits propres, il est
+    ouvert à toute personne qui passe la garde de l'application."""
+    return [
+        s.id
+        for s in fiche.sources_ordonnees()
+        if (s.type == "collection" and collection_lisible(collections.get(s.id), groupes=groupes, sub=sub)) or (s.type == "connecteur" and s.id in connecteurs)
+    ]
 
 
 def restreindre_plan(plan: Plan, lisibles: Iterable[str]) -> Plan:

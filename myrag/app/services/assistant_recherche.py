@@ -13,6 +13,7 @@ from app.auth import CurrentUser
 from app.config import settings
 from app.harnais import fiables, journal, perimetre
 from app.harnais.apparieur import ApparieurEmbeddings, ApparieurSacDeMots
+from app.harnais.connecteurs.eligibilite import ConnecteurEligibilite
 from app.harnais.connecteurs.openrag import ConnecteurOpenRAG
 from app.harnais.contrat import Appelant, Canal, CapaciteClient, Contexte, FicheAssistant, Plan, Resultat
 from app.harnais.execution import Execution
@@ -21,7 +22,7 @@ from app.harnais.fusion import fusionner
 from app.harnais.interfaces import Apparieur, Connecteur, Planificateur
 from app.harnais.plan.regles import Regles
 from app.harnais.plan.toutes_les_sources import ToutesLesSources
-from app.services import assistant_droits, assistant_store, questions_store
+from app.services import assistant_droits, assistant_store, connecteurs_declares, questions_store
 from app.services.nommage import titre_de
 
 
@@ -34,7 +35,7 @@ class Charge:
     fiche: FicheAssistant
     version: int
     modifier: bool
-    #: Les sources `collection` de la fiche que la personne lit (le périmètre).
+    #: Les sources de la fiche que la personne lit (le périmètre) : ses collections et les connecteurs déclarés.
     lisibles: list[str]
     #: Les fiches de collection de ces sources, pour les titres et les droits à afficher.
     collections: dict[str, dict | None]
@@ -60,7 +61,7 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
         if not voir:
             raise AssistantIntrouvable(ident)
         modifier = False
-    lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub)
+    lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub, connecteurs=connecteurs_declares.declarations())
     return Charge(fiche=fiche, version=version, modifier=modifier, lisibles=lisibles, collections=cols)
 
 
@@ -78,6 +79,8 @@ def apparieur() -> Apparieur:
 def planificateur_regles(charge: Charge, app: Apparieur | None = None) -> Regles:
     """Le planificateur par règles, avec de quoi juger si une source `selon_question` ressemble à la question."""
     descriptions = {n: f"{titre_de(c)}. {c.get('description') or ''}".strip() for n, c in charge.collections.items() if c}
+    for ident, d in connecteurs_declares.declarations().items():
+        descriptions[ident] = " ".join([d.titre + ".", d.description, *d.exemples]).strip()
     return Regles(app or apparieur(), version=charge.version, descriptions=descriptions)
 
 
@@ -120,6 +123,25 @@ async def servir_fiable(charge: Charge, plan: Plan, hash_: str, canal: Canal) ->
     return Resultat(plan=plan, passages=[], reponse=q.reponse, duree_ms=duree_ms, par_source={})
 
 
+def connecteurs_de(charge: Charge, *, top_k: int = 20) -> dict[str, Connecteur]:
+    """Un connecteur par source lisible : OpenRAG (un seul, il groupe les requêtes) pour les
+    collections, le sien pour un connecteur déclaré en configuration."""
+    declares = connecteurs_declares.declarations()
+    commun = ConnecteurOpenRAG(top_k=top_k)
+    types = {s.id: s.type for s in charge.fiche.sources}
+    rendu: dict[str, Connecteur] = {}
+    for s in charge.lisibles:
+        if types.get(s) == "connecteur":
+            d = declares.get(s)
+            if d is not None:
+                rendu[s] = ConnecteurEligibilite(
+                    ident=d.id, url=d.url, titre=d.titre, tables=d.tables, description=d.description, exemples=d.exemples, delai_s=settings.recherche_delai_s
+                )
+        else:
+            rendu[s] = commun
+    return rendu
+
+
 async def executer(
     charge: Charge,
     plan: Plan,
@@ -138,8 +160,7 @@ async def executer(
     debut = time.monotonic()
     plan = perimetre.restreindre_plan(plan, charge.lisibles)
     if connecteurs is None:
-        commun = ConnecteurOpenRAG(top_k=top_k)
-        connecteurs = {s: commun for s in charge.lisibles}
+        connecteurs = connecteurs_de(charge, top_k=top_k)
     execution = await executer_plan(plan, connecteurs, Appelant(sub=user.sub, groupes=list(user.groups)))
     toujours = {s.id for s in charge.fiche.sources if s.regime == "toujours"}
     fusion = fusionner(execution.par_etape, {e.n: e.poids for e in plan.etapes}, toujours=toujours, limite=top_k)
