@@ -13,40 +13,39 @@ Droits, calculés ici à partir du jeton — jamais d'un paramètre du client :
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Literal
 
-from app.harnais.contrat import FicheAssistant
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
+
+from app.auth import CurrentUser, current_user
+from app.config import settings
+from app.harnais.contrat import CAPACITES_CLIENT, FicheAssistant, Plan, Resultat
+from app.models.db import RELECTURES_PAIRE
 from app.routers._commun import Identite, capacite, identite
-from app.services import access
+from app.services import assistant_droits as droits_service
+from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
-from app.services.collection_store import get_collection
+from app.services import liens, qualite, questions_store
+from app.services.fenetre_par_minute import Fenetre
+from app.services.nommage import titre_de
 
 router = APIRouter(prefix="/api/assistants", tags=["assistants"], dependencies=[Depends(capacite("assistants"))])
+#: Les routes du harnais, sous /api/v1 : `plan` et `executer`. Elles s'ajoutent à `router` (voir le bas du fichier).
+router_v1 = APIRouter(prefix="/api/v1/assistants", tags=["assistants (moteur)"], dependencies=[Depends(capacite("assistants"))])
 
 
 async def _collections(fiche: FicheAssistant) -> dict[str, dict | None]:
-    return {s.id: await get_collection(s.id) for s in fiche.sources if s.type == "collection"}
+    return await droits_service.collections_de(fiche)
 
 
 def _lisible(col: dict | None, moi: Identite) -> bool:
-    if not col or col.get("archived_at"):
-        return False
-    return access.can_read(name=col["name"], scope=col["scope"], scope_groups=col["scope_groups"], created_by=col["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub)
-
-
-def _gerable(col: dict | None, moi: Identite) -> bool:
-    return bool(col) and access.can_write(name=col["name"], created_by=col["created_by"], user_groups=moi.user.groups, user_sub=moi.user.sub)
+    return droits_service.lisible(col, moi.user)
 
 
 async def _droits(fiche: FicheAssistant, createur_hash: str | None, moi: Identite) -> tuple[bool, bool, dict[str, dict | None]]:
     """(voir, modifier, collections) pour cette fiche et cette personne."""
-    cols = await _collections(fiche)
-    createur = bool(createur_hash) and createur_hash == moi.hash
-    if moi.superadmin:
-        return True, True, cols
-    voir = createur or any(_lisible(c, moi) for c in cols.values())
-    modifier = all(_gerable(c, moi) for c in cols.values()) if cols else createur
-    return voir, modifier, cols
+    return await droits_service.droits(fiche, createur_hash, user=moi.user, hash_=moi.hash, superadmin=moi.superadmin)
 
 
 def _vue(fiche: FicheAssistant, cols: dict[str, dict | None], moi: Identite, modifier: bool) -> tuple[dict, int]:
@@ -121,6 +120,8 @@ async def enregistrer(ident: str, fiche: FicheAssistant, moi: Identite = Depends
     if fiche.assistant != ident:
         raise HTTPException(status_code=422, detail="L'identifiant de la fiche diffère de celui de l'adresse")
     existante = await store.lire(ident)
+    if existante is not None and existante.get("archive_le"):
+        raise HTTPException(status_code=409, detail="Cet assistant est archivé : désarchivez-le avant de le modifier")
     if existante is not None:
         _, _, modifier_avant, _ = await _charger(ident, moi)
         if not modifier_avant:
@@ -147,7 +148,185 @@ async def publier(ident: str, moi: Identite = Depends(identite)):
     return await store.publier(ident, auteur_hash=moi.hash)
 
 
+@router.post("/{ident}/archiver")
+async def archiver(ident: str, moi: Identite = Depends(identite)):
+    """Retire l'assistant : il disparaît de la liste, ne répond plus et n'est plus proposé par
+    l'extension du navigateur. Rien n'est effacé ; `…/desarchiver` le rétablit."""
+    ligne, _, modifier, _ = await _charger(ident, moi)
+    if not modifier:
+        raise HTTPException(status_code=403, detail="Archiver cet assistant demande de gérer toutes ses collections")
+    if ligne.get("collection_name"):
+        raise HTTPException(status_code=409, detail="Cet assistant suit sa collection : archivez la collection pour le retirer")
+    await store.archiver(ident)
+    return {"assistant": ident, "archive": True}
+
+
+@router.post("/{ident}/desarchiver")
+async def desarchiver(ident: str, moi: Identite = Depends(identite)):
+    _, _, modifier, _ = await _charger(ident, moi)
+    if not modifier:
+        raise HTTPException(status_code=403, detail="Désarchiver cet assistant demande de gérer toutes ses collections")
+    await store.archiver(ident, archive=False)
+    return {"assistant": ident, "archive": False}
+
+
 @router.get("/{ident}/versions")
 async def versions(ident: str, moi: Identite = Depends(identite)):
     await _charger(ident, moi)
     return {"versions": await store.versions(ident)}
+
+
+# ─── La qualité d'un assistant : la lecture des jeux de questions de ses sources ────────────────
+# Rien ne s'écrit ici : marquer ou retirer une réponse fiable passe par le `PATCH` de la collection,
+# avec ses droits. Les sources que la personne ne lit pas sont absentes, sans que rien le dise.
+
+
+async def _sources_lues(ident: str, moi: Identite, user: CurrentUser):
+    try:
+        charge = await moteur.charger(ident, user, moi.hash, moi.superadmin, brouillon=True)
+    except moteur.AssistantIntrouvable:
+        raise HTTPException(status_code=404, detail=f"Assistant « {ident} » introuvable")
+    return charge
+
+
+@router.get("/{ident}/qualite/questions")
+async def qualite_questions(
+    ident: str,
+    relecture: str | None = Query(None, pattern="^(" + "|".join(RELECTURES_PAIRE) + ")$"),
+    fiable: bool | None = None,
+    q: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1),
+    par_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(current_user),
+):
+    """L'union, en lecture, des jeux de questions des sources lisibles, chaque question avec sa collection."""
+    moi = await identite(user)
+    charge = await _sources_lues(ident, moi, user)
+    if not charge.lisibles:
+        return {"total": 0, "page": 1, "pages": 1, "par_page": par_page, "questions": []}
+    page_ = await questions_store.lister_questions(charge.lisibles, relecture=relecture, fiable=fiable, texte=q, page=page, par_page=par_page)
+    cols = charge.collections
+    questions = [
+        {
+            **f.model_dump(),
+            "collection_titre": titre_de(cols[f.collection]) if cols.get(f.collection) else f.collection,
+            "peut_gerer": droits_service.gerable(cols.get(f.collection), user),
+        }
+        for f in page_.questions
+    ]
+    return {**page_.model_dump(exclude={"questions"}), "questions": questions}
+
+
+@router.get("/{ident}/qualite")
+async def qualite_assistant(ident: str, user: CurrentUser = Depends(current_user)):
+    """Par source lisible : la synthèse de qualité de la collection, ses réponses fiables et combien de fois elles ont été servies."""
+    moi = await identite(user)
+    charge = await _sources_lues(ident, moi, user)
+    fiables = await questions_store.compter_fiables(charge.lisibles)
+    sources = []
+    for nom in charge.lisibles:
+        col = charge.collections.get(nom)
+        n, servies = fiables.get(nom, (0, 0))
+        sources.append(
+            {
+                "collection": nom,
+                "collection_titre": titre_de(col) if col else nom,
+                "peut_gerer": droits_service.gerable(col, user),
+                "synthese": await qualite.synthese(nom),
+                "reponses_fiables": n,
+                "servie_fois": servies,
+            }
+        )
+    return {"assistant": ident, "seuil_fiable": charge.fiche.seuil_fiable, "sources": sources}
+
+
+# ─── Le moteur : plan et exécution (lot A) ───────────────────────────────────────────────────
+# Servi à la dernière version ENREGISTRÉE (le brouillon) pour qui peut modifier l'assistant, à sa
+# version publiée pour les autres. Avec MYCOLLECTIONS_DOUBLURE_ASSISTANTS, c'est la doublure qui
+# répond (les prévisualisations restent montrables), avec l'en-tête `X-Mycollections-Doublure: 1`.
+
+ENTETE_DOUBLURE = "X-Mycollections-Doublure"
+#: Le moteur interroge plusieurs collections par question : un débit par personne le protège.
+_debit = Fenetre(lambda: settings.assistants_par_minute)
+
+
+def avec_liens(resultat: Resultat) -> Resultat:
+    """Chaque passage reçoit son lien de lecture signé (12 h), absolu, comme dans la recherche v1 :
+    un client hors de l'application (l'extension du navigateur) l'ouvre sans jeton. Les passages
+    sont déjà ramenés au périmètre lisible de la personne."""
+    origine = (settings.recherche_url_publique or settings.myrag_public_url).rstrip("/")
+    passages = [
+        p.model_copy(update={"url": origine + liens.signer(f"/api/openrag/extract/{p.ident}", liens.portee_extrait(p.ident))}) if p.ident and not p.url else p
+        for p in resultat.passages
+    ]
+    return resultat.model_copy(update={"passages": passages})
+
+
+def _limiter(user: CurrentUser) -> None:
+    attente = _debit.compter(user.sub or "anonyme")
+    if attente is not None:
+        raise HTTPException(status_code=429, detail="Trop de questions posées à la suite. Réessayez dans un instant.", headers={"Retry-After": str(attente)})
+
+
+class DemandePlan(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    capacites_client: list[str] = Field(default_factory=list)
+    #: Porté par le contexte et le journal : le bac à sable et « Tester » disent `bac-a-sable`.
+    canal: Literal["bac-a-sable", "api"] = "api"
+
+
+class DemandeExecution(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    plan: Plan | None = None
+    canal: Literal["bac-a-sable", "api"] = "api"
+
+
+async def _preparer(ident: str, canal: str, user: CurrentUser, capacites_client: list[str] | None = None):
+    moi = await identite(user)
+    try:
+        charge = await moteur.charger(ident, user, moi.hash, moi.superadmin, brouillon=True)
+    except moteur.AssistantIntrouvable:
+        raise HTTPException(status_code=404, detail=f"Assistant « {ident} » introuvable")
+    ctx = moteur.contexte(charge, canal, capacites_client={c for c in (capacites_client or []) if c in CAPACITES_CLIENT})
+    return moi, charge, ctx
+
+
+@router_v1.post("/{ident}/plan")
+async def plan(ident: str, demande: DemandePlan, response: Response, user: CurrentUser = Depends(current_user)) -> Plan:
+    """Le plan de recherche pour cette question, sans l'exécuter."""
+    _limiter(user)
+    if settings.doublure_assistants:
+        from app.routers import assistants_doublure
+
+        return await assistants_doublure.plan(ident, demande, response)
+    _, charge, ctx = await _preparer(ident, demande.canal, user, demande.capacites_client)
+    return await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge), avec_fiables=True)
+
+
+@router_v1.post("/{ident}/executer")
+async def executer(ident: str, demande: DemandeExecution, response: Response, user: CurrentUser = Depends(current_user)) -> Resultat:
+    """Exécute le plan (celui du client, re-validé, sinon un plan neuf) : les passages, la fusion, la trace."""
+    _limiter(user)
+    if settings.doublure_assistants:
+        from app.routers import assistants_doublure
+
+        return await assistants_doublure.executer(ident, demande, response)
+    moi, charge, ctx = await _preparer(ident, demande.canal, user)
+    if demande.plan is None:
+        plan_ = await moteur.planifier(charge, demande.question, ctx, moteur.planificateur_regles(charge), avec_fiables=True)
+    else:
+        plan_ = demande.plan
+        sources = {s.id for s in charge.fiche.sources}
+        if plan_.assistant != ident or any(e.source not in sources for e in plan_.etapes):
+            raise HTTPException(status_code=400, detail="Ce plan ne correspond pas à l'assistant : une étape cherche dans une source qui n'est pas la sienne.")
+    try:
+        resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
+    except moteur.ReponseFiableInvalide:
+        raise HTTPException(status_code=400, detail="Ce plan cite une réponse fiable qui n'est pas disponible pour vous.")
+    if execution.toutes_en_panne:
+        raise HTTPException(status_code=503, detail="Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.", headers={"Retry-After": "10"})
+    return avec_liens(resultat)
+
+
+# Les adresses absolues de `router_v1` rejoignent `router` : `main.py` n'inclut que celui-ci.
+router.routes.extend(router_v1.routes)

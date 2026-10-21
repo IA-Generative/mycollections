@@ -899,6 +899,25 @@ class PlanJournal(Base):
     cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class SiteDeclare(Base):
+    """Un motif d'adresse déclaré sur une collection ou un assistant : sur une page qui y
+    correspond, l'extension du navigateur propose la bulle « + IA » (docs/clients.md, « Sites
+    déclarés »). Le motif suit la règle des *match patterns* d'extension, validée à l'écriture."""
+
+    __tablename__ = "sites_declares"
+    __table_args__ = (
+        UniqueConstraint("cible_type", "cible_id", "motif", name="site_declare_unique"),
+        CheckConstraint("cible_type IN ('collection', 'assistant')", name="site_declare_cible_valide"),
+        Index("site_declare_cible", "cible_type", "cible_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    cible_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    cible_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    motif: Mapped[str] = mapped_column(String(300), nullable=False)
+    cree_le: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 # Le réseau d'entraide (lot G) écrit ses tables dans ce module détachable ; l'importer ici
 # suffit à ce que `create_all` les connaisse.
 from app.models import entraide as _entraide  # noqa: E402, F401

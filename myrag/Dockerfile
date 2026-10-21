@@ -7,9 +7,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 # La génération de questions (ragas, docs/generation.md) est un extra : AVEC_GENERATION=0 donne
 # une image sans elle (les routes de génération répondent alors 503, le reste est inchangé).
+# Le serveur MCP des assistants (extra `mcp`, docs/clients.md) est toujours installé : sans lui,
+# `/mcp` n'est pas monté.
 ARG AVEC_GENERATION=1
-RUN if [ "$AVEC_GENERATION" = "1" ]; then uv sync --frozen --no-install-project --no-dev --extra generation; \
-    else uv sync --frozen --no-install-project --no-dev; fi
+RUN if [ "$AVEC_GENERATION" = "1" ]; then uv sync --frozen --no-install-project --no-dev --extra generation --extra mcp; \
+    else uv sync --frozen --no-install-project --no-dev --extra mcp; fi
 
 # ragas envoie des statistiques d'usage à son éditeur sauf avis contraire : aucune donnée ne doit
 # sortir du ministère. Les barres de progression de ragas n'ont rien à faire dans les journaux.

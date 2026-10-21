@@ -7,8 +7,8 @@ assistants est remplacé par sa doublure (MYCOLLECTIONS_DOUBLURE_ASSISTANTS) : l
 on vérifie donc la mécanique des écrans, pas le contenu des réponses.
 
 La séquence partage la page du testeur : chaque test reprend là où le précédent s'arrête. Elle crée
-deux collections (purgées à la fin) et un assistant ; aucune route n'efface un assistant : son
-brouillon reste, à l'identifiant daté, et ne se voit plus une fois ses collections purgées.
+deux collections (purgées à la fin) et un assistant, archivé à la fin (rien n'est effacé, mais il
+quitte la liste).
 """
 
 from __future__ import annotations
@@ -40,8 +40,13 @@ def assistant_essai(session_testeur):
         )
         if cree.status != 200:
             pytest.skip(f"création de la collection d'essai refusée ({cree.status}) : parcours des assistants ignoré")
-    ESSAI.update(collections=collections, titres=["Assistant e2e : guide", "Assistant e2e : code"], assistant=f"{prefixe}e2e-assistant-{jour}")
+    # L'assistant d'essai est archivé en fin de parcours, et un assistant archivé ne se modifie plus :
+    # un identifiant neuf à chaque passage, pour qu'un second passage le même jour reparte de zéro.
+    suffixe = _dt.datetime.now().strftime("%H%M%S")
+    ESSAI.update(collections=collections, titres=["Assistant e2e : guide", "Assistant e2e : code"], assistant=f"{prefixe}e2e-assistant-{jour}-{suffixe}")
     yield ESSAI
+    # L'assistant d'essai est archivé (rien n'est effacé, mais il ne se voit plus), puis ses collections purgées.
+    session_testeur.post(f"/api/assistants/{ESSAI['assistant']}/archiver", {})
     for nom in collections:
         _menage(session_testeur, nom)
 

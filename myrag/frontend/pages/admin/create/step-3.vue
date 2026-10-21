@@ -125,6 +125,8 @@ const isReadyToUpload = computed(() => {
   return false
 })
 
+const champFichier = ref<HTMLInputElement | null>(null)
+
 function onFile (e: Event) {
   file.value = (e.target as HTMLInputElement).files?.[0] || null
 }
@@ -288,7 +290,7 @@ async function checkRemoteUrl () {
   if (isGithubRepoUrl(remoteUrl.value)) {
     remoteCheck.value = {
       status: 'error',
-      message: 'Cette URL pointe vers un depot ou dossier GitHub, pas un fichier. Utilisez l\'URL d\'un fichier specifique (bouton "Raw" ou lien vers un fichier dans le depot).',
+      message: 'Cette URL pointe vers un dépôt ou dossier GitHub, pas un fichier. Utilisez l\'URL d\'un fichier spécifique (bouton "Raw" ou lien vers un fichier dans le dépôt).',
     }
     return
   }
@@ -317,9 +319,9 @@ async function checkRemoteUrl () {
       const detail = resp?.error
         ? `Erreur : ${resp.error}`
         : resp?.status_code
-          ? `Le serveur a repondu HTTP ${resp.status_code}.`
+          ? `Le serveur a répondu HTTP ${resp.status_code}.`
           : 'Le document n\'est pas accessible.'
-      remoteCheck.value = { status: 'error', message: `${detail} Verifiez l'URL et que le fichier est public.` }
+      remoteCheck.value = { status: 'error', message: `${detail} Vérifiez l'URL et que le fichier est public.` }
     }
   }
   catch {
@@ -355,7 +357,7 @@ onMounted(async () => {
         class="fr-alert fr-alert--warning fr-mb-4w"
       >
         <p>
-          Aucune collection specifiee. <NuxtLink to="/admin/create">
+          Aucune collection indiquée. <NuxtLink to="/admin/create">
             Retour à l'étape 1
           </NuxtLink>
         </p>
@@ -580,16 +582,30 @@ onMounted(async () => {
               <!-- Mode: Fichier local -->
               <div v-if="tab === 'file' && !uploaded">
                 <div class="fr-upload-group fr-mt-2w">
-                  <label class="fr-label">
-                    Deposer un fichier depuis votre ordinateur
+                  <label
+                    class="fr-label"
+                    for="depot-fichier"
+                  >
+                    Déposer un fichier depuis votre ordinateur
                     <span class="fr-hint-text">Formats acceptés : {{ FORMATS_LISIBLES }}. Pour déposer plusieurs fichiers ou un dossier entier, utilisez ensuite « Ajouter des documents » sur la fiche de la collection.</span>
                   </label>
+                  <!-- Le champ natif écrit « Choose File » dans la langue du navigateur : on le masque et un
+                       bouton DSFR en français l'ouvre. Il reste dans l'arbre d'accessibilité (label ci-dessus). -->
                   <input
+                    id="depot-fichier"
+                    ref="champFichier"
                     type="file"
-                    class="fr-upload"
+                    class="fr-sr-only"
                     :accept="ACCEPT"
                     @change="onFile"
                   >
+                  <button
+                    type="button"
+                    class="fr-btn fr-btn--secondary fr-icon-upload-line fr-btn--icon-left fr-mt-1w"
+                    @click="champFichier?.click()"
+                  >
+                    Choisir un fichier
+                  </button>
                 </div>
 
                 <div
@@ -597,7 +613,7 @@ onMounted(async () => {
                   class="fr-mt-2w"
                 >
                   <p class="fr-text--sm">
-                    Fichier selectionne : <strong>{{ file.name }}</strong> ({{ formatSize(file.size) }})
+                    Fichier sélectionné : <strong>{{ file.name }}</strong> ({{ formatSize(file.size) }})
                   </p>
                 </div>
               </div>
@@ -616,7 +632,7 @@ onMounted(async () => {
                   >
                 </div>
 
-                <!-- Verification -->
+                <!-- Vérification -->
                 <div
                   v-if="remoteUrl && (!remoteCheck || remoteCheck.status === 'error')"
                   class="fr-mt-1w"
@@ -625,7 +641,7 @@ onMounted(async () => {
                     class="fr-btn fr-btn--tertiary fr-btn--sm"
                     @click="checkRemoteUrl"
                   >
-                    Verifier l'accessibilite
+                    Vérifier l'accessibilité
                   </button>
                 </div>
 
@@ -637,7 +653,7 @@ onMounted(async () => {
                     class="fr-text--sm"
                     style="color:#666;"
                   >
-                    Verification en cours...
+                    Vérification en cours…
                   </p>
                 </div>
 
@@ -662,7 +678,7 @@ onMounted(async () => {
                       v-if="remoteCheck.githubConverted"
                       class="fr-text--sm fr-mt-1v"
                     >
-                      L'URL GitHub a ete convertie automatiquement vers le fichier brut (raw).
+                      L'URL GitHub a été convertie automatiquement vers le fichier brut (raw).
                     </p>
                   </div>
 
@@ -674,7 +690,7 @@ onMounted(async () => {
                       class="fr-text--sm"
                       style="cursor:pointer;font-weight:bold;"
                     >
-                      Apercu du document
+                      Aperçu du document
                     </summary>
                     <div class="myrag-preview-frame fr-mt-1w">
                       <!-- Text preview fetched via backend -->
@@ -688,14 +704,14 @@ onMounted(async () => {
                           class="fr-text--xs"
                           style="color:#666;text-align:center;margin-top:0.5rem;"
                         >
-                          ... affichage limite aux {{ previewMaxChars }} premiers caracteres
+                          ... affichage limité aux {{ previewMaxChars }} premiers caractères
                         </p>
                       </div>
                       <div
                         v-else-if="previewLoading"
                         style="text-align:center;padding:2rem;color:#666;"
                       >
-                        Chargement de l'apercu...
+                        Chargement de l'aperçu…
                       </div>
                       <div
                         v-else
@@ -705,8 +721,8 @@ onMounted(async () => {
                           class="fr-text--sm"
                           style="text-align:center;color:#666;padding:2rem;"
                         >
-                          Apercu non disponible pour le format <strong>{{ remoteCheck.contentType }}</strong>.<br>
-                          Le document sera telecharge et indexe directement.
+                          Aperçu non disponible pour le format <strong>{{ remoteCheck.contentType }}</strong>.<br>
+                          Le document sera téléchargé et indexé directement.
                         </p>
                       </div>
                     </div>

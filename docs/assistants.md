@@ -14,12 +14,24 @@ collection publiée a son assistant miroir à une source.
 
 ## Le harnais (lot A)
 
-À écrire par le lot A.
+`myrag/app/harnais/` (sans FastAPI ni base, sauf `journal.py`) : un planificateur produit un plan, `execution.py`
+l'exécute (étapes en parallèle, relais `avec`, source en panne ignorée et comptée), `fusion.py` fusionne (RRF, k = 60,
+poids par étape, quota des sources `toujours`), `perimetre.py` ne garde que ce que la personne lit. Planificateurs :
+`toutes_les_sources` (recherche `GET /api/v1/search?assistant=<id>`) et `regles` (consigne reconnue par ressemblance au
+« quand » et aux exemples ; sinon régimes des sources, jamais `sur_consigne`). Routes `POST /api/v1/assistants/{id}/plan`
+et `/executer` : la version enregistrée pour qui peut modifier, la publiée pour les autres. Le journal (`plans_journal`)
+ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure répond (en-tête `X-Mycollections-Doublure: 1`).
 
 
 ## Le banc (lot A)
 
-À écrire par le lot A.
+`scripts/banc.py` joue un jeu figé (`tests/harnais/fixtures/banc/`) sans HTTP ni réseau et compare les planificateurs :
+rappel du passage témoin (`rappel@1`, `rappel@5`), part des sources contactées, score, incidents de droits (un passage
+d'une source que la personne ne lit pas), durée p95 (non bloquante). Le juge « doublure » est déterministe (conforme si le
+témoin attendu est rendu, partiel si c'est celui d'une autre source) ; le juge « réel » n'est pas branché. Seuils : `seuils.json`.
+
+    cd myrag && uv run python -m scripts.banc tests/harnais/fixtures/banc/sejour-des-etrangers.json --juge doublure --planificateur regles --rapport json
+    cd myrag && uv run pytest tests -q -m banc
 
 
 ## L'interface (lot B)
@@ -42,6 +54,9 @@ Les calculs d'écran sont des fonctions pures de `frontend/utils/assistants.ts` 
 
 ## Travailler sans le harnais
 
+Le moteur répond sur la bêta depuis la fusion des lots A1 et A3. La doublure reste utile pour
+montrer les écrans sans OpenRAG, en local ou sur une prévisualisation :
+
 ```bash
 cd myrag
 MYCOLLECTIONS_DOUBLURE_ASSISTANTS=true \
@@ -50,4 +65,9 @@ AUTH_ENABLED=false MYRAG_PSEUDO_SEL=dev-sel uv run uvicorn app.main:app --port 8
 ```
 
 `POST /api/v1/assistants/{id}/plan` et `/executer` rendent alors le plan et le résultat de
-`myrag/app/doublure/assistants/` (conformes au contrat, vérifiés par les tests). Jamais en production.
+`myrag/app/doublure/assistants/`, avec l'en-tête `X-Mycollections-Doublure: 1` ; l'interface
+l'annonce par un encadré « Réponse d'exemple ». Jamais sur la bêta ni en production.
+
+Les deux routes du moteur sont limitées par personne : `MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE`
+(30 par défaut, par processus) ; au-delà, 429 avec `Retry-After`. Un moteur entièrement en panne
+rend 503 avec `Retry-After: 10`.

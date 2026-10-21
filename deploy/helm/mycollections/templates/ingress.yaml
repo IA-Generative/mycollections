@@ -32,9 +32,9 @@ spec:
     - host: {{ .Values.host }}
       http:
         paths:
-          {{- range list "/api" "/health" "/__version__" "/graph" "/articles" }}
+          {{- range list "/api" "/health" "/__version__" "/graph" "/articles" "/mcp" }}
           - path: {{ . }}
-            pathType: {{ eq . "/__version__" | ternary "Exact" "Prefix" }}
+            pathType: {{ has . (list "/__version__" "/mcp") | ternary "Exact" "Prefix" }}
             backend: {{ toJson $backend }}
           {{- end }}
           - path: /

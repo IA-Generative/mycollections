@@ -1,0 +1,70 @@
+{
+  "assistant": {
+    "assistant": "guide-unique",
+    "titre": "Guide unique",
+    "description": "Exemple à une source pour le banc.",
+    "sources": [
+      {
+        "id": "guide-des-demarches",
+        "type": "collection",
+        "regime": "selon_question",
+        "rang": 1
+      }
+    ]
+  },
+  "collections": {
+    "guide-des-demarches": {
+      "titre": "Guide des démarches",
+      "description": "Guide des démarches administratives : formulaires, justificatifs, délais de réponse",
+      "scope": "public",
+      "scope_groups": [],
+      "created_by": "createur-1",
+      "documents": [
+        {
+          "document": "gd-fiche",
+          "titre": "Fiche pratique des démarches",
+          "texte": "Les justificatifs de domicile se fournissent avec le formulaire. Le délai de réponse est de deux mois.",
+          "temoin": true
+        },
+        {
+          "document": "gd-aide",
+          "titre": "Aide",
+          "texte": "Un agent d'accueil aide à remplir le formulaire."
+        },
+        {
+          "document": "gd-rdv",
+          "titre": "Rendez-vous",
+          "texte": "Le rendez-vous se prend en ligne."
+        }
+      ]
+    }
+  },
+  "identites": {
+    "agent": {
+      "sub": "agent-1",
+      "groupes": [
+        "/g/agents"
+      ]
+    }
+  },
+  "questions": [
+    {
+      "id": "u01",
+      "texte": "Quels justificatifs de domicile fournir avec le formulaire ?",
+      "identite": "agent",
+      "source": "guide-des-demarches"
+    },
+    {
+      "id": "u02",
+      "texte": "Quel délai de réponse pour une demande ?",
+      "identite": "agent",
+      "source": "guide-des-demarches"
+    },
+    {
+      "id": "u03",
+      "texte": "Comment obtenir un rendez-vous ?",
+      "identite": "agent",
+      "source": "guide-des-demarches"
+    }
+  ]
+}

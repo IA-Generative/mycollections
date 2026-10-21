@@ -161,6 +161,10 @@
           </div>
         </div>
 
+        <div class="fr-col-12 fr-col-lg-8 fr-mt-4w">
+          <SitesDeclares :chemin="`/api/collections/${encodeURIComponent(id)}/sites`" objet="cette collection" :ecrire="!pub.archivee" />
+        </div>
+
         <!-- Archiver : loin de « Publier », et jamais sur un seul clic -->
         <div v-if="!pub.archivee" class="fr-col-12 fr-mt-4w">
           <div class="publier-retrait">

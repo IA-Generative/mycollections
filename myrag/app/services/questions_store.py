@@ -21,7 +21,7 @@ import unicodedata
 from math import ceil
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.database import async_session
@@ -88,8 +88,8 @@ def _appliquer_relecture(q: PaireQA, relecture: str, sub: str | None) -> None:
 # ─── Lecture ──────────────────────────────────────────────────────────────────────
 
 
-def _filtres(name: str, *, origine=None, relecture=None, fiable=None, hors_sujet=None, verdict=None, persona=None, texte=None, run_id=None) -> list:
-    f = [PaireQA.collection_name == name]
+def _filtres(name: str | list[str], *, origine=None, relecture=None, fiable=None, hors_sujet=None, verdict=None, persona=None, texte=None, run_id=None) -> list:
+    f = [PaireQA.collection_name.in_(name) if isinstance(name, list) else PaireQA.collection_name == name]
     if origine:
         f.append(PaireQA.origine == origine)
     if relecture:
@@ -112,7 +112,7 @@ def _filtres(name: str, *, origine=None, relecture=None, fiable=None, hors_sujet
     return f
 
 
-async def lister_questions(name: str, *, page: int = 1, par_page: int = 50, **filtres) -> PageQuestions:
+async def lister_questions(name: str | list[str], *, page: int = 1, par_page: int = 50, **filtres) -> PageQuestions:
     par_page = max(1, min(int(par_page), 200))
     conditions = _filtres(name, **filtres)
     async with async_session() as s:
@@ -129,6 +129,17 @@ async def lire_question(name: str, ident: str) -> QuestionFiche:
         if not q or q.collection_name != name:
             raise Introuvable("Question introuvable")
         return QuestionFiche.depuis(q)
+
+
+async def compter_fiables(sources: list[str]) -> dict[str, tuple[int, int]]:
+    """Par collection : (réponses fiables servables, fois où elles ont été servies)."""
+    if not sources:
+        return {}
+    async with async_session() as s:
+        r = await s.execute(
+            select(PaireQA.collection_name, func.count(), func.coalesce(func.sum(PaireQA.servie_fois), 0)).where(*_conditions_fiables(sources)).group_by(PaireQA.collection_name)
+        )
+        return {nom: (int(n), int(servies)) for nom, n, servies in r.all()}
 
 
 async def compter(name: str) -> ComptesQuestions:
@@ -152,6 +163,36 @@ async def compter(name: str) -> ComptesQuestions:
         fiables=fiables,
         hors_sujet=hors,
     )
+
+
+def _conditions_fiables(sources: list[str]) -> list:
+    """Une réponse fiable servable : validée, marquée fiable, pas hors sujet, d'une des `sources`."""
+    return [PaireQA.collection_name.in_(sources), PaireQA.fiable.is_(True), PaireQA.relecture == "valide", PaireQA.hors_sujet.is_(False)]
+
+
+async def reponses_fiables(sources: list[str]) -> list[PaireQA]:
+    """Les réponses fiables servables des `sources` données (l'appelant les a ramenées à ce que la personne lit)."""
+    if not sources:
+        return []
+    async with async_session() as s:
+        r = await s.execute(select(PaireQA).where(*_conditions_fiables(sources)).order_by(PaireQA.cree_le, PaireQA.rang))
+        return list(r.scalars().all())
+
+
+async def lire_fiable(ident: str, sources: list[str]) -> PaireQA | None:
+    """La réponse fiable `ident` si elle est encore servable et d'une des `sources`, sinon None."""
+    if not sources:
+        return None
+    async with async_session() as s:
+        r = await s.execute(select(PaireQA).where(PaireQA.id == ident, *_conditions_fiables(sources)))
+        return r.scalar_one_or_none()
+
+
+async def marquer_servie(ident: str) -> None:
+    """Une fois de plus servie : le compteur monte (en SQL, sans lecture préalable), la date est celle de maintenant."""
+    async with async_session() as s:
+        await s.execute(update(PaireQA).where(PaireQA.id == ident).values(servie_fois=PaireQA.servie_fois + 1, servie_le=utcnow()))
+        await s.commit()
 
 
 async def questions_a_mesurer(name: str, *, seulement_validees: bool = True, origines: list[str] | None = None) -> list[QuestionFiche]:

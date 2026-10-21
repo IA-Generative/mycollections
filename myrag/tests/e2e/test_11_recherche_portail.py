@@ -45,7 +45,9 @@ def test_la_recherche_ne_rend_que_des_collections_lisibles(session_testeur, coll
     assert r.headers.get("cache-control") == "no-store"
     corps = r.json()
     assert corps["source"] == "mycollections" and corps["query"] == q.strip()
-    assert corps["truncated"] == (corps["total"] > len(corps["results"]))
+    # Tronquée si des résultats manquent, ou si le total n'est qu'une borne basse (OpenRAG a rendu
+    # autant de passages qu'on lui en demandait : il peut y en avoir d'autres).
+    assert corps["truncated"] == (corps["total"] > len(corps["results"]) or corps["total_is_lower_bound"])
     for res in corps["results"]:
         assert res["context"]["collection"]["id"] in lisibles
         assert res["context"]["right"] in DROITS

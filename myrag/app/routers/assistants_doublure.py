@@ -2,8 +2,11 @@
 rendent un plan et un résultat CONFORMES AU CONTRAT, lus dans app/doublure/assistants/. Pour
 que l'interface des assistants (lot B) avance sans le harnais (lot A).
 
-Montée seulement si MYCOLLECTIONS_DOUBLURE_ASSISTANTS=true (défaut : non). Le lot A la retire
-quand il sert les vraies routes, sous les mêmes adresses et les mêmes corps."""
+Montée seulement si MYCOLLECTIONS_DOUBLURE_ASSISTANTS=true (défaut : non). Les vraies routes
+(routers/assistants.py) servent les mêmes adresses et les mêmes corps ; quand la doublure est
+demandée elles lui passent la main, de sorte que les prévisualisations restent montrables.
+Chaque réponse de la doublure porte l'en-tête `X-Mycollections-Doublure: 1`, que l'interface
+lit pour dire que le moteur n'est pas branché."""
 
 from __future__ import annotations
 
@@ -11,25 +14,15 @@ import json
 from functools import cache
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Response
 
 from app.harnais.contrat import Plan, Resultat
 from app.routers._commun import capacite
+from app.routers.assistants import ENTETE_DOUBLURE, DemandeExecution, DemandePlan
 
 REP = Path(__file__).resolve().parents[1] / "doublure" / "assistants"
 
 router = APIRouter(prefix="/api/v1/assistants", tags=["assistants (doublure)"], dependencies=[Depends(capacite("assistants"))])
-
-
-class DemandePlan(BaseModel):
-    question: str = Field(min_length=1, max_length=1000)
-    capacites_client: list[str] = Field(default_factory=list)
-
-
-class DemandeExecution(BaseModel):
-    question: str = Field(min_length=1, max_length=1000)
-    plan: Plan | None = None
 
 
 @cache
@@ -42,11 +35,13 @@ def _plan_pour(ident: str) -> Plan:
 
 
 @router.post("/{ident}/plan")
-async def plan(ident: str, demande: DemandePlan) -> Plan:
+async def plan(ident: str, demande: DemandePlan, response: Response) -> Plan:
+    response.headers[ENTETE_DOUBLURE] = "1"
     return _plan_pour(ident)
 
 
 @router.post("/{ident}/executer")
-async def executer(ident: str, demande: DemandeExecution) -> Resultat:
+async def executer(ident: str, demande: DemandeExecution, response: Response) -> Resultat:
+    response.headers[ENTETE_DOUBLURE] = "1"
     resultat = Resultat.model_validate(_lire("resultat.json"))
     return resultat.model_copy(update={"plan": demande.plan or _plan_pour(ident)})

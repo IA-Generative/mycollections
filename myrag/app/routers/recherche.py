@@ -39,11 +39,14 @@ from starlette.datastructures import Headers, MutableHeaders
 
 from app.auth import CurrentUser, _bearer_scheme, _exiger_le_groupe, audience_acceptee, current_user, decoder_le_jeton
 from app.config import settings
-from app.services import access, liens
+from app.harnais.contrat import vers_resultats_v1
+from app.routers._commun import capacite
+from app.services import access, assistant_recherche, liens
 from app.services.collection_store import list_collections
 from app.services.morceau import decouper_morceau
-from app.services.nommage import titre_de
+from app.services.nommage import titre_affiche, titre_de
 from app.services.openrag_client import DocumentRecherche, OpenRAGClient
+from app.services.pseudo import SelAbsent, condenser
 
 logger = logging.getLogger("myrag.recherche")
 
@@ -422,10 +425,13 @@ def _lien(ident: str | None) -> str | None:
 
 
 def _titre_du_document(meta: dict, fichier: str) -> str:
+    """Le titre du document s'il en porte un ; sinon son nom de fichier, et un nom lisible pour
+    un morceau nommé par le découpage (« section_wikipedia_extract.md » → « Wikipedia extract »)."""
     titre = meta.get("title") if isinstance(meta.get("title"), str) else ""
-    nom = titre or (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier
-    nom = re.sub(r"\.(md|txt|markdown)$", "", (nom or "").strip(), flags=re.I)
-    return _texte_brut(nom)[:200]
+    if titre.strip():
+        return _texte_brut(re.sub(r"\.(md|txt|markdown)$", "", titre.strip(), flags=re.I))[:200]
+    nom = (meta.get("filename") if isinstance(meta.get("filename"), str) else "") or fichier
+    return _texte_brut(titre_affiche(nom or ""))[:200]
 
 
 def _page(meta: dict) -> int | None:
@@ -519,6 +525,10 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
     jusqu = _lire_borne(request.query_params.get("to"), "to")
     demandees = _lire_perimetre(request)
 
+    assistant = request.query_params.get("assistant")
+    if assistant is not None:
+        return await _rechercher_par_assistant(assistant, texte, limite, depuis, jusqu, demandees, user)
+
     lisibles = {f["name"]: f for f in await _collections_lisibles(user)}
     # Une collection inconnue ou sans droit est ignorée, pas refusée (contrat).
     noms = [n for n in demandees if n in lisibles] if demandees is not None else list(lisibles)
@@ -547,6 +557,58 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
         "truncated": borne_basse or len(resultats) > limite,
         "total_is_lower_bound": borne_basse,
         "results": resultats[:limite],
+    }
+
+
+async def _rechercher_par_assistant(ident: str, texte: str, limite: int, depuis, jusqu, demandees: list[str] | None, user: CurrentUser) -> dict:
+    """`?assistant=<id>` : les résultats viennent de l'exécution du plan de l'assistant (sa
+    version publiée), dans le périmètre de la personne ; la réponse porte en plus la clé `plan`.
+    Assistant inconnu, jamais publié ou hors de portée, ou drapeau éteint : 404."""
+    await capacite("assistants")()  # 404 si le drapeau « assistants » n'est pas allumé
+    try:
+        hash_ = condenser(user.sub)
+    except SelAbsent:
+        raise ErreurRecherche(503, "search_unavailable", "Recherche momentanément indisponible")
+    try:
+        charge = await assistant_recherche.charger(ident, user, hash_, access.is_superadmin(user.groups))
+    except assistant_recherche.AssistantIntrouvable:
+        raise ErreurRecherche(404, "not_found", "Introuvable")
+    if demandees is not None:
+        charge.lisibles = [n for n in charge.lisibles if n in demandees]
+    top_k = min(200, max(20, limite * 3))
+    ctx = assistant_recherche.contexte(charge, "portail", top_k=top_k)
+    plan = await assistant_recherche.planifier(charge, texte, ctx)
+    resultat, execution = await assistant_recherche.executer(charge, plan, user, hash_, "portail", top_k=top_k)
+    if execution.toutes_en_panne:
+        logger.warning("Recherche par assistant : moteur indisponible (%d étape(s))", len(execution.sorties))
+        raise ErreurRecherche(503, "search_unavailable", "Recherche momentanément indisponible")
+
+    motif = _motif(texte)
+    fiches = {n: f for n, f in charge.collections.items() if f}
+    passages = []
+    for p in resultat.passages:
+        fiche = fiches.get(p.source)
+        if fiche is None or not _texte_brut(p.texte) or not _dans_les_bornes(p.date, depuis, jusqu):
+            continue  # hors périmètre ou hors bornes : jamais rendu, jamais signé
+        passages.append(p.model_copy(update={"url": _lien(p.ident), "titre": _texte_brut(p.titre)[:200] or titre_de(fiche)}))
+    resultats = vers_resultats_v1(
+        passages,
+        extrait=lambda t: _extrait(_texte_brut(t), motif),
+        surlignages=lambda e: _surlignages(e, motif),
+        titres={n: titre_de(f) for n, f in fiches.items()},
+        droit=lambda source: _droit(fiches[source], user)[0],
+        passages_max=PASSAGES_MAX,
+    )
+    logger.info("Recherche par assistant : %d étape(s), %d passage(s), %d résultat(s), %d ms", len(resultat.plan.etapes), len(passages), len(resultats), resultat.duree_ms)
+    borne_basse = len(passages) >= top_k
+    return {
+        "source": SOURCE,
+        "query": texte,
+        "total": len(resultats),
+        "truncated": borne_basse or len(resultats) > limite,
+        "total_is_lower_bound": borne_basse,
+        "results": resultats[:limite],
+        "plan": resultat.plan.model_dump(mode="json"),
     }
 
 
