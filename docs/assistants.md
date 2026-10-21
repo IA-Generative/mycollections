@@ -26,7 +26,7 @@ ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure rép
 
 Une source de type `connecteur` n'est pas une collection : elle interroge un service HTTP interne. Le premier est le
 référentiel d'éligibilité (`harnais/connecteurs/eligibilite.py`, type `eligibilite` : titres de séjour → situations →
-pièces). Il se déclare par `MYCOLLECTIONS_CONNECTEURS` (tableau JSON `{id, type, url, titre, description, tables, exemples}`) ;
+pièces). Il se déclare par `MYCOLLECTIONS_CONNECTEURS` (tableau JSON `{id, type, url, titre, description, tables, exemples, groupes}`, `groupes` facultatif : chemins complets qui réservent le connecteur à ces groupes, sinon ouvert à tous) ;
 vide, rien ne change. Un connecteur déclaré est lisible de toute personne qui passe la garde de l'application ; non
 déclaré, il n'est jamais lu (le périmètre et le filet `restreindre_passages` le vérifient). Le service ne connaît personne :
 le connecteur n'envoie ni `Authorization` ni identifiant. Il tire de la question quelques mots significatifs (trois appels

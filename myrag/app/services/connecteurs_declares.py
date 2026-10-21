@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import logging
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.config import settings
 from app.harnais.contrat import IDENT_ASSISTANT, FicheSource
+from app.services import access
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,24 @@ class Declaration(BaseModel):
     description: str = Field(default="", max_length=2000)
     tables: list[str] = Field(min_length=1, max_length=20)
     exemples: list[str] = Field(default_factory=list, max_length=10)
+    #: Réservé à ces groupes (chemins complets, `/g/…`) ; vide : à toute personne qui passe la
+    #: garde de l'application. Un service sans droits propres s'ouvre ainsi au même public que
+    #: là où il est déjà servi (par exemple un outil du socle réservé à un groupe).
+    groupes: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("groupes")
+    @classmethod
+    def _chemins_complets(cls, valeurs: list[str]) -> list[str]:
+        if any(not g.startswith("/") for g in valeurs):
+            raise ValueError("un groupe se donne en chemin complet (« /g/… »)")
+        return valeurs
+
+    def ouvert_a(self, groupes: list[str] | None) -> bool:
+        """La personne de ces groupes peut-elle lire ce connecteur ? Un claim en noms courts ne
+        donne aucun droit (`access.chemins`) ; l'administration lit tout."""
+        if not self.groupes or access.is_superadmin(groupes):
+            return True
+        return bool(set(access.chemins(groupes)) & set(self.groupes))
 
     def fiche(self) -> FicheSource:
         return FicheSource(id=self.id, type="connecteur", titre=self.titre, description=self.description, exemples=self.exemples, relais=["reference"])
@@ -63,6 +82,11 @@ def declarations() -> dict[str, Declaration]:
             continue
         rendu[d.id] = d
     return rendu
+
+
+def lisibles_par(groupes: list[str] | None) -> dict[str, Declaration]:
+    """Les connecteurs déclarés que cette personne peut lire."""
+    return {i: d for i, d in declarations().items() if d.ouvert_a(groupes)}
 
 
 def publique(d: Declaration) -> dict:

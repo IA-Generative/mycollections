@@ -84,7 +84,7 @@ def _reponse(ligne: dict, fiche: FicheAssistant, cols: dict, moi: Identite, modi
 @router.get("/connecteurs")
 async def connecteurs(moi: Identite = Depends(identite)):
     """Les connecteurs que l'on peut ajouter comme source : titre, description, exemples. Jamais l'adresse du service."""
-    return {"connecteurs": [connecteurs_declares.publique(d) for d in connecteurs_declares.declarations().values()]}
+    return {"connecteurs": [connecteurs_declares.publique(d) for d in connecteurs_declares.lisibles_par(moi.user.groups).values()]}
 
 
 @router.get("")
