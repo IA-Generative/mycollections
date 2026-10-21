@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Collection } from '~/types/collection'
-import type { FicheAssistant, Regime } from '~/utils/assistants'
-import { REGIMES, resumeSources } from '~/utils/assistants'
+import type { ConnecteurDeclare, FicheAssistant, Regime } from '~/utils/assistants'
+import { choixSource, connecteursAjoutables, etiquetteSource, REGIMES, resumeSources, sourceDepuisChoix } from '~/utils/assistants'
 import { titreDe } from '~/utils/catalogue'
 
 /** Les sources d'un assistant (B1) : quelles collections, quand les interroger, dans quel ordre. */
@@ -10,8 +10,9 @@ const id = useRoute().params.id as string
 useHead({ title: `Sources — ${id} — Mes collections` })
 
 const { get } = useApi()
-const { enregistrer } = useAssistants()
+const { enregistrer, connecteurs: listerConnecteurs } = useAssistants()
 const collections = ref<Collection[]>([])
+const connecteurs = ref<ConnecteurDeclare[]>([])
 const message = ref('')
 const erreur = ref('')
 const envoi = ref(false)
@@ -20,10 +21,28 @@ onMounted(async () => {
     collections.value = (await get('/api/collections')).collections || []
   }
   catch {}
+  try {
+    connecteurs.value = await listerConnecteurs()
+  }
+  catch {}
 })
 function titreSource (sid: string) {
+  const k = connecteurs.value.find(x => x.id === sid)
+  if (k) {
+    return k.titre
+  }
   const c = collections.value.find(x => x.name === sid)
   return c ? titreDe(c) : sid
+}
+function connecteursDe (fiche: FicheAssistant) {
+  return connecteursAjoutables(connecteurs.value, fiche.sources)
+}
+function ajouter (fiche: FicheAssistant, cible: HTMLSelectElement) {
+  const s = sourceDepuisChoix(cible.value)
+  if (s) {
+    fiche.sources.push(s)
+  }
+  cible.value = ''
 }
 function ajoutables (fiche: FicheAssistant) {
   return collections.value
@@ -77,7 +96,7 @@ function deplacer (fiche: FicheAssistant, i: number, sens: -1 | 1) {
                 Ordre
               </th>
               <th scope="col">
-                Collection
+                Source
               </th>
               <th scope="col">
                 Quand l'interroger
@@ -97,7 +116,14 @@ function deplacer (fiche: FicheAssistant, i: number, sens: -1 | 1) {
             >
               <td>{{ i + 1 }}</td>
               <td>
+                <template v-if="s.type === 'connecteur'">
+                  {{ titreSource(s.id) }}
+                  <p class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon fr-ml-1w">
+                    {{ etiquetteSource(s.type) }}
+                  </p>
+                </template>
                 <NuxtLink
+                  v-else
                   :to="`/c/${s.id}`"
                   class="fr-link"
                 >
@@ -163,33 +189,58 @@ function deplacer (fiche: FicheAssistant, i: number, sens: -1 | 1) {
 
       <template v-if="donnees.mes_droits.ecrire">
         <div
-          v-if="ajoutables(donnees.fiche).length"
+          v-if="ajoutables(donnees.fiche).length || connecteursDe(donnees.fiche).length"
           class="fr-select-group sources-ajout"
         >
           <label
             class="fr-label"
             for="ajout"
-          >Ajouter une collection</label>
+          >Ajouter une source</label>
           <select
             id="ajout"
             class="fr-select"
-            @change="donnees.fiche.sources.push({ id: ($event.target as HTMLSelectElement).value, type: 'collection', regime: 'selon_question' }); ($event.target as HTMLSelectElement).value = ''"
+            @change="ajouter(donnees.fiche, $event.target as HTMLSelectElement)"
           >
             <option
               value=""
               selected
               disabled
             >
-              Choisir une collection que vous gérez
+              Choisir une collection que vous gérez ou un référentiel
             </option>
-            <option
-              v-for="c in ajoutables(donnees.fiche)"
-              :key="c.name"
-              :value="c.name"
+            <optgroup
+              v-if="ajoutables(donnees.fiche).length"
+              label="Collections que vous gérez"
             >
-              {{ titreDe(c) }}
-            </option>
+              <option
+                v-for="c in ajoutables(donnees.fiche)"
+                :key="c.name"
+                :value="choixSource('collection', c.name)"
+              >
+                {{ titreDe(c) }}
+              </option>
+            </optgroup>
+            <optgroup
+              v-if="connecteursDe(donnees.fiche).length"
+              label="Référentiels"
+            >
+              <option
+                v-for="k in connecteursDe(donnees.fiche)"
+                :key="k.id"
+                :value="choixSource('connecteur', k.id)"
+                :title="k.description"
+              >
+                {{ k.titre }}
+              </option>
+            </optgroup>
           </select>
+          <p
+            v-for="k in connecteursDe(donnees.fiche).filter(x => x.description)"
+            :key="k.id"
+            class="fr-hint-text fr-mt-1w"
+          >
+            {{ k.titre }} : {{ k.description }}
+          </p>
         </div>
         <div
           v-if="message"

@@ -79,12 +79,41 @@ export function resumeSources (visibles: number, masquees: number): string {
   return masquees ? `${base}, dont ${masquees} que vous ne pouvez pas lire` : base
 }
 
+/** Un connecteur déclaré côté serveur (`GET /api/assistants/connecteurs`) : jamais son adresse. */
+export interface ConnecteurDeclare { id: string, type: 'connecteur', titre: string, description: string, exemples: string[] }
+
 export interface FormulaireAssistant {
   titre: string
   identifiant: string
   description: string
   rubrique: string
-  sources: { id: string, regime: Regime }[]
+  sources: { id: string, regime: Regime, type?: TypeSource }[]
+}
+
+/** L'étiquette d'une source qui n'est pas une collection (« Référentiel »), sinon rien. */
+export function etiquetteSource (type: TypeSource | string | null | undefined): string {
+  return type === 'connecteur' ? 'Référentiel' : ''
+}
+
+/** Les connecteurs déclarés qui ne sont pas déjà des sources de l'assistant. */
+export function connecteursAjoutables (declares: readonly ConnecteurDeclare[], sources: readonly Pick<SourceFiche, 'id'>[]): ConnecteurDeclare[] {
+  return declares.filter(c => !sources.some(s => s.id === c.id))
+}
+
+/** La valeur d'une option « Ajouter une source » : le type et l'identifiant, que `sourceDepuisChoix` relit. */
+export function choixSource (type: TypeSource, id: string): string {
+  return `${type}:${id}`
+}
+
+/** La source à ajouter pour une option choisie ; null si la valeur n'est pas de la forme `type:id`. */
+export function sourceDepuisChoix (valeur: string): SourceFiche | null {
+  const i = valeur.indexOf(':')
+  const type = valeur.slice(0, i)
+  const id = valeur.slice(i + 1)
+  if (i < 0 || !id || (type !== 'collection' && type !== 'connecteur')) {
+    return null
+  }
+  return { id, type, regime: 'selon_question' }
 }
 
 /** Les erreurs du formulaire de création, par champ ; vide = prêt à envoyer. */
@@ -116,7 +145,7 @@ export function ficheDepuisFormulaire (f: FormulaireAssistant, publication: Cana
     titre: f.titre.trim(),
     rubrique: f.rubrique || null,
     description: f.description.trim(),
-    sources: f.sources.map((s, i) => ({ id: s.id, type: 'collection', regime: s.regime, rang: i + 1 })),
+    sources: f.sources.map((s, i) => ({ id: s.id, type: s.type ?? 'collection', regime: s.regime, rang: i + 1 })),
     consignes: [],
     seuil_fiable: 0.9,
     validation_requise: false,

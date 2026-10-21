@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Categorie, Collection } from '~/types/collection'
-import type { FormulaireAssistant, Regime } from '~/utils/assistants'
-import { ficheDepuisFormulaire, REGIMES, validerFormulaire } from '~/utils/assistants'
+import type { ConnecteurDeclare, FormulaireAssistant, Regime } from '~/utils/assistants'
+import { etiquetteSource, ficheDepuisFormulaire, REGIMES, validerFormulaire } from '~/utils/assistants'
 import { titreDe } from '~/utils/catalogue'
 import { deriverIdentifiant } from '~/utils/collectionName'
 
@@ -14,12 +14,13 @@ definePageMeta({ middleware: 'capacite', capacite: 'assistants' })
 useHead({ title: 'Créer un assistant — Mes collections' })
 
 const { get } = useApi()
-const { lister, enregistrer } = useAssistants()
+const { lister, enregistrer, connecteurs: listerConnecteurs } = useAssistants()
 const { lister: listerCategories } = useCategories()
 
 const form = ref<FormulaireAssistant>({ titre: '', identifiant: '', description: '', rubrique: '', sources: [] })
 const identifiantManuel = ref(false)
 const collections = ref<Collection[]>([])
+const connecteurs = ref<ConnecteurDeclare[]>([])
 const categories = ref<Categorie[]>([])
 const pris = ref(new Set<string>())
 const filtre = ref('')
@@ -31,6 +32,9 @@ const tente = ref(false)
 const gerables = computed(() => collections.value
   .filter(c => c.mes_droits?.ecrire && !c.orphan && !c.archived_at)
   .filter(c => !filtre.value.trim() || `${titreDe(c)} ${c.name}`.toLowerCase().includes(filtre.value.trim().toLowerCase())))
+/** Les référentiels déclarés : ils ne retiennent personne, tout le monde peut les réunir. */
+const referentiels = computed(() => connecteurs.value
+  .filter(k => !filtre.value.trim() || `${k.titre} ${k.id}`.toLowerCase().includes(filtre.value.trim().toLowerCase())))
 const choisie = (id: string) => form.value.sources.find(s => s.id === id)
 const erreurs = computed(() => validerFormulaire(form.value))
 
@@ -53,6 +57,16 @@ function basculer (c: Collection) {
   }
   else {
     form.value.sources.push({ id: c.name, regime: 'selon_question' })
+  }
+}
+
+function basculerConnecteur (k: ConnecteurDeclare) {
+  const i = form.value.sources.findIndex(s => s.id === k.id)
+  if (i >= 0) {
+    form.value.sources.splice(i, 1)
+  }
+  else {
+    form.value.sources.push({ id: k.id, type: 'connecteur', regime: 'selon_question' })
   }
 }
 
@@ -83,7 +97,10 @@ async function creer () {
 }
 
 onMounted(async () => {
-  const [cols, cats, existants] = await Promise.allSettled([get('/api/collections'), listerCategories(), lister()])
+  const [cols, cats, existants, refs] = await Promise.allSettled([get('/api/collections'), listerCategories(), lister(), listerConnecteurs()])
+  if (refs.status === 'fulfilled') {
+    connecteurs.value = refs.value
+  }
   if (cols.status === 'fulfilled') {
     collections.value = cols.value.collections || []
   }
@@ -223,8 +240,8 @@ onMounted(async () => {
             id="titre-sources"
             class="fr-fieldset__legend"
           >
-            Les collections qu'il interroge *
-            <span class="fr-hint-text">Celles que vous gérez. Pour chacune, dites quand l'assistant l'interroge.</span>
+            Les sources qu'il interroge *
+            <span class="fr-hint-text">Les collections que vous gérez, et les référentiels proposés. Pour chacune, dites quand l'assistant l'interroge.</span>
           </legend>
           <div class="fr-fieldset__element">
             <div class="fr-input-group fr-mb-1w">
@@ -276,8 +293,44 @@ onMounted(async () => {
               </option>
             </select>
           </div>
+          <div
+            v-for="k in referentiels"
+            :key="k.id"
+            class="fr-fieldset__element nouveau-source"
+          >
+            <div class="fr-checkbox-group">
+              <input
+                :id="`src-${k.id}`"
+                type="checkbox"
+                :checked="!!choisie(k.id)"
+                @change="basculerConnecteur(k)"
+              >
+              <label
+                class="fr-label"
+                :for="`src-${k.id}`"
+              >{{ k.titre }}
+                <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon fr-ml-1w">{{ etiquetteSource(k.type) }}</span>
+                <span class="fr-hint-text">{{ k.description || k.id }}</span>
+              </label>
+            </div>
+            <select
+              v-if="choisie(k.id)"
+              class="fr-select nouveau-regime"
+              :aria-label="`Quand interroger ${k.titre}`"
+              :value="choisie(k.id)!.regime"
+              @change="regime(k.id, ($event.target as HTMLSelectElement).value)"
+            >
+              <option
+                v-for="r in REGIMES"
+                :key="r.cle"
+                :value="r.cle"
+              >
+                {{ r.libelle }}
+              </option>
+            </select>
+          </div>
           <p
-            v-if="!gerables.length"
+            v-if="!gerables.length && !referentiels.length"
             class="fr-text--sm nouveau-discret fr-ml-1w"
           >
             {{ filtre ? 'Aucune collection ne correspond.' : 'Vous ne gérez encore aucune collection : créez-en une d\'abord.' }}
