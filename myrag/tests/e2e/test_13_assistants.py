@@ -40,7 +40,10 @@ def assistant_essai(session_testeur):
         )
         if cree.status != 200:
             pytest.skip(f"création de la collection d'essai refusée ({cree.status}) : parcours des assistants ignoré")
-    ESSAI.update(collections=collections, titres=["Assistant e2e : guide", "Assistant e2e : code"], assistant=f"{prefixe}e2e-assistant-{jour}")
+    # L'assistant d'essai est archivé en fin de parcours, et un assistant archivé ne se modifie plus :
+    # un identifiant neuf à chaque passage, pour qu'un second passage le même jour reparte de zéro.
+    suffixe = _dt.datetime.now().strftime("%H%M%S")
+    ESSAI.update(collections=collections, titres=["Assistant e2e : guide", "Assistant e2e : code"], assistant=f"{prefixe}e2e-assistant-{jour}-{suffixe}")
     yield ESSAI
     # L'assistant d'essai est archivé (rien n'est effacé, mais il ne se voit plus), puis ses collections purgées.
     session_testeur.post(f"/api/assistants/{ESSAI['assistant']}/archiver", {})
