@@ -61,7 +61,7 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
         if not voir:
             raise AssistantIntrouvable(ident)
         modifier = False
-    lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub, connecteurs=connecteurs_declares.declarations())
+    lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub, connecteurs=connecteurs_declares.lisibles_par(user.groups))
     return Charge(fiche=fiche, version=version, modifier=modifier, lisibles=lisibles, collections=cols)
 
 
