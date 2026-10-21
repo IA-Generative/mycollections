@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { messageErreur } from '~/utils/collectif'
-import { LIBELLES_TYPE, TYPES_REDIGES } from '~/utils/entraide'
+import { LIBELLES_TYPE, lienTchapPlausible, TYPES_REDIGES } from '~/utils/entraide'
 
 definePageMeta({ middleware: 'capacite', capacite: 'entraide' })
 useHead({ title: 'Lancer un appel — Mes collections' })
@@ -10,6 +10,7 @@ const { creerAppel } = useEntraide()
 const type = ref<string>('cherche')
 const titre = ref('')
 const texte = ref('')
+const lien = ref('')
 const erreur = ref('')
 const envoi = ref(false)
 
@@ -17,7 +18,7 @@ async function enregistrer () {
   erreur.value = ''
   envoi.value = true
   try {
-    const { appel } = await creerAppel({ type: type.value, titre: titre.value, texte: texte.value })
+    const { appel } = await creerAppel({ type: type.value, titre: titre.value, texte: texte.value, lien_tchap: lien.value.trim() || null })
     await navigateTo(`/entraide/${appel.id}`)
   }
   catch (e) {
@@ -76,7 +77,7 @@ async function enregistrer () {
         <label
           class="fr-label"
           for="appel-titre"
-        >Titre de l'appel</label>
+        >Titre de l'appel <span class="fr-hint-text">Par exemple : {{ LIBELLES_TYPE[type as 'cherche' | 'propose'].exemple }}</span></label>
         <input
           id="appel-titre"
           v-model="titre"
@@ -99,6 +100,20 @@ async function enregistrer () {
           maxlength="5000"
         />
       </div>
+      <div class="fr-input-group">
+        <label
+          class="fr-label"
+          for="appel-tchap"
+        >Lien d'un salon Tchap <span class="fr-hint-text">Facultatif : pour échanger avec celles et ceux qui répondent. Collez le lien d'invitation d'un salon, jamais une adresse de messagerie.</span></label>
+        <input
+          id="appel-tchap"
+          v-model="lien"
+          class="fr-input"
+          type="url"
+          inputmode="url"
+          autocomplete="off"
+        >
+      </div>
       <div
         v-if="erreur"
         class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"
@@ -111,7 +126,7 @@ async function enregistrer () {
           <button
             class="fr-btn"
             type="submit"
-            :disabled="envoi || !titre.trim()"
+            :disabled="envoi || !titre.trim() || !lienTchapPlausible(lien)"
           >
             Enregistrer le brouillon
           </button>

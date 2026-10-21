@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adresseAppel, compteReponses, destinationDemandes, libelleRoles, LIBELLES_ETAT_APPEL, LIBELLES_TYPE, libelleType, sansRecommandation } from '../../utils/entraide'
+import { adresseAppel, compteReponses, destinationDemandes, libelleRoles, LIBELLES_ETAT_APPEL, LIBELLES_TYPE, libelleType, lienTchapPlausible, sansRecommandation } from '../../utils/entraide'
 
 describe('/demandes mène au réseau d’entraide seulement si le drapeau est vrai', () => {
   it('drapeau vrai : /entraide', () => {
@@ -53,5 +53,14 @@ describe('les recommandations avant de publier', () => {
   it('les rôles se lisent sans identité', () => {
     expect(libelleRoles({ soutien: 2, fournisseur: 1 })).toBe('2 soutiens, 1 fournisseur')
     expect(libelleRoles({})).toBe('personne encore')
+  })
+})
+
+describe('le lien Tchap, vérification de forme', () => {
+  it('vide, ou https sans adresse de messagerie', () => {
+    expect(lienTchapPlausible('')).toBe(true)
+    expect(lienTchapPlausible('https://tchap.gouv.fr/#/room/!a:b')).toBe(true)
+    expect(lienTchapPlausible('http://tchap.gouv.fr/#/room/!a:b')).toBe(false)
+    expect(lienTchapPlausible('prenom.nom@fake-domain.name')).toBe(false)
   })
 })

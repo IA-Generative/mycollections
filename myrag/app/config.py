@@ -138,6 +138,8 @@ class Settings(BaseSettings):
     assistants_par_minute: int = Field(default=30, validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_PAR_MINUTE", "assistants_par_minute"))
     #: quelles collections) ; les questions, elles, demandent toujours un jeton.
     sites_anonymes: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_SITES_ANONYMES", "sites_anonymes"))
+    #: Hôtes autorisés pour le lien Tchap d'un appel du réseau d'entraide (CSV, hôte exact) ; vide ⇒ aucun lien accepté.
+    entraide_tchap_hotes: str = Field(default="tchap.gouv.fr", validation_alias=AliasChoices("MYCOLLECTIONS_ENTRAIDE_TCHAP_HOTES", "entraide_tchap_hotes"))
     seuil_chantier_defaut: int = Field(default=5)
     # Un chantier sans événement depuis ce nombre de jours est « en sommeil ».
     sommeil_jours: int = Field(default=30)

@@ -165,3 +165,5 @@ Front Nuxt 4 + DSFR, `myrag/frontend/` :
 
 Tests : `cd myrag/frontend && npm test` (`tests/unit/collectif.test.ts`) ;
 `npx nuxt build` doit passer.
+
+Les demandes sont aussi un type d'appel du **réseau d'entraide** (drapeau `entraide`) : elles y sont lues par référence, inchangées. Voir [entraide.md](entraide.md).

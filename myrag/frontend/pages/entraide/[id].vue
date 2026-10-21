@@ -104,6 +104,15 @@ onMounted(charger)
         {{ appel.texte }}
       </p>
 
+      <p v-if="appel.lien_tchap">
+        <a
+          class="fr-link fr-icon-external-link-line fr-link--icon-right"
+          :href="appel.lien_tchap"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Échanger sur Tchap<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+      </p>
+
       <div
         v-if="message"
         class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"

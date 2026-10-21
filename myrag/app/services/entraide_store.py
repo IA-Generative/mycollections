@@ -35,6 +35,7 @@ def appel_vers_dict(a: EntraideAppel, moi_hash: str, *, nb_reponses: int = 0) ->
         "texte": a.texte,
         "etat": a.etat,
         "demande_id": a.demande_id,
+        "lien_tchap": a.lien_tchap,
         "par_reference": False,
         "est_mon_appel": a.auteur_hash == moi_hash,
         "nb_reponses": nb_reponses,
@@ -54,6 +55,7 @@ def demande_vers_appel(d) -> dict:
         "etat": "clos" if d.etat in ("close", "realisee") else "publie",
         "etat_demande": d.etat,
         "demande_id": d.id,
+        "lien_tchap": None,
         "par_reference": True,
         "est_mon_appel": False,
         "nb_reponses": d.nb_soutiens,
@@ -127,7 +129,7 @@ async def auteur_de(ident: str) -> str:
 
 async def creer(entree: dict, moi_hash: str) -> dict:
     async with async_session() as session:
-        a = EntraideAppel(type=entree["type"], titre=entree["titre"], texte=entree["texte"], etat="brouillon", auteur_hash=moi_hash)
+        a = EntraideAppel(type=entree["type"], titre=entree["titre"], texte=entree["texte"], lien_tchap=entree.get("lien_tchap"), etat="brouillon", auteur_hash=moi_hash)
         session.add(a)
         await session.commit()
         return appel_vers_dict(a, moi_hash)

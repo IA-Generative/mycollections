@@ -197,3 +197,50 @@ def test_recommandations_drapeau_faux(client, en_tant_que, capacites):
     appel = _creer(client, en_tant_que)
     capacites(entraide=False)
     assert client.get(f"/api/entraide/appels/{appel['id']}/recommandations").status_code == 404
+
+
+# ── G3 : le lien Tchap ───────────────────────────────────────────────────────────────────────
+
+SALON = "https://tchap.gouv.fr/#/room/!AbCdEf:agent.fake-domain.name"
+
+
+@pytest.mark.parametrize(
+    "lien",
+    [
+        "http://tchap.gouv.fr/#/room/!abc:fake-domain.name",  # pas https
+        "https://exemple.fake-domain.name/#/room/!abc:fake-domain.name",  # hôte hors liste blanche
+        "https://tchap.gouv.fr.fake-domain.name/#/room/!abc:fake-domain.name",  # hôte imitant
+        "https://user:mdp@tchap.gouv.fr/#/room/!abc:fake-domain.name",  # identifiants
+        "https://tchap.gouv.fr:8443/#/room/!abc:fake-domain.name",  # port
+        "https://tchap.gouv.fr/?suivi=1#/room/!abc:fake-domain.name",  # paramètre
+        "https://tchap.gouv.fr/autre/chemin#/room/!abc:fake-domain.name",  # chemin
+        "https://tchap.gouv.fr/#/user/@prenom:fake-domain.name",  # une personne, pas un salon
+        "https://tchap.gouv.fr/",  # pas de salon
+        "mailto:prenom.nom@fake-domain.name",  # adresse de messagerie
+        "prenom.nom@fake-domain.name",
+        "javascript:alert(1)",
+    ],
+)
+def test_un_lien_tchap_invalide_est_refuse(client, en_tant_que, lien):
+    en_tant_que(personne("auteur"))
+    r = client.post("/api/entraide/appels", json={**APPEL, "lien_tchap": lien})
+    assert r.status_code == 422, (lien, r.text)
+
+
+def test_un_lien_tchap_valide_est_garde_et_normalise(client, en_tant_que):
+    appel = _creer(client, en_tant_que, type="propose", lien_tchap=f"  {SALON.replace('tchap.gouv.fr', 'TCHAP.gouv.fr')}  ")
+    assert appel["lien_tchap"] == SALON
+    assert client.get(f"/api/entraide/appels/{appel['id']}").json()["appel"]["lien_tchap"] == SALON
+    assert _creer(client, en_tant_que, lien_tchap="")["lien_tchap"] is None
+
+
+def test_la_liste_blanche_se_configure(client, en_tant_que, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "entraide_tchap_hotes", "salons.fake-domain.name")
+    en_tant_que(personne("auteur"))
+    assert client.post("/api/entraide/appels", json={**APPEL, "lien_tchap": SALON}).status_code == 422
+    ok = client.post("/api/entraide/appels", json={**APPEL, "lien_tchap": "https://salons.fake-domain.name/#/room/!x:fake-domain.name"})
+    assert ok.status_code == 201
+    monkeypatch.setattr(settings, "entraide_tchap_hotes", "")
+    assert client.post("/api/entraide/appels", json={**APPEL, "lien_tchap": SALON}).status_code == 422
