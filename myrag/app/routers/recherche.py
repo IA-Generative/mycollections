@@ -41,7 +41,7 @@ from app.auth import CurrentUser, _bearer_scheme, _exiger_le_groupe, audience_ac
 from app.config import settings
 from app.harnais.contrat import vers_resultats_v1
 from app.routers._commun import capacite
-from app.services import access, assistant_recherche, liens
+from app.services import access, assistant_recherche, connecteurs_declares, liens
 from app.services.collection_store import list_collections
 from app.services.morceau import decouper_morceau
 from app.services.nommage import titre_affiche, titre_de
@@ -585,18 +585,23 @@ async def _rechercher_par_assistant(ident: str, texte: str, limite: int, depuis,
 
     motif = _motif(texte)
     fiches = {n: f for n, f in charge.collections.items() if f}
+    declares = {n: d for n, d in connecteurs_declares.declarations().items() if n in charge.lisibles}
     passages = []
     for p in resultat.passages:
         fiche = fiches.get(p.source)
-        if fiche is None or not _texte_brut(p.texte) or not _dans_les_bornes(p.date, depuis, jusqu):
+        d = declares.get(p.source)
+        if (fiche is None and d is None) or not _texte_brut(p.texte) or not _dans_les_bornes(p.date, depuis, jusqu):
             continue  # hors périmètre ou hors bornes : jamais rendu, jamais signé
+        if fiche is None:  # un connecteur : pas de fiche de collection, donc aucun lien à signer
+            passages.append(p.model_copy(update={"url": None, "titre": _texte_brut(p.titre)[:200] or d.titre}))
+            continue
         passages.append(p.model_copy(update={"url": _lien(p.ident), "titre": _texte_brut(p.titre)[:200] or titre_de(fiche)}))
     resultats = vers_resultats_v1(
         passages,
         extrait=lambda t: _extrait(_texte_brut(t), motif),
         surlignages=lambda e: _surlignages(e, motif),
-        titres={n: titre_de(f) for n, f in fiches.items()},
-        droit=lambda source: _droit(fiches[source], user)[0],
+        titres={**{n: titre_de(f) for n, f in fiches.items()}, **{n: d.titre for n, d in declares.items()}},
+        droit=lambda source: _droit(fiches[source], user)[0] if source in fiches else "reader",
         passages_max=PASSAGES_MAX,
     )
     logger.info("Recherche par assistant : %d étape(s), %d passage(s), %d résultat(s), %d ms", len(resultat.plan.etapes), len(passages), len(resultats), resultat.duree_ms)

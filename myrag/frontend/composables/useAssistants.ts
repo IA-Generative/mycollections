@@ -1,4 +1,4 @@
-import type { FicheAssistant, ReponseMoteur, ResultatAssistant } from '~/utils/assistants'
+import type { ConnecteurDeclare, FicheAssistant, ReponseMoteur, ResultatAssistant } from '~/utils/assistants'
 import { reponseDoublure } from '~/utils/assistants'
 
 /**
@@ -12,6 +12,8 @@ export function useAssistants () {
   const ident = (id: string) => encodeURIComponent(id)
   return {
     lister: async () => (await get('/api/assistants')).assistants || [],
+    /** Les connecteurs que l'on peut ajouter comme source (titre, description, exemples). */
+    connecteurs: async (): Promise<ConnecteurDeclare[]> => (await get('/api/assistants/connecteurs')).connecteurs || [],
     lire: (id: string) => get(`/api/assistants/${ident(id)}`),
     enregistrer: (fiche: FicheAssistant) => put(`/api/assistants/${ident(fiche.assistant)}`, fiche),
     publier: (id: string) => post(`/api/assistants/${ident(id)}/publier`),

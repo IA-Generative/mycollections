@@ -164,6 +164,10 @@ class Settings(BaseSettings):
     # Origine publique devant les liens signés rendus (le contrat veut des URL absolues).
     # Vide : on reprend MYCOLLECTIONS_PUBLIC_URL.
     recherche_url_publique: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_URL_PUBLIQUE", "recherche_url_publique"))
+    # Les sources de type « connecteur » d'un assistant (docs/assistants.md) : un tableau JSON
+    # d'objets `{id, type, url, titre, description, tables, exemples}`. Vide ⇒ aucune. Illisible ⇒ ignoré.
+    connecteurs: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CONNECTEURS", "connecteurs"))
+
     # Délai accordé au moteur (Mon portail attend 8 s par source), et recherches permises
     # par personne et par minute (0 = sans limite).
     recherche_delai_s: float = Field(default=6.0, validation_alias=AliasChoices("MYCOLLECTIONS_RECHERCHE_DELAI_S", "recherche_delai_s"))

@@ -8,7 +8,8 @@ Droits, calculés ici à partir du jeton — jamais d'un paramètre du client :
   créateur, ou l'on administre ; une source illisible n'est pas montrée (un compte, pas un nom) ;
 - MODIFIER ou PUBLIER : pouvoir gérer TOUTES ses sources `collection` (et, pour un assistant
   sans collection, en être le créateur), avant comme après la modification ;
-- une source `connecteur` n'ouvre aucun droit : le catalogue des connecteurs arrive au lot A.
+- une source `connecteur` n'ouvre aucun droit et ne retient personne ; elle n'est lue que si elle est déclarée
+  en configuration (`MYCOLLECTIONS_CONNECTEURS`, liste : `GET /api/assistants/connecteurs`).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
 from app.services import assistant_recherche as moteur
 from app.services import assistant_store as store
-from app.services import liens, qualite, questions_store
+from app.services import connecteurs_declares, liens, qualite, questions_store
 from app.services.fenetre_par_minute import Fenetre
 from app.services.nommage import titre_de
 
@@ -78,6 +79,12 @@ def _reponse(ligne: dict, fiche: FicheAssistant, cols: dict, moi: Identite, modi
     vue, masquees = _vue(fiche, cols, moi, modifier)
     assistant = {k: v for k, v in ligne.items() if k not in ("fiche", "sources", "cree_par_hash")}
     return {"assistant": assistant, "fiche": vue, "version": ligne["version_publiee"], "sources_masquees": masquees, "mes_droits": {"ecrire": modifier}}
+
+
+@router.get("/connecteurs")
+async def connecteurs(moi: Identite = Depends(identite)):
+    """Les connecteurs que l'on peut ajouter comme source : titre, description, exemples. Jamais l'adresse du service."""
+    return {"connecteurs": [connecteurs_declares.publique(d) for d in connecteurs_declares.declarations().values()]}
 
 
 @router.get("")

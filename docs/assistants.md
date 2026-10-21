@@ -22,6 +22,20 @@ poids par étape, quota des sources `toujours`), `perimetre.py` ne garde que ce 
 et `/executer` : la version enregistrée pour qui peut modifier, la publiée pour les autres. Le journal (`plans_journal`)
 ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure répond (en-tête `X-Mycollections-Doublure: 1`).
 
+## Un référentiel comme source (lot A6)
+
+Une source de type `connecteur` n'est pas une collection : elle interroge un service HTTP interne. Le premier est le
+référentiel d'éligibilité (`harnais/connecteurs/eligibilite.py`, type `eligibilite` : titres de séjour → situations →
+pièces). Il se déclare par `MYCOLLECTIONS_CONNECTEURS` (tableau JSON `{id, type, url, titre, description, tables, exemples}`) ;
+vide, rien ne change. Un connecteur déclaré est lisible de toute personne qui passe la garde de l'application ; non
+déclaré, il n'est jamais lu (le périmètre et le filet `restreindre_passages` le vérifient). Le service ne connaît personne :
+le connecteur n'envoie ni `Authorization` ni identifiant. Il tire de la question quelques mots significatifs (trois appels
+de `/tables/{t}/search` au plus par table), classe les lignes par mots retrouvés ; une étape `avec` (relais `reference`)
+cherche la référence courte du meilleur passage amont. Panne, délai (`MYCOLLECTIONS_RECHERCHE_DELAI_S`) ou JSON illisible :
+liste vide, jamais d'exception. `/query` n'est pas utilisé. L'écran « Ajouter une source » les propose (`GET /api/assistants/connecteurs`,
+sans l'adresse du service) avec l'étiquette « Référentiel » ; assembler demande de gérer les seules **collections**.
+En production, Mes collections doit pouvoir joindre le service (règle réseau à poser côté infrastructure).
+
 
 ## Le banc (lot A)
 
