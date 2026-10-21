@@ -97,6 +97,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { LIBELLES_DEMANDE, ceQuiManque, echeance, messageErreur, progression } from '~/utils/collectif'
+import { destinationDemandes } from '~/utils/entraide'
 const { capacites, chargees, charger } = useCapacites()
 const { listerDemandes, deposerDemande, soutenir, retirerSoutien } = useCollectif()
 const { user } = useAuth()
@@ -132,6 +133,11 @@ function apresDepot(d: any) {
 }
 onMounted(async () => {
   await charger()
+  // Le réseau d'entraide allumé : /demandes y mène. Drapeau faux : la page reste telle quelle.
+  const destination = destinationDemandes(capacites.value, route.query)
+  if (destination !== '/demandes') {
+    return navigateTo(destination, { replace: true })
+  }
   if (capacites.value.demandes) await recharger()
   if (formulaireOuvert.value) nextTick(() => document.getElementById('d-titre')?.focus())
 })
