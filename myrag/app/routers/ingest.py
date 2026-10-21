@@ -130,7 +130,7 @@ async def reprendre_les_travaux_interrompus() -> list[str]:
                 error=f"Indexation interrompue par un redémarrage du service, et le fichier conservé ne se lit plus ({type(e).__name__}) : redéposez-le.",
             )
             continue
-        await _indexer_document_background(job_id, collection, filename, contenu, sensitivity or Sensitivity.PUBLIC)
+        await _indexer_document_background(job_id, collection, filename, contenu, sf.sensitivity or Sensitivity.PUBLIC)
         repris.append(job_id)
     if travaux:
         logger.info("Reprise au démarrage : %d travail(aux) interrompu(s), %d repris", len(travaux), len(repris))
