@@ -93,13 +93,40 @@ def empreinte_ligne(table: str, ligne: dict) -> str:
     return hashlib.sha256(contenu.encode("utf-8")).hexdigest()[:16]
 
 
-def _premiere_colonne_utile(ligne: dict) -> str:
+#: Au-delà, une valeur est un contenu (la liste des pièces…), pas un intitulé.
+LONGUEUR_INTITULE = 120
+
+
+def _intitules(ligne: dict) -> list[tuple[str, str]]:
+    """Les valeurs qui peuvent nommer la ligne, dans l'ordre : ni vides, ni identifiants, ni nombres."""
+    rendu = []
     for nom, v in ligne.items():
-        texte = _valeur(v)
+        texte = " ".join(_valeur(v).split())
         if not texte or nom.lower() == "id" or nom.lower().endswith("_id") or texte.replace(".", "").isdigit():
             continue
-        return texte
-    return ""
+        rendu.append((nom, texte))
+    return rendu
+
+
+def titre_de_ligne(ligne: dict) -> str:
+    """Le titre d'une ligne : les deux intitulés qui précèdent son premier contenu long (par exemple le
+    titre de séjour et la situation, avant la liste des pièces), car les premières colonnes d'un
+    référentiel sont souvent des regroupements communs à toutes les lignes ; sans contenu long, le
+    premier intitulé."""
+    valeurs = _intitules(ligne)
+    longs = [i for i, (_, v) in enumerate(valeurs) if len(v) > LONGUEUR_INTITULE]
+    if longs:
+        courts = [v for _, v in valeurs[: longs[0]] if len(v) <= LONGUEUR_INTITULE]
+        if courts:
+            return " — ".join(v.rstrip(" :") for v in courts[-2:])
+    courts = [v for _, v in valeurs if len(v) <= LONGUEUR_INTITULE]
+    return courts[0].rstrip(" :") if courts else ""
+
+
+def libelle_colonne(nom: str) -> str:
+    """« titre_pour_eligibilite » → « Titre pour eligibilite » : un nom de colonne qui se lit."""
+    mots = " ".join(str(nom).replace("_", " ").split())
+    return mots[:1].upper() + mots[1:]
 
 
 class ConnecteurEligibilite(Connecteur):
@@ -178,11 +205,10 @@ class ConnecteurEligibilite(Connecteur):
         classees = sorted(candidates.items(), key=lambda kv: -kv[1][0])  # stable : à égalité, l'ordre du service
         passages: list[Passage] = []
         for cle, (retrouves, table, ligne) in classees:
-            texte = "\n".join(f"{nom} : {v}" for nom, val in ligne.items() if (v := _valeur(val)))
+            texte = "\n".join(f"{libelle_colonne(nom)} : {v}" for nom, val in ligne.items() if (v := _valeur(val)))
             if not texte:
                 continue
-            premier = _premiere_colonne_utile(ligne)
-            titre = f"{table} — {premier}" if premier else table
+            titre = titre_de_ligne(ligne) or self.titre
             passages.append(
                 Passage(
                     source=self.ident,
