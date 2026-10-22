@@ -109,18 +109,18 @@ def _intitules(ligne: dict) -> list[tuple[str, str]]:
 
 
 def titre_de_ligne(ligne: dict) -> str:
-    """Le titre d'une ligne : les deux intitulés qui précèdent son premier contenu long (par exemple le
-    titre de séjour et la situation, avant la liste des pièces), car les premières colonnes d'un
-    référentiel sont souvent des regroupements communs à toutes les lignes ; sans contenu long, le
-    premier intitulé."""
-    valeurs = _intitules(ligne)
-    longs = [i for i, (_, v) in enumerate(valeurs) if len(v) > LONGUEUR_INTITULE]
-    if longs:
-        courts = [v for _, v in valeurs[: longs[0]] if len(v) <= LONGUEUR_INTITULE]
-        if courts:
-            return " — ".join(v.rstrip(" :") for v in courts[-2:])
-    courts = [v for _, v in valeurs if len(v) <= LONGUEUR_INTITULE]
-    return courts[0].rstrip(" :") if courts else ""
+    """Le titre d'une ligne : les deux intitulés qui précèdent son contenu (le premier contenu long,
+    sinon la dernière valeur : la liste des pièces…), car les premières colonnes d'un référentiel sont
+    souvent des regroupements communs à toutes les lignes. Une ligne d'une seule valeur : elle-même."""
+    valeurs = [v for _, v in _intitules(ligne)]
+    if not valeurs:
+        return ""
+    longs = [i for i, v in enumerate(valeurs) if len(v) > LONGUEUR_INTITULE]
+    contenu = longs[0] if longs else len(valeurs) - 1
+    avant = [v for v in valeurs[:contenu] if len(v) <= LONGUEUR_INTITULE]
+    if not avant:
+        return valeurs[0][:LONGUEUR_INTITULE].rstrip(" :")
+    return " — ".join(v.rstrip(" :") for v in avant[-2:])
 
 
 def libelle_colonne(nom: str) -> str:

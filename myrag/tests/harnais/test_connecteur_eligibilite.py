@@ -102,7 +102,7 @@ async def test_au_plus_trois_appels_par_table_sur_les_mots_les_plus_specifiques(
 async def test_classement_par_nombre_de_mots_retrouves():
     service = Service()
     passages = await service.connecteur().chercher(etape("pièces carte résident passeport"), APPELANT)
-    assert [p.titre for p in passages][0].endswith("Carte de résident")
+    assert [p.titre for p in passages][0] == "Carte de résident — Justificatif de domicile, passeport"
     assert passages[0].score > passages[1].score
     assert [p.rang for p in passages] == [1, 2]
 
@@ -119,7 +119,7 @@ async def test_avec_cherche_la_reference_courte_du_meilleur_passage_amont():
         etape("quelles pièces ?", avec="reference"), APPELANT, amont=[amont("Code", "Selon l'article L. 423-1 du code, la carte de résident est délivrée.")]
     )
     assert [r.url.params["q"] for r in service.recherches()] == ["L. 423-1"]
-    assert [p.titre for p in passages] == ["Carte de résident"]
+    assert [p.titre for p in passages] == ["Carte de résident — Justificatif de domicile, passeport"]
 
 
 async def test_avec_sans_article_cherche_le_titre_court():
@@ -142,7 +142,7 @@ async def test_une_ligne_devient_un_passage():
     [p] = await service.connecteur().chercher(etape("justificatif domicile"), APPELANT)
     assert p.source == "eligibilite-dgef" and p.etape == 1 and p.rang == 1
     assert p.document == f"titres:{empreinte_ligne('titres', TITRES[1])}"
-    assert p.titre == "Carte de résident"  # la colonne `id` ne nomme pas une ligne
+    assert p.titre == "Carte de résident — Justificatif de domicile, passeport"  # la colonne `id` ne nomme pas une ligne ; « article » est le contenu
     assert p.texte.splitlines() == ["Id : 2", "Intitule : Carte de résident", "Pieces : Justificatif de domicile, passeport", "Article : L. 423-1"]
     assert p.url is None and p.ident is None and p.meta == {"table": "titres"}
 
@@ -244,6 +244,9 @@ def test_le_titre_d_une_ligne_de_referentiel_nomme_ce_qui_la_distingue():
         "pieces": "Justificatif de domicile de moins de six mois : " + "facture, quittance de loyer ou attestation d'hébergement. " * 3,
     }
     assert titre_de_ligne(ligne) == 'Carte de séjour portant la mention " salarié " — 1. Pièces à fournir dans tous les cas'
+    # Sans contenu long, la dernière valeur est le contenu : la liste des pièces, même courte.
+    courte = {**ligne, "pieces": "Visa de long séjour en cours de validité"}
+    assert titre_de_ligne(courte) == 'Carte de séjour portant la mention " salarié " — 1. Pièces à fournir dans tous les cas'
     assert titre_de_ligne({"id": 3, "nom": "Visa"}) == "Visa"
     assert titre_de_ligne({"id": 3}) == ""
     assert libelle_colonne("titre_pour_eligibilite") == "Titre pour eligibilite"
