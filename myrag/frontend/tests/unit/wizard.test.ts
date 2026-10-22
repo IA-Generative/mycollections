@@ -21,7 +21,7 @@ describe('les sources', () => {
     expect(cartesDeSource().every(s => s.disponible)).toBe(true)
   })
   it('la ligne « Bientôt » liste toutes les autres, et seulement elles', () => {
-    expect(ligneBientot()).toBe('Bientôt : Légifrance, Drive, Nextcloud, Resana, un site web, un outil MCP.')
+    expect(ligneBientot()).toBe('Bientôt : Légifrance, Drive, Nextcloud, Résana, un site web, un outil MCP.')
     const autres = SOURCES.filter(s => !s.disponible).length
     expect(cartesDeSource().length + autres).toBe(SOURCES.length)
   })
