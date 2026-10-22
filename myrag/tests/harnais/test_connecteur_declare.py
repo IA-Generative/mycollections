@@ -163,7 +163,7 @@ def test_la_recherche_v1_rend_la_ligne_du_referentiel_dans_la_forme_du_contrat(c
     corps = r.json()
     ligne = next(x for x in corps["results"] if x["context"]["collection"]["id"] == ID)
     assert ligne["context"] == {"collection": {"id": ID, "title": "Référentiel d'éligibilité"}, "right": "reader"}
-    assert ligne["title"] == "titres — Carte de résident" and ligne["url"] is None
+    assert ligne["title"] == "Carte de résident" and ligne["url"] is None
     assert ligne["id"].startswith(f"{ID}:titres:")
     [hit] = ligne["hits"]
     assert "Justificatif de domicile" in hit["snippet"] and hit["url"] is None and hit["field"] == "content"

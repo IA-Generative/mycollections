@@ -119,7 +119,7 @@ async def test_avec_cherche_la_reference_courte_du_meilleur_passage_amont():
         etape("quelles pièces ?", avec="reference"), APPELANT, amont=[amont("Code", "Selon l'article L. 423-1 du code, la carte de résident est délivrée.")]
     )
     assert [r.url.params["q"] for r in service.recherches()] == ["L. 423-1"]
-    assert [p.titre for p in passages] == ["titres — Carte de résident"]
+    assert [p.titre for p in passages] == ["Carte de résident"]
 
 
 async def test_avec_sans_article_cherche_le_titre_court():
@@ -142,8 +142,8 @@ async def test_une_ligne_devient_un_passage():
     [p] = await service.connecteur().chercher(etape("justificatif domicile"), APPELANT)
     assert p.source == "eligibilite-dgef" and p.etape == 1 and p.rang == 1
     assert p.document == f"titres:{empreinte_ligne('titres', TITRES[1])}"
-    assert p.titre == "titres — Carte de résident"  # la colonne `id` n'est pas une première colonne utile
-    assert p.texte.splitlines() == ["id : 2", "intitule : Carte de résident", "pieces : Justificatif de domicile, passeport", "article : L. 423-1"]
+    assert p.titre == "Carte de résident"  # la colonne `id` ne nomme pas une ligne
+    assert p.texte.splitlines() == ["Id : 2", "Intitule : Carte de résident", "Pieces : Justificatif de domicile, passeport", "Article : L. 423-1"]
     assert p.url is None and p.ident is None and p.meta == {"table": "titres"}
 
 
@@ -156,7 +156,7 @@ def test_l_empreinte_ne_depend_ni_de_l_ordre_des_colonnes_ni_d_un_appel_a_l_autr
 async def test_valeurs_vides_et_structurees():
     service = Service({"t": [{"nom": "Visa", "notes": None, "pieces": ["a", "b"]}]})
     [p] = await service.connecteur().chercher(etape("visa"), APPELANT)
-    assert p.texte.splitlines() == ["nom : Visa", 'pieces : ["a", "b"]']
+    assert p.texte.splitlines() == ["Nom : Visa", 'Pieces : ["a", "b"]']
 
 
 # ─── Les pannes ──────────────────────────────────────────────────────────────────────────────
@@ -229,3 +229,21 @@ async def test_la_fiche_dit_le_relais_reference():
     fiche = await Service().connecteur(description="Titres et pièces", exemples=["Quelles pièces ?"]).fiche()
     assert fiche.type == "connecteur" and fiche.id == "eligibilite-dgef" and fiche.relais == ["reference"]
     assert fiche.description == "Titres et pièces" and fiche.exemples == ["Quelles pièces ?"]
+
+
+def test_le_titre_d_une_ligne_de_referentiel_nomme_ce_qui_la_distingue():
+    """Les premières colonnes regroupent (communes à toutes les lignes) ; le titre prend les deux
+    intitulés qui précèdent le premier contenu long."""
+    from app.harnais.connecteurs.eligibilite import libelle_colonne, titre_de_ligne
+
+    ligne = {
+        "groupement": "Catégories de titres de séjour",
+        "categorie": "Titres de séjour pour motif professionnel",
+        "titre": 'Carte de séjour portant la mention  " salarié "',
+        "situation": "1. Pièces à fournir dans tous les cas :",
+        "pieces": "Justificatif de domicile de moins de six mois : " + "facture, quittance de loyer ou attestation d'hébergement. " * 3,
+    }
+    assert titre_de_ligne(ligne) == 'Carte de séjour portant la mention " salarié " — 1. Pièces à fournir dans tous les cas'
+    assert titre_de_ligne({"id": 3, "nom": "Visa"}) == "Visa"
+    assert titre_de_ligne({"id": 3}) == ""
+    assert libelle_colonne("titre_pour_eligibilite") == "Titre pour eligibilite"
