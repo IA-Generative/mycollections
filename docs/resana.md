@@ -29,7 +29,7 @@ droits appliqués sont ceux de la personne dans Résana.
 |---|---|
 | `GET /espaces` | la liste des espaces ; peut ouvrir la session de la personne (jusqu'à 90 s) |
 | `GET /espaces/{id}/dossiers?search=` | le choix du dossier |
-| `GET /espaces/{id}/documents?dossier=&recursif=true` | la liste **complète** du dossier, page par page (`suivant`) ; un curseur expiré (410) relance la lecture une fois |
+| `GET /espaces/{id}/documents?dossier=&recursif=true` | la liste **complète** du dossier, page par page (`suivant`) ; un curseur expiré (410) relance la lecture une fois ; un grand dossier répond d'abord `202 en_preparation` (voir plus bas) |
 | `GET /documents/{id}/fichier?espace=` | les octets d'origine, lus en flux, 100 Mo au plus |
 
 ## Routes de Mes collections
@@ -41,7 +41,7 @@ sans elle, chaque route répond 404 et l'écran ne propose pas Résana.
 |---|---|---|
 | `GET /espaces` | toute personne connectée | ses espaces, triés par nom |
 | `GET /espaces/{id}/dossiers?recherche=` | toute personne connectée | les dossiers de l'espace |
-| `GET /espaces/{id}/apercu?dossier=` | toute personne connectée | le nombre de documents et leur taille approchée |
+| `GET /espaces/{id}/apercu?dossier=` | toute personne connectée | le nombre de documents et leur taille approchée ; `202 {en_preparation, dossiers_lus, dossiers}` tant que le service prépare la liste |
 | `POST /add` | la personne qui a **créé** la collection | relie la collection au dossier et lance l'import |
 | `POST /sync/{collection}` | la personne qui a importé | relit le dossier et réindexe s'il a changé |
 | `GET /status/{collection}` | qui peut lire la collection | le dossier relié, l'avancement, et `est_importeur` |
@@ -76,8 +76,19 @@ du groupe `<racine>/<nom>-admin` la lisent.
 
 ## Import et synchronisation
 
-1. La route relit la liste complète du dossier, sans `depuis` : c'est elle qui révèle les suppressions.
+1. La route demande la liste complète du dossier, sans `depuis` : c'est elle qui révèle les suppressions.
    Les erreurs immédiates (session absente, dossier trop gros, service en panne) reviennent à l'écran.
+   - **Grand dossier.** Au-delà de 40 sous-dossiers, le service prépare la liste en arrière-plan : un
+     appel Résana par dossier, à 5 par seconde. Sur un dossier réel de 1 361 sous-dossiers, la
+     préparation a pris 4 min 30. Le service répond `202 en_preparation` avec `dossiers_lus`, `dossiers`
+     et `Retry-After`.
+     - L'aperçu le rend tel quel, et l'écran rappelle toutes les 5 s en affichant « n dossiers lus
+       sur N ».
+     - L'import et la synchronisation n'attendent pas : la tâche de fond rappelle la même adresse au
+       rythme de `Retry-After`, 20 minutes au plus, puis télécharge.
+     - Une fois prête, la liste reste 10 minutes en cache chez le service.
+   - **Synchronisation sur un dossier vide.** Elle est refusée (409 `dossier_vide`) : rien n'est
+     retiré sur la foi d'une liste vide.
 2. Le téléchargement se fait en tâche de fond, quatre documents à la fois. Le jeton de la personne reste
    en mémoire le temps de la tâche et n'est jamais écrit. L'écran suit l'avancement par `/status`.
 3. Chaque document est comparé par son **sha256**. Le service ne donne pas d'ETag, et `version_fichier`
@@ -93,9 +104,25 @@ du groupe `<racine>/<nom>-admin` la lisent.
    - la partition OpenRAG est vidée puis tout est renvoyé, comme pour une réindexation : Mes collections
      ne connaît pas l'identifiant OpenRAG d'un fichier, c'est donc la seule façon de retirer une ancienne
      version.
-6. Une erreur bloquante en cours de route arrête tout sans rien appliquer : session perdue, jeton
-   expiré, service indisponible, plus de 500 Mo au total. L'état passe à « échec », avec le message et,
-   s'il y a lieu, le lien de connexion. Il suffit de synchroniser de nouveau.
+6. **Arrêt en route.** Une erreur bloquante arrête le téléchargement : session perdue, jeton expiré
+   (le jeton d'accès vit quelques minutes), service indisponible, ou plafond de 500 Mo de contenu
+   nouveau atteint.
+   - **Aucun document reçu** : l'état passe à « échec », avec le message et, s'il y a lieu, le lien de
+     connexion.
+   - **Des documents reçus** : l'état passe à « partiel ».
+     - Ce qui est arrivé est gardé et indexé.
+     - **Rien n'est retiré.** Les documents non relus restent dans leur dernière version.
+     - La date de dernière lecture ne bouge pas.
+
+   Une nouvelle synchronisation reprend où c'est utile. Les documents sont téléchargés dans cet
+   ordre :
+   1. les nouveaux ;
+   2. ceux dont Résana annonce une autre version (`version_fichier`, `modifie_le`) ;
+   3. les autres.
+
+   Un grand dossier s'importe ainsi en plusieurs fois. L'ordre ne décide de rien : seul le sha256 dit
+   qu'un document a changé. Un contenu relu à l'identique n'est pas gardé en mémoire et ne compte pas
+   dans le plafond.
 
 Les noms de fichiers viennent du service (`Content-Disposition`). Deux documents de même nom sont
 distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'import ne change plus.

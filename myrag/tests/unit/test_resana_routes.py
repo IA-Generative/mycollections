@@ -200,13 +200,70 @@ def test_dossier_vide(client, en_tant_que, faux, privee):
     assert client.get(f"/api/collections/{privee}").json()["source_type"] != "resana"
 
 
-def test_session_perdue_en_cours_d_import(client, en_tant_que, faux, privee):
-    faux.documents[1].refus = (409, "session_absente")
+def test_session_perdue_avant_tout_document(client, en_tant_que, faux, privee):
+    faux.documents[0].refus = faux.documents[1].refus = (409, "session_absente")
     en_tant_que(CREATEUR)
     assert _importer(client, privee).status_code == 200
     travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
     assert travail["etat"] == "echec" and travail["code"] == "session_absente"
     assert not faux.envois.await_count and _sources(privee) == []
+
+
+def test_session_perdue_en_route_garde_l_acquis_et_la_synchro_reprend(client, en_tant_que, faux, privee, monkeypatch):
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    faux.documents[1].refus = (409, "session_absente")
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    statut = client.get(f"/api/sources/resana/status/{privee}").json()
+    assert statut["travail"]["etat"] == "partiel" and statut["travail"]["code"] == "session_absente"
+    assert statut["documents"] == 1 and statut["last_sync_at"] is None
+    assert _sources(privee) == ["note-a.md"]
+
+    faux.documents[1].refus = None
+    faux.envois.reset_mock()
+    client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert (travail["etat"], travail["ajoutes"], travail["inchanges"]) == ("termine", 1, 1)
+    assert _sources(privee) == ["note-a.md", "note-b.md"]
+
+
+def test_le_plafond_se_franchit_en_plusieurs_synchronisations(client, en_tant_que, faux, privee, monkeypatch):
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    monkeypatch.setattr(sources_resana, "OCTETS_MAX_TOTAL", 40)
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert travail["etat"] == "partiel" and travail["code"] == "trop_volumineux_total" and _sources(privee) == ["note-a.md"]
+    client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
+    assert _sources(privee) == ["note-a.md", "note-b.md"]
+
+
+def test_un_grand_dossier_se_prepare_puis_s_importe(client, en_tant_que, faux, privee, monkeypatch):
+    dormi = []
+
+    async def dormir(s):
+        dormi.append(s)
+
+    monkeypatch.setattr(ClientExportResana, "_dormir", staticmethod(dormir))
+    faux.preparations = 1
+    en_tant_que(CREATEUR)
+    r = client.get("/api/sources/resana/espaces/e-1/apercu?dossier=d-1", headers=ENTETE)
+    assert r.status_code == 202 and r.json() == {"en_preparation": True, "dossiers_lus": 12, "dossiers": 40} and r.headers["retry-after"] == "10"
+    faux.preparations = 2
+    r = _importer(client, privee)
+    assert r.status_code == 200 and r.json()["total"] is None
+    statut = client.get(f"/api/sources/resana/status/{privee}").json()
+    assert statut["travail"]["etat"] == "termine" and statut["documents"] == 2
+    assert dormi == [10.0]
+
+
+def test_une_synchro_sur_un_dossier_vide_ne_retire_rien(client, en_tant_que, faux, privee):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    faux.documents = []
+    r = client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "dossier_vide"
+    assert _sources(privee) == ["note-a.md", "note-b.md"]
 
 
 def test_un_document_refuse_est_ecarte_les_autres_passent(client, en_tant_que, faux, privee):

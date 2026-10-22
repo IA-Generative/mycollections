@@ -58,11 +58,11 @@ onBeforeUnmount(() => clearTimeout(minuterie))
 <template>
   <section
     v-if="statut?.configured"
-    class="fr-card fr-mb-4w"
+    class="resana-carte fr-mb-4w"
     aria-labelledby="etat-resana-titre"
   >
-    <div class="fr-card__body">
-      <div class="fr-card__content">
+    <div>
+      <div>
         <h2
           id="etat-resana-titre"
           class="fr-h5"
@@ -71,9 +71,7 @@ onBeforeUnmount(() => clearTimeout(minuterie))
         </h2>
         <p class="fr-text--sm fr-mb-1w">
           <strong>{{ statut.espace_nom }}</strong> › {{ statut.dossier_chemin }} —
-          {{ statut.documents }} document{{ statut.documents > 1 ? 's' : '' }} importé{{ statut.documents > 1 ? 's' : '' }}<template v-if="derniere">
-            , dernière lecture le {{ derniere }}
-          </template>.
+          {{ statut.documents }} document{{ statut.documents > 1 ? 's' : '' }} importé{{ statut.documents > 1 ? 's' : '' }}{{ derniere ? `, dernière lecture le ${derniere}` : '' }}.
         </p>
         <p class="fr-text--xs resana-discret">
           Collection privée : seule la personne qui a importé le dossier l'interroge et la synchronise.
@@ -85,6 +83,13 @@ onBeforeUnmount(() => clearTimeout(minuterie))
           aria-live="polite"
         >
           {{ phrase }}
+          <a
+            v-if="statut.travail?.url_connexion?.startsWith('https://')"
+            :href="statut.travail.url_connexion"
+            class="fr-link"
+            target="_blank"
+            rel="noopener"
+          >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
         </p>
         <details
           v-if="ecartes.length"
@@ -131,5 +136,7 @@ onBeforeUnmount(() => clearTimeout(minuterie))
 </template>
 
 <style scoped>
+.resana-carte { padding: 1.5rem 2rem; border: 1px solid var(--border-default-grey); }
 .resana-discret { color: var(--text-mention-grey); }
+@media (max-width: 36em) { .resana-carte { padding: 1rem; } }
 </style>

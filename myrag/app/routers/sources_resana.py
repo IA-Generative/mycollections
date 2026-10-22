@@ -22,9 +22,11 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -39,7 +41,7 @@ from app.services import formats
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
-from app.services.connectors.resana import ClientExportResana, DocumentResana, ErreurResana, Fichier, nom_unique
+from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, Fichier, nom_unique
 
 logger = logging.getLogger("myrag.sources.resana")
 
@@ -53,6 +55,9 @@ TELECHARGEMENTS_PARALLELES = 4
 ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "trop_volumineux_total"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
 ECARTES_MAX = 50
+
+MESSAGE_DOSSIER_VIDE = "Ce dossier ne contient aucun document."
+MESSAGE_SYNCHRO_VIDE = "Le dossier Résana est vide : rien n'est retiré de la collection. Supprimez-la si c'est voulu."
 
 #: Une tâche par collection, dans ce processus.
 _TACHES: dict[str, asyncio.Task] = {}
@@ -124,9 +129,12 @@ async def dossiers(espace: str, recherche: str = Query("", max_length=200), auth
 
 @router.get("/espaces/{espace}/apercu")
 async def apercu(espace: str, dossier: str = Query(..., min_length=1, max_length=200), authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
-    """Ce que l'import emporterait : le nombre de documents et leur taille approchée."""
+    """Ce que l'import emporterait : le nombre de documents et leur taille approchée. Un grand
+    dossier se prépare côté service : 202 avec l'avancement, l'écran rappelle (Retry-After)."""
     try:
         docs = await _client(authorization).documents(espace, dossier)
+    except EnPreparation as e:
+        return JSONResponse(status_code=202, content={"en_preparation": True, "dossiers_lus": e.dossiers_lus, "dossiers": e.dossiers}, headers={"Retry-After": str(int(e.attente))})
     except ErreurResana as e:
         raise _http(e) from None
     tailles = [d.taille_approx_mo for d in docs if d.taille_approx_mo is not None]
@@ -177,8 +185,21 @@ def _exiger_importeur(col: dict, user: CurrentUser) -> None:
         raise _refus(403, "reserve_a_l_importeur", "Seule la personne qui a importé ce dossier Résana peut le synchroniser (avec sa propre session Résana).")
 
 
-def _travail(action: str, total: int) -> dict:
-    return {"etat": "en_cours", "action": action, "debut": utcnow().isoformat(), "total": total, "faits": 0}
+def _travail(action: str, docs: list[DocumentResana] | None) -> dict:
+    """L'état d'un travail qui commence : la liste est prête (téléchargement), ou se prépare encore."""
+    phase = "telechargement" if docs is not None else "preparation"
+    return {"etat": "en_cours", "action": action, "phase": phase, "debut": utcnow().isoformat(), "total": len(docs or []), "faits": 0}
+
+
+async def _liste_si_prete(client: ClientExportResana, espace: str, dossier: str) -> list[DocumentResana] | None:
+    """La liste du dossier si le service l'a (aussitôt, ou en cache après l'aperçu) ; None si elle se
+    prépare encore : la tâche de fond l'attendra. Les autres erreurs reviennent à l'écran."""
+    try:
+        return await client.documents(espace, dossier)
+    except EnPreparation:
+        return None
+    except ErreurResana as e:
+        raise _http(e) from None
 
 
 @router.post("/add")
@@ -192,12 +213,9 @@ async def ajouter(req: AjoutResana, authorization: str | None = Header(default=N
     if _occupee(req.collection):
         raise _refus(409, "travail_en_cours", "Un import est déjà en cours pour cette collection.")
     client = _client(authorization)
-    try:
-        docs = await client.documents(req.espace_id, req.dossier_id)
-    except ErreurResana as e:
-        raise _http(e) from None
-    if not docs:
-        raise _refus(400, "dossier_vide", "Ce dossier ne contient aucun document.")
+    docs = await _liste_si_prete(client, req.espace_id, req.dossier_id)
+    if docs is not None and not docs:
+        raise _refus(400, "dossier_vide", MESSAGE_DOSSIER_VIDE)
     cfg = {
         "espace_id": req.espace_id,
         "espace_nom": req.espace_nom.strip() or req.espace_id,
@@ -205,12 +223,12 @@ async def ajouter(req: AjoutResana, authorization: str | None = Header(default=N
         "dossier_chemin": req.dossier_chemin.strip() or req.dossier_id,
         "documents": {},
         "last_sync_at": None,
-        "travail": _travail("import", len(docs)),
+        "travail": _travail("import", docs),
     }
     # Privée d'abord, documents ensuite : rien de Résana n'est jamais lisible hors de la personne.
     await update_collection(req.collection, {"scope": "private", "scope_groups": [], "source_type": SOURCE, "source_url": "", "source_config_json": json.dumps(cfg)})
-    await _demarrer(req.collection, _executer(req.collection, client, req.espace_id, docs, "import", user))
-    return {"status": "import_lance", "collection": req.collection, "total": len(docs)}
+    await _demarrer(req.collection, _executer(req.collection, client, req.espace_id, req.dossier_id, docs, "import", user))
+    return {"status": "import_lance", "collection": req.collection, "total": len(docs) if docs is not None else None}
 
 
 @router.post("/sync/{collection}")
@@ -226,14 +244,14 @@ async def synchroniser(collection: str, authorization: str | None = Header(defau
         raise _refus(409, "travail_en_cours", "Une synchronisation est déjà en cours pour cette collection.")
     cfg = await get_source_config(collection)
     client = _client(authorization)
-    try:
-        docs = await client.documents(cfg.get("espace_id", ""), cfg.get("dossier_id", ""))
-    except ErreurResana as e:
-        raise _http(e) from None
-    cfg["travail"] = _travail("synchronisation", len(docs))
+    espace, dossier = str(cfg.get("espace_id", "")), str(cfg.get("dossier_id", ""))
+    docs = await _liste_si_prete(client, espace, dossier)
+    if docs is not None and not docs:
+        raise _refus(409, "dossier_vide", MESSAGE_SYNCHRO_VIDE)
+    cfg["travail"] = _travail("synchronisation", docs)
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
-    await _demarrer(collection, _executer(collection, client, cfg.get("espace_id", ""), docs, "synchronisation", user))
-    return {"status": "synchro_lancee", "collection": collection, "total": len(docs)}
+    await _demarrer(collection, _executer(collection, client, espace, dossier, docs, "synchronisation", user))
+    return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None}
 
 
 @router.get("/status/{collection}", dependencies=[Depends(lire_la_collection)])
@@ -270,45 +288,76 @@ async def _ecrire_config(collection: str, **champs) -> None:
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
 
 
-async def _avancer(collection: str, faits: int) -> None:
+async def _suivre(collection: str, **champs) -> None:
+    """Met à jour l'avancement du travail en cours (lu par /status)."""
     cfg = await get_source_config(collection)
     if isinstance(cfg.get("travail"), dict):
-        cfg["travail"]["faits"] = faits
+        cfg["travail"].update(champs)
         await update_collection(collection, {"source_config_json": json.dumps(cfg)})
 
 
-async def _rapatrier(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana]) -> tuple[list[tuple[DocumentResana, Fichier]], list[dict]]:
-    """Télécharge chaque document (quelques-uns à la fois). Une erreur bloquante arrête tout et
-    remonte ; un refus propre au document l'écarte."""
-    recus: dict[int, tuple[DocumentResana, Fichier]] = {}
-    ecartes: list[dict] = []
-    file = list(enumerate(docs))
-    etat = {"octets": 0, "faits": 0, "erreur": None}
+def _ordre(docs: list[DocumentResana], connus: dict[str, dict]) -> list[DocumentResana]:
+    """Les nouveaux d'abord, puis ceux dont Résana annonce une autre version, puis le reste : si la
+    session s'arrête en route, la synchronisation suivante reprend là où c'est utile. L'ordre ne
+    décide de rien : seul le sha256 dit qu'un document a changé."""
+
+    def rang(d: DocumentResana) -> int:
+        ancien = connus.get(d.id)
+        if not ancien:
+            return 0
+        if (d.version_fichier, d.modifie_le) != (ancien.get("version_fichier"), ancien.get("modifie_le")):
+            return 1
+        return 2
+
+    return sorted(docs, key=rang)
+
+
+@dataclass
+class Rapatriement:
+    """Ce que le téléchargement a rapporté. `recus` : contenu gardé (nouveau ou changé) ; `identiques` :
+    documents relus sans changement (contenu jeté aussitôt) ; `erreur` : ce qui l'a arrêté en route."""
+
+    recus: list[tuple[DocumentResana, Fichier]] = field(default_factory=list)
+    identiques: list[DocumentResana] = field(default_factory=list)
+    ecartes: list[dict] = field(default_factory=list)
+    erreur: ErreurResana | None = None
+
+
+async def _rapatrier(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], connus: dict[str, dict]) -> Rapatriement:
+    """Télécharge chaque document, quelques-uns à la fois. Un contenu identique au précédent n'est pas
+    gardé en mémoire ; le plafond ne compte que ce qui est gardé. Une erreur bloquante (ou le
+    plafond) arrête le téléchargement : ce qui est déjà reçu reste utilisable."""
+    r = Rapatriement()
+    file = _ordre(docs, connus)
+    etat = {"octets": 0, "faits": 0}
 
     async def ouvrier() -> None:
-        while file and etat["erreur"] is None:
-            rang, doc = file.pop(0)
+        while file and r.erreur is None:
+            doc = file.pop(0)
             try:
                 f = await client.fichier(doc, espace)
             except ErreurResana as e:
                 if e.code in ERREURS_BLOQUANTES:
-                    etat["erreur"] = e
+                    r.erreur = r.erreur or e
                     return
-                ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
+                r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
                 continue
-            etat["octets"] += len(f.contenu)
-            if etat["octets"] > OCTETS_MAX_TOTAL:
-                etat["erreur"] = ErreurResana(413, "trop_volumineux_total")
-                return
-            recus[rang] = (doc, f)
+            if (connus.get(doc.id) or {}).get("sha256") == f.sha256:
+                r.identiques.append(doc)
+            else:
+                if etat["octets"] + len(f.contenu) > OCTETS_MAX_TOTAL:
+                    r.erreur = r.erreur or ErreurResana(413, "trop_volumineux_total")
+                    return
+                etat["octets"] += len(f.contenu)
+                r.recus.append((doc, f))
             etat["faits"] += 1
             if etat["faits"] % 10 == 0:
-                await _avancer(collection, etat["faits"])
+                await _suivre(collection, faits=etat["faits"])
 
     await asyncio.gather(*(ouvrier() for _ in range(TELECHARGEMENTS_PARALLELES)))
-    if etat["erreur"] is not None:
-        raise etat["erreur"]
-    return [recus[r] for r in sorted(recus)], ecartes
+    rang = {d.id: i for i, d in enumerate(docs)}
+    r.recus.sort(key=lambda x: rang[x[0].id])
+    return r
 
 
 def _irrecevable(nom: str, contenu: bytes) -> str | None:
@@ -369,7 +418,10 @@ async def _reindexer(collection: str, col: dict) -> int:
         await client.delete_partition(collection)
     except Exception as e:  # noqa: BLE001 — une partition encore absente
         logger.info("résana %s : partition non vidée (%s)", collection, type(e).__name__)
-    await client.create_partition(collection)
+    try:
+        await client.create_partition(collection)
+    except Exception as e:  # noqa: BLE001 — comme le dépôt : chaque envoi dira son échec
+        logger.warning("résana %s : partition non créée (%s)", collection, type(e).__name__)
     async with async_session() as session:
         sources = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()
     envoyes = 0
@@ -386,12 +438,24 @@ async def _reindexer(collection: str, col: dict) -> int:
     return envoyes
 
 
-async def _executer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], action: str, user: CurrentUser) -> None:
+async def _executer(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
     try:
+        if docs is None:
+
+            async def suivi(e: EnPreparation) -> None:
+                await _suivre(collection, dossiers_lus=e.dossiers_lus, dossiers=e.dossiers)
+
+            docs = await client.documents(espace, dossier, attendre=True, suivi=suivi)
+            if not docs:
+                raise ErreurResana(400, "dossier_vide", MESSAGE_DOSSIER_VIDE)
+            await _suivre(collection, phase="telechargement", total=len(docs))
         bilan = await _comparer_et_appliquer(collection, client, espace, docs, action)
     except ErreurResana as e:
         logger.info("résana %s : %s arrêté (%s)", collection, action, e.code)
-        await _ecrire_config(collection, travail={"etat": "echec", "action": action, "fin": utcnow().isoformat(), **e.detail()})
+        detail = e.detail()
+        if e.code == "dossier_vide":
+            detail["message"] = MESSAGE_DOSSIER_VIDE
+        await _ecrire_config(collection, travail={"etat": "echec", "action": action, "fin": utcnow().isoformat(), **detail})
         return
     except Exception as e:  # noqa: BLE001 — la tâche de fond ne doit rien laisser « en cours »
         logger.exception("résana %s : %s en échec", collection, action)
@@ -418,14 +482,24 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         raise ErreurResana(404, "introuvable")
     cfg = await get_source_config(collection)
     connus: dict[str, dict] = dict(cfg.get("documents") or {})
-    recus, ecartes = await _rapatrier(collection, client, espace, docs)
+    r = await _rapatrier(collection, client, espace, docs, connus)
+    if r.erreur is not None and not r.recus:
+        raise r.erreur
+    # Arrêté en route (session expirée, plafond) : on garde ce qui est arrivé, sans rien retirer ;
+    # les documents non relus restent dans leur dernière version connue.
+    partiel = r.erreur is not None
 
     pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
     gardes: dict[str, dict] = {}
     a_ecrire: list[tuple[str, bytes, str]] = []
     condensats: dict[str, str] = {}
-    ajoutes = modifies = inchanges = 0
-    for doc, f in recus:
+    ecartes = list(r.ecartes)
+    ajoutes = modifies = 0
+    for doc in r.identiques:
+        ancien = connus[doc.id]
+        gardes[doc.id] = {**ancien, "url": _url(doc) or ancien.get("url", ""), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
+        condensats[ancien["sha256"]] = doc.titre
+    for doc, f in r.recus:
         ancien = connus.get(doc.id)
         nom = ancien["fichier"] if ancien else _nom_de(doc, f)
         raison = _irrecevable(nom, f.contenu)
@@ -439,16 +513,18 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         if not ancien:
             nom = nom_unique(nom, doc.id, pris)
         gardes[doc.id] = {"sha256": f.sha256, "fichier": nom, "url": _url(doc), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
-        if ancien and ancien.get("sha256") == f.sha256:
-            inchanges += 1
+        a_ecrire.append((nom, f.contenu, _url(doc)))
+        if ancien:
+            modifies += 1
         else:
-            a_ecrire.append((nom, f.contenu, _url(doc)))
-            if ancien:
-                modifies += 1
-            else:
-                ajoutes += 1
-    del recus
-    retires = [v["fichier"] for k, v in connus.items() if k not in gardes]
+            ajoutes += 1
+    del r.recus
+    if partiel:
+        retires: list[str] = []
+        for k, v in connus.items():
+            gardes.setdefault(k, v)
+    else:
+        retires = [v["fichier"] for k, v in connus.items() if k not in gardes]
 
     if a_ecrire or retires:
         await _retirer(collection, retires)
@@ -456,19 +532,20 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
             await depot._enregistrer_source(collection, nom, contenu, depot.STRATEGIE_DOCUMENT, 0, url)
         await _reindexer(collection, col)
 
-    bilan = {"ajoutes": ajoutes, "modifies": modifies, "retires": len(retires), "inchanges": inchanges, "ecartes": len(ecartes)}
-    await _ecrire_config(
-        collection,
-        documents=gardes,
-        last_sync_at=utcnow().isoformat(),
-        travail={
-            "etat": "termine" if (a_ecrire or retires) else "a_jour",
-            "action": action,
-            "fin": utcnow().isoformat(),
-            "total": len(docs),
-            "faits": len(docs),
-            **bilan,
-            "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
-        },
-    )
+    bilan = {"ajoutes": ajoutes, "modifies": modifies, "retires": len(retires), "inchanges": len(r.identiques), "ecartes": len(ecartes)}
+    travail = {
+        "etat": "partiel" if partiel else ("termine" if (a_ecrire or retires) else "a_jour"),
+        "action": action,
+        "fin": utcnow().isoformat(),
+        "total": len(docs),
+        "faits": len(r.identiques) + len(a_ecrire) + len(ecartes),
+        **bilan,
+        "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
+    }
+    champs: dict = {"documents": gardes, "travail": travail}
+    if partiel and r.erreur is not None:
+        travail.update({k: v for k, v in r.erreur.detail().items() if k in ("code", "message", "url_connexion")})
+    else:
+        champs["last_sync_at"] = utcnow().isoformat()
+    await _ecrire_config(collection, **champs)
     return bilan

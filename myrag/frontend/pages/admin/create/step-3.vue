@@ -818,7 +818,8 @@ onMounted(async () => {
           v-else-if="source === 'resana'"
           class="fr-hint-text fr-mt-1w"
         >
-          <span v-if="!resanaLance">Choisissez un espace puis un dossier pour continuer.</span>
+          <span v-if="!resanaLance && !resanaPret">Choisissez un espace puis un dossier pour continuer.</span>
+          <span v-else-if="!resanaLance">Cliquez sur « Importer le dossier » : les documents sont lus avec vos droits Résana, en tâche de fond.</span>
           <span v-else>L'import se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
         </p>
         <p

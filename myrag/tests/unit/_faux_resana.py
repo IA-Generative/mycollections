@@ -54,6 +54,8 @@ class FauxResana:
     #: Les réponses forcées : {chemin: (statut, corps)} — corps dict (JSON) ou bytes.
     pannes: dict[str, tuple[int, object]] = field(default_factory=dict)
     curseurs_perimes: int = 0
+    #: Tant que > 0, la première page répond `202 en_preparation` (un grand dossier se prépare).
+    preparations: int = 0
     requetes: list[httpx.Request] = field(default_factory=list)
 
     def transport(self) -> httpx.MockTransport:
@@ -81,6 +83,9 @@ class FauxResana:
             if not req.url.params.get("dossier"):
                 return self._erreur(400, "dossier_requis")
             curseur = req.url.params.get("curseur")
+            if not curseur and self.preparations > 0:
+                self.preparations -= 1
+                return httpx.Response(202, json={"code": "en_preparation", "message": "x", "reessayable": True, "dossiers_lus": 12, "dossiers": 40}, headers={"retry-after": "10"})
             if curseur and self.curseurs_perimes > 0:
                 self.curseurs_perimes -= 1
                 return self._erreur(410, "curseur_perime")

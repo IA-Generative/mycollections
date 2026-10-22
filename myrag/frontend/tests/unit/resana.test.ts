@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { erreurResana, libelleTravail, resumeApercu, travailEnCours } from '../../utils/resana'
+import { erreurResana, libelleTravail, preparation, resumeApercu, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -29,6 +29,15 @@ describe('l\'avancement', () => {
     expect(libelleTravail(null)).toBe('')
     expect(travailEnCours({ etat: 'en_cours' })).toBe(true)
     expect(travailEnCours({ etat: 'termine' })).toBe(false)
+  })
+  it('un grand dossier se prépare, un travail s\'arrête en route', () => {
+    expect(libelleTravail({ etat: 'en_cours', phase: 'preparation', dossiers_lus: 12, dossiers: 40 }))
+      .toBe('Résana prépare la liste du dossier : 12 dossiers lus sur 40. Un grand dossier peut demander plusieurs minutes.')
+    expect(preparation(null, 40)).toBe('')
+    expect(preparation(1, 3)).toBe(' : 1 dossier lu sur 3')
+    expect(libelleTravail({ etat: 'partiel', action: 'import', ajoutes: 30, modifies: 0, message: 'Votre session a expiré.' }))
+      .toBe('Import arrêté en route : Votre session a expiré. 30 documents reçus sont gardés ; synchronisez de nouveau pour continuer.')
+    expect(travailEnCours({ etat: 'partiel' })).toBe(false)
   })
   it('l\'aperçu d\'un dossier', () => {
     expect(resumeApercu({ total: 40, taille_approx_mo: 119.6 })).toBe('40 documents, environ 120 Mo')

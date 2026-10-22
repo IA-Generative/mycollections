@@ -5,7 +5,7 @@
  * où s'en ouvrir une. Le parent porte le bouton d'import (`importer()`), comme pour un dossier.
  */
 import type { ErreurResana } from '~/utils/resana'
-import { erreurResana, resumeApercu } from '~/utils/resana'
+import { erreurResana, preparation, resumeApercu } from '~/utils/resana'
 
 const props = defineProps<{ collection: string }>()
 const emit = defineEmits<{ pret: [boolean], lance: [number] }>()
@@ -24,11 +24,14 @@ const apercu = ref<{ total: number, taille_approx_mo?: number | null, documents:
 const chargeEspaces = ref(false)
 const chargeDossiers = ref(false)
 const chargeApercu = ref(false)
+/** Un grand dossier : le service prépare la liste (202), on rappelle jusqu'à ce qu'elle soit prête. */
+const enPreparation = ref<{ dossiers_lus?: number | null, dossiers?: number | null } | null>(null)
+let rappel: ReturnType<typeof setTimeout> | undefined
 const envoi = ref(false)
 const erreur = ref<ErreurResana | null>(null)
 
 const dossierChoisi = computed(() => dossiers.value.find(d => d.id === dossier.value) || null)
-const pret = computed(() => !!(espace.value && dossierChoisi.value && apercu.value?.total) && !envoi.value)
+const pret = computed(() => !!(espace.value && dossierChoisi.value && (apercu.value?.total || enPreparation.value)) && !envoi.value)
 watch(pret, v => emit('pret', v), { immediate: true })
 
 async function chargerEspaces () {
@@ -73,14 +76,26 @@ function chercher () {
 }
 
 async function chargerApercu () {
+  clearTimeout(rappel)
   apercu.value = null
+  enPreparation.value = null
   if (!dossier.value) {
     return
   }
+  const demande = dossier.value
   chargeApercu.value = true
   erreur.value = null
   try {
-    apercu.value = await get(`/api/sources/resana/espaces/${encodeURIComponent(espace.value)}/apercu`, { dossier: dossier.value })
+    const r = await get(`/api/sources/resana/espaces/${encodeURIComponent(espace.value)}/apercu`, { dossier: demande })
+    if (demande !== dossier.value) {
+      return // la personne a choisi un autre dossier entre-temps
+    }
+    if (r.en_preparation) {
+      enPreparation.value = r
+      rappel = setTimeout(chargerApercu, 5000)
+      return
+    }
+    apercu.value = r
   }
   catch (e) {
     erreur.value = erreurResana(e)
@@ -116,7 +131,10 @@ async function importer () {
 
 defineExpose({ importer })
 onMounted(chargerEspaces)
-onBeforeUnmount(() => clearTimeout(minuterie))
+onBeforeUnmount(() => {
+  clearTimeout(minuterie)
+  clearTimeout(rappel)
+})
 </script>
 
 <template>
@@ -276,7 +294,15 @@ onBeforeUnmount(() => clearTimeout(minuterie))
         </template>
 
         <p
-          v-if="chargeApercu"
+          v-if="enPreparation"
+          class="fr-text--sm"
+          role="status"
+        >
+          Résana prépare la liste de ce grand dossier{{ preparation(enPreparation.dossiers_lus, enPreparation.dossiers) }}.
+          Cela peut prendre plusieurs minutes ; vous pouvez aussi lancer l'import tout de suite.
+        </p>
+        <p
+          v-else-if="chargeApercu"
           class="fr-text--sm"
           role="status"
         >

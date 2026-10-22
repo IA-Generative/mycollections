@@ -12,8 +12,12 @@ export interface ErreurResana {
 }
 
 export interface TravailResana {
-  etat?: 'en_cours' | 'termine' | 'a_jour' | 'echec' | 'interrompu' | string
+  etat?: 'en_cours' | 'termine' | 'a_jour' | 'partiel' | 'echec' | 'interrompu' | string
   action?: 'import' | 'synchronisation' | string
+  /** En cours : le service prépare la liste d'un grand dossier, ou les documents arrivent. */
+  phase?: 'preparation' | 'telechargement' | string
+  dossiers_lus?: number | null
+  dossiers?: number | null
   total?: number
   faits?: number
   ajoutes?: number
@@ -89,6 +93,9 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
   const e = feminin ? 'e' : ''
   switch (t.etat) {
     case 'en_cours':
+      if (t.phase === 'preparation') {
+        return `Résana prépare la liste du dossier${preparation(t.dossiers_lus, t.dossiers)}. Un grand dossier peut demander plusieurs minutes.`
+      }
       return t.total ? `${quoi} en cours : ${t.faits ?? 0} sur ${compte(t.total, 'document', 'documents')} lus.` : `${quoi} en cours.`
     case 'a_jour':
       return 'Rien n\'a changé dans Résana depuis la dernière synchronisation.'
@@ -101,6 +108,10 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
       const ecartes = t.ecartes ? `, ${compte(t.ecartes, 'écarté', 'écartés')}` : ''
       return `${quoi} terminé${e} : ${parties.join(', ')}${ecartes}. L'indexation se poursuit en tâche de fond.`
     }
+    case 'partiel': {
+      const recus = (t.ajoutes ?? 0) + (t.modifies ?? 0)
+      return `${quoi} arrêté${e} en route : ${t.message || 'erreur du service Résana.'} ${compte(recus, 'document reçu est gardé', 'documents reçus sont gardés')} ; synchronisez de nouveau pour continuer.`
+    }
     case 'interrompu':
       return `${quoi} interrompu${e} (le service a redémarré). Relancez la synchronisation.`
     case 'echec':
@@ -111,7 +122,16 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
 }
 
 export function travailEnCours (t: TravailResana | null | undefined): boolean {
+  // « partiel » est fini : la personne relance quand sa session est rouverte.
   return t?.etat === 'en_cours'
+}
+
+/** « : 12 dossiers lus sur 40 », ou rien si le service ne le dit pas. */
+export function preparation (lus: number | null | undefined, total: number | null | undefined): string {
+  if (typeof lus !== 'number' || typeof total !== 'number' || !total) {
+    return ''
+  }
+  return ` : ${lus} dossier${lus > 1 ? 's' : ''} lu${lus > 1 ? 's' : ''} sur ${total}`
 }
 
 /** « 40 documents, environ 120 Mo » — la taille de Résana est arrondie, on le dit. */

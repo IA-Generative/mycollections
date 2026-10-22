@@ -126,3 +126,38 @@ def test_noms():
     assert nom_unique("note.MD", "a/2", pris) == "note (a2).MD"
     d = [DocumentResana(id=i, titre="T", nom_fichier="t.md", mime="", dossier_id=None, chemin="", url_consultation="") for i in ("x", "y")]
     assert noms_uniques(d) == {"x": "t.md", "y": "t (y).md"}
+
+
+async def test_un_grand_dossier_en_preparation(monkeypatch):
+    from app.services.connectors.resana import EnPreparation
+
+    faux = FauxResana(documents=_docs(3), preparations=2)
+    with pytest.raises(EnPreparation) as e:
+        await _client(faux).documents("e-1", "d-1")
+    assert (e.value.dossiers_lus, e.value.dossiers, e.value.attente) == (12, 40, 10.0)
+
+    etapes, dormi = [], []
+
+    async def dormir(s):
+        dormi.append(s)
+
+    async def suivi(e):
+        etapes.append((e.dossiers_lus, e.dossiers))
+
+    client = _client(faux)
+    monkeypatch.setattr(client, "_dormir", dormir)
+    assert len(await client.documents("e-1", "d-1", attendre=True, suivi=suivi)) == 3
+    assert etapes == [(12, 40)] and dormi == [10.0]
+
+
+async def test_une_preparation_sans_fin_s_arrete(monkeypatch):
+    monkeypatch.setattr(resana, "ATTENTE_PREPARATION_MAX_S", 0)
+    client = _client(FauxResana(documents=_docs(1), preparations=5))
+
+    async def dormir(s):
+        pass
+
+    monkeypatch.setattr(client, "_dormir", dormir)
+    with pytest.raises(ErreurResana) as e:
+        await client.documents("e-1", "d-1", attendre=True)
+    assert e.value.code == "preparation_trop_longue"

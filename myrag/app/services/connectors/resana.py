@@ -16,9 +16,10 @@ dit avec le lien de connexion que donne le service.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from urllib.parse import unquote
 
@@ -34,6 +35,9 @@ DOCUMENTS_MAX = 5000
 LIMITE_PAGE = 200
 #: Une liste en cache expirée (`410 curseur_perime`) se relit une fois depuis le début.
 RELECTURES_CURSEUR = 1
+#: Un grand dossier se prépare côté service (`202 en_preparation`, un appel Résana par dossier) :
+#: on rappelle la même adresse au rythme de `Retry-After`, sans dépasser ce délai.
+ATTENTE_PREPARATION_MAX_S = 20 * 60
 
 MESSAGES = {
     "session_absente": "Vous n'avez pas de session Résana ouverte. Connectez-vous à Résana depuis le lien proposé, puis réessayez.",
@@ -51,6 +55,8 @@ MESSAGES = {
     "reponse_illisible": "Le service Résana a répondu de façon inattendue.",
     "service_injoignable": "Le service Résana est injoignable pour le moment. Réessayez dans un instant.",
     "trop_volumineux_total": "Ce dossier dépasse 500 Mo au total : choisissez un sous-dossier.",
+    "en_preparation": "Le service Résana prépare la liste de ce dossier.",
+    "preparation_trop_longue": "La liste de ce dossier n'a pas pu être préparée à temps : réessayez, ou choisissez un sous-dossier.",
 }
 
 
@@ -67,6 +73,17 @@ class ErreurResana(Exception):
         if self.url_connexion:
             d["url_connexion"] = self.url_connexion
         return d
+
+
+class EnPreparation(ErreurResana):
+    """`202 en_preparation` : la liste d'un grand dossier se prépare ; rappeler la même adresse."""
+
+    def __init__(self, dossiers_lus: int | None, dossiers: int | None, attente: float):
+        super().__init__(202, "en_preparation", reessayable=True)
+        self.dossiers_lus, self.dossiers, self.attente = dossiers_lus, dossiers, attente
+
+    def detail(self) -> dict:
+        return {**super().detail(), "dossiers_lus": self.dossiers_lus, "dossiers": self.dossiers}
 
 
 @dataclass(frozen=True)
@@ -166,6 +183,20 @@ class ClientExportResana:
             url_connexion=url if isinstance(url, str) and url.startswith("https://") else None,
         )
 
+    @staticmethod
+    def _preparation(reponse: httpx.Response) -> EnPreparation:
+        try:
+            corps = reponse.json()
+        except ValueError:
+            corps = {}
+        corps = corps if isinstance(corps, dict) else {}
+
+        def entier(v) -> int | None:
+            return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+
+        attente = reponse.headers.get("retry-after", "")
+        return EnPreparation(entier(corps.get("dossiers_lus")), entier(corps.get("dossiers")), float(attente) if attente.isdigit() else 10.0)
+
     async def _json(self, chemin: str, params: dict | None = None, *, delai: float = DELAI_S) -> dict:
         try:
             async with self._client(delai) as c:
@@ -174,6 +205,8 @@ class ClientExportResana:
             raise ErreurResana(504, "service_injoignable", reessayable=True) from None
         except httpx.HTTPError:
             raise ErreurResana(502, "service_injoignable", reessayable=True) from None
+        if r.status_code == 202:
+            raise self._preparation(r)
         if r.status_code != 200:
             raise self._erreur(r)
         try:
@@ -199,17 +232,32 @@ class ClientExportResana:
                 rendu.append(Dossier(id=_ident(d.get("id")), titre=str(d.get("titre") or ""), parent_id=parent, chemin=str(d.get("chemin") or d.get("titre") or "")))
         return rendu
 
-    async def documents(self, espace: str, dossier: str) -> list[DocumentResana]:
+    async def documents(self, espace: str, dossier: str, *, attendre: bool = False, suivi: Callable[[EnPreparation], Awaitable[None]] | None = None) -> list[DocumentResana]:
         """La liste **complète** d'un dossier et de ses sous-dossiers (sans `depuis` : c'est elle qui
         révèle les suppressions). Pages suivies par `suivant` ; un curseur périmé relance la lecture
-        une fois depuis le début."""
-        for essai in range(RELECTURES_CURSEUR + 1):
+        une fois depuis le début. Un grand dossier en préparation (`202`) lève `EnPreparation`, ou,
+        avec `attendre`, se rappelle jusqu'à ce qu'il soit prêt (`suivi` reçoit chaque étape)."""
+        relectures = 0
+        fin = asyncio.get_running_loop().time() + ATTENTE_PREPARATION_MAX_S
+        while True:
             try:
                 return await self._documents(espace, dossier)
-            except ErreurResana as e:
-                if e.code != "curseur_perime" or essai >= RELECTURES_CURSEUR:
+            except EnPreparation as e:
+                if not attendre:
                     raise
-        raise ErreurResana(410, "curseur_perime")  # pragma: no cover — la boucle rend ou lève
+                if asyncio.get_running_loop().time() >= fin:
+                    raise ErreurResana(504, "preparation_trop_longue", reessayable=True) from None
+                if suivi is not None:
+                    await suivi(e)
+                await self._dormir(min(max(e.attente, 1.0), 30.0))
+            except ErreurResana as e:
+                if e.code != "curseur_perime" or relectures >= RELECTURES_CURSEUR:
+                    raise
+                relectures += 1
+
+    @staticmethod
+    async def _dormir(secondes: float) -> None:
+        await asyncio.sleep(secondes)
 
     async def _documents(self, espace: str, dossier: str) -> list[DocumentResana]:
         rendu: list[DocumentResana] = []
