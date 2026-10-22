@@ -84,6 +84,20 @@ async def get_collection(name: str) -> dict | None:
         return c.to_dict() if c else None
 
 
+async def get_source_config(name: str) -> dict:
+    """La configuration de la source (`source_config_json`). Elle n'est pas dans `to_dict` : elle ne
+    sort que par les routes de sa source (Résana y garde la liste des documents importés)."""
+    async with async_session() as session:
+        c = await session.get(Collection, name)
+        if not c:
+            return {}
+        try:
+            cfg = json.loads(c.source_config_json or "{}")
+        except ValueError:
+            return {}
+        return cfg if isinstance(cfg, dict) else {}
+
+
 async def is_creator(name: str, sub: str | None) -> bool:
     """Vrai si ``sub`` est le créateur (``created_by``) de la collection."""
     if not sub:

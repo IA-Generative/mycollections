@@ -20,6 +20,7 @@ MESSAGE_VERIFICATION = (
 )
 
 MESSAGE_ARCHIVEE = "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord (page Publication, ou catalogue d'administration)."
+MESSAGE_RESANA = "Une collection importée de Résana reste privée à la personne qui l'a importée : elle ne se publie pas dans l'assistant."
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
 
@@ -96,6 +97,10 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     # que le nom de la collection (« Publication OWUI echouee : <nom> »).
     if (fiche or {}).get("archived_at") and req.state != "draft":
         raise HTTPException(status_code=409, detail=MESSAGE_ARCHIVEE)
+    # Une collection Résana reste privée à qui l'a importée (docs/resana.md, décision v1) : elle
+    # ne part pas dans l'assistant, où d'autres l'interrogeraient. Un brouillon reste permis.
+    if (fiche or {}).get("source_type") == "resana" and req.state != "draft":
+        raise HTTPException(status_code=409, detail=MESSAGE_RESANA)
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 

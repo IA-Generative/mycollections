@@ -534,3 +534,10 @@ async def sync_drive_source(
         "job_ids": job_ids,
         "last_sync_at": cfg["last_sync_at"],
     }
+
+
+# Résana (docs/resana.md) : ses routes vivent à part, sous /api/sources/resana, gardées par la
+# capacité `resana`. Importé ici pour ne pas toucher à app/main.py.
+from app.routers.sources_resana import router as _resana_router  # noqa: E402
+
+router.include_router(_resana_router)

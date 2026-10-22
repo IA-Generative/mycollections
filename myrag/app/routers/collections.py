@@ -443,6 +443,22 @@ async def usage_collection_endpoint(name: str, user: CurrentUser = Depends(curre
     return await accueil.usage_collection(name)
 
 
+#: Une collection Résana reste privée à qui l'a importée (docs/resana.md) : sa portée et sa source
+#: ne changent pas par la fiche, seulement par les routes /api/sources/resana.
+CHAMPS_VERROUILLES_RESANA = ("scope", "scope_groups", "source_type", "source_url", "source_config_json")
+
+
+def _garder_resana(existing: dict, updates: dict) -> None:
+    if existing.get("source_type") != "resana":
+        if updates.get("source_type") == "resana":
+            raise HTTPException(status_code=409, detail="Une collection se relie à Résana par l'import d'un dossier, pas par sa fiche.")
+        return
+    # Renvoyer la même valeur (un formulaire qui renvoie toute la fiche) n'est pas un changement.
+    changes = [k for k in CHAMPS_VERROUILLES_RESANA if k in updates and updates[k] != existing.get(k)]
+    if changes:
+        raise HTTPException(status_code=409, detail="Une collection Résana reste privée à la personne qui a importé le dossier : sa portée et sa source ne se modifient pas.")
+
+
 @router.patch("/{name}")
 async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
@@ -455,6 +471,7 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
         user_sub=user.sub,
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
+    _garder_resana(existing, updates)
     if "categorie" in updates:
         # Qui gère la collection la range lui-même parmi les catégories existantes ; le changement
         # s'écrit au journal comme un reclassement de l'administration.
