@@ -333,6 +333,11 @@ function next () {
   router.push(`/admin/create/step-4?collection=${collection}`)
 }
 
+// Résana : le choix du dossier vit dans DepotChoixResana ; le bouton d'import reste en bas, comme ailleurs.
+const choixResana = ref<{ importer: () => Promise<void> } | null>(null)
+const resanaPret = ref(false)
+const resanaLance = ref(false)
+
 onMounted(async () => {
   if (source === 'drive') {
     try {
@@ -539,9 +544,23 @@ onMounted(async () => {
           </div>
         </div>
 
+        <template v-if="source === 'resana'">
+          <DepotChoixResana
+            v-if="!resanaLance"
+            ref="choixResana"
+            :collection="collection"
+            @pret="resanaPret = $event"
+            @lance="resanaLance = true"
+          />
+          <DepotEtatResana
+            v-else
+            :collection="collection"
+          />
+        </template>
+
         <!-- Source selector (upload file / URL) — hidden when Drive picker or a folder is active -->
         <div
-          v-if="source !== 'drive' && source !== 'directory'"
+          v-if="source !== 'drive' && source !== 'directory' && source !== 'resana'"
           class="fr-card fr-mb-4w"
         >
           <div class="fr-card__body">
@@ -796,6 +815,14 @@ onMounted(async () => {
           <span v-else>L'indexation se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
         </p>
         <p
+          v-else-if="source === 'resana'"
+          class="fr-hint-text fr-mt-1w"
+        >
+          <span v-if="!resanaLance && !resanaPret">Choisissez un espace puis un dossier pour continuer.</span>
+          <span v-else-if="!resanaLance">Cliquez sur « Importer le dossier » : les documents sont lus avec vos droits Résana, en tâche de fond.</span>
+          <span v-else>L'import se poursuit : vous pouvez passer à l'étape suivante sans attendre.</span>
+        </p>
+        <p
           v-else-if="!uploaded && !uploading"
           class="fr-hint-text fr-mt-1w"
         >
@@ -883,6 +910,25 @@ onMounted(async () => {
             @click="zone?.deposer()"
           >
             Déposer le dossier
+          </button>
+        </li>
+        <li v-else-if="source === 'resana'">
+          <button
+            v-if="resanaLance"
+            type="button"
+            class="fr-btn"
+            @click="next"
+          >
+            Étape suivante
+          </button>
+          <button
+            v-else
+            type="button"
+            class="fr-btn"
+            :disabled="!resanaPret"
+            @click="choixResana?.importer()"
+          >
+            Importer le dossier
           </button>
         </li>
         <li v-else-if="uploaded">

@@ -29,7 +29,7 @@ def test_api_config_reflete_les_capacites(client, capacites):
     assert c["seuil_chantier"] == 7 and c["demandes"] is True
 
 
-SANS_RIEN = {"demandes": False, "signalements": False, "assistants": False, "entraide": False, "seuil_chantier": 5}
+SANS_RIEN = {"demandes": False, "signalements": False, "assistants": False, "entraide": False, "resana": False, "seuil_chantier": 5}
 
 
 def _reponse(json):

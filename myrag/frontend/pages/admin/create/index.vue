@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { cartesDeSource, ligneBientot } from '~/utils/wizard'
+import { cartesDeSource, ligneBientot, sourcesSelon } from '~/utils/wizard'
 
 /** Étape 1 de l'assistant de création : avant de créer, puis d'où viennent les documents. Seules
- *  les sources que le code sait traiter sont proposées ; les autres sont annoncées sur une ligne. */
+ *  les sources que le code sait traiter sont proposées ; les autres sont annoncées sur une ligne.
+ *  Une source gardée par une capacité (Résana) n'est une carte que si elle est allumée. */
 const router = useRouter()
-const cartes = cartesDeSource()
-const bientot = ligneBientot()
-const selected = ref(cartes[0]?.cle || '')
+const { capacites, charger } = useCapacites()
+const sources = computed(() => sourcesSelon(capacites.value))
+const cartes = computed(() => cartesDeSource(sources.value))
+const bientot = computed(() => ligneBientot(sources.value))
+const selected = ref(cartesDeSource()[0]?.cle || '')
+onMounted(charger)
 
 function next () {
   router.push(`/admin/create/step-2?source=${selected.value}`)

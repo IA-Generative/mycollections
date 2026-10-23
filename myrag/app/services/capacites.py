@@ -7,7 +7,8 @@ valeur connue, sinon des défauts qui n'affichent rien et n'écrivent rien.
 
 Un drapeau à `false` ne se contente pas de cacher un bouton : la route répond 404.
 
-Drapeaux : `demandes`, `signalements` (le collectif), `assistants`, `entraide` (ADR-0003).
+Drapeaux : `demandes`, `signalements` (le collectif), `assistants`, `entraide` (ADR-0003), `resana`
+(import d'un dossier Résana, docs/resana.md).
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ logger = logging.getLogger("myrag.capacites")
 
 DELAI_S = 2.0
 CACHE_S = 60.0
-DRAPEAUX = ("demandes", "signalements", "assistants", "entraide")
+DRAPEAUX = ("demandes", "signalements", "assistants", "entraide", "resana")
 
 _cache: dict = {"valeur": None, "expire": 0.0}
 

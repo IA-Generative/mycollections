@@ -3,6 +3,7 @@
  * les réglages avancés de l'étape 2 et l'identifiant proposé. Fonctions pures, testées dans
  * tests/unit/wizard.test.ts.
  */
+import type { Capacites, Drapeau } from './capacites'
 import type { ReglesNommage } from './collectionName'
 import { deriverIdentifiant, motifRefus, REGLES_PAR_DEFAUT } from './collectionName'
 
@@ -29,6 +30,8 @@ export interface Source {
   /** Vrai seulement si le code sait traiter cette source de bout en bout. */
   disponible: boolean
   miseAJourAuto?: boolean
+  /** Branchée mais gardée par une capacité : disponible seulement si ce drapeau est allumé. */
+  drapeau?: Drapeau
 }
 
 /** Les sources, dans l'ordre d'affichage. Une source devient une carte quand elle est branchée. */
@@ -38,10 +41,15 @@ export const SOURCES: readonly Source[] = [
   { cle: 'legifrance', nom: 'Légifrance', court: 'Légifrance', icone: 'fr-icon-scales-3-line', disponible: false, miseAJourAuto: true, description: 'Un code ou une loi, découpé par article.' },
   { cle: 'drive', nom: 'Un dossier Drive', court: 'Drive', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier de la Suite numérique, réindexé quand son contenu change.' },
   { cle: 'nextcloud', nom: 'Nextcloud', court: 'Nextcloud', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier Nextcloud, réindexé quand il change.' },
-  { cle: 'resana', nom: 'Resana', court: 'Resana', icone: 'fr-icon-team-line', disponible: false, miseAJourAuto: true, description: 'Un espace Resana.' },
+  { cle: 'resana', nom: 'Un dossier Résana', court: 'Résana', icone: 'fr-icon-team-line', disponible: false, drapeau: 'resana', description: 'Un dossier d\'un de vos espaces Résana, lu avec vos droits. La collection reste privée : vous seul l\'interrogez.' },
   { cle: 'website', nom: 'Une page ou un site', court: 'un site web', icone: 'fr-icon-global-line', disponible: false, miseAJourAuto: true, description: 'Une adresse web, relue et découpée page par page.' },
   { cle: 'mcp', nom: 'Un outil MCP', court: 'un outil MCP', icone: 'fr-icon-links-line', disponible: false, description: 'Les ressources d\'un serveur MCP, comme documents.' },
 ]
+
+/** Les sources selon les capacités : une source gardée par un drapeau allumé devient disponible. */
+export function sourcesSelon (capacites: Capacites, sources: readonly Source[] = SOURCES): Source[] {
+  return sources.map(s => (s.drapeau && capacites[s.drapeau] === true ? { ...s, disponible: true } : s))
+}
 
 /** Les sources que l'on peut choisir : une carte chacune. */
 export function cartesDeSource (sources: readonly Source[] = SOURCES): Source[] {

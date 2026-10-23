@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # tout hôte absent de sa liste, et redirige en 301 vers son adresse publique tant
     # qu'il croit répondre en clair. Vide = on n'y touche pas (dev, adresse publique).
     drive_public_host: str = Field(default="")
+    #: Le service d'export Résana (contrat owuitools-resana docs/export-v1.md) : adresse interne
+    #: (préfixe `/export/v1` ajouté par le connecteur) et secret propre à Mes collections
+    #: (`X-Internal-Token`). Vides : l'import Résana répond 503. Le drapeau `resana` l'allume.
+    resana_export_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_EXPORT_URL", "resana_export_url"))
+    resana_export_secret: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_EXPORT_SECRET", "resana_export_secret"))
 
     # Open WebUI (used by /publish to create model aliases)
     # Défaut d'EXEMPLE : chaque déploiement pose son adresse par OWUI_URL. Nommer ici

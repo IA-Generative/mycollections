@@ -6,6 +6,12 @@
 
     <div class="fr-grid-row fr-grid-row--gutters">
       <div class="fr-col-12 fr-col-lg-8">
+        <DepotEtatResana
+          v-if="capacites.resana"
+          :collection="id"
+          class="fr-mt-2w"
+        />
+
         <!-- Strategy -->
         <div class="fr-select-group fr-mt-2w">
           <label class="fr-label" for="strategy">Découpage du document
@@ -52,4 +58,7 @@ const { rechercheIndisponible } = useEtatService()
 const strategy = ref('auto')
 const sensitivity = ref('public')
 const error = ref('')
+// Une collection Résana : son dossier et « Synchroniser » (la carte ne s'affiche que si elle l'est).
+const { capacites, charger } = useCapacites()
+onMounted(charger)
 </script>
