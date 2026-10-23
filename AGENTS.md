@@ -180,6 +180,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/chunker.py` | 4 strategies de decoupage |
 | `myrag/app/services/graph_builder.py` | Graph NetworkX + Cytoscape.js |
 | `myrag/app/routers/ingest.py` | Upload + from-url + reindex |
+| `myrag/app/services/indexeur.py` | L'indexeur (OpenRAG aujourd'hui) derrière une interface : envoyer, suivre, retirer, vider (`docs/indexeur.md`) ; construit dans `ingest._indexeur` |
 | `myrag/app/routers/sources_resana.py`, `app/services/connectors/resana.py`, `app/services/resana_perimetre.py`, `frontend/pages/admin/create/resana.vue` | Import d'un dossier Résana : client du service d'export, routes `/api/sources/resana/*`, collection privée à l'importeur (`docs/resana.md`) |
 | `myrag/app/routers/playground.py` | Chat RAG avec fallback |
 | `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |

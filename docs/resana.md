@@ -122,7 +122,7 @@ du groupe `<racine>/<nom>-admin` la lisent.
    - un format non pris en charge est écarté ;
    - un document refusé par Résana (`hors_droits`, `introuvable`, `trop_volumineux`) est écarté, et
      retiré s'il avait été importé.
-6. **OpenRAG, document par document.** La partition n'est jamais vidée, et la recherche continue
+6. **OpenRAG, document par document** (par l'interface de l'indexeur, `docs/indexeur.md`). La partition n'est jamais vidée, et la recherche continue
    pendant la mise à jour.
    - L'ancienne version d'un document modifié et les documents disparus sont retirés un par un
      (`DELETE /indexer/partition/<p>/file/<id>`).
