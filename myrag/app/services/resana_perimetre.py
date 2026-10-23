@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from app.services.connectors.resana import DocumentResana, Dossier
 
@@ -159,21 +160,25 @@ def _date(iso: str | None) -> datetime | None:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
-def avis(collection: str, cfg: dict, *, est_importeur: bool, maintenant: datetime, seuil_jours: int = FRAICHEUR_JOURS) -> dict | None:
+def avis(collection: str, cfg: dict, *, est_importeur: bool, maintenant: datetime, seuil_jours: int = FRAICHEUR_JOURS, titre: str = "") -> dict | None:
     """L'invitation à mettre l'index à jour, glissée dans une réponse ou une recherche : seulement
     pour la personne qui peut synchroniser, et seulement quand c'est utile (index ancien, ou passe
-    restée incomplète). None sinon. `action.url` est relatif à l'origine de Mes collections."""
+    restée incomplète ou en échec). None sinon. Le message nomme la collection (`titre`) : une
+    recherche sur deux collections Résana donne deux avis qu'on distingue. `action.url` est relatif
+    à l'origine du front de Mes collections."""
     if not est_importeur:
         return None
     travail = cfg.get("travail") or {}
     if travail.get("etat") == "en_cours":
         return None
-    action = {"libelle": "Mettre à jour", "url": f"/c/{collection}/upload?synchroniser=1"}
-    if travail.get("etat") in ("partiel", "interrompu"):
+    nom = titre.strip() or collection
+    action = {"libelle": "Mettre à jour", "url": f"/c/{quote(collection, safe='')}/upload?synchroniser=1"}
+    if travail.get("etat") in ("partiel", "interrompu", "echec"):
         return {
             "collection": collection,
+            "titre": nom,
             "code": "resana_incomplet",
-            "message": "L'index de votre dossier Résana est incomplet : la dernière mise à jour s'est arrêtée en route. Souhaitez-vous la reprendre ?",
+            "message": f"L'index Résana de « {nom} » est incomplet : la dernière mise à jour n'est pas allée au bout. Souhaitez-vous la reprendre ?",
             "action": {**action, "libelle": "Reprendre"},
         }
     derniere = _date(cfg.get("last_sync_at"))
@@ -184,8 +189,9 @@ def avis(collection: str, cfg: dict, *, est_importeur: bool, maintenant: datetim
         return None
     return {
         "collection": collection,
+        "titre": nom,
         "code": "resana_ancien",
-        "message": f"L'index de votre espace Résana semble ancien (dernière lecture il y a {jours} jours). Souhaitez-vous le mettre à jour ?",
+        "message": f"L'index Résana de « {nom} » semble ancien (dernière lecture il y a {jours} jours). Souhaitez-vous le mettre à jour ?",
         "action": action,
         "jours": jours,
     }

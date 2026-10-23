@@ -263,6 +263,8 @@ export function phraseCouverture (c: CouvertureResana | null | undefined): strin
 /** L'invitation à mettre l'index à jour, glissée dans une réponse (champ `avis`). */
 export interface AvisResana {
   collection: string
+  /** Le titre de la collection, déjà repris dans `message`. */
+  titre?: string
   code: string
   message: string
   action: { libelle: string, url: string }

@@ -205,10 +205,11 @@ Pas de synchronisation planifiée (elle demanderait d'agir sans la personne : is
 l'indexation »). À la place, l'outil **propose** une mise à jour là où la personne se trouve, quand
 c'est utile :
 
-- index lu il y a plus de `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` jours (7 par défaut) : « L'index de
-  votre espace Résana semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le mettre à
-  jour ? » ;
-- dernière passe restée incomplète : « L'index de votre dossier Résana est incomplet… Souhaitez-vous
+- index lu il y a plus de `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` jours (7 par défaut) : « L'index
+  Résana de « Notes fictives » semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le
+  mettre à jour ? » ;
+- dernière passe arrêtée en route ou en échec (premier import raté compris) : « L'index Résana de
+  « Notes fictives » est incomplet : la dernière mise à jour n'est pas allée au bout. Souhaitez-vous
   la reprendre ? ».
 
 Seulement pour la personne qui a importé (elle seule peut mettre à jour), et jamais pendant une

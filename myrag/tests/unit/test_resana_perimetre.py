@@ -54,12 +54,16 @@ def test_couverture():
 def test_l_invitation_seulement_pour_l_importeur_et_quand_c_est_utile():
     maintenant = datetime(2026, 10, 23, tzinfo=timezone.utc)
     ancien = {"last_sync_at": (maintenant - timedelta(days=12)).isoformat()}
-    a = avis("notes", ancien, est_importeur=True, maintenant=maintenant)
-    assert a["code"] == "resana_ancien" and "il y a 12 jours" in a["message"] and a["action"]["url"] == "/c/notes/upload?synchroniser=1"
+    a = avis("notes", ancien, est_importeur=True, maintenant=maintenant, titre="Notes fictives")
+    assert a["code"] == "resana_ancien" and a["titre"] == "Notes fictives" and a["action"]["url"] == "/c/notes/upload?synchroniser=1"
+    assert a["message"] == "L'index Résana de « Notes fictives » semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le mettre à jour ?"
     assert avis("notes", ancien, est_importeur=False, maintenant=maintenant) is None
     assert avis("notes", {"last_sync_at": maintenant.isoformat()}, est_importeur=True, maintenant=maintenant) is None
     assert avis("notes", {**ancien, "travail": {"etat": "en_cours"}}, est_importeur=True, maintenant=maintenant) is None
-    assert avis("notes", {"travail": {"etat": "partiel"}}, est_importeur=True, maintenant=maintenant)["code"] == "resana_incomplet"
+    for etat in ("partiel", "interrompu", "echec"):  # un premier import raté aussi
+        assert avis("notes", {"travail": {"etat": etat}}, est_importeur=True, maintenant=maintenant)["code"] == "resana_incomplet"
+    assert avis("notes", {"travail": {"etat": "echec"}}, est_importeur=True, maintenant=maintenant)["titre"] == "notes"  # sans titre : l'identifiant
+    assert avis("a b/c", ancien, est_importeur=True, maintenant=maintenant)["action"]["url"] == "/c/a%20b%2Fc/upload?synchroniser=1"
 
 
 # --- Par les routes -----------------------------------------------------------------------------
@@ -158,10 +162,27 @@ def test_l_invitation_dans_l_etat_et_pour_la_recherche(client, en_tant_que, faux
     assert client.get(f"/api/sources/resana/status/{privee}").json()["avis"] is None
     _vieillir(privee, 30)
     a = client.get(f"/api/sources/resana/status/{privee}").json()["avis"]
-    assert a["code"] == "resana_ancien" and "il y a 30 jours" in a["message"]
+    assert a["code"] == "resana_ancien" and "il y a 30 jours" in a["message"] and a["titre"]
 
     col = asyncio.run(get_collection(privee))
     assert asyncio.run(avis_pour(col, CREATEUR))["code"] == "resana_ancien"
     from tests.conftest import SUPERADMIN
 
     assert asyncio.run(avis_pour(col, SUPERADMIN)) is None  # seul l'importeur peut agir
+
+
+def test_les_notices_de_la_recherche_pointent_vers_le_front(client, en_tant_que, faux, privee, monkeypatch):
+    import asyncio
+
+    from app.routers import recherche
+    from app.services.collection_store import get_collection
+
+    monkeypatch.setattr(recherche.settings, "myrag_public_url", "https://mescollections.fake-domain.name/")
+    monkeypatch.setattr(recherche.settings, "recherche_url_publique", "https://api.fake-domain.name")
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    _vieillir(privee, 30)
+    col = asyncio.run(get_collection(privee))
+    (n,) = asyncio.run(recherche._notices([privee], {privee: col}, CREATEUR))
+    assert n["action"]["url"] == f"https://mescollections.fake-domain.name/c/{privee}/upload?synchroniser=1"
+    assert n["collection"] == privee and n["titre"]

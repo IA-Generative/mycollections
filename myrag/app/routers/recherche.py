@@ -567,14 +567,15 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
 async def _notices(noms: list[str], lisibles: dict[str, dict], user: CurrentUser) -> list[dict]:
     """Les invitations à mettre à jour un index Résana ancien ou incomplet, pour la personne qui
     peut le faire (clé `notices`, absente s'il n'y en a pas ; docs/clients.md). `action.url` est
-    absolue : un client (l'extension du navigateur) l'ouvre telle quelle."""
+    absolue, sur l'origine publique du FRONT (MYCOLLECTIONS_PUBLIC_URL) — c'est une page, pas un
+    lien signé de l'API : un client (l'extension du navigateur) l'ouvre telle quelle."""
     from app.routers.sources_resana import avis_pour
 
     rendu = []
     for nom in noms:
         a = await avis_pour(lisibles.get(nom), user)
         if a:
-            rendu.append({**a, "action": {**a["action"], "url": _origine_publique() + a["action"]["url"]}})
+            rendu.append({**a, "action": {**a["action"], "url": settings.myrag_public_url.rstrip("/") + a["action"]["url"]}})
     return rendu
 
 

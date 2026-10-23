@@ -348,7 +348,12 @@ async def statut(collection: str, user: CurrentUser = Depends(current_user)):
         "exclus": list((cfg.get("perimetre") or {}).get("exclus") or []) if est_importeur else [],
         **resana_perimetre.couverture({**cfg, "travail": travail}),
         "avis": resana_perimetre.avis(
-            collection, {**cfg, "travail": travail}, est_importeur=est_importeur, maintenant=datetime.now(timezone.utc), seuil_jours=settings.resana_fraicheur_jours
+            collection,
+            {**cfg, "travail": travail},
+            est_importeur=est_importeur,
+            maintenant=datetime.now(timezone.utc),
+            seuil_jours=settings.resana_fraicheur_jours,
+            titre=col.get("titre") or "",
         ),
     }
 
@@ -366,7 +371,14 @@ async def avis_pour(col: dict | None, user: CurrentUser) -> dict | None:
     travail = dict(cfg.get("travail") or {})
     if travail.get("etat") == "en_cours" and not _occupee(col["name"]):
         travail["etat"] = "interrompu"
-    return resana_perimetre.avis(col["name"], {**cfg, "travail": travail}, est_importeur=True, maintenant=datetime.now(timezone.utc), seuil_jours=settings.resana_fraicheur_jours)
+    return resana_perimetre.avis(
+        col["name"],
+        {**cfg, "travail": travail},
+        est_importeur=True,
+        maintenant=datetime.now(timezone.utc),
+        seuil_jours=settings.resana_fraicheur_jours,
+        titre=col.get("titre") or "",
+    )
 
 
 # --- La tâche de fond ----------------------------------------------------------------------------

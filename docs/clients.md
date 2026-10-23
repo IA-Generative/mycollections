@@ -60,17 +60,28 @@ incomplet, pour la personne qui peut le mettre à jour (docs/resana.md).
 "notices": [
   {
     "collection": "notes-fictives",
+    "titre": "Notes fictives",
     "code": "resana_ancien",
-    "message": "L'index de votre espace Résana semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le mettre à jour ?",
+    "message": "L'index Résana de « Notes fictives » semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le mettre à jour ?",
     "action": {"libelle": "Mettre à jour", "url": "https://mescollections.fake-domain.name/c/notes-fictives/upload?synchroniser=1"},
     "jours": 12
   }
 ]
 ```
 
+- `collection` est l'identifiant de la collection, le même que l'`id` d'une cible collection de
+  `/api/v1/sites` ; `titre` est son titre, déjà repris dans `message`.
+- `code` vaut `resana_ancien` (index lu il y a plus de N jours ; `jours` le précise) ou
+  `resana_incomplet` (dernière passe arrêtée en route ou en échec). Un code inconnu s'affiche par
+  son `message`.
+- `action.url` est une **page du front**, sur l'origine publique de Mes collections
+  (`MYCOLLECTIONS_PUBLIC_URL`), pas sur celle des liens signés de la recherche. Un client vérifie
+  que son origine (`new URL(url).origin`, comparaison exacte) est celle de Mes collections qu'il
+  connaît, et l'ignore sinon. Front et API partagent aujourd'hui la même origine ; un déploiement
+  qui les séparerait devra le dire aux clients.
+
 Un client l'affiche sous les résultats, avec un lien qui ouvre `action.url` dans un nouvel onglet.
 Il n'appelle rien lui-même : la mise à jour se lance d'un clic sur la page de la collection.
-`code` vaut `resana_ancien` ou `resana_incomplet` ; un code inconnu s'affiche par son `message`.
 
 ## Serveur MCP
 
