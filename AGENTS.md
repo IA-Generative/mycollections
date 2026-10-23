@@ -180,7 +180,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/chunker.py` | 4 strategies de decoupage |
 | `myrag/app/services/graph_builder.py` | Graph NetworkX + Cytoscape.js |
 | `myrag/app/routers/ingest.py` | Upload + from-url + reindex |
-| `myrag/app/routers/sources_resana.py`, `app/services/connectors/resana.py` | Import d'un dossier Résana : client du service d'export, routes `/api/sources/resana/*`, collection privée à l'importeur (`docs/resana.md`) |
+| `myrag/app/routers/sources_resana.py`, `app/services/connectors/resana.py`, `app/services/resana_perimetre.py`, `frontend/pages/admin/create/resana.vue` | Import d'un dossier Résana : client du service d'export, routes `/api/sources/resana/*`, collection privée à l'importeur (`docs/resana.md`) |
 | `myrag/app/routers/playground.py` | Chat RAG avec fallback |
 | `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |
 | `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
@@ -264,6 +264,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `OWUI_PUBLIC_URL` | `` | Adresse publique de l'assistant (ouverte par le navigateur) |
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `MYCOLLECTIONS_RESANA_EXPORT_URL` / `_SECRET` | `` | Service d'export Résana (owuitools-resana, `/export/v1`) et secret propre à Mes collections ; vides ⇒ routes Résana en 503. Capacité `resana` éteinte par défaut (`docs/resana.md`) |
+| `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` | `7` | Au-delà, l'index d'une collection Résana « semble ancien » : invitation à le mettre à jour (bac à sable, `notices` de la recherche, page de la collection) |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
 | `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |

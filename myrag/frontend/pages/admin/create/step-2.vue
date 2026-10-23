@@ -17,8 +17,6 @@ const { user } = useAuth()
 const { lister: listerCategories } = useCategories()
 
 const source = (route.query.source as string) || 'file'
-/** Une collection Résana reste privée à qui l'importe (docs/resana.md, décision v1). */
-const estResana = source === 'resana'
 const defaut = reglagesAvancesDefaut(source)
 
 // Types de collection : découpage et consignes réglés ensemble.
@@ -42,7 +40,7 @@ const form = ref({
   strategy: profilInitial.strategy,
   sensitivity: defaut.sensitivity,
   prompt_template: profilInitial.prompt,
-  scope: estResana ? 'private' : 'group',
+  scope: 'group',
   graph_enabled: profilInitial.graph,
   ai_summary_enabled: defaut.ai_summary_enabled,
   contact_name: '',
@@ -396,13 +394,12 @@ onMounted(async () => {
               class="fr-label"
               for="scope"
             >Qui peut l'interroger ?
-              <span class="fr-hint-text">{{ estResana ? 'Une collection Résana reste privée.' : 'Vous pourrez l\'ouvrir plus largement ensuite.' }}</span>
+              <span class="fr-hint-text">Vous pourrez l'ouvrir plus largement ensuite.</span>
             </label>
             <select
               id="scope"
               v-model="form.scope"
               class="fr-select"
-              :disabled="estResana"
             >
               <option value="public">
                 Tout le ministère
@@ -482,13 +479,7 @@ onMounted(async () => {
         v-if="form.scope === 'private'"
         class="fr-text--sm etape2-discret"
       >
-        <template v-if="estResana">
-          Vous seul l'interrogerez : ses documents viennent de Résana, lus avec vos droits. Elle ne s'ouvre pas à d'autres
-          et ne se publie pas dans l'assistant.
-        </template>
-        <template v-else>
-          Vous seul la verrez : utile pour la tester avant de l'ouvrir.
-        </template>
+        Vous seul la verrez : utile pour la tester avant de l'ouvrir.
       </p>
 
       <div class="fr-grid-row fr-grid-row--gutters">

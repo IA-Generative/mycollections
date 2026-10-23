@@ -78,6 +78,27 @@ function onVote (v: 'up' | 'down') {
       />
     </div>
 
+    <!-- L'invitation à mettre à jour un index Résana ancien ou incomplet (pour qui le peut). -->
+    <div
+      v-for="a in message.role === 'assistant' ? (message.avis || []) : []"
+      :key="a.code + a.collection"
+      class="fr-notice fr-notice--info fr-mt-1w myrag-msg__avis"
+    >
+      <div class="fr-container">
+        <div class="fr-notice__body">
+          <p class="fr-notice__title fr-text--sm">
+            {{ a.message }}
+            <NuxtLink
+              :to="a.action.url"
+              class="fr-link fr-ml-1w"
+            >
+              {{ a.action.libelle }}
+            </NuxtLink>
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- No-source warning when RAG returned nothing -->
     <p
       v-if="message.role === 'assistant' && !reponseFiable && !message.error && !message.sources?.length && message.content"

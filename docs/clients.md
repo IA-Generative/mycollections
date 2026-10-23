@@ -50,6 +50,28 @@ toujours un jeton.
 
 
 
+## Recherche : les invitations à mettre à jour (`notices`)
+
+`GET /api/v1/search` peut porter, en plus du contrat de recherche, une clé **`notices`** (absente
+s'il n'y en a pas). Aujourd'hui, une seule sorte : l'index d'une collection Résana ancien ou
+incomplet, pour la personne qui peut le mettre à jour (docs/resana.md).
+
+```json
+"notices": [
+  {
+    "collection": "notes-fictives",
+    "code": "resana_ancien",
+    "message": "L'index de votre espace Résana semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le mettre à jour ?",
+    "action": {"libelle": "Mettre à jour", "url": "https://mescollections.fake-domain.name/c/notes-fictives/upload?synchroniser=1"},
+    "jours": 12
+  }
+]
+```
+
+Un client l'affiche sous les résultats, avec un lien qui ouvre `action.url` dans un nouvel onglet.
+Il n'appelle rien lui-même : la mise à jour se lance d'un clic sur la page de la collection.
+`code` vaut `resana_ancien` ou `resana_incomplet` ; un code inconnu s'affiche par son `message`.
+
 ## Serveur MCP
 
 Un client MCP (un agent conversationnel) cherche dans les assistants de recherche avec les droits de la personne,

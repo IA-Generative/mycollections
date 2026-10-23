@@ -13,7 +13,8 @@ const selected = ref(cartesDeSource()[0]?.cle || '')
 onMounted(charger)
 
 function next () {
-  router.push(`/admin/create/step-2?source=${selected.value}`)
+  // Résana se choisit d'abord dans Résana (espace, dossier, sous-dossiers), la fiche vient après.
+  router.push(selected.value === 'resana' ? '/admin/create/resana' : `/admin/create/step-2?source=${selected.value}`)
 }
 </script>
 

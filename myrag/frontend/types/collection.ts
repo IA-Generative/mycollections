@@ -15,6 +15,8 @@ export interface Collection {
   contact_name?: string
   contact_email?: string
   source_type?: string
+  /** Résana : ce que l'index couvre du dossier (« Résana · index partiel »). Null pour les autres sources. */
+  source_resume?: ({ type: 'resana' } & import('~/utils/resana').CouvertureResana) | null
   file_count?: number
   orphan?: boolean
   archived_at?: string | null
