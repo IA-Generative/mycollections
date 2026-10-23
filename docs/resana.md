@@ -93,6 +93,10 @@ du groupe `<racine>/<nom>-admin` la lisent.
      retiré sur la foi d'une liste vide.
 2. Le téléchargement se fait en tâche de fond, quatre documents à la fois. Le jeton de la personne reste
    en mémoire le temps de la tâche et n'est jamais écrit. L'écran suit l'avancement par `/status`.
+   Chaque fichier nouveau ou changé est écrit aussitôt dans un **dossier d'attente sur le disque**
+   (`<DATA_DIR>/_resana_attente/<collection>`), jamais gardé en mémoire : il n'y a donc **pas de
+   plafond par passe**. Le dossier d'attente est vidé au début et à la fin de chaque passe. Seule
+   garde : laisser au moins 1 Go libre sur le volume.
 3. Chaque document est comparé par son **sha256**. Le service ne donne pas d'ETag, et `version_fichier`
    n'est pas garanti. Résultat :
    - un contenu déjà vu sous un autre document est écarté (doublon) ;
@@ -107,8 +111,8 @@ du groupe `<racine>/<nom>-admin` la lisent.
      ne connaît pas l'identifiant OpenRAG d'un fichier, c'est donc la seule façon de retirer une ancienne
      version.
 6. **Arrêt en route.** Une erreur bloquante arrête le téléchargement : session perdue, jeton expiré
-   (le jeton d'accès vit quelques minutes), service indisponible, ou plafond de 500 Mo de contenu
-   nouveau atteint.
+   (le jeton d'accès vit quelques minutes), service indisponible, ou disque presque plein
+   (`disque_plein`).
    - **Aucun document reçu** : l'état passe à « échec », avec le message et, s'il y a lieu, le lien de
      connexion.
    - **Des documents reçus** : l'état passe à « partiel ».
@@ -123,8 +127,8 @@ du groupe `<racine>/<nom>-admin` la lisent.
    3. les autres.
 
    Un grand dossier s'importe ainsi en plusieurs fois. L'ordre ne décide de rien : seul le sha256 dit
-   qu'un document a changé. Un contenu relu à l'identique n'est pas gardé en mémoire et ne compte pas
-   dans le plafond.
+   qu'un document a changé. Un contenu relu à l'identique est jeté aussitôt, sans passer par le
+   disque.
 
 Les noms de fichiers viennent du service (`Content-Disposition`). Deux documents de même nom sont
 distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'import ne change plus.

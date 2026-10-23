@@ -227,13 +227,36 @@ def test_session_perdue_en_route_garde_l_acquis_et_la_synchro_reprend(client, en
     assert _sources(privee) == ["note-a.md", "note-b.md"]
 
 
-def test_le_plafond_se_franchit_en_plusieurs_synchronisations(client, en_tant_que, faux, privee, monkeypatch):
-    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
-    monkeypatch.setattr(sources_resana, "OCTETS_MAX_TOTAL", 40)
+def test_plus_de_plafond_les_fichiers_attendent_sur_le_disque(client, en_tant_que, faux, privee, monkeypatch):
+    """Les fichiers reçus attendent sur le disque, pas en mémoire : un gros dossier passe en une fois,
+    et le dossier d'attente est vidé à la fin de la passe."""
+    vus = []
+    ecrire = sources_resana.Path.write_bytes
+
+    def espionner(chemin, contenu):
+        vus.append(chemin)
+        return ecrire(chemin, contenu)
+
+    monkeypatch.setattr(sources_resana.Path, "write_bytes", espionner)
+    faux.documents += [_doc(f"x{k}", f"# X{k}\n\nTexte fictif {k}.") for k in range(20)]
     en_tant_que(CREATEUR)
     _importer(client, privee)
     travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
-    assert travail["etat"] == "partiel" and travail["code"] == "trop_volumineux_total" and _sources(privee) == ["note-a.md"]
+    assert (travail["etat"], travail["ajoutes"]) == ("termine", 22)
+    attente = sources_resana._attente(privee)
+    assert any(attente in p.parents for p in vus), "les fichiers sont passés par le dossier d'attente"
+    assert not attente.exists(), "le dossier d'attente est vidé à la fin"
+
+
+def test_un_disque_presque_plein_arrete_en_gardant_l_acquis(client, en_tant_que, faux, privee, monkeypatch):
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    places = iter([10 * sources_resana.PLACE_LIBRE_MIN, 0])
+    monkeypatch.setattr(sources_resana, "_place_libre", lambda chemin: next(places, 0))
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert travail["etat"] == "partiel" and travail["code"] == "disque_plein" and _sources(privee) == ["note-a.md"]
+    monkeypatch.setattr(sources_resana, "_place_libre", lambda chemin: 10 * sources_resana.PLACE_LIBRE_MIN)
     client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     assert _sources(privee) == ["note-a.md", "note-b.md"]
 

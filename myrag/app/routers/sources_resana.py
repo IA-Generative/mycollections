@@ -19,8 +19,10 @@ de la tâche (jamais écrit) ; l'écran suit l'avancement par `/status`.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import shutil
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -42,18 +44,19 @@ from app.services import formats, resana_perimetre
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
-from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, Fichier, nom_unique
+from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, nom_unique
 
 logger = logging.getLogger("myrag.sources.resana")
 
 router = APIRouter(prefix="/resana", tags=["Sources"], dependencies=[Depends(capacite("resana"))])
 
 SOURCE = "resana"
-#: Plafond d'un import ou d'une synchronisation, comme pour Drive : au-delà, un sous-dossier.
-OCTETS_MAX_TOTAL = 500 * 1024 * 1024
+#: Les fichiers reçus attendent sur le disque (jamais en mémoire) que la passe se termine : plus
+#: de plafond par passe. Seule garde : laisser au moins cette place libre sur le volume.
+PLACE_LIBRE_MIN = 1024 * 1024 * 1024
 TELECHARGEMENTS_PARALLELES = 4
 #: Les erreurs qui arrêtent tout ; les autres (droits, taille d'un document) n'écartent que lui.
-ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "trop_volumineux_total"}
+ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "disque_plein"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
 ECARTES_MAX = 50
 
@@ -417,23 +420,46 @@ def _ordre(docs: list[DocumentResana], connus: dict[str, dict]) -> list[Document
 
 
 @dataclass
-class Rapatriement:
-    """Ce que le téléchargement a rapporté. `recus` : contenu gardé (nouveau ou changé) ; `identiques` :
-    documents relus sans changement (contenu jeté aussitôt) ; `erreur` : ce qui l'a arrêté en route."""
+class Recu:
+    """Un document reçu, nouveau ou changé : son contenu attend sur le disque."""
 
-    recus: list[tuple[DocumentResana, Fichier]] = field(default_factory=list)
+    doc: DocumentResana
+    nom: str
+    sha256: str
+    chemin: Path
+
+
+@dataclass
+class Rapatriement:
+    """Ce que le téléchargement a rapporté. `recus` : contenus nouveaux ou changés, en attente sur
+    le disque ; `identiques` : documents relus sans changement (contenu jeté aussitôt) ; `erreur` :
+    ce qui l'a arrêté en route."""
+
+    recus: list[Recu] = field(default_factory=list)
     identiques: list[DocumentResana] = field(default_factory=list)
     ecartes: list[dict] = field(default_factory=list)
     erreur: ErreurResana | None = None
 
 
+def _attente(collection: str) -> Path:
+    """Le dossier où attendent les fichiers d'une passe (vidé au début et à la fin de chaque passe)."""
+    return Path(settings.data_dir) / "_resana_attente" / collection
+
+
+def _place_libre(chemin: Path) -> int:
+    return shutil.disk_usage(chemin).free
+
+
 async def _rapatrier(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], connus: dict[str, dict]) -> Rapatriement:
-    """Télécharge chaque document, quelques-uns à la fois. Un contenu identique au précédent n'est pas
-    gardé en mémoire ; le plafond ne compte que ce qui est gardé. Une erreur bloquante (ou le
-    plafond) arrête le téléchargement : ce qui est déjà reçu reste utilisable."""
+    """Télécharge chaque document, quelques-uns à la fois. Un contenu identique au précédent est
+    jeté aussitôt ; un contenu nouveau ou changé est écrit dans le dossier d'attente, pas gardé en
+    mémoire. Une erreur bloquante (ou un disque presque plein) arrête le téléchargement : ce qui est
+    déjà reçu reste utilisable."""
     r = Rapatriement()
     file = _ordre(docs, connus)
-    etat = {"octets": 0, "faits": 0}
+    etat = {"faits": 0}
+    attente = _attente(collection)
+    attente.mkdir(parents=True, exist_ok=True)
 
     async def ouvrier() -> None:
         while file and r.erreur is None:
@@ -449,18 +475,19 @@ async def _rapatrier(collection: str, client: ClientExportResana, espace: str, d
             if (connus.get(doc.id) or {}).get("sha256") == f.sha256:
                 r.identiques.append(doc)
             else:
-                if etat["octets"] + len(f.contenu) > OCTETS_MAX_TOTAL:
-                    r.erreur = r.erreur or ErreurResana(413, "trop_volumineux_total")
+                if _place_libre(attente) - len(f.contenu) < PLACE_LIBRE_MIN:
+                    r.erreur = r.erreur or ErreurResana(507, "disque_plein", reessayable=True)
                     return
-                etat["octets"] += len(f.contenu)
-                r.recus.append((doc, f))
+                chemin = attente / f"{len(r.recus):05d}-{hashlib.sha256(doc.id.encode()).hexdigest()[:16]}"
+                await asyncio.to_thread(chemin.write_bytes, f.contenu)
+                r.recus.append(Recu(doc=doc, nom=f.nom, sha256=f.sha256, chemin=chemin))
             etat["faits"] += 1
             if etat["faits"] % 10 == 0:
                 await _suivre(collection, faits=etat["faits"])
 
     await asyncio.gather(*(ouvrier() for _ in range(TELECHARGEMENTS_PARALLELES)))
     rang = {d.id: i for i, d in enumerate(docs)}
-    r.recus.sort(key=lambda x: rang[x[0].id])
+    r.recus.sort(key=lambda x: rang[x.doc.id])
     return r
 
 
@@ -478,10 +505,10 @@ def _irrecevable(nom: str, contenu: bytes) -> str | None:
     return None if texte.strip() else "document vide"
 
 
-def _nom_de(doc: DocumentResana, f: Fichier) -> str:
+def _nom_de(doc: DocumentResana, nom_recu: str) -> str:
     """Le nom donné par le service au fichier ; celui de la liste s'il porte seul une extension."""
-    if formats.extension(f.nom) or not formats.extension(doc.nom_fichier):
-        return f.nom
+    if formats.extension(nom_recu) or not formats.extension(doc.nom_fichier):
+        return nom_recu
     return doc.nom_fichier
 
 
@@ -553,6 +580,15 @@ async def _filtrer(collection: str, client: ClientExportResana, espace: str, doc
 
 
 async def _executer(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
+    # Le dossier d'attente d'une passe précédente (service arrêté en route) ne sert plus.
+    shutil.rmtree(_attente(collection), ignore_errors=True)
+    try:
+        await _executer_passe(collection, client, espace, dossier, docs, action, user)
+    finally:
+        shutil.rmtree(_attente(collection), ignore_errors=True)
+
+
+async def _executer_passe(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
     try:
         if docs is None:
 
@@ -612,7 +648,7 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
 
     pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
     gardes: dict[str, dict] = {}
-    a_ecrire: list[tuple[str, bytes, str]] = []
+    a_ecrire: list[tuple[str, Path, str]] = []
     condensats: dict[str, str] = {}
     ecartes = list(r.ecartes)
     ajoutes = modifies = 0
@@ -620,26 +656,26 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         ancien = connus[doc.id]
         gardes[doc.id] = {**ancien, "url": _url(doc) or ancien.get("url", ""), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
         condensats[ancien["sha256"]] = doc.titre
-    for doc, f in r.recus:
+    for recu in r.recus:
+        doc = recu.doc
         ancien = connus.get(doc.id)
-        nom = ancien["fichier"] if ancien else _nom_de(doc, f)
-        raison = _irrecevable(nom, f.contenu)
+        nom = ancien["fichier"] if ancien else _nom_de(doc, recu.nom)
+        raison = _irrecevable(nom, await asyncio.to_thread(recu.chemin.read_bytes))
         if raison:
             ecartes.append({"id": doc.id, "titre": doc.titre, "raison": raison})
             continue
-        if f.sha256 in condensats:
-            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": f"même contenu que « {condensats[f.sha256]} »"})
+        if recu.sha256 in condensats:
+            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": f"même contenu que « {condensats[recu.sha256]} »"})
             continue
-        condensats[f.sha256] = doc.titre
+        condensats[recu.sha256] = doc.titre
         if not ancien:
             nom = nom_unique(nom, doc.id, pris)
-        gardes[doc.id] = {"sha256": f.sha256, "fichier": nom, "url": _url(doc), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
-        a_ecrire.append((nom, f.contenu, _url(doc)))
+        gardes[doc.id] = {"sha256": recu.sha256, "fichier": nom, "url": _url(doc), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
+        a_ecrire.append((nom, recu.chemin, _url(doc)))
         if ancien:
             modifies += 1
         else:
             ajoutes += 1
-    del r.recus
     if partiel:
         retires: list[str] = []
         for k, v in connus.items():
@@ -649,8 +685,8 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
 
     if a_ecrire or retires:
         await _retirer(collection, retires)
-        for nom, contenu, url in a_ecrire:
-            await depot._enregistrer_source(collection, nom, contenu, depot.STRATEGIE_DOCUMENT, 0, url)
+        for nom, chemin, url in a_ecrire:
+            await depot._enregistrer_source(collection, nom, await asyncio.to_thread(chemin.read_bytes), depot.STRATEGIE_DOCUMENT, 0, url)
         await _reindexer(collection, col)
 
     bilan = {"ajoutes": ajoutes, "modifies": modifies, "retires": len(retires), "inchanges": len(r.identiques), "ecartes": len(ecartes)}

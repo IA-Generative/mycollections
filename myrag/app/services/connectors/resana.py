@@ -54,7 +54,7 @@ MESSAGES = {
     "parametre_invalide": "Paramètre refusé par le service Résana.",
     "reponse_illisible": "Le service Résana a répondu de façon inattendue.",
     "service_injoignable": "Le service Résana est injoignable pour le moment. Réessayez dans un instant.",
-    "trop_volumineux_total": "Ce dossier dépasse 500 Mo au total : choisissez un sous-dossier.",
+    "disque_plein": "Le disque de Mes collections est presque plein : l'indexation s'est arrêtée en route. Les documents reçus sont gardés ; réessayez plus tard.",
     "en_preparation": "Le service Résana prépare la liste de ce dossier.",
     "preparation_trop_longue": "La liste de ce dossier n'a pas pu être préparée à temps : réessayez, ou choisissez un sous-dossier.",
 }
