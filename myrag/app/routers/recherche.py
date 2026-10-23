@@ -550,7 +550,7 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
     # Le moteur a rendu autant de passages que demandé : il en reste peut-être d'autres, `total`
     # n'est alors qu'un minimum, et la liste est tronquée par définition.
     borne_basse = len(docs) >= top_k
-    return {
+    reponse = {
         "source": SOURCE,
         "query": texte,
         "total": len(resultats),
@@ -558,6 +558,24 @@ async def rechercher(request: Request, q: str | None = None, limit: str | None =
         "total_is_lower_bound": borne_basse,
         "results": resultats[:limite],
     }
+    notices = await _notices(noms, lisibles, user)
+    if notices:
+        reponse["notices"] = notices
+    return reponse
+
+
+async def _notices(noms: list[str], lisibles: dict[str, dict], user: CurrentUser) -> list[dict]:
+    """Les invitations à mettre à jour un index Résana ancien ou incomplet, pour la personne qui
+    peut le faire (clé `notices`, absente s'il n'y en a pas ; docs/clients.md). `action.url` est
+    absolue : un client (l'extension du navigateur) l'ouvre telle quelle."""
+    from app.routers.sources_resana import avis_pour
+
+    rendu = []
+    for nom in noms:
+        a = await avis_pour(lisibles.get(nom), user)
+        if a:
+            rendu.append({**a, "action": {**a["action"], "url": _origine_publique() + a["action"]["url"]}})
+    return rendu
 
 
 async def _rechercher_par_assistant(ident: str, texte: str, limite: int, depuis, jusqu, demandees: list[str] | None, user: CurrentUser) -> dict:

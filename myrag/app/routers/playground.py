@@ -179,8 +179,9 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest, user: Cur
     # Poser une question à une collection demande de pouvoir la lire : la réponse cite ses
     # sources et en remet des liens signés (diagnostic d'octobre 2026, P0).
     from app.routers.publication import _fiche_pour
+    from app.routers.sources_resana import avis_pour as avis_resana
 
-    await _fiche_pour(collection, user, ecrire=False)
+    fiche = await _fiche_pour(collection, user, ecrire=False)
     # La mesure d'usage : une ligne par question (sans son texte). Ne bloque jamais.
     await accueil.noter_question(collection, user.sub)
     client = OpenRAGClient(timeout=120.0)
@@ -205,6 +206,9 @@ async def playground_chat(collection: str, req: PlaygroundChatRequest, user: Cur
         "system_prompt_used": rep.system_prompt_used,
         "fallback_used": rep.fallback_used,
         "repli_recherche": rep.repli == "recherche",
+        # Une collection Résana dont l'index est ancien ou incomplet : l'invitation à le mettre à
+        # jour, pour la seule personne qui le peut (docs/resana.md). Liste vide sinon.
+        "avis": [a for a in [await avis_resana(fiche, user)] if a],
     }
 
 

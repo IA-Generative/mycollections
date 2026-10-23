@@ -23,6 +23,7 @@ import json
 import logging
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -37,7 +38,7 @@ from app.models.db import Publication, SourceFile, utcnow
 from app.routers import ingest as depot
 from app.routers._commun import capacite
 from app.routers._droits import gerer_la_collection, lire_la_collection
-from app.services import formats
+from app.services import formats, resana_perimetre
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
@@ -57,6 +58,7 @@ ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "
 ECARTES_MAX = 50
 
 MESSAGE_DOSSIER_VIDE = "Ce dossier ne contient aucun document."
+MESSAGE_SELECTION_VIDE = "Aucun document dans les dossiers choisis : ajoutez au moins un dossier à la sélection."
 MESSAGE_SYNCHRO_VIDE = "Le dossier Résana est vide : rien n'est retiré de la collection. Supprimez-la si c'est voulu."
 
 #: Une tâche par collection, dans ce processus.
@@ -145,6 +147,61 @@ async def apercu(espace: str, dossier: str = Query(..., min_length=1, max_length
     }
 
 
+@router.get("/espaces/{espace}/inventaire")
+async def inventaire(
+    espace: str, dossier: str = Query(..., min_length=1, max_length=200), authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)
+):
+    """Le dossier choisi, sous-dossier par sous-dossier : combien de documents chacun contient,
+    pour n'indexer que ce qui sert. 202 tant que le service prépare la liste d'un grand dossier."""
+    client = _client(authorization)
+    try:
+        docs = await client.documents(espace, dossier)
+        dossiers = await client.dossiers(espace)
+    except EnPreparation as e:
+        return JSONResponse(status_code=202, content={"en_preparation": True, "dossiers_lus": e.dossiers_lus, "dossiers": e.dossiers}, headers={"Retry-After": str(int(e.attente))})
+    except ErreurResana as e:
+        raise _http(e) from None
+    a_la_racine, noeuds = resana_perimetre.inventaire(dossier, dossiers, docs)
+    tailles = [d.taille_approx_mo for d in docs if d.taille_approx_mo is not None]
+    return {
+        "total": len(docs),
+        "taille_approx_mo": round(sum(tailles), 1) if tailles else None,
+        "documents_a_la_racine": a_la_racine,
+        "dossiers": [n.vers_dict() for n in noeuds],
+    }
+
+
+@router.get("/existant")
+async def existant(
+    espace: str = Query(..., min_length=1, max_length=200),
+    dossier: str = Query(..., min_length=1, max_length=200),
+    chemin: str = Query("", max_length=1000),
+    user: CurrentUser = Depends(current_user),
+):
+    """Les collections Résana de la personne qui couvrent déjà ce dossier, un dossier parent ou un
+    sous-dossier : on propose de les reprendre plutôt que d'en créer une de plus. Seulement les
+    siennes (règle v1 : une collection Résana est privée ; on ne révèle pas celles des autres)."""
+    from app.services.collection_store import list_collections
+
+    meme, parents, enfants = [], [], []
+    cible = chemin.strip().rstrip("/") if chemin else ""
+    for col in await list_collections(include_archived=False):
+        if col.get("source_type") != SOURCE or not user.sub or col.get("created_by") != user.sub:
+            continue
+        cfg = await get_source_config(col["name"])
+        if str(cfg.get("espace_id")) != espace:
+            continue
+        ligne = {"collection": col["name"], "titre": col.get("titre") or col["name"], "dossier_chemin": cfg.get("dossier_chemin"), **resana_perimetre.couverture(cfg)}
+        autre = str(cfg.get("dossier_chemin") or "").rstrip("/")
+        if str(cfg.get("dossier_id")) == dossier:
+            meme.append(ligne)
+        elif cible and autre and cible.startswith(autre + " / "):
+            parents.append(ligne)
+        elif cible and autre and autre.startswith(cible + " / "):
+            enfants.append(ligne)
+    return {"meme_dossier": meme, "dossier_parent": parents, "sous_dossiers": enfants}
+
+
 # --- Importer et synchroniser ------------------------------------------------------------------
 
 
@@ -154,6 +211,13 @@ class AjoutResana(BaseModel):
     espace_nom: str = Field("", max_length=300)
     dossier_id: str = Field(min_length=1, max_length=200)
     dossier_chemin: str = Field("", max_length=1000)
+    #: Les sous-dossiers à ne pas indexer (et tout ce qu'ils contiennent).
+    exclus: list[str] = Field(default_factory=list, max_length=2000)
+
+
+class SynchroResana(BaseModel):
+    #: Absent : le périmètre ne change pas ; présent : il est remplacé avant la passe.
+    exclus: list[str] | None = Field(default=None, max_length=2000)
 
 
 async def _a_des_documents(collection: str) -> bool:
@@ -223,6 +287,7 @@ async def ajouter(req: AjoutResana, authorization: str | None = Header(default=N
         "dossier_chemin": req.dossier_chemin.strip() or req.dossier_id,
         "documents": {},
         "last_sync_at": None,
+        "perimetre": {"exclus": sorted({e for e in req.exclus if e and e != req.dossier_id})},
         "travail": _travail("import", docs),
     }
     # Privée d'abord, documents ensuite : rien de Résana n'est jamais lisible hors de la personne.
@@ -232,7 +297,9 @@ async def ajouter(req: AjoutResana, authorization: str | None = Header(default=N
 
 
 @router.post("/sync/{collection}")
-async def synchroniser(collection: str, authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
+async def synchroniser(collection: str, corps: SynchroResana | None = None, authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
+    """Relire le dossier et réindexer ce qui a changé ; `exclus` change d'abord le périmètre
+    (un dossier ajouté s'indexe, un dossier retiré sort de l'index)."""
     await gerer_la_collection(collection, user)
     col = await get_collection(collection)
     if not col:
@@ -248,6 +315,8 @@ async def synchroniser(collection: str, authorization: str | None = Header(defau
     docs = await _liste_si_prete(client, espace, dossier)
     if docs is not None and not docs:
         raise _refus(409, "dossier_vide", MESSAGE_SYNCHRO_VIDE)
+    if corps is not None and corps.exclus is not None:
+        cfg["perimetre"] = {"exclus": sorted({e for e in corps.exclus if e and e != dossier})}
     cfg["travail"] = _travail("synchronisation", docs)
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
     await _demarrer(collection, _executer(collection, client, espace, dossier, docs, "synchronisation", user))
@@ -274,7 +343,30 @@ async def statut(collection: str, user: CurrentUser = Depends(current_user)):
         "last_sync_at": cfg.get("last_sync_at"),
         "travail": travail or None,
         "est_importeur": est_importeur,
+        "espace_id": cfg.get("espace_id") if est_importeur else None,
+        "dossier_id": cfg.get("dossier_id") if est_importeur else None,
+        "exclus": list((cfg.get("perimetre") or {}).get("exclus") or []) if est_importeur else [],
+        **resana_perimetre.couverture({**cfg, "travail": travail}),
+        "avis": resana_perimetre.avis(
+            collection, {**cfg, "travail": travail}, est_importeur=est_importeur, maintenant=datetime.now(timezone.utc), seuil_jours=settings.resana_fraicheur_jours
+        ),
     }
+
+
+async def avis_pour(col: dict | None, user: CurrentUser) -> dict | None:
+    """L'invitation à mettre à jour l'index Résana de `col`, pour cette personne, ou None :
+    capacité éteinte, autre source, autre personne que l'importeur, index récent."""
+    if not col or col.get("source_type") != SOURCE or not user.sub or col.get("created_by") != user.sub:
+        return None
+    from app.services import capacites
+
+    if (await capacites.lire_async()).get("resana") is not True:
+        return None
+    cfg = await get_source_config(col["name"])
+    travail = dict(cfg.get("travail") or {})
+    if travail.get("etat") == "en_cours" and not _occupee(col["name"]):
+        travail["etat"] = "interrompu"
+    return resana_perimetre.avis(col["name"], {**cfg, "travail": travail}, est_importeur=True, maintenant=datetime.now(timezone.utc), seuil_jours=settings.resana_fraicheur_jours)
 
 
 # --- La tâche de fond ----------------------------------------------------------------------------
@@ -438,6 +530,16 @@ async def _reindexer(collection: str, col: dict) -> int:
     return envoyes
 
 
+async def _filtrer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana]) -> list[DocumentResana]:
+    """Le périmètre appliqué : sans exclusion, tout le dossier ; sinon l'arbre des dossiers dit ce
+    que contient chaque dossier exclu."""
+    exclus = list(((await get_source_config(collection)).get("perimetre") or {}).get("exclus") or [])
+    if not exclus:
+        return docs
+    effectifs = resana_perimetre.exclus_effectifs(exclus, await client.dossiers(espace))
+    return resana_perimetre.dans_le_perimetre(docs, effectifs)
+
+
 async def _executer(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
     try:
         if docs is None:
@@ -448,13 +550,20 @@ async def _executer(collection: str, client: ClientExportResana, espace: str, do
             docs = await client.documents(espace, dossier, attendre=True, suivi=suivi)
             if not docs:
                 raise ErreurResana(400, "dossier_vide", MESSAGE_DOSSIER_VIDE)
-            await _suivre(collection, phase="telechargement", total=len(docs))
+        disponibles = len(docs)
+        docs = await _filtrer(collection, client, espace, docs)
+        if not docs:
+            raise ErreurResana(400, "selection_vide", MESSAGE_SELECTION_VIDE)
+        await _ecrire_config(collection, documents_disponibles=disponibles, documents_perimetre=len(docs))
+        await _suivre(collection, phase="telechargement", total=len(docs))
         bilan = await _comparer_et_appliquer(collection, client, espace, docs, action)
     except ErreurResana as e:
         logger.info("résana %s : %s arrêté (%s)", collection, action, e.code)
         detail = e.detail()
         if e.code == "dossier_vide":
             detail["message"] = MESSAGE_DOSSIER_VIDE
+        elif e.code == "selection_vide":
+            detail["message"] = MESSAGE_SELECTION_VIDE
         await _ecrire_config(collection, travail={"etat": "echec", "action": action, "fin": utcnow().isoformat(), **detail})
         return
     except Exception as e:  # noqa: BLE001 — la tâche de fond ne doit rien laisser « en cours »
