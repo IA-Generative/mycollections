@@ -4,6 +4,7 @@ import type { BilanPartage } from '~/utils/accueil'
 import { indicateursCollection, nombre } from '~/utils/accueil'
 import { titreDe } from '~/utils/catalogue'
 import { libelleEtat } from '~/utils/collectif'
+import { etiquetteResana, phraseCouverture } from '~/utils/resana'
 
 /**
  * Les collections que je gère, chacune avec ce qu'elle rend : questions de collègues sur la
@@ -105,6 +106,15 @@ onMounted(async () => {
               {{ libelleEtat(c.col.etat_collab) }}
             </span>
           </div>
+          <p
+            v-if="c.col.source_resume?.type === 'resana'"
+            class="fr-mb-0"
+          >
+            <span
+              class="fr-tag fr-tag--sm"
+              :title="phraseCouverture(c.col.source_resume)"
+            >{{ etiquetteResana(c.col.source_resume) }}</span>
+          </p>
           <dl class="mes-carte__chiffres">
             <div>
               <dt class="fr-sr-only">

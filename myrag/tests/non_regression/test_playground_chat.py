@@ -11,7 +11,7 @@ from app.services.reponse import Reponse
 from tests.conftest import personne
 from tests.non_regression._outils import figer, forme
 
-CLES = {"response", "mention", "sources", "source_names", "model", "system_prompt_used", "fallback_used", "repli_recherche"}
+CLES = {"response", "mention", "sources", "source_names", "model", "system_prompt_used", "fallback_used", "repli_recherche", "avis"}
 
 
 def _compter(table: str, nom: str) -> int:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { erreurResana, libelleTravail, preparation, resumeApercu, travailEnCours } from '../../utils/resana'
+import { avisDeReponse, basculer, erreurResana, estExclu, etiquetteResana, exclusParUnParent, ficheDepuisResana, libelleTravail, phraseCouverture, preparation, resumeApercu, selection, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -59,5 +59,53 @@ describe('la carte Résana suit la capacité', () => {
   })
   it('le drapeau ne touche que sa source', () => {
     expect(sourcesSelon(normaliserCapacites({ resana: true })).filter(s => s.cle !== 'resana')).toEqual(SOURCES.filter(s => s.cle !== 'resana'))
+  })
+})
+
+describe('le périmètre', () => {
+  const noeuds = [
+    { id: 'a', titre: 'Comptes rendus', parent_id: 'r', profondeur: 0, documents: 1, documents_total: 3 },
+    { id: 'a1', titre: '2026', parent_id: 'a', profondeur: 1, documents: 2, documents_total: 2 },
+    { id: 'b', titre: 'Procédures', parent_id: 'r', profondeur: 0, documents: 4, documents_total: 4 },
+  ]
+  const inv = { total: 8, documents_a_la_racine: 1, dossiers: noeuds }
+  it('exclure un dossier exclut son contenu', () => {
+    const exclus = new Set(['a'])
+    expect(estExclu('a1', exclus, noeuds)).toBe(true)
+    expect(exclusParUnParent(noeuds[1]!, exclus, noeuds)).toBe(true)
+    expect(selection(inv, exclus)).toEqual({ documents: 5, dossiers: 1 })
+    expect(selection(inv, new Set())).toEqual({ documents: 8, dossiers: 3 })
+  })
+  it('basculer garde la liste la plus courte', () => {
+    const fin = basculer('a1', new Set(), noeuds)
+    expect([...fin]).toEqual(['a1'])
+    expect([...basculer('a', fin, noeuds)]).toEqual(['a'])
+    expect([...basculer('a', new Set(['a']), noeuds)]).toEqual([])
+  })
+})
+
+describe('la couverture', () => {
+  it('étiquette et phrase', () => {
+    expect(etiquetteResana({ couverture: 'totale' })).toBe('Résana · index complet')
+    expect(etiquetteResana({ couverture: 'partielle' })).toBe('Résana · index partiel')
+    expect(etiquetteResana(null)).toBe('')
+    expect(phraseCouverture({ couverture: 'partielle', raisons: ['selection'], documents_indexes: 412, documents_disponibles: 2141 }))
+      .toBe('412 documents indexés sur 2141 dans le dossier Résana : index partiel (certains sous-dossiers sont exclus).')
+    expect(phraseCouverture({ couverture: 'totale', documents_indexes: 1 })).toBe('1 document indexé : index complet du dossier.')
+  })
+  it('les avis d\'une réponse : seulement des liens internes', () => {
+    const bon = { collection: 'c', code: 'resana_ancien', message: 'L\'index semble ancien.', action: { libelle: 'Mettre à jour', url: '/c/c/upload?synchroniser=1' } }
+    expect(avisDeReponse([bon, { ...bon, action: { libelle: 'x', url: 'https://ailleurs.fake-domain.name' } }, { ...bon, action: { libelle: 'x', url: '//ailleurs' } }, null])).toEqual([bon])
+    expect(avisDeReponse(undefined)).toEqual([])
+  })
+})
+
+describe('la fiche proposée', () => {
+  it('reprend le dossier et l\'espace', () => {
+    expect(ficheDepuisResana({ titre: '2026', chemin: 'Comptes rendus / 2026' }, 'Alpha fictif')).toEqual({
+      titre: '2026',
+      description: 'Les documents du dossier « 2026 » (Comptes rendus / 2026) de l\'espace Résana « Alpha fictif ».',
+    })
+    expect(ficheDepuisResana({ titre: 'Notes', chemin: 'Notes' }, 'Alpha').description).toBe('Les documents du dossier « Notes » de l\'espace Résana « Alpha ».')
   })
 })

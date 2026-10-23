@@ -42,9 +42,11 @@ sans elle, chaque route répond 404 et l'écran ne propose pas Résana.
 | `GET /espaces` | toute personne connectée | ses espaces, triés par nom |
 | `GET /espaces/{id}/dossiers?recherche=` | toute personne connectée | les dossiers de l'espace |
 | `GET /espaces/{id}/apercu?dossier=` | toute personne connectée | le nombre de documents et leur taille approchée ; `202 {en_preparation, dossiers_lus, dossiers}` tant que le service prépare la liste |
-| `POST /add` | la personne qui a **créé** la collection | relie la collection au dossier et lance l'import |
-| `POST /sync/{collection}` | la personne qui a importé | relit le dossier et réindexe s'il a changé |
-| `GET /status/{collection}` | qui peut lire la collection | le dossier relié, l'avancement, et `est_importeur` |
+| `GET /espaces/{id}/inventaire?dossier=` | toute personne connectée | les sous-dossiers du dossier, avec le nombre de documents de chacun et de son sous-arbre ; 202 pendant la préparation |
+| `GET /existant?espace=&dossier=&chemin=` | toute personne connectée | ses propres collections Résana qui indexent déjà ce dossier, un parent ou un sous-dossier |
+| `POST /add` | la personne qui a **créé** la collection | relie la collection au dossier (`exclus` : les sous-dossiers à ne pas indexer) et lance l'import |
+| `POST /sync/{collection}` | la personne qui a importé | relit le dossier et réindexe s'il a changé ; avec `{"exclus": […]}`, change d'abord la sélection |
+| `GET /status/{collection}` | qui peut lire la collection | le dossier relié, la couverture, l'avancement, l'invitation à mettre à jour, `est_importeur` (et, pour lui, la sélection) |
 
 Les erreurs du service sont rendues telles quelles : `{code, message, reessayable}`, plus `url_connexion`
 quand la session est absente. Deux exceptions :
@@ -140,22 +142,86 @@ L'adresse de consultation Résana (`url_consultation`, donnée par le service, j
 gardée comme adresse d'origine de chaque fichier. **Les citations du bac à sable n'affichent pas encore
 de lien « Ouvrir dans Résana »** : elles passent par l'extrait OpenRAG, comme pour toute collection.
 
-## Écrans
+## Écrans : Résana d'abord
 
-- **Assistant de création, étape 1** : la carte « Un dossier Résana » n'apparaît que si la capacité est
-  allumée. Sinon, Résana reste dans la ligne « Bientôt ».
-- **Étape 2** : la portée est fixée à « Moi seulement », avec une phrase qui dit pourquoi.
-- **Étape 3** : le choix se fait en quatre temps.
-  1. La liste des espaces. Un message prévient que la première ouverture de session peut prendre une
-     minute et demie.
-  2. Le filtre des dossiers.
-  3. L'aperçu : nombre de documents, taille approchée et premiers titres.
-  4. « Importer le dossier », puis l'avancement.
+On part de Résana : la personne choisit ce qu'elle veut indexer, l'outil construit la collection
+autour (`pages/admin/create/resana.vue`).
 
-  Sans session Résana, un avertissement donne le lien de connexion du service et un bouton « Réessayer ».
-- **Ajouter des documents** (page d'une collection) : la carte « Dossier Résana » montre le dossier
-  relié, le nombre de documents, la dernière lecture, l'avancement et les documents écartés.
-  « Synchroniser » n'y apparaît que pour la personne qui a importé.
+1. **Choisir dans Résana** (la carte « Un dossier Résana » de l'étape 1, visible si la capacité est
+   allumée).
+   - L'espace. La première ouverture de session peut prendre une minute et demie, et un message le dit.
+     Sans session Résana, un avertissement donne le lien de connexion du service et « Réessayer ».
+   - Le dossier, avec un filtre. Pour tout l'espace, on prend son dossier principal.
+   - **L'existant**, vérifié aussitôt (`GET /existant`) : si une de vos collections indexe déjà ce
+     dossier, un dossier qui le contient ou un de ses sous-dossiers, l'écran le dit, avec le lien
+     pour la mettre à jour plutôt que d'en créer une de plus. Seulement les vôtres : une collection
+     Résana est privée, celles des autres ne se révèlent pas.
+   - **Que faut-il indexer ?** (`GET /inventaire`, composant `DepotArbreResana`) : les sous-dossiers en
+     arbre, avec le nombre de documents (et la taille approchée) de chacun, cochés par défaut. Un
+     texte rappelle de n'indexer que ce qui sert : chaque document de plus allonge l'import et les
+     mises à jour, et peut mêler aux réponses des textes hors sujet. Le total de la sélection se met
+     à jour à chaque case. Pendant la préparation d'un grand dossier, l'écran affiche « n dossiers
+     lus sur N » ; on peut continuer sans attendre (tout le dossier sera indexé).
+2. **Relire la fiche**, déjà remplie : titre (le nom du dossier), identifiant proposé, description
+   (« Les documents du dossier … de l'espace Résana … »), et les étiquettes **Résana**,
+   **Index complet / partiel**, **Privée**. « Créer et indexer » crée la collection (privée) et lance
+   l'import, puis ouvre la page de la collection. Si l'import ne démarre pas, la collection reste et
+   le bouton devient « Relancer l'indexation ».
+
+**Page « Ajouter des documents »** d'une collection Résana (`DepotEtatResana`) :
+- le badge **Résana · index complet** ou **Résana · index partiel**, et la phrase qui l'explique
+  (« 412 documents indexés sur 2 141 dans le dossier Résana : index partiel (certains sous-dossiers
+  sont exclus) ») ;
+- l'avancement, les documents écartés, et l'invitation à mettre à jour si l'index vieillit ;
+- pour la personne qui a importé : **Mettre à jour**, et **Modifier la sélection**. Ce bouton rouvre
+  l'arbre avec les dossiers exclus décochés. « Enregistrer et mettre à jour » applique la sélection :
+  un dossier ajouté s'indexe, un dossier retiré sort de l'index. C'est ainsi qu'on **poursuit une
+  indexation partielle**.
+
+**Mes collections** : l'étiquette « Résana · index complet / partiel » sur la carte de la collection.
+
+## Périmètre et couverture
+
+Le périmètre s'écrit en **exclusions** (`source_config_json.perimetre.exclus`) : le dossier choisi
+est indexé, sauf les sous-dossiers exclus et tout ce qu'ils contiennent. Un sous-dossier créé plus
+tard dans Résana entre donc de lui-même dans l'index, sauf s'il est rangé sous un dossier exclu. Les
+documents rangés directement dans le dossier choisi sont toujours indexés.
+
+La **couverture** (`source_resume` dans la fiche d'une collection, et dans `/status`) dit ce que
+l'index couvre du dossier :
+
+| Champ | Sens |
+|---|---|
+| `couverture` | `totale` ou `partielle` |
+| `raisons` | `selection` (des sous-dossiers exclus), `interrompue` (la dernière passe s'est arrêtée en route), `a_faire` (rien d'indexé encore) |
+| `documents_indexes` | documents dans l'index |
+| `documents_perimetre` | documents de la sélection lors de la dernière passe |
+| `documents_disponibles` | documents du dossier Résana (sous-dossiers exclus compris) |
+| `derniere_lecture` | date de la dernière passe complète |
+
+## Inviter à mettre à jour
+
+Pas de synchronisation planifiée (elle demanderait d'agir sans la personne : issue « qui peut relancer
+l'indexation »). À la place, l'outil **propose** une mise à jour là où la personne se trouve, quand
+c'est utile :
+
+- index lu il y a plus de `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` jours (7 par défaut) : « L'index
+  Résana de « Notes fictives » semble ancien (dernière lecture il y a 12 jours). Souhaitez-vous le
+  mettre à jour ? » ;
+- dernière passe arrêtée en route ou en échec (premier import raté compris) : « L'index Résana de
+  « Notes fictives » est incomplet : la dernière mise à jour n'est pas allée au bout. Souhaitez-vous
+  la reprendre ? ».
+
+Seulement pour la personne qui a importé (elle seule peut mettre à jour), et jamais pendant une
+passe. L'invitation apparaît :
+
+- **sous une réponse du bac à sable** (champ `avis` de `POST /api/playground/{c}/chat`) ;
+- **dans la recherche** (`GET /api/v1/search`) : clé `notices`, absente s'il n'y en a pas, lue par
+  l'extension IAssistant-Direct (docs/clients.md) ;
+- **sur la page de la collection**.
+
+Le lien d'action ouvre la page de la collection (`/c/<nom>/upload?synchroniser=1`), où le bouton
+« Mettre à jour » reçoit le focus : rien ne se lance sans un clic.
 
 ## Configuration
 
@@ -163,6 +229,7 @@ de lien « Ouvrir dans Résana »** : elles passent par l'extrait OpenRAG, comme
 |---|---|---|
 | `MYCOLLECTIONS_RESANA_EXPORT_URL` | `` | adresse interne du service d'export (sans `/export/v1`) ; vide ⇒ 503 |
 | `MYCOLLECTIONS_RESANA_EXPORT_SECRET` | `` | secret propre à Mes collections, attendu par le service dans `X-Internal-Token` ; vide ⇒ 503 |
+| `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` | `7` | au-delà, l'index « semble ancien » et l'outil propose de le mettre à jour |
 | capacité `resana` | `false` | `capacites.json` du menu commun, ou `MYCOLLECTIONS_CAPACITES_SURCHARGE='{"resana": true}'` |
 
 En cluster, il faut aussi une règle réseau qui laisse Mes collections joindre le service Résana sur son

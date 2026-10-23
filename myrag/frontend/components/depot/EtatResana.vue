@@ -1,18 +1,25 @@
 <script setup lang="ts">
 /**
- * Où en est une collection Résana (docs/resana.md) : le dossier relié, l'import ou la
- * synchronisation en cours, et le bouton « Synchroniser », réservé à la personne qui a importé.
+ * Où en est une collection Résana (docs/resana.md) : le dossier relié, ce que l'index en couvre
+ * (complet ou partiel, et pourquoi), l'import ou la mise à jour en cours, l'invitation à mettre à
+ * jour un index ancien, et — pour la personne qui a importé — « Mettre à jour » et « Modifier la
+ * sélection » (ajouter ou retirer des sous-dossiers, pour poursuivre l'indexation).
  */
-import type { ErreurResana, StatutResana } from '~/utils/resana'
-import { erreurResana, libelleTravail, travailEnCours } from '~/utils/resana'
+import type { AvisResana, CouvertureResana, ErreurResana, InventaireResana, StatutResana } from '~/utils/resana'
+import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, preparation, travailEnCours } from '~/utils/resana'
 
 const props = defineProps<{ collection: string }>()
 
+type Statut = StatutResana & CouvertureResana & { espace_id?: string | null, dossier_id?: string | null, exclus: string[], avis?: AvisResana | null }
+
+const route = useRoute()
 const { get, post } = useApi()
-const statut = ref<StatutResana | null>(null)
+const statut = ref<Statut | null>(null)
 const erreur = ref<ErreurResana | null>(null)
 const envoi = ref(false)
+const bouton = ref<HTMLButtonElement | null>(null)
 let minuterie: ReturnType<typeof setTimeout> | undefined
+let rappel: ReturnType<typeof setTimeout> | undefined
 
 const enCours = computed(() => travailEnCours(statut.value?.travail))
 const phrase = computed(() => libelleTravail(statut.value?.travail))
@@ -21,6 +28,12 @@ const derniere = computed(() => {
   const d = statut.value?.last_sync_at
   return d ? new Date(d.endsWith('Z') || d.includes('+') ? d : `${d}Z`).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : ''
 })
+
+// ─── Modifier la sélection ───────────────────────────────────────────────────
+const edition = ref(false)
+const inventaire = ref<InventaireResana | null>(null)
+const enPreparation = ref<{ dossiers_lus?: number | null, dossiers?: number | null } | null>(null)
+const exclus = ref<string[]>([])
 
 async function charger () {
   clearTimeout(minuterie)
@@ -36,11 +49,12 @@ async function charger () {
   }
 }
 
-async function synchroniser () {
+async function synchroniser (nouveauxExclus?: string[]) {
   envoi.value = true
   erreur.value = null
   try {
-    await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`)
+    await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, nouveauxExclus ? { exclus: nouveauxExclus } : undefined)
+    edition.value = false
   }
   catch (e) {
     erreur.value = erreurResana(e)
@@ -51,8 +65,53 @@ async function synchroniser () {
   await charger()
 }
 
-onMounted(charger)
-onBeforeUnmount(() => clearTimeout(minuterie))
+async function chargerInventaire () {
+  clearTimeout(rappel)
+  const s = statut.value
+  if (!s?.espace_id || !s.dossier_id || !edition.value) {
+    return
+  }
+  erreur.value = null
+  try {
+    const r = await get(`/api/sources/resana/espaces/${encodeURIComponent(s.espace_id)}/inventaire`, { dossier: s.dossier_id })
+    if (r.en_preparation) {
+      enPreparation.value = r
+      rappel = setTimeout(chargerInventaire, 5000)
+      return
+    }
+    enPreparation.value = null
+    inventaire.value = r
+  }
+  catch (e) {
+    erreur.value = erreurResana(e)
+  }
+}
+
+function ouvrirEdition () {
+  exclus.value = [...(statut.value?.exclus || [])]
+  inventaire.value = null
+  edition.value = true
+  chargerInventaire()
+}
+
+function fermerEdition () {
+  clearTimeout(rappel)
+  edition.value = false
+}
+
+onMounted(async () => {
+  await charger()
+  // Venue d'une invitation (« l'index semble ancien ») : le bouton est là, prêt, sans rien lancer seul.
+  if (route.query.synchroniser && statut.value?.est_importeur) {
+    await nextTick()
+    bouton.value?.scrollIntoView({ block: 'center' })
+    bouton.value?.focus()
+  }
+})
+onBeforeUnmount(() => {
+  clearTimeout(minuterie)
+  clearTimeout(rappel)
+})
 </script>
 
 <template>
@@ -61,82 +120,166 @@ onBeforeUnmount(() => clearTimeout(minuterie))
     class="resana-carte fr-mb-4w"
     aria-labelledby="etat-resana-titre"
   >
-    <div>
-      <div>
-        <h2
-          id="etat-resana-titre"
-          class="fr-h5"
-        >
-          Dossier Résana
-        </h2>
-        <p class="fr-text--sm fr-mb-1w">
-          <strong>{{ statut.espace_nom }}</strong> › {{ statut.dossier_chemin }} —
-          {{ statut.documents }} document{{ statut.documents > 1 ? 's' : '' }} importé{{ statut.documents > 1 ? 's' : '' }}{{ derniere ? `, dernière lecture le ${derniere}` : '' }}.
-        </p>
-        <p class="fr-text--xs resana-discret">
-          Collection privée : seule la personne qui a importé le dossier l'interroge et la synchronise.
-        </p>
-        <p
-          v-if="phrase"
-          class="fr-text--sm"
-          role="status"
-          aria-live="polite"
-        >
-          {{ phrase }}
-          <a
-            v-if="statut.travail?.url_connexion?.startsWith('https://')"
-            :href="statut.travail.url_connexion"
-            class="fr-link"
-            target="_blank"
-            rel="noopener"
-          >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
-        </p>
-        <details
-          v-if="ecartes.length"
-          class="fr-text--xs fr-mb-2w"
-        >
-          <summary>Documents écartés ({{ ecartes.length }})</summary>
-          <ul>
-            <li
-              v-for="(e, i) in ecartes"
-              :key="i"
-            >
-              {{ e.titre }} — {{ e.raison }}
-            </li>
-          </ul>
-        </details>
-        <div
-          v-if="erreur"
-          class="fr-alert fr-alert--sm fr-mb-2w"
-          :class="erreur.code === 'session_absente' ? 'fr-alert--warning' : 'fr-alert--error'"
-          role="alert"
-        >
-          <p>{{ erreur.message }}</p>
-          <p v-if="erreur.urlConnexion">
-            <a
-              :href="erreur.urlConnexion"
-              class="fr-link"
-              target="_blank"
-              rel="noopener"
-            >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+    <div class="resana-carte__tete">
+      <h2
+        id="etat-resana-titre"
+        class="fr-h5 fr-mb-0"
+      >
+        Dossier Résana
+      </h2>
+      <span
+        class="fr-badge fr-badge--sm fr-badge--no-icon"
+        :class="statut.couverture === 'totale' ? 'fr-badge--success' : 'fr-badge--info'"
+      >{{ etiquetteResana(statut) }}</span>
+    </div>
+    <p class="fr-text--sm fr-mt-1w fr-mb-1w">
+      <strong>{{ statut.espace_nom }}</strong> › {{ statut.dossier_chemin }}{{ derniere ? ` — dernière lecture le ${derniere}` : '' }}.
+    </p>
+    <p class="fr-text--sm fr-mb-1w">
+      {{ phraseCouverture(statut) }}
+    </p>
+    <p class="fr-text--xs resana-discret">
+      Collection privée : seule la personne qui a importé le dossier l'interroge et la met à jour.
+    </p>
+
+    <div
+      v-if="statut.avis && !enCours"
+      class="fr-notice fr-notice--info fr-mb-2w"
+    >
+      <div class="fr-container">
+        <div class="fr-notice__body">
+          <p class="fr-notice__title fr-text--sm">
+            {{ statut.avis.message }}
           </p>
         </div>
-        <button
-          v-if="statut.est_importeur"
-          type="button"
-          class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-refresh-line fr-btn--icon-left"
-          :disabled="enCours || envoi"
-          @click="synchroniser"
-        >
-          {{ enCours || envoi ? 'Synchronisation en cours…' : 'Synchroniser' }}
-        </button>
       </div>
+    </div>
+
+    <p
+      v-if="phrase"
+      class="fr-text--sm"
+      role="status"
+      aria-live="polite"
+    >
+      {{ phrase }}
+      <a
+        v-if="statut.travail?.url_connexion?.startsWith('https://')"
+        :href="statut.travail.url_connexion"
+        class="fr-link"
+        target="_blank"
+        rel="noopener"
+      >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+    </p>
+    <details
+      v-if="ecartes.length"
+      class="fr-text--xs fr-mb-2w"
+    >
+      <summary>Documents écartés ({{ ecartes.length }})</summary>
+      <ul>
+        <li
+          v-for="(e, i) in ecartes"
+          :key="i"
+        >
+          {{ e.titre }} — {{ e.raison }}
+        </li>
+      </ul>
+    </details>
+    <div
+      v-if="erreur"
+      class="fr-alert fr-alert--sm fr-mb-2w"
+      :class="erreur.code === 'session_absente' ? 'fr-alert--warning' : 'fr-alert--error'"
+      role="alert"
+    >
+      <p>{{ erreur.message }}</p>
+      <p v-if="erreur.urlConnexion">
+        <a
+          :href="erreur.urlConnexion"
+          class="fr-link"
+          target="_blank"
+          rel="noopener"
+        >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+      </p>
+    </div>
+
+    <ul
+      v-if="statut.est_importeur && !edition"
+      class="fr-btns-group fr-btns-group--inline fr-btns-group--sm"
+    >
+      <li>
+        <button
+          ref="bouton"
+          type="button"
+          class="fr-btn fr-btn--sm"
+          :class="statut.avis ? '' : 'fr-btn--secondary'"
+          :disabled="enCours || envoi"
+          @click="synchroniser()"
+        >
+          {{ enCours || envoi ? 'Mise à jour en cours…' : (statut.avis?.action.libelle || 'Mettre à jour') }}
+        </button>
+      </li>
+      <li>
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary"
+          :disabled="enCours || envoi"
+          @click="ouvrirEdition"
+        >
+          Modifier la sélection
+        </button>
+      </li>
+    </ul>
+
+    <div
+      v-if="edition"
+      class="fr-mt-2w"
+    >
+      <p
+        v-if="enPreparation"
+        class="fr-text--sm"
+        role="status"
+      >
+        Résana prépare l'inventaire du dossier{{ preparation(enPreparation.dossiers_lus, enPreparation.dossiers) }}…
+      </p>
+      <p
+        v-else-if="!inventaire && !erreur"
+        class="fr-text--sm"
+        role="status"
+      >
+        Inventaire du dossier…
+      </p>
+      <DepotArbreResana
+        v-if="inventaire"
+        v-model="exclus"
+        :inventaire="inventaire"
+      />
+      <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-2w">
+        <li>
+          <button
+            type="button"
+            class="fr-btn fr-btn--sm"
+            :disabled="!inventaire || envoi"
+            @click="synchroniser(exclus)"
+          >
+            Enregistrer et mettre à jour
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            class="fr-btn fr-btn--sm fr-btn--tertiary"
+            @click="fermerEdition"
+          >
+            Annuler
+          </button>
+        </li>
+      </ul>
     </div>
   </section>
 </template>
 
 <style scoped>
 .resana-carte { padding: 1.5rem 2rem; border: 1px solid var(--border-default-grey); }
+.resana-carte__tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .resana-discret { color: var(--text-mention-grey); }
 @media (max-width: 36em) { .resana-carte { padding: 1rem; } }
 </style>

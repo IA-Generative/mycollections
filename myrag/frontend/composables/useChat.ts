@@ -16,7 +16,9 @@
  * fallback_used) so the UI can reveal it progressively under each message
  * instead of keeping a separate "last debug" mirror.
  */
+import type { AvisResana } from '~/utils/resana'
 import { ref } from 'vue'
+import { avisDeReponse } from '~/utils/resana'
 
 export interface ChatSource {
   original_filename?: string
@@ -38,6 +40,8 @@ export interface ChatMessage {
   error?: boolean
   /** Server-assigned id for tracking votes back to a specific turn. */
   turnId?: string
+  /** Invitations glissées dans la réponse (index Résana ancien ou incomplet). */
+  avis?: AvisResana[]
 }
 
 export function useChat(collection: string) {
@@ -65,6 +69,7 @@ export function useChat(collection: string) {
         model: data.model,
         fallbackUsed: !!data.fallback_used,
         turnId: `turn-${Date.now()}`,
+        avis: avisDeReponse(data.avis),
       }
       messages.value.push(assistant)
       return assistant

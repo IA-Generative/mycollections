@@ -74,6 +74,19 @@ class Collection(Base):
     garant_pressenti: Mapped[str] = mapped_column(String(255), default="", server_default="")
     demande_id: Mapped[str | None] = mapped_column(String(36), nullable=True, default=None)
 
+    def _resume_source(self) -> dict | None:
+        """Ce que l'index couvre de sa source, pour l'étiquette des listes (« Résana · index
+        partiel ») ; seulement pour Résana, et sans rien de la configuration au-delà des comptes."""
+        if self.source_type != "resana":
+            return None
+        from app.services.resana_perimetre import couverture
+
+        try:
+            cfg = json.loads(self.source_config_json or "{}")
+        except ValueError:
+            cfg = {}
+        return {"type": "resana", **couverture(cfg if isinstance(cfg, dict) else {})}
+
     def to_dict(self) -> dict:
         return {
             "name": self.name,
@@ -98,6 +111,7 @@ class Collection(Base):
             "contact_email": self.contact_email,
             "source_type": self.source_type,
             "source_url": self.source_url,
+            "source_resume": self._resume_source(),
             "created_at": self.created_at.isoformat() if self.created_at else "",
             "updated_at": self.updated_at.isoformat() if self.updated_at else "",
             "archived_at": self.archived_at.isoformat() if self.archived_at else None,

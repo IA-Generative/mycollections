@@ -143,3 +143,151 @@ export function resumeApercu (a: { total: number, taille_approx_mo?: number | nu
   const mo = a.taille_approx_mo < 1 ? 'moins de 1 Mo' : `environ ${Math.round(a.taille_approx_mo)} Mo`
   return `${docs}, ${mo}`
 }
+
+// ─── Le périmètre : quels sous-dossiers indexer ─────────────────────────────────────────────
+
+/** Un sous-dossier du dossier choisi, avec ses comptes (route `/inventaire`). */
+export interface NoeudResana {
+  id: string
+  titre: string
+  parent_id: string | null
+  profondeur: number
+  /** Documents rangés directement dans ce dossier. */
+  documents: number
+  /** Documents de tout son sous-arbre. */
+  documents_total: number
+  taille_approx_mo?: number | null
+}
+
+export interface InventaireResana {
+  total: number
+  taille_approx_mo?: number | null
+  documents_a_la_racine: number
+  dossiers: NoeudResana[]
+}
+
+/** Exclu de lui-même ou par un dossier parent exclu. */
+export function estExclu (id: string, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): boolean {
+  const parents = new Map(noeuds.map(n => [n.id, n.parent_id]))
+  let courant: string | null | undefined = id
+  const vus = new Set<string>()
+  while (courant && !vus.has(courant)) {
+    if (exclus.has(courant)) {
+      return true
+    }
+    vus.add(courant)
+    courant = parents.get(courant)
+  }
+  return false
+}
+
+/** Exclu par un parent : sa case est grisée (on ne réinclut pas un dossier dans un dossier exclu). */
+export function exclusParUnParent (n: NoeudResana, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): boolean {
+  return !!n.parent_id && estExclu(n.parent_id, exclus, noeuds)
+}
+
+/**
+ * Cocher ou décocher un dossier. Décocher l'exclut avec tout son contenu ; les exclusions plus
+ * fines sous lui deviennent inutiles et sont retirées, pour que la liste reste la plus courte.
+ */
+export function basculer (id: string, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): Set<string> {
+  const suivant = new Set(exclus)
+  if (suivant.has(id)) {
+    suivant.delete(id)
+    return suivant
+  }
+  suivant.add(id)
+  for (const autre of [...suivant]) {
+    if (autre !== id && estExclu(autre, new Set([id]), noeuds)) {
+      suivant.delete(autre)
+    }
+  }
+  return suivant
+}
+
+/** Ce que la sélection indexera : documents et dossiers retenus. */
+export function selection (inv: InventaireResana, exclus: ReadonlySet<string>): { documents: number, dossiers: number } {
+  let documents = inv.documents_a_la_racine
+  let dossiers = 0
+  for (const n of inv.dossiers) {
+    if (!estExclu(n.id, exclus, inv.dossiers)) {
+      documents += n.documents
+      dossiers += 1
+    }
+  }
+  return { documents, dossiers }
+}
+
+/** Le résumé de couverture d'une collection Résana (`source_resume`, ou l'état de `/status`). */
+export interface CouvertureResana {
+  couverture: 'totale' | 'partielle' | string
+  raisons?: string[]
+  documents_indexes?: number
+  documents_perimetre?: number | null
+  documents_disponibles?: number | null
+}
+
+/** L'étiquette des listes : « Résana · index complet » ou « Résana · index partiel ». */
+export function etiquetteResana (c: CouvertureResana | null | undefined): string {
+  if (!c) {
+    return ''
+  }
+  return c.couverture === 'totale' ? 'Résana · index complet' : 'Résana · index partiel'
+}
+
+/** La phrase qui explique la couverture : ce qui est indexé, sur quoi, et pourquoi c'est partiel. */
+export function phraseCouverture (c: CouvertureResana | null | undefined): string {
+  if (!c) {
+    return ''
+  }
+  const indexes = c.documents_indexes ?? 0
+  const sur = typeof c.documents_disponibles === 'number' ? ` sur ${c.documents_disponibles} dans le dossier Résana` : ''
+  const base = `${indexes} document${indexes > 1 ? 's' : ''} indexé${indexes > 1 ? 's' : ''}${sur}`
+  const raisons = c.raisons || []
+  if (c.couverture === 'totale') {
+    return `${base} : index complet du dossier.`
+  }
+  const pourquoi: string[] = []
+  if (raisons.includes('selection')) {
+    pourquoi.push('certains sous-dossiers sont exclus')
+  }
+  if (raisons.includes('interrompue')) {
+    pourquoi.push('la dernière mise à jour s\'est arrêtée en route')
+  }
+  if (raisons.includes('a_faire')) {
+    pourquoi.push('l\'indexation n\'a pas encore eu lieu')
+  }
+  return `${base} : index partiel${pourquoi.length ? ` (${pourquoi.join(', ')})` : ''}.`
+}
+
+/** L'invitation à mettre l'index à jour, glissée dans une réponse (champ `avis`). */
+export interface AvisResana {
+  collection: string
+  /** Le titre de la collection, déjà repris dans `message`. */
+  titre?: string
+  code: string
+  message: string
+  action: { libelle: string, url: string }
+}
+
+/** Les avis lisibles d'une réponse : une liste d'objets complets, sinon rien. Un lien externe est écarté. */
+export function avisDeReponse (brut: unknown): AvisResana[] {
+  if (!Array.isArray(brut)) {
+    return []
+  }
+  return brut.filter((a): a is AvisResana => !!a && typeof a === 'object'
+    && typeof (a as AvisResana).message === 'string'
+    && typeof (a as AvisResana).action?.url === 'string'
+    && (a as AvisResana).action.url.startsWith('/')
+    && !(a as AvisResana).action.url.startsWith('//'))
+}
+
+/** La fiche proposée pour un dossier Résana : titre et description déjà écrits, à relire. */
+export function ficheDepuisResana (d: { titre: string, chemin: string }, espaceNom: string): { titre: string, description: string } {
+  const titre = (d.titre || d.chemin.split(' / ').pop() || 'Dossier Résana').trim()
+  const ou = d.chemin && d.chemin !== titre ? ` (${d.chemin})` : ''
+  return {
+    titre,
+    description: `Les documents du dossier « ${titre} »${ou} de l'espace Résana « ${espaceNom} ».`,
+  }
+}

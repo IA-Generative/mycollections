@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     #: (`X-Internal-Token`). Vides : l'import Résana répond 503. Le drapeau `resana` l'allume.
     resana_export_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_EXPORT_URL", "resana_export_url"))
     resana_export_secret: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_EXPORT_SECRET", "resana_export_secret"))
+    #: Au-delà de ce nombre de jours sans lecture, l'index d'une collection Résana « semble ancien ».
+    resana_fraicheur_jours: int = Field(default=7, validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS", "resana_fraicheur_jours"))
 
     # Open WebUI (used by /publish to create model aliases)
     # Défaut d'EXEMPLE : chaque déploiement pose son adresse par OWUI_URL. Nommer ici
