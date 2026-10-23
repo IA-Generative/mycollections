@@ -320,6 +320,16 @@ class OpenRAGClient:
                 return ResultatPartition(status="not_found")
             raise
 
+    async def delete_file(self, partition: str, file_id: str) -> None:
+        """Retire un fichier (et ses morceaux) d'une partition. Un fichier déjà absent n'est pas une
+        erreur : le but est qu'il n'y soit plus."""
+        path = f"/indexer/partition/{partition}/file/{file_id}"
+        _verifier_chemin(path)
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.delete(f"{self.base_url}{path}", headers={"Authorization": f"Bearer {self.admin_token}"})
+            if resp.status_code != 404:
+                resp.raise_for_status()
+
     async def upload_chunk(self, partition: str, chunk: dict) -> ResultatPartition:
         file_id = str(uuid.uuid4())
         content = chunk["content"].encode("utf-8")
@@ -332,12 +342,14 @@ class OpenRAGClient:
             )
         )
 
-    async def upload_document(self, partition: str, filename: str, content: bytes, mimetype: str, metadata: dict | None = None) -> EnvoiDocument:
+    async def upload_document(self, partition: str, filename: str, content: bytes, mimetype: str, metadata: dict | None = None, file_id: str | None = None) -> EnvoiDocument:
         """Un document entier (PDF, Word…) confié à OpenRAG, qui le lit et le découpe lui-même.
-        Rend `EnvoiDocument` : l'indexation est asynchrone, `task_state` la suit."""
+        Rend `EnvoiDocument` : l'indexation est asynchrone, `task_state` la suit. `file_id` : un
+        identifiant choisi (stable, pour qu'un renvoi après coupure tombe sur le même fichier —
+        OpenRAG répond alors 409) ; sinon un identifiant au hasard."""
         import json as _json
 
-        file_id = str(uuid.uuid4())
+        file_id = file_id or str(uuid.uuid4())
         path = f"/indexer/partition/{partition}/file/{file_id}"
         _verifier_chemin(path)
         donnees = {"metadata": _json.dumps({"mimetype": mimetype, **(metadata or {})}, ensure_ascii=False)}

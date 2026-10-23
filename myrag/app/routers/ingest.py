@@ -16,7 +16,7 @@ from app.security_utils import assert_public_http_url, ensure_within, safe_filen
 from app.services import formats
 from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
-from app.services.openrag_client import OpenRAGClient
+from app.services.openrag_client import EnvoiDocument, OpenRAGClient
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -76,16 +76,23 @@ _ETATS_REUSSIS = ("COMPLETED", "SUCCESS")
 _ETATS_ECHOUES = ("FAILED", "CANCELLED")
 
 
-async def _indexer_document_background(job_id: str, collection: str, filename: str, content: bytes) -> None:
+async def _indexer_document_background(
+    job_id: str, collection: str, filename: str, content: bytes, metadata: dict | None = None, file_id: str | None = None
+) -> tuple[str | None, str | None]:
     """Un document entier part vers OpenRAG, qui le lit et le découpe ; on suit sa tâche jusqu'au
-    bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG)."""
+    bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG). Rend
+    (identifiant du fichier chez OpenRAG s'il a été reçu, erreur ou None) : l'import Résana garde
+    l'identifiant pour remplacer ou retirer ce document plus tard, même si sa lecture a échoué ou
+    traîne. `metadata` complète le titre ; `file_id` fixe l'identifiant (un 409 dit alors que ce
+    fichier-là est déjà chez OpenRAG)."""
     import time
 
     client = OpenRAGClient(timeout=300.0)
     await update_job(job_id, status="uploading")
     erreur = None
+    envoi = None
     try:
-        envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename})
+        envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename, **(metadata or {})}, file_id=file_id)
         tache, debut = envoi.task_id, time.monotonic()
         while tache:
             etat = str((await client.task_state(tache)).task_state or "").upper()
@@ -100,6 +107,8 @@ async def _indexer_document_background(job_id: str, collection: str, filename: s
             await asyncio.sleep(SUIVI_DOCUMENT_S)
     except httpx.HTTPStatusError as e:
         # 409 : OpenRAG a déjà ce document (reprise après arrêt) — compté comme réussi.
+        if e.response is not None and e.response.status_code == 409 and file_id:
+            envoi = EnvoiDocument(file_id=file_id, task_id="")
         if e.response is None or e.response.status_code != 409:
             code = e.response.status_code if e.response is not None else "?"
             erreur = f"OpenRAG a refusé « {filename} » (format ou taille)." if code in (413, 415, 422) else f"OpenRAG a répondu {code} pour « {filename} »."
@@ -110,6 +119,7 @@ async def _indexer_document_background(job_id: str, collection: str, filename: s
         await update_job(job_id, error=erreur)
     await increment_job_progress(job_id, success=erreur is None)
     await complete_job(job_id)
+    return (envoi.file_id if envoi is not None else None), erreur
 
 
 ETATS_EN_COURS = ("chunking", "chunking_done", "pending", "uploading")
@@ -401,6 +411,12 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
     await _exiger_gestion(collection, user)
     from app.database import async_session as db_session
     from app.models.db import SourceFile
+    from app.services.collection_store import get_collection
+
+    # Une collection Résana ne garde pas de copie de ses documents (docs/resana.md) : on la
+    # réindexe en relisant Résana, par sa page (« Vérification complète »).
+    if ((await get_collection(collection)) or {}).get("source_type") == "resana":
+        raise HTTPException(status_code=409, detail="Une collection Résana se réindexe depuis Résana : « Vérification complète » sur sa page.")
 
     # Get all source files for this collection
     async with db_session() as session:

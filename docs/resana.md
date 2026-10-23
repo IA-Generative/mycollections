@@ -91,44 +91,64 @@ du groupe `<racine>/<nom>-admin` la lisent.
      - Une fois prête, la liste reste 10 minutes en cache chez le service.
    - **Synchronisation sur un dossier vide.** Elle est refusée (409 `dossier_vide`) : rien n'est
      retiré sur la foi d'une liste vide.
-2. Le téléchargement se fait en tâche de fond, quatre documents à la fois. Le jeton de la personne reste
+2. **Mes collections ne garde aucune copie des documents Résana.** Pour chaque document, il garde
+   une fiche de quelques centaines d'octets :
+   - son empreinte sha256 ;
+   - la date de modification et la version annoncées par Résana (`modifie_le`, `version_fichier`) ;
+   - son adresse de consultation ;
+   - **son identifiant chez OpenRAG**.
+
+   L'original reste dans Résana, le texte indexé chez OpenRAG.
+3. **Ce que la liste suffit à dire.** Sans rien télécharger, chaque document est classé ainsi :
+   - **nouveau** : à télécharger ;
+   - **date ou version annoncée différente** : à télécharger, puis à comparer par empreinte ;
+   - **même date, même version** : inchangé, rien n'est téléchargé ;
+   - **absent de la liste** : disparu.
+
+   Une mise à jour où dix documents ont bougé télécharge ces dix-là, pas tout le dossier. Le
+   service ne garantit pas que la version change à chaque modification. Pour le cas rare d'un
+   contenu changé sans nouvelle date, **« Vérification complète »** (`{"complet": true}`)
+   retélécharge tout et compare les empreintes.
+4. **Le téléchargement**, en tâche de fond, quatre documents à la fois. Le jeton de la personne reste
    en mémoire le temps de la tâche et n'est jamais écrit. L'écran suit l'avancement par `/status`.
-   Chaque fichier nouveau ou changé est écrit aussitôt dans un **dossier d'attente sur le disque**
-   (`<DATA_DIR>/_resana_attente/<collection>`), jamais gardé en mémoire : il n'y a donc **pas de
-   plafond par passe**. Le dossier d'attente est vidé au début et à la fin de chaque passe. Seule
-   garde : laisser au moins 1 Go libre sur le volume.
-3. Chaque document est comparé par son **sha256**. Le service ne donne pas d'ETag, et `version_fichier`
-   n'est pas garanti. Résultat :
+   - Un contenu relu à l'identique est jeté aussitôt.
+   - Un contenu nouveau ou changé attend dans un **dossier d'attente sur le disque**
+     (`<DATA_DIR>/_resana_attente/<collection>`), jamais en mémoire, le temps de partir chez
+     OpenRAG. Il est effacé dès son envoi, et le dossier est vidé au début et à la fin de chaque
+     passe.
+   - Pas de plafond par passe. Seule garde : laisser au moins 1 Go libre sur le volume.
+5. **Le tri** :
    - un contenu déjà vu sous un autre document est écarté (doublon) ;
    - un format non pris en charge est écarté ;
    - un document refusé par Résana (`hors_droits`, `introuvable`, `trop_volumineux`) est écarté, et
      retiré s'il avait été importé.
-4. Si rien n'a changé, la synchronisation le dit (« à jour ») et ne touche pas à l'index.
-5. Sinon :
-   - les documents disparus sont retirés (ligne et fichier gardé) ;
-   - les nouveaux et les modifiés sont gardés ;
-   - la partition OpenRAG est vidée puis tout est renvoyé, comme pour une réindexation : Mes collections
-     ne connaît pas l'identifiant OpenRAG d'un fichier, c'est donc la seule façon de retirer une ancienne
-     version.
-6. **Arrêt en route.** Une erreur bloquante arrête le téléchargement : session perdue, jeton expiré
+6. **OpenRAG, document par document.** La partition n'est jamais vidée, et la recherche continue
+   pendant la mise à jour.
+   - L'ancienne version d'un document modifié et les documents disparus sont retirés un par un
+     (`DELETE /indexer/partition/<p>/file/<id>`).
+   - Les nouveaux documents et les nouvelles versions sont envoyés entiers : OpenRAG les lit et les
+     découpe. L'adresse Résana est jointe en métadonnée `url`.
+   - Les envois partent **quatre à la fois**, chacun suivi jusqu'au bout (un travail par document) :
+     des centaines de PDF envoyés d'un coup dépassaient le délai de lecture d'OpenRAG.
+   - **Identifiant stable** : l'identifiant OpenRAG d'un document se déduit du document Résana et de
+     son empreinte (`resana-<id>-<sha>`). Un renvoi après une coupure retombe sur le même fichier
+     (OpenRAG répond 409, compté comme reçu), au lieu d'en créer un second.
+   - Si rien n'a changé, la synchronisation le dit (« à jour ») et ne touche pas à l'index.
+7. **Arrêt en route.** Une erreur bloquante arrête le téléchargement : session perdue, jeton expiré
    (le jeton d'accès vit quelques minutes), service indisponible, ou disque presque plein
    (`disque_plein`).
    - **Aucun document reçu** : l'état passe à « échec », avec le message et, s'il y a lieu, le lien de
      connexion.
    - **Des documents reçus** : l'état passe à « partiel ».
-     - Ce qui est arrivé est gardé et indexé.
-     - **Rien n'est retiré.** Les documents non relus restent dans leur dernière version.
+     - Ce qui est arrivé est indexé.
+     - **Rien n'est retiré.** Les documents non relus gardent leur fiche, donc leur ancienne date :
+       la passe suivante les relira.
      - La date de dernière lecture ne bouge pas.
+     - Les nouveaux documents sont téléchargés en premier.
 
-   Une nouvelle synchronisation reprend où c'est utile. Les documents sont téléchargés dans cet
-   ordre :
-   1. les nouveaux ;
-   2. ceux dont Résana annonce une autre version (`version_fichier`, `modifie_le`) ;
-   3. les autres.
-
-   Un grand dossier s'importe ainsi en plusieurs fois. L'ordre ne décide de rien : seul le sha256 dit
-   qu'un document a changé. Un contenu relu à l'identique est jeté aussitôt, sans passer par le
-   disque.
+**Réindexer** (changer le découpage) ne s'applique pas à une collection Résana : il n'y a pas de copie
+à redécouper (409). On passe par « Vérification complète », qui relit Résana. Pour les PDF et les
+documents bureautiques, c'est de toute façon OpenRAG qui découpe.
 
 Les noms de fichiers viennent du service (`Content-Disposition`). Deux documents de même nom sont
 distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'import ne change plus.
@@ -136,15 +156,17 @@ distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'im
 `source_config_json` garde :
 
 - l'espace et le dossier (identifiant et libellé) ;
-- pour chaque document : son sha256, son nom de fichier, son adresse de consultation et sa version ;
+- pour chaque document : son sha256, son nom de fichier, son adresse de consultation, sa date et sa
+  version annoncées, son identifiant OpenRAG (et l'erreur de lecture d'OpenRAG s'il y en a eu une) ;
 - la date de la dernière lecture ;
 - l'état du dernier travail.
 
 Cette configuration ne sort que par `/status`, et sans la liste des documents.
 
 L'adresse de consultation Résana (`url_consultation`, donnée par le service, jamais construite ici) est
-gardée comme adresse d'origine de chaque fichier. **Les citations du bac à sable n'affichent pas encore
-de lien « Ouvrir dans Résana »** : elles passent par l'extrait OpenRAG, comme pour toute collection.
+gardée comme adresse d'origine de chaque fichier, et envoyée à OpenRAG en métadonnée `url`. OpenRAG
+fait déjà pointer ses liens de source vers cette adresse quand elle existe. Les citations du bac à
+sable de Mes collections passent encore par l'extrait OpenRAG.
 
 ## Écrans : Résana d'abord
 

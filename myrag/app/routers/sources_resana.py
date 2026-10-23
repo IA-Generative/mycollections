@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import shutil
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
@@ -55,6 +56,9 @@ SOURCE = "resana"
 #: de plafond par passe. Seule garde : laisser au moins cette place libre sur le volume.
 PLACE_LIBRE_MIN = 1024 * 1024 * 1024
 TELECHARGEMENTS_PARALLELES = 4
+#: Documents confiés à OpenRAG en même temps : au-delà, il ne suit plus (« pas fini de lire en
+#: 30 minutes » pour des centaines de PDF envoyés d'un coup).
+ENVOIS_PARALLELES = 4
 #: Les erreurs qui arrêtent tout ; les autres (droits, taille d'un document) n'écartent que lui.
 ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "disque_plein"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
@@ -221,6 +225,9 @@ class AjoutResana(BaseModel):
 class SynchroResana(BaseModel):
     #: Absent : le périmètre ne change pas ; présent : il est remplacé avant la passe.
     exclus: list[str] | None = Field(default=None, max_length=2000)
+    #: Vérification complète : retélécharger chaque document et comparer son empreinte, même si
+    #: Résana annonce la même date et la même version (rare : un contenu changé sans nouvelle date).
+    complet: bool = False
 
 
 async def _a_des_documents(collection: str) -> bool:
@@ -302,7 +309,8 @@ async def ajouter(req: AjoutResana, authorization: str | None = Header(default=N
 @router.post("/sync/{collection}")
 async def synchroniser(collection: str, corps: SynchroResana | None = None, authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
     """Relire le dossier et réindexer ce qui a changé ; `exclus` change d'abord le périmètre
-    (un dossier ajouté s'indexe, un dossier retiré sort de l'index)."""
+    (un dossier ajouté s'indexe, un dossier retiré sort de l'index) ; `complet` retélécharge tout
+    pour comparer les empreintes."""
     await gerer_la_collection(collection, user)
     col = await get_collection(collection)
     if not col:
@@ -322,7 +330,8 @@ async def synchroniser(collection: str, corps: SynchroResana | None = None, auth
         cfg["perimetre"] = {"exclus": sorted({e for e in corps.exclus if e and e != dossier})}
     cfg["travail"] = _travail("synchronisation", docs)
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
-    await _demarrer(collection, _executer(collection, client, espace, dossier, docs, "synchronisation", user))
+    complet = bool(corps and corps.complet)
+    await _demarrer(collection, _executer(collection, client, espace, dossier, docs, "synchronisation", user, complet=complet))
     return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None}
 
 
@@ -403,37 +412,48 @@ async def _suivre(collection: str, **champs) -> None:
         await update_collection(collection, {"source_config_json": json.dumps(cfg)})
 
 
+def a_relire(doc: DocumentResana, ancien: dict | None) -> bool:
+    """Faut-il retélécharger ce document ? Oui s'il est nouveau, si Résana annonce une autre date ou
+    une autre version, ou si la fiche gardée est incomplète. Sinon, rien à télécharger : la liste
+    du dossier suffit (l'empreinte ne se vérifie qu'en vérification complète)."""
+    if not ancien or not ancien.get("sha256") or not ancien.get("file_id"):
+        return True
+    if not doc.modifie_le and not doc.version_fichier:
+        return True  # Résana ne dit rien : seule l'empreinte peut trancher
+    return (doc.version_fichier, doc.modifie_le) != (ancien.get("version_fichier"), ancien.get("modifie_le"))
+
+
+def identifiant_openrag(ident: str, sha256: str) -> str:
+    """L'identifiant du document chez OpenRAG, déduit du document Résana et de son contenu : un
+    renvoi après une coupure retombe sur le même fichier (OpenRAG répond 409) au lieu d'en créer
+    un second ; une nouvelle version a un autre identifiant."""
+    propre = re.sub(r"[^A-Za-z0-9_.:-]", "", ident)[:48] or "doc"
+    return f"resana-{propre}-{sha256[:16]}"
+
+
 def _ordre(docs: list[DocumentResana], connus: dict[str, dict]) -> list[DocumentResana]:
-    """Les nouveaux d'abord, puis ceux dont Résana annonce une autre version, puis le reste : si la
-    session s'arrête en route, la synchronisation suivante reprend là où c'est utile. L'ordre ne
-    décide de rien : seul le sha256 dit qu'un document a changé."""
-
-    def rang(d: DocumentResana) -> int:
-        ancien = connus.get(d.id)
-        if not ancien:
-            return 0
-        if (d.version_fichier, d.modifie_le) != (ancien.get("version_fichier"), ancien.get("modifie_le")):
-            return 1
-        return 2
-
-    return sorted(docs, key=rang)
+    """Les nouveaux d'abord, puis les autres : si la session s'arrête en route, la passe suivante
+    reprend là où c'est utile."""
+    return sorted(docs, key=lambda d: 0 if d.id not in connus else 1)
 
 
 @dataclass
 class Recu:
-    """Un document reçu, nouveau ou changé : son contenu attend sur le disque."""
+    """Un document reçu, nouveau ou changé : son contenu attend sur le disque le temps de partir
+    chez OpenRAG, puis il est effacé (Mes collections n'en garde que l'empreinte)."""
 
     doc: DocumentResana
     nom: str
     sha256: str
     chemin: Path
+    taille: int
 
 
 @dataclass
 class Rapatriement:
     """Ce que le téléchargement a rapporté. `recus` : contenus nouveaux ou changés, en attente sur
-    le disque ; `identiques` : documents relus sans changement (contenu jeté aussitôt) ; `erreur` :
-    ce qui l'a arrêté en route."""
+    le disque ; `identiques` : documents relus sans changement de contenu ; `erreur` : ce qui l'a
+    arrêté en route."""
 
     recus: list[Recu] = field(default_factory=list)
     identiques: list[DocumentResana] = field(default_factory=list)
@@ -451,10 +471,10 @@ def _place_libre(chemin: Path) -> int:
 
 
 async def _rapatrier(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], connus: dict[str, dict]) -> Rapatriement:
-    """Télécharge chaque document, quelques-uns à la fois. Un contenu identique au précédent est
-    jeté aussitôt ; un contenu nouveau ou changé est écrit dans le dossier d'attente, pas gardé en
-    mémoire. Une erreur bloquante (ou un disque presque plein) arrête le téléchargement : ce qui est
-    déjà reçu reste utilisable."""
+    """Télécharge les documents à relire, quelques-uns à la fois. Un contenu identique au précédent
+    est jeté aussitôt ; un contenu nouveau ou changé attend sur le disque, pas en mémoire. Une
+    erreur bloquante (ou un disque presque plein) arrête le téléchargement : ce qui est déjà reçu
+    reste utilisable."""
     r = Rapatriement()
     file = _ordre(docs, connus)
     etat = {"faits": 0}
@@ -472,7 +492,8 @@ async def _rapatrier(collection: str, client: ClientExportResana, espace: str, d
                     return
                 r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
                 continue
-            if (connus.get(doc.id) or {}).get("sha256") == f.sha256:
+            ancien = connus.get(doc.id) or {}
+            if ancien.get("sha256") == f.sha256 and ancien.get("file_id"):
                 r.identiques.append(doc)
             else:
                 if _place_libre(attente) - len(f.contenu) < PLACE_LIBRE_MIN:
@@ -480,7 +501,7 @@ async def _rapatrier(collection: str, client: ClientExportResana, espace: str, d
                     return
                 chemin = attente / f"{len(r.recus):05d}-{hashlib.sha256(doc.id.encode()).hexdigest()[:16]}"
                 await asyncio.to_thread(chemin.write_bytes, f.contenu)
-                r.recus.append(Recu(doc=doc, nom=f.nom, sha256=f.sha256, chemin=chemin))
+                r.recus.append(Recu(doc=doc, nom=f.nom, sha256=f.sha256, chemin=chemin, taille=len(f.contenu)))
             etat["faits"] += 1
             if etat["faits"] % 10 == 0:
                 await _suivre(collection, faits=etat["faits"])
@@ -496,8 +517,10 @@ def _irrecevable(nom: str, contenu: bytes) -> str | None:
     nature = formats.nature(nom, contenu)
     if nature is None:
         return "format non pris en charge"
+    if len(contenu) > depot.DOCUMENT_MAX_OCTETS:
+        return "trop volumineux pour l'indexation"
     if nature is formats.Nature.DOCUMENT:
-        return "trop volumineux pour l'indexation" if len(contenu) > depot.DOCUMENT_MAX_OCTETS else None
+        return None
     try:
         texte = depot.texte_ou_refus(contenu, nom)
     except HTTPException:
@@ -528,45 +551,193 @@ def _strategie(col: dict) -> tuple[Strategy, Sensitivity]:
     return strategie, sensibilite
 
 
-async def _retirer(collection: str, fichiers: list[str]) -> None:
-    if not fichiers:
-        return
+async def _noter_sources(collection: str, documents: dict[str, dict]) -> None:
+    """Une ligne `SourceFile` par document indexé, SANS copie du fichier (storage_path vide) : la
+    liste des sources, la date du dernier dépôt et la purge restent justes ; l'original est dans
+    Résana (`original_url`), le texte dans OpenRAG."""
     async with async_session() as session:
-        lignes = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection, SourceFile.filename.in_(fichiers)))).scalars().all()
-        for sf in lignes:
-            if sf.storage_path:
-                Path(sf.storage_path).unlink(missing_ok=True)
-            await session.delete(sf)
+        lignes = {sf.filename: sf for sf in (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()}
+        voulus = {d["fichier"]: d for d in documents.values()}
+        for nom, sf in lignes.items():
+            if nom not in voulus:
+                if sf.storage_path:
+                    Path(sf.storage_path).unlink(missing_ok=True)
+                await session.delete(sf)
+        for nom, d in voulus.items():
+            sf = lignes.get(nom) or SourceFile(collection_name=collection, filename=nom)
+            if nom not in lignes:
+                session.add(sf)
+            sf.original_url = d.get("url") or ""
+            sf.storage_path = ""
+            sf.file_size = int(d.get("taille") or 0)
+            sf.checksum = d.get("sha256") or ""
+            sf.strategy_used = depot.STRATEGIE_DOCUMENT
+            sf.last_indexed_at = utcnow()
         await session.commit()
 
 
-async def _reindexer(collection: str, col: dict) -> int:
-    """Vide la partition et renvoie toutes les sources gardées (comme la réindexation) : sans
-    identifiant de fichier OpenRAG, c'est la seule façon de retirer l'ancienne version."""
-    strategie, sensibilite = _strategie(col)
+async def _retirer_d_openrag(collection: str, file_ids: list[str]) -> None:
     client = depot.OpenRAGClient()
-    try:
-        await client.delete_partition(collection)
-    except Exception as e:  # noqa: BLE001 — une partition encore absente
-        logger.info("résana %s : partition non vidée (%s)", collection, type(e).__name__)
-    try:
-        await client.create_partition(collection)
-    except Exception as e:  # noqa: BLE001 — comme le dépôt : chaque envoi dira son échec
-        logger.warning("résana %s : partition non créée (%s)", collection, type(e).__name__)
-    async with async_session() as session:
-        sources = (await session.execute(select(SourceFile).where(SourceFile.collection_name == collection))).scalars().all()
-    envoyes = 0
-    for sf in sources:
-        chemin = Path(sf.storage_path or "")
-        if not chemin.exists():
-            logger.warning("résana %s : source %s absente du disque", collection, sf.id)
-            continue
+    for file_id in file_ids:
         try:
-            await depot._ingest_content(collection, sf.filename, chemin.read_bytes(), strategie, sensibilite, source_path=sf.original_url or sf.storage_path)
-            envoyes += 1
-        except HTTPException as e:
-            logger.warning("résana %s : source %s non indexée (%s)", collection, sf.id, e.status_code)
-    return envoyes
+            await client.delete_file(collection, file_id)
+        except Exception as e:  # noqa: BLE001 — un retrait raté laisse un passage en trop, pas une panne
+            logger.warning("résana %s : fichier OpenRAG %s non retiré (%s)", collection, file_id, type(e).__name__)
+
+
+async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sensibilite: Sensitivity) -> dict[str, tuple[str | None, str | None]]:
+    """Confie les documents à OpenRAG, ENVOIS_PARALLELES à la fois, chacun suivi jusqu'au bout (un
+    travail par document, visible dans les travaux). Rend {id Résana: (file_id, erreur)}. Chaque
+    fichier en attente est effacé dès qu'il est parti."""
+    from app.services.job_store import create_job, update_job
+
+    verrou = asyncio.Semaphore(ENVOIS_PARALLELES)
+    rendu: dict[str, tuple[str | None, str | None]] = {}
+    faits = {"n": 0}
+
+    async def un(nom: str, recu: Recu, meta: dict) -> None:
+        async with verrou:
+            job = await create_job(collection=collection, filename=nom, strategy=depot.STRATEGIE_DOCUMENT, sensitivity=sensibilite, source_path=meta.get("url") or "")
+            await update_job(job["job_id"], total_chunks=1)
+            contenu = await asyncio.to_thread(recu.chemin.read_bytes)
+            recu.chemin.unlink(missing_ok=True)
+            rendu[recu.doc.id] = await depot._indexer_document_background(
+                job["job_id"], collection, nom, contenu, metadata=meta, file_id=identifiant_openrag(recu.doc.id, recu.sha256)
+            )
+            del contenu
+            faits["n"] += 1
+            await _suivre(collection, faits=faits["n"])
+
+    await asyncio.gather(*(un(nom, recu, meta) for nom, recu, meta in a_envoyer))
+    return rendu
+
+
+async def _comparer_et_appliquer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], action: str, *, complet: bool = False) -> dict:
+    col = await get_collection(collection)
+    if not col:
+        raise ErreurResana(404, "introuvable")
+    cfg = await get_source_config(collection)
+    connus: dict[str, dict] = dict(cfg.get("documents") or {})
+    _, sensibilite = _strategie(col)
+
+    # Ce que la liste suffit à dire : inchangés (même date, même version), et à relire.
+    a_relire_ = [d for d in docs if complet or a_relire(d, connus.get(d.id))]
+    stables = [d for d in docs if d not in a_relire_]
+    await _suivre(collection, phase="telechargement", total=len(a_relire_), faits=0, inchanges_annonces=len(stables))
+    r = await _rapatrier(collection, client, espace, a_relire_, connus)
+    if r.erreur is not None and not r.recus and not r.identiques:
+        raise r.erreur
+    # Arrêté en route (session expirée, disque) : on garde ce qui est arrivé, sans rien retirer ;
+    # les documents non relus restent dans leur dernière version.
+    partiel = r.erreur is not None
+
+    gardes: dict[str, dict] = {}
+    for doc in stables:
+        gardes[doc.id] = {**connus[doc.id], "url": _url(doc) or connus[doc.id].get("url", ""), "titre": doc.titre}
+    for doc in r.identiques:
+        gardes[doc.id] = {
+            **connus[doc.id],
+            "url": _url(doc) or connus[doc.id].get("url", ""),
+            "titre": doc.titre,
+            "version_fichier": doc.version_fichier,
+            "modifie_le": doc.modifie_le,
+        }
+    pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
+    condensats = {v["sha256"]: v.get("titre", "") for v in gardes.values() if v.get("sha256")}
+    ecartes = list(r.ecartes)
+    a_envoyer: list[tuple[str, Recu, dict]] = []
+    a_retirer: list[str] = []
+    ajoutes = modifies = 0
+    for recu in r.recus:
+        doc = recu.doc
+        ancien = connus.get(doc.id)
+        nom = ancien["fichier"] if ancien and ancien.get("fichier") else _nom_de(doc, recu.nom)
+        raison = _irrecevable(nom, await asyncio.to_thread(recu.chemin.read_bytes))
+        if raison is None and recu.sha256 in condensats:
+            raison = f"même contenu que « {condensats[recu.sha256]} »"
+        if raison:
+            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": raison})
+            if ancien and ancien.get("file_id"):
+                a_retirer.append(ancien["file_id"])  # son ancienne version ne doit pas rester seule
+            continue
+        condensats[recu.sha256] = doc.titre
+        if not ancien:
+            nom = nom_unique(nom, doc.id, pris)
+        if ancien and ancien.get("file_id"):
+            a_retirer.append(ancien["file_id"])
+        meta = {"url": _url(doc)} if _url(doc) else {}
+        a_envoyer.append((nom, recu, meta))
+        gardes[doc.id] = {
+            "sha256": recu.sha256,
+            "fichier": nom,
+            "url": _url(doc),
+            "titre": doc.titre,
+            "version_fichier": doc.version_fichier,
+            "modifie_le": doc.modifie_le,
+            "taille": recu.taille,
+        }
+        if ancien:
+            modifies += 1
+        else:
+            ajoutes += 1
+    if partiel:
+        for k, v in connus.items():
+            gardes.setdefault(k, v)
+        disparus: list[dict] = []
+    else:
+        disparus = [v for k, v in connus.items() if k not in gardes]
+    a_retirer += [v["file_id"] for v in disparus if v.get("file_id")]
+
+    # Les anciennes versions et les disparus sortent d'OpenRAG, document par document : la
+    # partition n'est jamais vidée, la recherche continue pendant la mise à jour.
+    try:
+        await depot.OpenRAGClient().create_partition(collection)
+    except Exception:  # noqa: BLE001 — elle existe déjà, ou chaque envoi dira son échec
+        pass
+    await _retirer_d_openrag(collection, a_retirer)
+    if a_envoyer:
+        await _suivre(collection, phase="indexation", total=len(a_envoyer), faits=0)
+    envois = await _envoyer(collection, a_envoyer, sensibilite)
+    en_erreur = 0
+    for ident, (file_id, erreur) in envois.items():
+        if file_id:
+            gardes[ident]["file_id"] = file_id
+        if erreur:
+            en_erreur += 1
+            gardes[ident]["erreur"] = erreur
+        else:
+            gardes[ident].pop("erreur", None)
+    # Un document qu'OpenRAG n'a même pas reçu n'est pas dans l'index : on l'oublie, la passe
+    # suivante le renverra.
+    for ident in [i for i, (file_id, _) in envois.items() if not file_id]:
+        gardes.pop(ident, None)
+    await _noter_sources(collection, gardes)
+
+    bilan = {
+        "ajoutes": ajoutes,
+        "modifies": modifies,
+        "retires": len(disparus),
+        "inchanges": len(stables) + len(r.identiques),
+        "ecartes": len(ecartes),
+        "en_erreur": en_erreur,
+    }
+    travail = {
+        "etat": "partiel" if partiel else ("termine" if (a_envoyer or disparus or a_retirer) else "a_jour"),
+        "action": action,
+        "complet": complet,
+        "fin": utcnow().isoformat(),
+        "total": len(docs),
+        "faits": len(docs),
+        **bilan,
+        "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
+    }
+    champs: dict = {"documents": gardes, "travail": travail}
+    if partiel and r.erreur is not None:
+        travail.update({k: v for k, v in r.erreur.detail().items() if k in ("code", "message", "url_connexion")})
+    else:
+        champs["last_sync_at"] = utcnow().isoformat()
+    await _ecrire_config(collection, **champs)
+    return bilan
 
 
 async def _filtrer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana]) -> list[DocumentResana]:
@@ -579,16 +750,20 @@ async def _filtrer(collection: str, client: ClientExportResana, espace: str, doc
     return resana_perimetre.dans_le_perimetre(docs, effectifs)
 
 
-async def _executer(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
+async def _executer(
+    collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser, *, complet: bool = False
+) -> None:
     # Le dossier d'attente d'une passe précédente (service arrêté en route) ne sert plus.
     shutil.rmtree(_attente(collection), ignore_errors=True)
     try:
-        await _executer_passe(collection, client, espace, dossier, docs, action, user)
+        await _executer_passe(collection, client, espace, dossier, docs, action, user, complet=complet)
     finally:
         shutil.rmtree(_attente(collection), ignore_errors=True)
 
 
-async def _executer_passe(collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser) -> None:
+async def _executer_passe(
+    collection: str, client: ClientExportResana, espace: str, dossier: str, docs: list[DocumentResana] | None, action: str, user: CurrentUser, *, complet: bool = False
+) -> None:
     try:
         if docs is None:
 
@@ -604,7 +779,7 @@ async def _executer_passe(collection: str, client: ClientExportResana, espace: s
             raise ErreurResana(400, "selection_vide", MESSAGE_SELECTION_VIDE)
         await _ecrire_config(collection, documents_disponibles=disponibles, documents_perimetre=len(docs))
         await _suivre(collection, phase="telechargement", total=len(docs))
-        bilan = await _comparer_et_appliquer(collection, client, espace, docs, action)
+        bilan = await _comparer_et_appliquer(collection, client, espace, docs, action, complet=complet)
     except ErreurResana as e:
         logger.info("résana %s : %s arrêté (%s)", collection, action, e.code)
         detail = e.detail()
@@ -631,78 +806,3 @@ async def _executer_passe(collection: str, client: ClientExportResana, espace: s
     await consigner(
         "synchronisation", collection, "synchro.terminee", user.sub, collection_name=collection, detail={"source": SOURCE, **{k: v for k, v in bilan.items() if isinstance(v, int)}}
     )
-
-
-async def _comparer_et_appliquer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], action: str) -> dict:
-    col = await get_collection(collection)
-    if not col:
-        raise ErreurResana(404, "introuvable")
-    cfg = await get_source_config(collection)
-    connus: dict[str, dict] = dict(cfg.get("documents") or {})
-    r = await _rapatrier(collection, client, espace, docs, connus)
-    if r.erreur is not None and not r.recus:
-        raise r.erreur
-    # Arrêté en route (session expirée, plafond) : on garde ce qui est arrivé, sans rien retirer ;
-    # les documents non relus restent dans leur dernière version connue.
-    partiel = r.erreur is not None
-
-    pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
-    gardes: dict[str, dict] = {}
-    a_ecrire: list[tuple[str, Path, str]] = []
-    condensats: dict[str, str] = {}
-    ecartes = list(r.ecartes)
-    ajoutes = modifies = 0
-    for doc in r.identiques:
-        ancien = connus[doc.id]
-        gardes[doc.id] = {**ancien, "url": _url(doc) or ancien.get("url", ""), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
-        condensats[ancien["sha256"]] = doc.titre
-    for recu in r.recus:
-        doc = recu.doc
-        ancien = connus.get(doc.id)
-        nom = ancien["fichier"] if ancien else _nom_de(doc, recu.nom)
-        raison = _irrecevable(nom, await asyncio.to_thread(recu.chemin.read_bytes))
-        if raison:
-            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": raison})
-            continue
-        if recu.sha256 in condensats:
-            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": f"même contenu que « {condensats[recu.sha256]} »"})
-            continue
-        condensats[recu.sha256] = doc.titre
-        if not ancien:
-            nom = nom_unique(nom, doc.id, pris)
-        gardes[doc.id] = {"sha256": recu.sha256, "fichier": nom, "url": _url(doc), "titre": doc.titre, "version_fichier": doc.version_fichier, "modifie_le": doc.modifie_le}
-        a_ecrire.append((nom, recu.chemin, _url(doc)))
-        if ancien:
-            modifies += 1
-        else:
-            ajoutes += 1
-    if partiel:
-        retires: list[str] = []
-        for k, v in connus.items():
-            gardes.setdefault(k, v)
-    else:
-        retires = [v["fichier"] for k, v in connus.items() if k not in gardes]
-
-    if a_ecrire or retires:
-        await _retirer(collection, retires)
-        for nom, chemin, url in a_ecrire:
-            await depot._enregistrer_source(collection, nom, await asyncio.to_thread(chemin.read_bytes), depot.STRATEGIE_DOCUMENT, 0, url)
-        await _reindexer(collection, col)
-
-    bilan = {"ajoutes": ajoutes, "modifies": modifies, "retires": len(retires), "inchanges": len(r.identiques), "ecartes": len(ecartes)}
-    travail = {
-        "etat": "partiel" if partiel else ("termine" if (a_ecrire or retires) else "a_jour"),
-        "action": action,
-        "fin": utcnow().isoformat(),
-        "total": len(docs),
-        "faits": len(r.identiques) + len(a_ecrire) + len(ecartes),
-        **bilan,
-        "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
-    }
-    champs: dict = {"documents": gardes, "travail": travail}
-    if partiel and r.erreur is not None:
-        travail.update({k: v for k, v in r.erreur.detail().items() if k in ("code", "message", "url_connexion")})
-    else:
-        champs["last_sync_at"] = utcnow().isoformat()
-    await _ecrire_config(collection, **champs)
-    return bilan

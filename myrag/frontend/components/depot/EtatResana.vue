@@ -49,11 +49,12 @@ async function charger () {
   }
 }
 
-async function synchroniser (nouveauxExclus?: string[]) {
+async function synchroniser (nouveauxExclus?: string[], complet = false) {
   envoi.value = true
   erreur.value = null
   try {
-    await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, nouveauxExclus ? { exclus: nouveauxExclus } : undefined)
+    const corps = nouveauxExclus || complet ? { ...(nouveauxExclus ? { exclus: nouveauxExclus } : {}), ...(complet ? { complet: true } : {}) } : undefined
+    await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, corps)
     edition.value = false
   }
   catch (e) {
@@ -225,6 +226,17 @@ onBeforeUnmount(() => {
           @click="ouvrirEdition"
         >
           Modifier la sélection
+        </button>
+      </li>
+      <li>
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline"
+          :disabled="enCours || envoi"
+          title="Retélécharge chaque document pour comparer son empreinte, même si Résana annonce la même version"
+          @click="synchroniser(undefined, true)"
+        >
+          Vérification complète
         </button>
       </li>
     </ul>
