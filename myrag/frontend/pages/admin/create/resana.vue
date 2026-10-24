@@ -8,7 +8,7 @@
  * 3. la fiche : titre (le nom de l'espace), entité administrative, identifiant expliqué.
  */
 import type { ErreurResana, EspaceResana } from '~/utils/resana'
-import { descriptionParDefaut, erreurResana, etiquetteResana, filtrerEspaces, titreDepuisEspace } from '~/utils/resana'
+import { descriptionParDefaut, erreurResana, etiquetteResana, titreDepuisEspace } from '~/utils/resana'
 
 interface Existante { collection: string, titre: string, chemins: string[], couverture: string }
 
@@ -26,10 +26,9 @@ const dossiersChoisis = ref<{ id: string, chemin: string }[]>([])
 // ─── 1. L'espace ─────────────────────────────────────────────────────────────
 const espaces = ref<EspaceResana[]>([])
 const espace = ref('')
-const rechercheEspace = ref('')
 const chargeEspaces = ref(false)
 const existantes = ref<Existante[]>([])
-const espacesFiltres = computed(() => filtrerEspaces(espaces.value, rechercheEspace.value))
+const optionsEspaces = computed(() => espaces.value.map(e => ({ value: e.id, label: e.nom, hint: e.objet || e.description || '' })))
 const espaceChoisi = computed(() => espaces.value.find(e => e.id === espace.value) || null)
 
 async function chargerEspaces () {
@@ -175,67 +174,14 @@ onBeforeUnmount(() => clearTimeout(minuterie))
           Ouverture de votre session Résana… Cela peut prendre jusqu'à une minute et demie la première fois.
         </p>
 
-        <fieldset
+        <ListeDeroulanteRiche
           v-if="espaces.length"
-          class="bloc"
-          :aria-labelledby="`${champ}-espaces`"
-        >
-          <legend
-            :id="`${champ}-espaces`"
-            class="bloc__legende"
-          >
-            <span class="fr-h6 fr-mb-0">Espace</span>
-            <span class="fr-hint-text">{{ espaces.length }} espace{{ espaces.length > 1 ? 's' : '' }} ouvert{{ espaces.length > 1 ? 's' : '' }} à votre compte.</span>
-          </legend>
-          <div class="fr-input-group fr-mb-1w recherche">
-            <label
-              class="fr-label"
-              :for="`${champ}-recherche-espace`"
-            >Rechercher un espace</label>
-            <input
-              :id="`${champ}-recherche-espace`"
-              v-model="rechercheEspace"
-              class="fr-input"
-              type="search"
-              placeholder="Nom, objet ou description…"
-              autocomplete="off"
-            >
-          </div>
-          <ul
-            v-if="espacesFiltres.length"
-            class="liste"
-          >
-            <li
-              v-for="e in espacesFiltres"
-              :key="e.id"
-              class="fr-radio-group fr-radio-group--sm liste__ligne"
-            >
-              <input
-                :id="`${champ}-e-${e.id}`"
-                v-model="espace"
-                type="radio"
-                :name="`${champ}-espace`"
-                :value="e.id"
-              >
-              <label
-                class="fr-label"
-                :for="`${champ}-e-${e.id}`"
-              >
-                {{ e.nom }}
-                <span
-                  v-if="e.objet || e.description"
-                  class="fr-hint-text"
-                >{{ e.objet || e.description }}</span>
-              </label>
-            </li>
-          </ul>
-          <p
-            v-else
-            class="fr-text--sm"
-          >
-            Aucun espace ne correspond.
-          </p>
-        </fieldset>
+          v-model="espace"
+          :options="optionsEspaces"
+          label="Espace"
+          :hint="`${espaces.length} espace${espaces.length > 1 ? 's' : ''} ouvert${espaces.length > 1 ? 's' : ''} à votre compte. Tapez une partie du nom, de l'objet ou de la description.`"
+          placeholder="Rechercher un espace…"
+        />
         <p
           v-else-if="!chargeEspaces && !erreur"
           class="fr-text--sm"
@@ -396,11 +342,5 @@ onBeforeUnmount(() => clearTimeout(minuterie))
 </template>
 
 <style scoped>
-.bloc { border: 0; padding: 0; margin: 0; min-width: 0; }
-.bloc__legende { float: left; width: 100%; padding: 0; margin: 0 0 .5rem; }
-.bloc__legende + * { clear: both; }
-.recherche { max-width: 32rem; }
-.liste { list-style: none; margin: 0; padding: .5rem .75rem; max-height: 16rem; overflow-y: auto; border: 1px solid var(--border-default-grey); }
-.liste__ligne { margin: 0 0 .25rem; }
 .identifiant__pourquoi { color: var(--text-mention-grey); }
 </style>

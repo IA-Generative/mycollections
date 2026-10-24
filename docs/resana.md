@@ -212,8 +212,14 @@ chemin de son dossier et l'adresse de consultation.
 
 ## Écrans
 
-1. **L'espace.** Une recherche (nom, objet, description, sans tenir compte des accents) filtre la
-   liste. Chaque espace montre son objet, ce qui aide à départager des homonymes.
+1. **L'espace**, dans une **liste déroulante riche** (`components/ListeDeroulanteRiche.vue`).
+   - On tape une partie du nom, de l'objet ou de la description ; les accents et la casse sont
+     ignorés, et chaque mot doit figurer.
+   - Chaque espace montre son objet en gris, ce qui départage des homonymes.
+   - Le composant suit la maquette DSFR « Liste déroulante riche », en bêta et pas encore publiée
+     en code, et le motif « combobox » du W3C. Clavier : les flèches pour parcourir, Entrée pour
+     choisir, Échap pour fermer, Tab pour quitter.
+   - À remplacer par le composant du DSFR le jour où il existe en code.
    - Si une de vos collections est déjà ancrée sur cet espace, l'écran le dit et propose d'y
      ajouter des dossiers plutôt que d'en créer une autre (`GET /existant?espace=`). Seules vos
      collections apparaissent : une collection Résana est privée.
