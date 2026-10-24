@@ -162,6 +162,15 @@ class ClientExportResana:
         self._entetes = {"X-Internal-Token": secret, "Authorization": f"Bearer {jeton}", "Accept": "application/json"}
         self._transport = transport
 
+    def renouveler_jeton(self, jeton: str) -> bool:
+        """Remplace le jeton de la personne par un plus récent, pour les appels suivants (une tâche
+        longue survit ainsi à l'expiration du jeton qu'elle avait au départ). Rend True s'il a changé."""
+        jeton = (jeton or "").strip()
+        if not jeton or self._entetes.get("Authorization") == f"Bearer {jeton}":
+            return False
+        self._entetes["Authorization"] = f"Bearer {jeton}"
+        return True
+
     def _client(self, delai: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(base_url=self.base_url, headers=self._entetes, timeout=delai, transport=self._transport, follow_redirects=False)
 

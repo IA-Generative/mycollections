@@ -57,6 +57,10 @@ class FauxResana:
     #: Tant que > 0, la première page répond `202 en_preparation` (un grand dossier se prépare).
     preparations: int = 0
     requetes: list[httpx.Request] = field(default_factory=list)
+    #: Jetons expirés : refusés en 401 jeton_invalide (une tâche qui garde son jeton de départ).
+    jetons_expires: set[str] = field(default_factory=set)
+    #: Appelé à chaque téléchargement de fichier (pour faire vieillir un jeton en cours de route).
+    sur_fichier: object = None
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._repondre)
@@ -70,6 +74,8 @@ class FauxResana:
         if req.headers.get("x-internal-token") != SECRET:
             return self._erreur(401, "appelant_inconnu")
         if not (req.headers.get("authorization") or "").startswith("Bearer "):
+            return self._erreur(401, "jeton_invalide")
+        if req.headers["authorization"].removeprefix("Bearer ") in self.jetons_expires:
             return self._erreur(401, "jeton_invalide")
         chemin = req.url.path.removeprefix("/export/v1")
         for prefixe, (statut, corps) in self.pannes.items():
@@ -96,6 +102,8 @@ class FauxResana:
         if chemin.startswith("/documents/") and chemin.endswith("/fichier"):
             if not req.url.params.get("espace"):
                 return self._erreur(400, "espace_requis")
+            if callable(self.sur_fichier):
+                self.sur_fichier()
             ident = chemin.split("/")[2]
             doc = next((d for d in self.documents if d.id == ident), None)
             if doc is None:
