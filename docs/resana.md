@@ -255,6 +255,11 @@ Un espace Résana est un espace de travail entre agents : sa collection naît **
 s'enregistre aussitôt dans la fiche et vaut pour les documents envoyés à partir de la mise à jour
 suivante (ceux déjà indexés gardent la leur jusqu'à leur prochain envoi).
 
+Les collections Résana créées avant ce défaut étaient en « public » : le démarrage les passe à
+« internal », **une seule fois** (`database._resana_interne`). L'événement
+`sensibilite.resana_interne`, écrit au journal de la collection, empêche de rejouer : un « Public —
+internet » choisi ensuite par qui la gère est respecté.
+
 La liste vaut pour toutes les collections (`Sensitivity` dans `app/services/chunker.py`, libellés
 dans `frontend/utils/libelles.ts`) :
 

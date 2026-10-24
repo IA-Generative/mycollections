@@ -72,3 +72,38 @@ def test_le_demarrage_reecrit_les_anciennes_valeurs(client, creer_collection, no
     assert _sql("SELECT sensitivity FROM collections WHERE name = ?", (nom,)) == [("restricted",)]
     assert _sql("SELECT sensitivity FROM ingest_jobs WHERE job_id = ?", (f"{nom}-job",)) == [("restricted",)]
     _sql("DELETE FROM ingest_jobs WHERE job_id = ?", (f"{nom}-job",))
+
+
+def test_une_collection_resana_d_avant_passe_a_interne_une_seule_fois(client, creer_collection, nom):
+    from app.database import EVENEMENT_RESANA_INTERNE, _resana_interne, engine
+
+    creer_collection(nom)
+    _sql("UPDATE collections SET source_type = 'resana', sensitivity = 'public' WHERE name = ?", (nom,))
+
+    async def _rejouer():
+        async with engine.begin() as conn:
+            await _resana_interne(conn)
+
+    asyncio.run(_rejouer())
+    assert _sql("SELECT sensitivity FROM collections WHERE name = ?", (nom,)) == [("internal",)]
+    assert _sql("SELECT robot FROM evenement WHERE objet_id = ? AND type = ?", (nom, EVENEMENT_RESANA_INTERNE)) == [("serveur",)]
+
+    # Qui la gère la remet en « public » : le redémarrage suivant le respecte.
+    _sql("UPDATE collections SET sensitivity = 'public' WHERE name = ?", (nom,))
+    asyncio.run(_rejouer())
+    assert _sql("SELECT sensitivity FROM collections WHERE name = ?", (nom,)) == [("public",)]
+    assert len(_sql("SELECT id FROM evenement WHERE objet_id = ? AND type = ?", (nom, EVENEMENT_RESANA_INTERNE))) == 1
+    _sql("DELETE FROM evenement WHERE objet_id = ? AND type = ?", (nom, EVENEMENT_RESANA_INTERNE))
+
+
+def test_une_collection_ordinaire_publique_le_reste(client, creer_collection, nom):
+    from app.database import _resana_interne, engine
+
+    creer_collection(nom, sensitivity="public")
+
+    async def _rejouer():
+        async with engine.begin() as conn:
+            await _resana_interne(conn)
+
+    asyncio.run(_rejouer())
+    assert _sql("SELECT sensitivity FROM collections WHERE name = ?", (nom,)) == [("public",)]
