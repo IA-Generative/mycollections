@@ -24,6 +24,7 @@ import json
 import logging
 import re
 import shutil
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -59,6 +60,14 @@ TELECHARGEMENTS_PARALLELES = 4
 #: Documents confiés à OpenRAG en même temps : au-delà, il ne suit plus (« pas fini de lire en
 #: 30 minutes » pour des centaines de PDF envoyés d'un coup).
 ENVOIS_PARALLELES = 4
+
+
+def envois_paralleles() -> int:
+    """Le nombre d'envois simultanés à l'indexeur : réglable (MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES),
+    borné de 1 à 16."""
+    return max(1, min(16, int(settings.resana_envois_paralleles or ENVOIS_PARALLELES)))
+
+
 #: Les erreurs qui arrêtent tout ; les autres (droits, taille d'un document) n'écartent que lui.
 ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "disque_plein"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
@@ -771,12 +780,12 @@ async def _retirer_de_l_index(collection: str, identifiants: list[str]) -> None:
 
 
 async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sensibilite: Sensitivity) -> dict[str, tuple[str | None, str | None]]:
-    """Confie les documents à OpenRAG, ENVOIS_PARALLELES à la fois, chacun suivi jusqu'au bout (un
+    """Confie les documents à OpenRAG, `envois_paralleles()` à la fois, chacun suivi jusqu'au bout (un
     travail par document, visible dans les travaux). Rend {id Résana: (file_id, erreur)}. Chaque
     fichier en attente est effacé dès qu'il est parti."""
     from app.services.job_store import create_job, update_job
 
-    verrou = asyncio.Semaphore(ENVOIS_PARALLELES)
+    verrou = asyncio.Semaphore(envois_paralleles())
     rendu: dict[str, tuple[str | None, str | None]] = {}
     faits = {"n": 0}
 
@@ -917,7 +926,9 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     await _retirer_de_l_index(collection, a_retirer)
     if a_envoyer:
         await _suivre(collection, phase="indexation", total=len(a_envoyer), faits=0)
+    debut_indexation = time.monotonic()
     envois = await _envoyer(collection, a_envoyer, sensibilite)
+    duree_indexation = time.monotonic() - debut_indexation
     en_erreur = 0
     for ident, (file_id, erreur) in envois.items():
         if file_id:
@@ -941,6 +952,12 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         "ecartes": len(ecartes),
         "en_erreur": en_erreur,
     }
+    # La mesure du débit d'indexation : de quoi régler `envois_paralleles` sur des chiffres.
+    mesure = (
+        {"indexation_s": round(duree_indexation), "debit_docs_min": round(len(a_envoyer) / (duree_indexation / 60), 1), "envois_paralleles": envois_paralleles()}
+        if a_envoyer and duree_indexation > 0
+        else {}
+    )
     travail = {
         "etat": "partiel" if partiel else ("termine" if (a_envoyer or disparus or a_retirer) else "a_jour"),
         "action": action,
@@ -949,6 +966,7 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         "total": len(docs),
         "faits": len(docs),
         **bilan,
+        **mesure,
         "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
     }
     presents = {d.id for d in docs}

@@ -70,9 +70,26 @@ async def _upload_chunks_background(job_id: str, collection: str, chunks: list[d
     logger.info(f"Job {job_id} finished: {job}")
 
 
-#: Suivi d'une indexation confiée à OpenRAG : toutes les quelques secondes, et pas indéfiniment.
+#: Suivi d'une indexation confiée à OpenRAG : au plus toutes les quelques secondes, et pas
+#: indéfiniment. Les premières vérifications sont plus rapprochées (`pause_de_suivi`).
 SUIVI_DOCUMENT_S = 3.0
 SUIVI_DOCUMENT_MAX_S = 1800.0
+
+
+def pause_de_suivi(ecoule: float) -> float:
+    """L'attente avant de redemander où en est la lecture d'un document. La plupart des documents
+    sont lus en quelques secondes (9 s en médiane sur un import réel) : vérifier toutes les 3 s
+    laissait chaque envoi inoccupé 1 à 2 s en moyenne après sa fin. On vérifie chaque seconde au
+    début, puis on espace pour les longs documents, sans dépasser SUIVI_DOCUMENT_S."""
+    if SUIVI_DOCUMENT_S <= 0:
+        return SUIVI_DOCUMENT_S
+    if ecoule < 15:
+        return min(1.0, SUIVI_DOCUMENT_S)
+    if ecoule < 60:
+        return min(2.0, SUIVI_DOCUMENT_S)
+    return SUIVI_DOCUMENT_S
+
+
 _ETATS_REUSSIS = ("COMPLETED", "SUCCESS")
 _ETATS_ECHOUES = ("FAILED", "CANCELLED")
 
@@ -111,7 +128,7 @@ async def _indexer_document_background(
             if time.monotonic() - debut > SUIVI_DOCUMENT_MAX_S:
                 erreur = f"OpenRAG n'a pas fini de lire « {filename} » en {int(SUIVI_DOCUMENT_MAX_S // 60)} minutes."
                 break
-            await asyncio.sleep(SUIVI_DOCUMENT_S)
+            await asyncio.sleep(pause_de_suivi(time.monotonic() - debut))
     except DejaPresent:
         # Déjà indexé (reprise après arrêt) — compté comme réussi.
         identifiant = file_id

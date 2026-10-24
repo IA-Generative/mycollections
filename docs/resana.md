@@ -174,8 +174,20 @@ du groupe `<racine>/<nom>-admin` la lisent.
      (`DELETE /indexer/partition/<p>/file/<id>`).
    - Les nouveaux documents et les nouvelles versions sont envoyés entiers : OpenRAG les lit et les
      découpe. L'adresse Résana est jointe en métadonnée `url`.
-   - Les envois partent **quatre à la fois**, chacun suivi jusqu'au bout (un travail par document) :
-     des centaines de PDF envoyés d'un coup dépassaient le délai de lecture d'OpenRAG.
+   - Les envois partent **quatre à la fois** par défaut, chacun suivi jusqu'au bout (un travail par
+     document) : des centaines de PDF envoyés d'un coup dépassaient le délai de lecture d'OpenRAG.
+     Le nombre se règle (`MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES`, de 1 à 16).
+   - **Le débit est mesuré** dans l'état du travail : `indexation_s`, `debit_docs_min`,
+     `envois_paralleles`. Repère sur un import réel de 2 093 documents à 4 envois : ≈ 10 documents
+     par minute sur l'ensemble (17 au début). L'essentiel du temps se passe chez l'indexeur
+     (extraction, contexte de chaque passage et description des images par des modèles, vecteurs).
+   - **Ne pas monter les envois tant que la passerelle de modèles refuse** : sur cet import, 93 % des
+     passages ont perdu leur contexte, refusé par le quota de la passerelle (429), que l'indexeur
+     partage avec le chat. Plus d'envois simultanés, c'est plus de refus, pas plus de débit utile.
+     Voir le chantier #143.
+   - **La lecture de chaque document est suivie** chaque seconde pendant 15 s, puis toutes les 2 s
+     jusqu'à une minute, puis toutes les 3 s (`ingest.pause_de_suivi`). Un envoi ne reste plus
+     inoccupé après la fin d'un document.
    - **Identifiant stable** : l'identifiant OpenRAG d'un document se déduit du document Résana et de
      son empreinte (`resana-<id>-<sha>`). Un renvoi après une coupure retombe sur le même fichier
      (OpenRAG répond 409, compté comme reçu), au lieu d'en créer un second.
