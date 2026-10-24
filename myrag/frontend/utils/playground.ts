@@ -51,3 +51,17 @@ export function proxiedSourceUrl(url: string | undefined | null): string {
   if (m) return `/api/openrag/${m[1]}/${m[2]}`
   return https
 }
+
+/**
+ * La frappe simulée d'une question choisie dans la banque : les longueurs successives du texte
+ * affiché dans le champ de saisie, en `etapes` au plus (une question longue ne s'écrit pas plus
+ * lentement qu'une courte). La dernière est toujours la longueur entière.
+ */
+export function etapesDeFrappe(longueur: number, etapes = 40): number[] {
+  if (longueur <= 0) return []
+  const pas = Math.max(1, Math.ceil(longueur / etapes))
+  const rendu: number[] = []
+  for (let n = pas; n < longueur; n += pas) rendu.push(n)
+  rendu.push(longueur)
+  return rendu
+}
