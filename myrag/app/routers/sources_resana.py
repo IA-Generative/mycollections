@@ -423,7 +423,7 @@ def a_relire(doc: DocumentResana, ancien: dict | None) -> bool:
     return (doc.version_fichier, doc.modifie_le) != (ancien.get("version_fichier"), ancien.get("modifie_le"))
 
 
-def identifiant_openrag(ident: str, sha256: str) -> str:
+def identifiant_dans_l_index(ident: str, sha256: str) -> str:
     """L'identifiant du document chez OpenRAG, déduit du document Résana et de son contenu : un
     renvoi après une coupure retombe sur le même fichier (OpenRAG répond 409) au lieu d'en créer
     un second ; une nouvelle version a un autre identifiant."""
@@ -576,13 +576,13 @@ async def _noter_sources(collection: str, documents: dict[str, dict]) -> None:
         await session.commit()
 
 
-async def _retirer_d_openrag(collection: str, file_ids: list[str]) -> None:
-    client = depot.OpenRAGClient()
-    for file_id in file_ids:
+async def _retirer_de_l_index(collection: str, identifiants: list[str]) -> None:
+    indexeur = depot._indexeur()
+    for identifiant in identifiants:
         try:
-            await client.delete_file(collection, file_id)
+            await indexeur.retirer(collection, identifiant)
         except Exception as e:  # noqa: BLE001 — un retrait raté laisse un passage en trop, pas une panne
-            logger.warning("résana %s : fichier OpenRAG %s non retiré (%s)", collection, file_id, type(e).__name__)
+            logger.warning("résana %s : document %s non retiré de l'index (%s)", collection, identifiant, type(e).__name__)
 
 
 async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sensibilite: Sensitivity) -> dict[str, tuple[str | None, str | None]]:
@@ -602,7 +602,7 @@ async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sen
             contenu = await asyncio.to_thread(recu.chemin.read_bytes)
             recu.chemin.unlink(missing_ok=True)
             rendu[recu.doc.id] = await depot._indexer_document_background(
-                job["job_id"], collection, nom, contenu, metadata=meta, file_id=identifiant_openrag(recu.doc.id, recu.sha256)
+                job["job_id"], collection, nom, contenu, metadata=meta, file_id=identifiant_dans_l_index(recu.doc.id, recu.sha256)
             )
             del contenu
             faits["n"] += 1
@@ -691,10 +691,10 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     # Les anciennes versions et les disparus sortent d'OpenRAG, document par document : la
     # partition n'est jamais vidée, la recherche continue pendant la mise à jour.
     try:
-        await depot.OpenRAGClient().create_partition(collection)
+        await depot._indexeur().preparer(collection)
     except Exception:  # noqa: BLE001 — elle existe déjà, ou chaque envoi dira son échec
         pass
-    await _retirer_d_openrag(collection, a_retirer)
+    await _retirer_de_l_index(collection, a_retirer)
     if a_envoyer:
         await _suivre(collection, phase="indexation", total=len(a_envoyer), faits=0)
     envois = await _envoyer(collection, a_envoyer, sensibilite)
