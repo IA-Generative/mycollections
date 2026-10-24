@@ -139,7 +139,11 @@ def couverture(cfg: dict) -> dict:
         raisons.append("interrompue")
     if not cfg.get("last_sync_at") and not indexes:
         raisons.append("a_faire")
+    dossiers = (cfg.get("perimetre") or {}).get("dossiers") or ([{"chemin": cfg.get("dossier_chemin")}] if cfg.get("dossier_id") else [])
     return {
+        "espace_nom": (cfg.get("espace") or {}).get("nom") or cfg.get("espace_nom"),
+        "entite": (cfg.get("espace") or {}).get("entite") or None,
+        "nb_dossiers": len(dossiers),
         "couverture": "partielle" if raisons else "totale",
         "raisons": raisons,
         "documents_indexes": indexes,

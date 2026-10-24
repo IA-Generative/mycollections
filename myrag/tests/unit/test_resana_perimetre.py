@@ -125,18 +125,17 @@ def test_une_selection_vide_echoue_sans_rien_retirer(client, en_tant_que, faux, 
     assert _sources(privee) == ["a.md"]
 
 
-def test_l_existant_ne_montre_que_ses_collections(client, en_tant_que, faux, privee, creer_collection, nom):
+def test_l_existant_ne_montre_que_ses_collections_sur_cet_espace(client, en_tant_que, faux, privee, creer_collection, nom):
     _arborer(faux)
     en_tant_que(CREATEUR)
     _importer(client, privee, dossier_chemin="Notes")
-    r = client.get("/api/sources/resana/existant?espace=e-1&dossier=d-1").json()
-    assert [c["collection"] for c in r["meme_dossier"]] == [privee]
-    r = client.get("/api/sources/resana/existant", params={"espace": "e-1", "dossier": "d-11", "chemin": "Notes / Comptes rendus"}).json()
-    assert [c["collection"] for c in r["dossier_parent"]] == [privee] and not r["meme_dossier"]
+    r = client.get("/api/sources/resana/existant?espace=e-1").json()
+    assert [c["collection"] for c in r["collections"]] == [privee] and r["collections"][0]["chemins"] == ["Notes"]
+    assert client.get("/api/sources/resana/existant?espace=e-2").json()["collections"] == []
     from tests.conftest import personne
 
     en_tant_que(personne("autre"))
-    assert client.get("/api/sources/resana/existant?espace=e-1&dossier=d-1").json()["meme_dossier"] == []
+    assert client.get("/api/sources/resana/existant?espace=e-1").json()["collections"] == []
 
 
 def _vieillir(nom: str, jours: int) -> None:
@@ -186,3 +185,109 @@ def test_les_notices_de_la_recherche_pointent_vers_le_front(client, en_tant_que,
     (n,) = asyncio.run(recherche._notices([privee], {privee: col}, CREATEUR))
     assert n["action"]["url"] == f"https://mescollections.fake-domain.name/c/{privee}/upload?synchroniser=1"
     assert n["collection"] == privee and n["titre"]
+
+
+# --- Ancrage sur l'espace, périmètre en dossiers -------------------------------------------------
+
+
+def _purger_resana(*noms):
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1], timeout=30)
+    try:
+        from tests.conftest import TABLES_PAR_COLLECTION
+
+        for n in noms:
+            for t in TABLES_PAR_COLLECTION:
+                con.execute(f"DELETE FROM {t} WHERE collection_name = ?", (n,))
+            con.execute("DELETE FROM collections WHERE name = ?", (n,))
+        con.commit()
+    finally:
+        con.close()
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture
+def espace_libre():
+    _purger_resana("resana-e1", "resana-e1-car")
+    yield
+    _purger_resana("resana-e1", "resana-e1-car")
+
+
+def _creer(client, **extra):
+    corps = {
+        "espace_id": "e-1",
+        "dossiers": [{"id": "d-11", "chemin": "Notes / Comptes rendus"}, {"id": "d-12", "chemin": "Notes / Procédures"}],
+        "titre": "Alpha fictif",
+        "entite": "Préfecture fictive",
+        **extra,
+    }
+    return client.post("/api/sources/resana/collections", json=corps, headers=ENTETE)
+
+
+def test_creer_depuis_un_espace_pose_l_identifiant_et_la_fiche(client, en_tant_que, faux, espace_libre):
+    _arborer(faux)
+    en_tant_que(CREATEUR)
+    r = _creer(client)
+    assert r.status_code == 200, r.text
+    assert r.json()["collection"] == "resana-e1"
+    fiche = client.get("/api/collections/resana-e1").json()
+    assert fiche["titre"] == "Alpha fictif" and fiche["scope"] == "private" and fiche["source_type"] == "resana"
+    assert fiche["description"] == "Espace Résana « Alpha fictif » (n° e-1), Préfecture fictive."
+    assert fiche["source_resume"]["entite"] == "Préfecture fictive" and fiche["source_resume"]["nb_dossiers"] == 2
+    # Les deux dossiers (et leurs sous-dossiers), sans les documents rangés à la racine de l'espace.
+    assert _sources("resana-e1") == ["b.md", "c.md", "p.md"]
+    statut = client.get("/api/sources/resana/status/resana-e1").json()
+    assert statut["espace"]["entite"] == "Préfecture fictive" and [d["id"] for d in statut["dossiers"]] == ["d-11", "d-12"]
+    # La fiche d'identité de l'espace est gardée telle que Résana la donne.
+    import asyncio
+
+    from app.services.collection_store import get_source_config
+
+    cfg = asyncio.run(get_source_config("resana-e1"))
+    assert cfg["espace"] | {} == cfg["espace"] and cfg["espace"]["objet"] == "Essais" and cfg["espace"]["parent_id"] == "123" and cfg["espace"]["cree_le"].startswith("2019")
+    # Chaque document part avec son origine.
+    meta = faux.envois.await_args_list[0].kwargs["metadata"]
+    assert meta["source"] == "resana" and meta["espace"] == "Alpha fictif" and meta["dossier"]
+
+
+def test_un_meme_espace_deux_fois_demande_un_suffixe(client, en_tant_que, faux, espace_libre):
+    _arborer(faux)
+    en_tant_que(CREATEUR)
+    assert _creer(client).status_code == 200
+    r = _creer(client)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "identifiant_pris" and "Alpha fictif" in r.json()["detail"]["message"]
+    p = client.get("/api/sources/resana/proposition?espace=e-1&suffixe=CAR").json()
+    assert p == {"identifiant": "resana-e1-car", "disponible": True, "motif": None}
+    assert _creer(client, suffixe="CAR").json()["collection"] == "resana-e1-car"
+
+
+def test_le_prefixe_resana_est_reserve(client, en_tant_que):
+    en_tant_que(CREATEUR)
+    from unittest.mock import AsyncMock, patch
+
+    with patch("app.routers.collections.OpenRAGClient") as cls:
+        cls.return_value.create_partition = AsyncMock(return_value={})
+        r = client.post("/api/collections", json={"name": "resana-999", "scope": "private"})
+    assert r.status_code == 422 and r.json()["detail"]["reason"] == "resana"
+
+
+def test_un_espace_inaccessible_est_refuse(client, en_tant_que, faux, espace_libre):
+    en_tant_que(CREATEUR)
+    r = client.post("/api/sources/resana/collections", json={"espace_id": "e-404", "dossiers": [{"id": "d-1"}], "titre": "X"}, headers=ENTETE)
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "introuvable"
+
+
+def test_changer_les_dossiers_met_a_jour_l_index_et_le_journal(client, en_tant_que, faux, espace_libre):
+    _arborer(faux)
+    en_tant_que(CREATEUR)
+    _creer(client)
+    r = client.post("/api/sources/resana/sync/resana-e1", json={"dossiers": [{"id": "d-11", "chemin": "Notes / Comptes rendus"}]}, headers=ENTETE)
+    assert r.status_code == 200
+    assert _sources("resana-e1") == ["b.md", "c.md"]
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1], timeout=30)
+    try:
+        (detail,) = con.execute("SELECT detail_json FROM evenement WHERE collection_name = 'resana-e1' AND type = 'perimetre.modifie'").fetchone()
+    finally:
+        con.close()
+    assert json.loads(detail)["retires"] == ["Notes / Procédures"]

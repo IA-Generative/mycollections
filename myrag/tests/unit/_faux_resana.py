@@ -47,7 +47,12 @@ class DocFaux:
 
 @dataclass
 class FauxResana:
-    espaces: list[dict] = field(default_factory=lambda: [{"id": "e-2", "slug": "zeta", "nom": "Zêta fictif"}, {"id": "e-1", "slug": "alpha", "nom": "Alpha fictif"}])
+    espaces: list[dict] = field(
+        default_factory=lambda: [
+            {"id": "e-2", "slug": "e-2", "nom": "Zêta fictif"},
+            {"id": "e-1", "slug": "e-1", "nom": "Alpha fictif", "description": "Espace fictif d'essai", "objet": "Essais", "cree_le": "2019-01-15T08:30:00Z", "parent_id": 123},
+        ]
+    )
     dossiers: list[dict] = field(default_factory=lambda: [{"id": "d-1", "titre": "Notes", "parent_id": None, "chemin": "Notes"}])
     documents: list[DocFaux] = field(default_factory=list)
     page: int = 2
@@ -95,10 +100,20 @@ class FauxResana:
             if curseur and self.curseurs_perimes > 0:
                 self.curseurs_perimes -= 1
                 return self._erreur(410, "curseur_perime")
+            # Le dossier demandé et tout son sous-arbre (récursif), comme le vrai service.
+            racine = req.url.params.get("dossier")
+            sous_arbre, pile = {racine}, [racine]
+            while pile:
+                courant = pile.pop()
+                for d in self.dossiers:
+                    if str(d.get("parent_id")) == courant and str(d["id"]) not in sous_arbre:
+                        sous_arbre.add(str(d["id"]))
+                        pile.append(str(d["id"]))
+            liste = [d for d in self.documents if d.dossier_id in sous_arbre]
             debut = int(curseur or 0)
-            tranche = self.documents[debut : debut + self.page]
-            suivant = str(debut + self.page) if debut + self.page < len(self.documents) else None
-            return httpx.Response(200, json={"documents": [d.ligne() for d in tranche], "suivant": suivant, "total": len(self.documents), "depuis_applique": False})
+            tranche = liste[debut : debut + self.page]
+            suivant = str(debut + self.page) if debut + self.page < len(liste) else None
+            return httpx.Response(200, json={"documents": [d.ligne() for d in tranche], "suivant": suivant, "total": len(liste), "depuis_applique": False})
         if chemin.startswith("/documents/") and chemin.endswith("/fichier"):
             if not req.url.params.get("espace"):
                 return self._erreur(400, "espace_requis")

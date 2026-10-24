@@ -90,6 +90,11 @@ class EnPreparation(ErreurResana):
 class Espace:
     id: str
     nom: str
+    #: La fiche d'identité de l'espace, quand le service la donne (contrat v1, champs facultatifs).
+    description: str = ""
+    objet: str = ""
+    cree_le: str | None = None
+    parent_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -229,7 +234,16 @@ class ClientExportResana:
     async def espaces(self) -> list[Espace]:
         corps = await self._json("/espaces", delai=DELAI_ESPACES_S)
         return [
-            Espace(id=_ident(e.get("id")), nom=str(e.get("nom") or e.get("slug") or e.get("id"))) for e in corps.get("espaces") or [] if isinstance(e, dict) and _ident(e.get("id"))
+            Espace(
+                id=_ident(e.get("id")),
+                nom=str(e.get("nom") or e.get("slug") or e.get("id")),
+                description=str(e.get("description") or ""),
+                objet=str(e.get("objet") or ""),
+                cree_le=e.get("cree_le") if isinstance(e.get("cree_le"), str) else None,
+                parent_id=_ident(e.get("parent_id")) or None,
+            )
+            for e in corps.get("espaces") or []
+            if isinstance(e, dict) and _ident(e.get("id"))
         ]
 
     async def dossiers(self, espace: str, recherche: str = "") -> list[Dossier]:

@@ -97,6 +97,10 @@ RESERVES = frozenset({"all", "default", "alias", "check-name", "regles-nommage",
 
 _MOTS_VIDES = frozenset({"le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "et", "ou", "a", "au", "aux", "en", "sur", "pour", "par", "dans"})
 
+#: Le préfixe des collections importées de Résana : posé par le serveur seul (identifiant
+#: `resana-<numéro de l'espace>`), refusé à une création manuelle — il reste un marqueur fiable.
+PREFIXE_RESANA = "resana-"
+
 MOTIFS = {
     "empty": "Donnez un identifiant.",
     "longueur": f"Entre {IDENT_MIN} et {IDENT_MAX} caractères.",
@@ -106,6 +110,7 @@ MOTIFS = {
     "db": "Cet identifiant est déjà pris.",
     "partition": "Cet identifiant est déjà pris (une partition porte ce nom).",
     "preview": "Sur cet environnement d'essai, l'identifiant commence par le préfixe imposé.",
+    "resana": "Le préfixe « resana- » est réservé aux collections importées de Résana.",
 }
 
 
@@ -122,8 +127,23 @@ def prefixes_bannis() -> tuple[str, ...]:
     return tuple(p.strip().lower() for p in settings.myrag_prefixes_bannis.split(",") if p.strip())
 
 
-def motif_de_refus(identifiant: str) -> str | None:
-    """None si l'identifiant (déjà normalisé) est acceptable ; sinon la clé de MOTIFS."""
+def est_resana(identifiant: str) -> bool:
+    """L'identifiant porte-t-il le préfixe réservé à Résana (après le préfixe imposé d'une preview) ?"""
+    return (identifiant or "").removeprefix(prefixe_impose()).startswith(PREFIXE_RESANA)
+
+
+def identifiant_resana(espace_id: str, suffixe: str = "") -> str:
+    """`resana-<numéro de l'espace>[-<suffixe>]` : le numéro est la seule clé unique d'un espace
+    (son nom ne l'est pas : chaque région a ses « Instances de gouvernance régionale »)."""
+    numero = re.sub(r"[^0-9a-z]", "", str(espace_id).lower())
+    propre = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", _sans_accents(suffixe or "").lower())).strip("-")
+    ident = f"{prefixe_impose()}{PREFIXE_RESANA}{numero}" + (f"-{propre}" if propre else "")
+    return ident[:IDENT_MAX].rstrip("-")
+
+
+def motif_de_refus(identifiant: str, *, source: str | None = None) -> str | None:
+    """None si l'identifiant (déjà normalisé) est acceptable ; sinon la clé de MOTIFS. Le préfixe
+    « resana- » n'est permis qu'à la création par l'import Résana (`source="resana"`)."""
     n = identifiant or ""
     if not n:
         return "empty"
@@ -135,6 +155,8 @@ def motif_de_refus(identifiant: str) -> str | None:
         return "reserve"
     if any(n.startswith(p) for p in prefixes_bannis()):
         return "prefixe"
+    if source != "resana" and est_resana(n):
+        return "resana"
     impose = prefixe_impose()
     if impose and not (n.startswith(impose) and len(n) > len(impose)):
         return "preview"
