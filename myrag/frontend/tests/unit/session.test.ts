@@ -28,10 +28,12 @@ describe('la session qui expire', () => {
     expect(expiree).toHaveBeenCalledTimes(1)
   })
 
-  it('un 401 malgré un jeton neuf n\'est pas une expiration', async () => {
+  it('un 401 malgré un jeton neuf : la session est inutilisable, on le signale', async () => {
+    const faire = vi.fn(async () => reponse(401))
     const expiree = vi.fn()
-    expect((await avecRenouvellement(async () => reponse(401), async () => true, expiree)).status).toBe(401)
-    expect(expiree).not.toHaveBeenCalled()
+    expect((await avecRenouvellement(faire, async () => true, expiree)).status).toBe(401)
+    expect(faire).toHaveBeenCalledTimes(2)
+    expect(expiree).toHaveBeenCalledTimes(1)
   })
 })
 
