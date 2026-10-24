@@ -111,6 +111,13 @@ du groupe `<racine>/<nom>-admin` la lisent.
    retélécharge tout et compare les empreintes.
 4. **Le téléchargement**, en tâche de fond, quatre documents à la fois. Le jeton de la personne reste
    en mémoire le temps de la tâche et n'est jamais écrit. L'écran suit l'avancement par `/status`.
+   - **Le jeton reste frais tant que la page est ouverte.** Le jeton de départ vit 15 minutes, mais
+     la page de l'importeur lit l'état toutes les 3 secondes avec son jeton renouvelé, et la route
+     `/status` le transmet à la tâche en cours (`relayer_jeton`). Un téléchargement peut donc durer
+     des heures, pourvu que la page reste ouverte. Seul l'importeur relaie son jeton, et le jeton
+     n'est ni écrit ni journalisé.
+   - Page fermée : la tâche continue jusqu'à l'expiration de son dernier jeton, puis s'arrête en
+     « partiel » ; « Mettre à jour » reprend là où elle s'est arrêtée.
    - Un contenu relu à l'identique est jeté aussitôt.
    - Un contenu nouveau ou changé attend dans un **dossier d'attente sur le disque**
      (`<DATA_DIR>/_resana_attente/<collection>`), jamais en mémoire, le temps de partir chez

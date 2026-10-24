@@ -68,6 +68,11 @@ MESSAGE_DOSSIER_VIDE = "Ce dossier ne contient aucun document."
 MESSAGE_SELECTION_VIDE = "Aucun document dans les dossiers choisis : ajoutez au moins un dossier à la sélection."
 MESSAGE_SYNCHRO_VIDE = "Le dossier Résana est vide : rien n'est retiré de la collection. Supprimez-la si c'est voulu."
 
+#: Le client du service Résana d'une tâche en cours, par collection : la page de l'importeur lui
+#: transmet son jeton frais à chaque lecture de l'état (`relayer_jeton`), pour que le téléchargement
+#: survive à l'expiration du jeton de départ (15 min) tant que la page est ouverte.
+_CLIENTS: dict[str, ClientExportResana] = {}
+
 #: Une tâche par collection, dans ce processus.
 _TACHES: dict[str, asyncio.Task] = {}
 
@@ -336,10 +341,12 @@ async def synchroniser(collection: str, corps: SynchroResana | None = None, auth
 
 
 @router.get("/status/{collection}", dependencies=[Depends(lire_la_collection)])
-async def statut(collection: str, user: CurrentUser = Depends(current_user)):
+async def statut(collection: str, authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
     col = await get_collection(collection)
     if not col:
         raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
+    if col.get("source_type") == SOURCE and user.sub and col.get("created_by") == user.sub:
+        relayer_jeton(collection, authorization)
     cfg = await get_source_config(collection)
     travail = dict(cfg.get("travail") or {})
     if travail.get("etat") == "en_cours" and not _occupee(collection):
@@ -368,6 +375,16 @@ async def statut(collection: str, user: CurrentUser = Depends(current_user)):
             titre=col.get("titre") or "",
         ),
     }
+
+
+def relayer_jeton(collection: str, authorization: str | None) -> bool:
+    """Le jeton frais de la page de l'importeur passe à sa tâche en cours (s'il y en a une). Appelé
+    seulement pour l'importeur : c'est son propre jeton, la tâche agit déjà en son nom. Le jeton
+    n'est ni écrit ni journalisé. Rend True s'il a été transmis."""
+    client = _CLIENTS.get(collection)
+    if client is None or not authorization or not authorization.lower().startswith("bearer "):
+        return False
+    return client.renouveler_jeton(authorization.split(" ", 1)[1])
 
 
 async def avis_pour(col: dict | None, user: CurrentUser) -> dict | None:
@@ -755,9 +772,12 @@ async def _executer(
 ) -> None:
     # Le dossier d'attente d'une passe précédente (service arrêté en route) ne sert plus.
     shutil.rmtree(_attente(collection), ignore_errors=True)
+    _CLIENTS[collection] = client
     try:
         await _executer_passe(collection, client, espace, dossier, docs, action, user, complet=complet)
     finally:
+        if _CLIENTS.get(collection) is client:
+            del _CLIENTS[collection]
         shutil.rmtree(_attente(collection), ignore_errors=True)
 
 

@@ -215,6 +215,7 @@ onMounted(async () => {
       </div>
     </div>
     <EtatDuService />
+    <SessionExpiree />
 
     <!-- Auth error banner -->
     <div

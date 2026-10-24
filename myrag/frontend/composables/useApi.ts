@@ -12,6 +12,8 @@
  * The one-shot retry is intentional: if refreshing doesn't fix the 401 (e.g.
  * the backend itself rejects, not token-related), we don't loop.
  */
+import { avecRenouvellement } from '~/utils/session'
+
 export function useApi() {
   const config = useRuntimeConfig()
   const baseUrl = config.public.myragApiUrl
@@ -37,15 +39,9 @@ export function useApi() {
           ...authHeaders(),
         },
       })
-
-    let resp = await doFetch()
-    if (resp.status === 401) {
-      const renewed = await tryRenew()
-      if (renewed) {
-        resp = await doFetch()   // retry once with the new token
-      }
-    }
-    return resp
+    // Un 401 qu'aucun renouvellement ne répare : la session est finie, l'écran le dit et
+    // propose de se reconnecter (au lieu de laisser travailler sans jeton valide).
+    return avecRenouvellement(doFetch, tryRenew, () => useAuth().signalerExpiration())
   }
 
   async function get<T = any>(path: string, params?: Record<string, string>): Promise<T> {

@@ -429,3 +429,63 @@ def test_un_renvoi_apres_coupure_retombe_sur_le_meme_fichier(client, en_tant_que
     _importer(client, privee)
     statut = client.get(f"/api/sources/resana/status/{privee}").json()
     assert statut["travail"]["etat"] == "termine" and statut["documents"] == 2 and statut["travail"]["en_erreur"] == 0
+
+
+def test_le_jeton_frais_de_la_page_relaie_celui_de_la_tache(client, en_tant_que, faux, privee, monkeypatch):
+    """Le jeton de départ expire en plein téléchargement ; la page de l'importeur, qui lit l'état
+    toutes les 3 s avec son jeton renouvelé, le transmet à la tâche : l'import va au bout."""
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    frais = {"Authorization": "Bearer JETON-FRAIS-FICTIF"}
+    appels = {"n": 0}
+
+    def au_fichier():
+        appels["n"] += 1
+        if appels["n"] == 1:
+            faux.jetons_expires.add(TEMOIN)  # le jeton de départ vient d'expirer…
+            # …et la page relaie le sien : ce que fait la route d'état (testée à part ci-dessous).
+            assert sources_resana.relayer_jeton(privee, frais["Authorization"])
+
+    faux.sur_fichier = au_fichier
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert (travail["etat"], travail["ajoutes"]) == ("termine", 2)
+    assert faux.requetes[-1].headers["authorization"] == "Bearer JETON-FRAIS-FICTIF"
+    assert not sources_resana._CLIENTS, "la tâche finie ne garde plus de client"
+
+
+def test_sans_relais_la_tache_s_arrete_en_partiel(client, en_tant_que, faux, privee, monkeypatch):
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    appels = {"n": 0}
+
+    def au_fichier():
+        appels["n"] += 1
+        if appels["n"] == 1:
+            faux.jetons_expires.add(TEMOIN)
+
+    faux.sur_fichier = au_fichier
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert travail["etat"] == "partiel" and travail["code"] == "jeton_invalide"
+
+
+def test_seul_l_importeur_relaie_son_jeton(client, en_tant_que, faux, privee):
+    from app.services.connectors.resana import ClientExportResana
+
+    tache = ClientExportResana("http://resana.fake-domain.name", "s", "JETON-DE-DEPART")
+    sources_resana._CLIENTS[privee] = tache
+    try:
+        en_tant_que(CREATEUR)
+        con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+        con.execute("UPDATE collections SET source_type = 'resana' WHERE name = ?", (privee,))
+        con.commit()
+        con.close()
+        en_tant_que(SUPERADMIN)
+        client.get(f"/api/sources/resana/status/{privee}", headers={"Authorization": "Bearer JETON-D-UN-AUTRE"})
+        assert tache._entetes["Authorization"] == "Bearer JETON-DE-DEPART"
+        en_tant_que(CREATEUR)
+        client.get(f"/api/sources/resana/status/{privee}", headers={"Authorization": "Bearer JETON-FRAIS"})
+        assert tache._entetes["Authorization"] == "Bearer JETON-FRAIS"
+    finally:
+        sources_resana._CLIENTS.pop(privee, None)
