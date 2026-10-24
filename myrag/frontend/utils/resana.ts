@@ -45,6 +45,9 @@ export interface QualiteResana {
   a_reprendre: number
   passages?: number
   passages_sans_contexte?: number
+  /** Les scans repérés par Mes collections (PDF sans texte), et ceux que l'indexeur a lus par OCR. */
+  scans?: number
+  scans_lus?: number
 }
 
 export interface StatutResana {
@@ -384,7 +387,7 @@ export function partageResanaPret (groupes: readonly string[], confirme: boolean
  */
 export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   const n = (etat: string) => q?.par_etat?.[etat] ?? 0
-  if (!q || !Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0)) {
+  if (!q || (!Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0) && !q.scans_lus)) {
     return []
   }
   const phrases: string[] = []
@@ -400,6 +403,9 @@ export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   }
   if (n('echec')) {
     phrases.push(`${compte(n('echec'), 'document n\'a', 'documents n\'ont')} pas pu être lu${n('echec') > 1 ? 's' : ''} (format ou fichier refusé).`)
+  }
+  if (q.scans_lus) {
+    phrases.push(`${compte(q.scans_lus, 'scan a été lu', 'scans ont été lus')} par reconnaissance de caractères : le texte peut contenir des erreurs, vérifiez les passages importants dans le document d'origine.`)
   }
   if (n('inconnue')) {
     phrases.push(`${compte(n('inconnue'), 'document a été indexé', 'documents ont été indexés')} avant le suivi de la qualité : elle sera connue à ${n('inconnue') > 1 ? 'leur' : 'sa'} prochaine lecture.`)

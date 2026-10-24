@@ -645,10 +645,13 @@ def bilan_qualite(cfg: dict) -> dict:
         q = d.get("qualite") if isinstance(d.get("qualite"), dict) else {}
         passages += int(q.get("passages") or 0)
         sans_contexte += int(q.get("sans_contexte") or 0)
+    scans = [d for d in (cfg.get("documents") or {}).values() if d.get("scan")]
     return {
         "par_etat": par_etat,
         "a_reprendre": sum(par_etat.get(e, 0) for e in QUALITES_A_REPRENDRE),
         **({"passages": passages, "passages_sans_contexte": sans_contexte} if passages else {}),
+        # Les scans repérés par Mes collections, et ceux que l'indexeur a pu lire (par OCR).
+        **({"scans": len(scans), "scans_lus": sum(1 for d in scans if qualite_de(d) in ("complet", "sans_contexte", "degrade"))} if scans else {}),
     }
 
 
@@ -924,7 +927,11 @@ async def _comparer_et_appliquer(
         doc = recu.doc
         ancien = connus.get(doc.id)
         nom = ancien["fichier"] if ancien and ancien.get("fichier") else _nom_de(doc, recu.nom)
-        raison = _irrecevable(nom, await asyncio.to_thread(recu.chemin.read_bytes))
+        contenu = await asyncio.to_thread(recu.chemin.read_bytes)
+        raison = _irrecevable(nom, contenu)
+        # Un scan (PDF sans texte) part quand même : l'indexeur le lira s'il a l'OCR (#145).
+        scan = raison is None and await asyncio.to_thread(formats.est_un_scan, nom, contenu)
+        del contenu
         doublon_de = None
         if raison is None and recu.sha256 in condensats:
             titre_original, doublon_de = condensats[recu.sha256]
@@ -958,6 +965,7 @@ async def _comparer_et_appliquer(
             "dossier": doc.chemin,
             "sensitivity": sensibilite.value,
             **({"url": _url(doc)} if _url(doc) else {}),
+            **({"scan": True} if scan else {}),
         }
         a_envoyer.append((nom, recu, meta))
         gardes[doc.id] = {
@@ -968,6 +976,7 @@ async def _comparer_et_appliquer(
             "version_fichier": doc.version_fichier,
             "modifie_le": doc.modifie_le,
             "taille": recu.taille,
+            **({"scan": True} if scan else {}),
         }
         if ancien:
             modifies += 1

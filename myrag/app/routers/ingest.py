@@ -79,6 +79,11 @@ SUIVI_DOCUMENT_MAX_S = 1800.0
 #: La langue transmise à l'indexeur quand la source n'en dit rien : il y rédige le contexte de chaque
 #: passage (sans elle, OpenRAG l'écrit en anglais). Une détection par document viendra avec #157.
 LANGUE_PAR_DEFAUT = "fr"
+#: Ce qu'on dit d'un scan que l'indexeur n'a pas pu lire (#145).
+CONSEIL_SCAN = (
+    "C'est un scan, sans texte lisible : il ne sera trouvé qu'une fois la reconnaissance de caractères en place. "
+    "Si vous avez sa version électronique (Word, LibreOffice, PDF exporté), de préférence non signée, déposez-la plutôt."
+)
 
 
 def pause_de_suivi(ecoule: float) -> float:
@@ -122,9 +127,16 @@ async def _indexer_document_background(
     erreur = None
     identifiant = None
     qualite: dict | None = None
+    # Un scan (PDF sans texte) part quand même : l'indexeur le lira s'il a l'OCR (#145).
+    scan = bool((metadata or {}).get("scan")) or await asyncio.to_thread(formats.est_un_scan, filename, content)
     try:
         envoi = await indexeur.envoyer(
-            collection, filename, content, mime=formats.type_mime(filename), metadata={"title": filename, "language": LANGUE_PAR_DEFAUT, **(metadata or {})}, identifiant=file_id
+            collection,
+            filename,
+            content,
+            mime=formats.type_mime(filename),
+            metadata={"title": filename, "language": LANGUE_PAR_DEFAUT, **(metadata or {}), **({"scan": True} if scan else {})},
+            identifiant=file_id,
         )
         identifiant, tache, debut = envoi.identifiant, envoi.tache, time.monotonic()
         while tache:
@@ -148,6 +160,8 @@ async def _indexer_document_background(
         qualite = {"etat": "echec"}
     except Exception as e:  # noqa: BLE001
         erreur = f"Envoi de « {filename} » à OpenRAG impossible : {type(e).__name__}"
+    if erreur and scan and (qualite or {}).get("etat") == "sans_texte":
+        erreur = f"{erreur} {CONSEIL_SCAN}"
     if erreur:
         logger.warning("Job %s : %s", job_id, erreur)
         await update_job(job_id, error=erreur)
