@@ -83,7 +83,8 @@ class Settings(BaseSettings):
     #: Au-delà de ce nombre de jours sans lecture, l'index d'une collection Résana « semble ancien ».
     resana_fraicheur_jours: int = Field(default=7, validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS", "resana_fraicheur_jours"))
     #: Documents Résana confiés à l'indexeur en même temps (1 à 16). L'indexeur fait appel aux modèles
-    #: (contexte des passages, images) par une passerelle partagée : monter avec mesure.
+    #: (contexte des passages, images) par une passerelle partagée avec le chat : au-delà de son quota,
+    #: plus d'envois donnent plus de refus, pas plus de débit (chantier #143).
     resana_envois_paralleles: int = Field(default=4, validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES", "resana_envois_paralleles"))
 
     # Open WebUI (used by /publish to create model aliases)
