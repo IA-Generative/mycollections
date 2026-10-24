@@ -81,6 +81,7 @@ async function seReconnecter () {
 </template>
 
 <style scoped>
-.session-expiree { display: block; z-index: 1000; background: rgb(22 22 22 / 64%); }
+/* Au-dessus de tout, y compris la bulle d'accueil du menu commun. */
+.session-expiree { display: block; z-index: 2147483600; background: rgb(22 22 22 / 64%); }
 .session-expiree__discret { color: var(--text-mention-grey); }
 </style>
