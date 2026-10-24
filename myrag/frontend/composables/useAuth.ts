@@ -33,6 +33,9 @@ export function useAuth() {
   const user = useState<any>('auth-user', () => null)
   const loading = useState('auth-loading', () => true)
   const authError = useState('auth-error', () => '')
+  // La session est finie (le SSO ne renouvelle plus le jeton) : la fenêtre « Votre session a
+  // expiré » s'ouvre (components/SessionExpiree.vue). Une nouvelle connexion la referme.
+  const sessionExpiree = useState('auth-session-expiree', () => false)
 
   // La bulle du menu commun de la bêta est alimentée par l'application : événement
   // `mirai-menu:identite` (le menu peut être construit avant OU après la session), et
@@ -79,7 +82,18 @@ export function useAuth() {
     })
     // C'est CET écouteur qui rend `automaticSilentRenew` utile : sans lui, la
     // bibliothèque renouvelle en silence et l'application n'en sait rien.
-    _mgr.events.addUserLoaded((u: any) => { poserUtilisateur(u) })
+    _mgr.events.addUserLoaded((u: any) => {
+      poserUtilisateur(u)
+      sessionExpiree.value = false
+    })
+    // Le jeton est arrivé à expiration sans que le renouvellement automatique ait réussi : on
+    // tente une dernière fois ; s'il échoue, la session est finie, et on le dit tout de suite
+    // plutôt qu'au prochain appel refusé.
+    _mgr.events.addAccessTokenExpired(async () => {
+      if (!(await renewToken())) {
+        signalerExpiration()
+      }
+    })
     return _mgr
   }
 
@@ -172,6 +186,22 @@ export function useAuth() {
     return _renouvellement
   }
 
+  function signalerExpiration() {
+    if (!config.public.authEnabled || import.meta.server) return
+    sessionExpiree.value = true
+  }
+
+  /** Se reconnecter, et revenir sur la page où l'on était (état OIDC, utils/retour.ts). */
+  async function reconnecter() {
+    try {
+      const mgr = await manager()
+      await mgr.removeUser()
+      await mgr.signinRedirect({ state: { retour: adresseCourante(window.location) } })
+    } catch (e: any) {
+      authError.value = e?.message || 'Reconnexion impossible'
+    }
+  }
+
   async function logout() {
     try {
       const mgr = await manager()
@@ -199,5 +229,5 @@ export function useAuth() {
     return user.value?.profile?.groups || []
   }
 
-  return { user, loading, authError, init, logout, renewToken, getAccessToken, getUserName, getUserGroups }
+  return { user, loading, authError, sessionExpiree, init, logout, renewToken, signalerExpiration, reconnecter, getAccessToken, getUserName, getUserGroups }
 }
