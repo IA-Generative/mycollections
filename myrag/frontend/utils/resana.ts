@@ -25,6 +25,10 @@ export interface TravailResana {
   retires?: number
   inchanges?: number
   ecartes?: number
+  /** Documents qu'OpenRAG n'a pas su lire (PDF sans texte, délai dépassé). */
+  en_erreur?: number
+  /** Vérification complète : chaque document retéléchargé pour comparer son empreinte. */
+  complet?: boolean
   message?: string
   code?: string
   url_connexion?: string
@@ -96,7 +100,10 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
       if (t.phase === 'preparation') {
         return `Résana prépare la liste du dossier${preparation(t.dossiers_lus, t.dossiers)}. Un grand dossier peut demander plusieurs minutes.`
       }
-      return t.total ? `${quoi} en cours : ${t.faits ?? 0} sur ${compte(t.total, 'document', 'documents')} lus.` : `${quoi} en cours.`
+      if (t.phase === 'indexation') {
+        return `Indexation en cours : ${t.faits ?? 0} sur ${compte(t.total, 'document', 'documents')} confiés au moteur de recherche, quelques-uns à la fois.`
+      }
+      return t.total ? `${quoi} en cours : ${t.faits ?? 0} sur ${compte(t.total, 'document', 'documents')} lus.` : `${quoi} en cours : rien à télécharger, Résana annonce les mêmes versions.`
     case 'a_jour':
       return 'Rien n\'a changé dans Résana depuis la dernière synchronisation.'
     case 'termine': {
@@ -106,7 +113,8 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
         compte(t.retires, 'retiré', 'retirés'),
       ]
       const ecartes = t.ecartes ? `, ${compte(t.ecartes, 'écarté', 'écartés')}` : ''
-      return `${quoi} terminé${e} : ${parties.join(', ')}${ecartes}. L'indexation se poursuit en tâche de fond.`
+      const erreurs = t.en_erreur ? ` ${compte(t.en_erreur, 'document n\'a', 'documents n\'ont')} pas pu être lu${t.en_erreur > 1 ? 's' : ''} par le moteur de recherche.` : ''
+      return `${quoi} terminé${e} : ${parties.join(', ')}${ecartes}.${erreurs}`
     }
     case 'partiel': {
       const recus = (t.ajoutes ?? 0) + (t.modifies ?? 0)

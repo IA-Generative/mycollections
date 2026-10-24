@@ -22,7 +22,11 @@ describe('l\'avancement', () => {
   it('en cours, terminé, à jour, échec, interrompu', () => {
     expect(libelleTravail({ etat: 'en_cours', action: 'import', total: 40, faits: 12 })).toBe('Import en cours : 12 sur 40 documents lus.')
     expect(libelleTravail({ etat: 'termine', action: 'synchronisation', ajoutes: 1, modifies: 2, retires: 0, ecartes: 1 }))
-      .toBe('Synchronisation terminée : 1 ajouté, 2 modifiés, 0 retiré, 1 écarté. L\'indexation se poursuit en tâche de fond.')
+      .toBe('Synchronisation terminée : 1 ajouté, 2 modifiés, 0 retiré, 1 écarté.')
+    expect(libelleTravail({ etat: 'termine', action: 'import', ajoutes: 3, en_erreur: 2 }))
+      .toBe('Import terminé : 3 ajoutés, 0 modifié, 0 retiré. 2 documents n\'ont pas pu être lus par le moteur de recherche.')
+    expect(libelleTravail({ etat: 'en_cours', phase: 'indexation', total: 40, faits: 4 }))
+      .toBe('Indexation en cours : 4 sur 40 documents confiés au moteur de recherche, quelques-uns à la fois.')
     expect(libelleTravail({ etat: 'a_jour' })).toContain('Rien n\'a changé')
     expect(libelleTravail({ etat: 'echec', action: 'import', message: 'Résana ne répond pas.' })).toBe('Import arrêté : Résana ne répond pas.')
     expect(libelleTravail({ etat: 'interrompu', action: 'synchronisation' })).toContain('Relancez')

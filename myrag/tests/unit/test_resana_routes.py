@@ -39,13 +39,16 @@ def faux(monkeypatch):
         await travail
 
     monkeypatch.setattr(sources_resana, "_demarrer", sur_place)
+    from app.services.openrag_client import EnvoiDocument
+
     openrag = MagicMock()
     openrag.delete_partition = AsyncMock()
     openrag.create_partition = AsyncMock()
+    openrag.delete_file = AsyncMock()
+    # OpenRAG reçoit chaque document entier et rend son identifiant ; sans tâche à suivre.
+    openrag.upload_document = AsyncMock(side_effect=lambda partition, nom, contenu, mime, metadata=None, file_id=None: EnvoiDocument(file_id=file_id or nom, task_id=""))
     monkeypatch.setattr(sources_resana.depot, "OpenRAGClient", MagicMock(return_value=openrag))
-    envois = AsyncMock()
-    monkeypatch.setattr(sources_resana.depot, "_ingest_content", envois)
-    service.openrag, service.envois = openrag, envois
+    service.openrag, service.envois = openrag, openrag.upload_document
     return service
 
 
@@ -60,9 +63,15 @@ def _importer(client, nom, **extra):
     return client.post("/api/sources/resana/add", json=corps, headers=ENTETE)
 
 
+def _sha(texte: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(texte.encode()).hexdigest()
+
+
 def _envoyes(faux) -> dict[str, str]:
-    """{nom de fichier: adresse citée} des fichiers envoyés à l'indexation."""
-    return {c.args[1]: c.kwargs["source_path"] for c in faux.envois.await_args_list}
+    """{nom de fichier: adresse citée} des fichiers envoyés à OpenRAG (métadonnée `url`)."""
+    return {c.args[1]: (c.kwargs.get("metadata") or {}).get("url", "") for c in faux.envois.await_args_list}
 
 
 def _sources(nom) -> list[str]:
@@ -227,13 +236,36 @@ def test_session_perdue_en_route_garde_l_acquis_et_la_synchro_reprend(client, en
     assert _sources(privee) == ["note-a.md", "note-b.md"]
 
 
-def test_le_plafond_se_franchit_en_plusieurs_synchronisations(client, en_tant_que, faux, privee, monkeypatch):
-    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
-    monkeypatch.setattr(sources_resana, "OCTETS_MAX_TOTAL", 40)
+def test_plus_de_plafond_les_fichiers_attendent_sur_le_disque(client, en_tant_que, faux, privee, monkeypatch):
+    """Les fichiers reçus attendent sur le disque, pas en mémoire : un gros dossier passe en une fois,
+    et le dossier d'attente est vidé à la fin de la passe."""
+    vus = []
+    ecrire = sources_resana.Path.write_bytes
+
+    def espionner(chemin, contenu):
+        vus.append(chemin)
+        return ecrire(chemin, contenu)
+
+    monkeypatch.setattr(sources_resana.Path, "write_bytes", espionner)
+    faux.documents += [_doc(f"x{k}", f"# X{k}\n\nTexte fictif {k}.") for k in range(20)]
     en_tant_que(CREATEUR)
     _importer(client, privee)
     travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
-    assert travail["etat"] == "partiel" and travail["code"] == "trop_volumineux_total" and _sources(privee) == ["note-a.md"]
+    assert (travail["etat"], travail["ajoutes"]) == ("termine", 22)
+    attente = sources_resana._attente(privee)
+    assert any(attente in p.parents for p in vus), "les fichiers sont passés par le dossier d'attente"
+    assert not attente.exists(), "le dossier d'attente est vidé à la fin"
+
+
+def test_un_disque_presque_plein_arrete_en_gardant_l_acquis(client, en_tant_que, faux, privee, monkeypatch):
+    monkeypatch.setattr(sources_resana, "TELECHARGEMENTS_PARALLELES", 1)
+    places = iter([10 * sources_resana.PLACE_LIBRE_MIN, 0])
+    monkeypatch.setattr(sources_resana, "_place_libre", lambda chemin: next(places, 0))
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert travail["etat"] == "partiel" and travail["code"] == "disque_plein" and _sources(privee) == ["note-a.md"]
+    monkeypatch.setattr(sources_resana, "_place_libre", lambda chemin: 10 * sources_resana.PLACE_LIBRE_MIN)
     client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     assert _sources(privee) == ["note-a.md", "note-b.md"]
 
@@ -277,24 +309,60 @@ def test_un_document_refuse_est_ecarte_les_autres_passent(client, en_tant_que, f
 # --- Synchroniser -------------------------------------------------------------------------------
 
 
-def test_synchroniser_ne_reindexe_que_si_un_condensat_change(client, en_tant_que, faux, privee):
+def test_synchroniser_ne_relit_que_ce_qui_a_change(client, en_tant_que, faux, privee):
     en_tant_que(CREATEUR)
     _importer(client, privee)
-    faux.openrag.delete_partition.reset_mock()
     faux.envois.reset_mock()
+    faux.requetes.clear()
 
+    # Même date, même version : rien n'est téléchargé, rien n'est envoyé.
     r = client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     assert r.status_code == 200
     assert client.get(f"/api/sources/resana/status/{privee}").json()["travail"]["etat"] == "a_jour"
-    assert not faux.openrag.delete_partition.await_count and not faux.envois.await_count
+    assert not [q for q in faux.requetes if q.url.path.endswith("/fichier")]
+    assert not faux.envois.await_count and not faux.openrag.delete_file.await_count
 
+    # b change (nouvelle version annoncée), a disparaît, f arrive : seul b et f sont téléchargés ;
+    # l'ancien b et a sortent d'OpenRAG un par un, la partition n'est jamais vidée.
     faux.documents = [_doc("b", "# B\n\nDeuxième texte fictif, corrigé."), _doc("f", "# F\n\nNouveau texte fictif.")]
+    faux.requetes.clear()
     client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
     assert (travail["ajoutes"], travail["modifies"], travail["retires"], travail["inchanges"]) == (1, 1, 1, 0)
-    assert faux.openrag.delete_partition.await_count == 1
+    assert sorted(q.url.path.split("/")[-2] for q in faux.requetes if q.url.path.endswith("/fichier")) == ["b", "f"]
+    assert sorted(c.args[1] for c in faux.openrag.delete_file.await_args_list) == sorted(
+        sources_resana.identifiant_openrag(i, h) for i, h in (("a", _sha("# A\n\nPremier texte fictif.")), ("b", _sha("# B\n\nDeuxième texte fictif.")))
+    )
+    assert not faux.openrag.delete_partition.await_count
     assert sorted(_envoyes(faux)) == ["note-b.md", "note-f.md"]
     assert _sources(privee) == ["note-b.md", "note-f.md"]
+
+
+def test_la_verification_complete_retelecharge_tout(client, en_tant_que, faux, privee):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    faux.envois.reset_mock()
+    faux.requetes.clear()
+    client.post(f"/api/sources/resana/sync/{privee}", json={"complet": True}, headers=ENTETE)
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert (travail["etat"], travail["inchanges"], travail["complet"]) == ("a_jour", 2, True)
+    assert len([q for q in faux.requetes if q.url.path.endswith("/fichier")]) == 2
+    assert not faux.envois.await_count  # même empreinte : rien à renvoyer
+
+
+def test_aucune_copie_n_est_gardee(client, en_tant_que, faux, privee):
+    import sqlite3 as _sql
+
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    con = _sql.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    try:
+        lignes = con.execute("SELECT storage_path, original_url, checksum FROM source_files WHERE collection_name = ?", (privee,)).fetchall()
+    finally:
+        con.close()
+    assert len(lignes) == 2 and all(chemin == "" and url.startswith("https://") and len(sha) == 64 for chemin, url, sha in lignes)
+    assert not sources_resana._attente(privee).exists()
+    assert not (sources_resana.depot.SOURCES_DIR / privee).exists()
 
 
 def test_synchroniser_reserve_a_l_importeur(client, en_tant_que, faux, privee):
@@ -346,3 +414,18 @@ def test_le_jeton_ne_laisse_aucune_trace(client, en_tant_que, faux, privee, capl
 def test_un_tiers_sans_droit_ne_voit_rien(client, en_tant_que, faux, privee):
     en_tant_que(CurrentUser(sub="etranger", username="e", groups=["/g/rien"]))
     assert _importer(client, privee).status_code == 404
+
+
+def test_un_renvoi_apres_coupure_retombe_sur_le_meme_fichier(client, en_tant_que, faux, privee):
+    """OpenRAG a déjà le fichier (renvoi après un arrêt) : il répond 409 ; l'identifiant, déduit du
+    document et de son contenu, est le même — compté comme reçu, sans second exemplaire."""
+    import httpx
+
+    def deja_la(partition, nom, contenu, mime, metadata=None, file_id=None):
+        raise httpx.HTTPStatusError("conflit", request=httpx.Request("POST", "http://openrag"), response=httpx.Response(409))
+
+    faux.openrag.upload_document.side_effect = deja_la
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    statut = client.get(f"/api/sources/resana/status/{privee}").json()
+    assert statut["travail"]["etat"] == "termine" and statut["documents"] == 2 and statut["travail"]["en_erreur"] == 0

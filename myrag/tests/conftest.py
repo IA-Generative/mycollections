@@ -115,7 +115,9 @@ def capacites(monkeypatch):
 def purger():
     def _f(name: str):
         chemin = os.environ["DATABASE_URL"].split("///")[-1]
-        con = sqlite3.connect(chemin)
+        # Une tâche de fond d'un test (mesure, indexation) peut encore écrire : on attend le verrou
+        # au lieu d'échouer aussitôt (« database is locked », vu en CI).
+        con = sqlite3.connect(chemin, timeout=30)
         try:
             for (aid,) in con.execute("SELECT id FROM assistants WHERE collection_name = ?", (name,)).fetchall():
                 for t in ("assistant_versions", "consignes", "plans_journal"):
@@ -161,7 +163,7 @@ def ident_assistant():
 
     ident = f"t-asst-{uuid.uuid4().hex[:8]}"
     yield ident
-    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1], timeout=30)
     try:
         for t in ("assistant_versions", "consignes", "plans_journal"):
             con.execute(f"DELETE FROM {t} WHERE assistant_id = ?", (ident,))
