@@ -22,7 +22,7 @@ MESSAGE_VERIFICATION = (
 MESSAGE_ARCHIVEE = "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord (page Publication, ou catalogue d'administration)."
 MESSAGE_RESANA_GROUPE = "Une collection importée de Résana ne s'ouvre qu'à un groupe que vous choisissez, jamais à tout le monde : ses documents suivent les droits de Résana."
 MESSAGE_RESANA_CONFIRMATION = (
-    "Avant d'ouvrir une collection Résana à un groupe, confirmez que chacun de ses membres a accès, dans Résana, aux dossiers indexés : vous en êtes responsable."
+    "Avant d'ouvrir une collection Résana à un groupe, confirmez que chacun de ses membres a accès, dans Résana, aux dossiers indexés : c'est vous qui pilotez."
 )
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
@@ -105,7 +105,7 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
         raise HTTPException(status_code=409, detail=MESSAGE_ARCHIVEE)
     # Une collection Résana a été lue avec les droits Résana de qui l'a importée. Qui la gère peut
     # l'ouvrir à un groupe de son choix, jamais à tous, et confirme avoir vérifié que les membres
-    # ont ces droits dans Résana : c'est sa responsabilité (docs/resana.md, décision du 2026-10-24).
+    # ont ces droits dans Résana : c'est elle qui pilote (docs/resana.md, décision du 2026-10-24).
     resana = (fiche or {}).get("source_type") == "resana"
     if resana and req.state != "draft":
         if req.visibility != "group" or not [g for g in req.visibility_groups if g.strip()]:

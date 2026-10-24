@@ -358,7 +358,7 @@ export function titrePageDocuments (fiche: { source_type?: string | null } | nul
  * choisit le groupe et confirme que chacun de ses membres a accès, dans Résana, aux dossiers
  * indexés. Jamais à tout le monde. Même phrase dans l'assistant de création et dans « Partager ».
  */
-export const CONFIRMATION_DROITS_RESANA = 'J\'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers indexés. J\'en suis responsable.'
+export const CONFIRMATION_DROITS_RESANA = 'J\'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers indexés. C\'est moi qui pilote ce partage.'
 
 /** Le partage d'une collection Résana peut partir : un groupe nommé et la confirmation cochée. */
 export function partageResanaPret (groupe: string, confirme: boolean): boolean {

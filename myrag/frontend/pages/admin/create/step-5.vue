@@ -91,7 +91,7 @@ async function terminer () {
               Ses documents viennent de vos espaces Résana. Dans Résana, chacun ne voit que les espaces où il est
               invité. Un membre du groupe qui n'est pas invité dans ces espaces lirait, par l'assistant, des documents
               que Résana ne lui montre pas. Vérifiez donc que chaque membre du groupe a accès aux dossiers indexés :
-              c'est votre responsabilité. Une collection Résana ne s'ouvre jamais à tout le monde.
+              c'est vous qui pilotez. Une collection Résana ne s'ouvre jamais à tout le monde.
             </p>
           </div>
         </template>
