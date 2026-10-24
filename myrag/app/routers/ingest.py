@@ -76,6 +76,11 @@ SUIVI_DOCUMENT_S = 3.0
 SUIVI_DOCUMENT_MAX_S = 1800.0
 
 
+#: La langue transmise à l'indexeur quand la source n'en dit rien : il y rédige le contexte de chaque
+#: passage (sans elle, OpenRAG l'écrit en anglais). Une détection par document viendra avec #157.
+LANGUE_PAR_DEFAUT = "fr"
+
+
 def pause_de_suivi(ecoule: float) -> float:
     """L'attente avant de redemander où en est la lecture d'un document. La plupart des documents
     sont lus en quelques secondes (9 s en médiane sur un import réel) : vérifier toutes les 3 s
@@ -116,7 +121,9 @@ async def _indexer_document_background(
     erreur = None
     identifiant = None
     try:
-        envoi = await indexeur.envoyer(collection, filename, content, mime=formats.type_mime(filename), metadata={"title": filename, **(metadata or {})}, identifiant=file_id)
+        envoi = await indexeur.envoyer(
+            collection, filename, content, mime=formats.type_mime(filename), metadata={"title": filename, "language": LANGUE_PAR_DEFAUT, **(metadata or {})}, identifiant=file_id
+        )
         identifiant, tache, debut = envoi.identifiant, envoi.tache, time.monotonic()
         while tache:
             suivi = await indexeur.suivre(tache)

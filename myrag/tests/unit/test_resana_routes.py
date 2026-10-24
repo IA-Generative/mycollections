@@ -183,6 +183,19 @@ def test_import_prive_dedoublonne_et_cite_resana(client, en_tant_que, faux, priv
     assert fiche["scope"] == "private" and fiche["scope_groups"] == [] and fiche["source_type"] == "resana"
 
 
+def test_titre_et_langue_transmis_et_accents_repares(client, en_tant_que, faux, privee):
+    """Le titre envoyé à l'indexeur est celui de Résana, la langue est le français (sans elle,
+    OpenRAG rédige le contexte des passages en anglais), et un nom aux accents mal décodés en route
+    (« RÃ©ponse », de l'UTF-8 lu en latin-1) arrive réparé."""
+    faux.documents[:] = [DocFaux(id="m", titre="Réponse fictive", nom_fichier="R\u00c3\u00a9ponse fictive.md", contenu=b"# R\n\nTexte fictif.")]
+    en_tant_que(CREATEUR)
+    assert _importer(client, privee).status_code == 200
+    (appel,) = faux.envois.await_args_list
+    meta = appel.kwargs["metadata"]
+    assert appel.args[1] == "Réponse fictive.md"
+    assert meta["title"] == "Réponse fictive" and meta["language"] == "fr"
+
+
 def test_import_reserve_au_createur(client, en_tant_que, faux, privee):
     en_tant_que(SUPERADMIN)
     r = _importer(client, privee)

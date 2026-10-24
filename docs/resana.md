@@ -173,7 +173,9 @@ du groupe `<racine>/<nom>-admin` la lisent.
    - L'ancienne version d'un document modifié et les documents disparus sont retirés un par un
      (`DELETE /indexer/partition/<p>/file/<id>`).
    - Les nouveaux documents et les nouvelles versions sont envoyés entiers : OpenRAG les lit et les
-     découpe. L'adresse Résana est jointe en métadonnée `url`.
+     découpe. Métadonnées jointes : le titre Résana (`title`), la langue (`language: fr`, pour que
+     le contexte de chaque passage soit rédigé en français), l'adresse Résana (`url`), l'espace, le
+     dossier et la sensibilité.
    - Les envois partent **quatre à la fois** par défaut, chacun suivi jusqu'au bout (un travail par
      document) : des centaines de PDF envoyés d'un coup dépassaient le délai de lecture d'OpenRAG.
      Le nombre se règle (`MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES`, de 1 à 16).
@@ -209,7 +211,9 @@ du groupe `<racine>/<nom>-admin` la lisent.
 documents bureautiques, c'est de toute façon OpenRAG qui découpe.
 
 Les noms de fichiers viennent du service (`Content-Disposition`). Deux documents de même nom sont
-distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'import ne change plus.
+distingués par l'identifiant Résana : `note (1234).pdf`. Un nom donné à l'import ne change plus, sauf
+pour réparer des accents mal décodés en route (« RÃ©ponse » devient « Réponse » :
+`reparer_accents`, owuitools-resana#7).
 
 `source_config_json` garde :
 

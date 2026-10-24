@@ -22,8 +22,12 @@ Deux exceptions :
   compte comme réussi.
 - `Refuse(statut)` : le moteur refuse le document, pour une question de format ou de taille.
 
-Les métadonnées envoyées sont le titre (`title`) et, pour Résana, l'adresse du document d'origine
-(`url`) et la sensibilité de la collection (`sensitivity`, voir `docs/resana.md`).
+Les métadonnées envoyées sont :
+
+- le titre (`title`) : le nom du fichier, ou, pour Résana, le titre du document dans Résana ;
+- la langue (`language`, `fr` par défaut). L'indexeur rédige dans cette langue le contexte de chaque
+  passage ; sans elle, OpenRAG l'écrit en anglais ;
+- pour Résana, l'adresse du document d'origine (`url`), l'espace, le dossier et la sensibilité.
 
 ## Ce que Mes collections garde de son côté
 
