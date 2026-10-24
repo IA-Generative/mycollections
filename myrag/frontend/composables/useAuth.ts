@@ -3,6 +3,7 @@
  * Uses oidc-client-ts with PKCE flow.
  */
 import { portesOidc } from '~/utils/agents'
+import { contenuJwt, delaiAvantRenouvellement } from '~/utils/session'
 
 // `basic` est un scope Keycloak qui ajoute `sub` (et `auth_time`) au jeton d'ACCÈS.
 // Sans lui, ce realm n'y met pas `sub` : les services qui identifient leur utilisateur
@@ -27,6 +28,11 @@ let _mgr: any = null
 // Dédoublonnage des renouvellements : deux appels API simultanés en 401 déclenchaient
 // deux `signinSilent()` concurrents sur le même refresh token.
 let _renouvellement: Promise<string | null> | null = null
+// Le renouvellement planifié par l'application (voir `planifierRenouvellement`) et l'écoute du
+// retour sur l'onglet, posée une seule fois.
+let _minuterie: ReturnType<typeof setTimeout> | null = null
+let _dernierUtilisateur: any = null
+let _visibiliteEcoutee = false
 
 export function useAuth() {
   const config = useRuntimeConfig()
@@ -40,7 +46,36 @@ export function useAuth() {
   // La bulle du menu commun de la bêta est alimentée par l'application : événement
   // `mirai-menu:identite` (le menu peut être construit avant OU après la session), et
   // `window.MIRAI_MENU.sub` pour le condensé des avis — jamais écrit en clair.
+  /**
+   * Garder la session ouverte tant que la page l'est. Le SSO de la bêta donne un jeton d'accès de
+   * 15 min mais un jeton de rafraîchissement de 10 min (inactivité de la session) :
+   * `automaticSilentRenew` renouvelle 60 s avant la fin du jeton d'ACCÈS — trop tard, la session
+   * est déjà close (constaté le 2026-10-23). On renouvelle donc avant la première des deux
+   * échéances (utils/session.ts) ; chaque renouvellement repousse l'inactivité de la session.
+   */
+  function planifierRenouvellement(u: any) {
+    if (!import.meta.client || !config.public.authEnabled) return
+    _dernierUtilisateur = u
+    if (_minuterie) clearTimeout(_minuterie)
+    const accesExp = typeof u?.expires_at === 'number' ? u.expires_at : (contenuJwt(u?.access_token)?.exp as number | undefined)
+    const delai = delaiAvantRenouvellement(Date.now(), accesExp, contenuJwt(u?.refresh_token)?.exp as number | undefined)
+    if (delai === null) return
+    _minuterie = setTimeout(async () => {
+      _minuterie = null
+      if (!(await renewToken())) signalerExpiration()
+    }, delai)
+    if (!_visibiliteEcoutee) {
+      _visibiliteEcoutee = true
+      // Un onglet en arrière-plan ou un poste en veille peut retarder la minuterie : au retour
+      // sur l'onglet, on replanifie (un renouvellement en retard part tout de suite).
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && _dernierUtilisateur) planifierRenouvellement(_dernierUtilisateur)
+      })
+    }
+  }
+
   function poserUtilisateur(u: any) {
+    planifierRenouvellement(u)
     user.value = { access_token: u.access_token, profile: u.profile }
     try {
       const p = u.profile || {}
