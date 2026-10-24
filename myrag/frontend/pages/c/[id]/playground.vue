@@ -4,7 +4,7 @@
 
     <div class="myrag-playground">
       <!-- LEFT: chat column -->
-      <section class="myrag-playground__chat">
+      <section ref="chatEl" class="myrag-playground__chat">
         <!-- Empty state: invite to pick from bank or type -->
         <div v-if="!messages.length" class="myrag-playground__empty">
           <p v-if="bank.items.value.length" class="fr-text--sm">
@@ -23,17 +23,17 @@
           <PlaygroundChatMessage v-for="m in messages" :key="m.turnId || m.content" :gestionnaire="peutGerer"
                        :message="m"
                        @vote="(v) => onVote(m, v)" />
-          <div v-if="isLoading" class="fr-text--sm" style="color:#666;padding:0.4rem 0;">
-            ⏳ L'assistant réfléchit…
+          <div v-if="isLoading" class="fr-text--sm myrag-playground__attente" role="status">
+            ⏳ L'assistant réfléchit<span class="myrag-playground__points" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
           </div>
         </div>
 
         <!-- Input -->
-        <div class="myrag-playground__input">
+        <div class="myrag-playground__input" :class="{ 'myrag-playground__input--frappe': enFrappe }">
           <div class="fr-input-group">
             <label class="fr-label fr-sr-only" for="question">Votre question</label>
             <textarea id="question" class="fr-input" v-model="draft" rows="2"
-                      placeholder="Votre question…"
+                      placeholder="Votre question…" :readonly="enFrappe"
                       @keydown.enter.exact.prevent="canSend && send()"></textarea>
           </div>
           <div class="fr-btns-group fr-btns-group--inline">
@@ -77,7 +77,7 @@
           <PlaygroundBankCard v-for="q in bank.filtered.value" :key="q.id"
                     :item="q"
                     :tested="testedIds.has(q.id)"
-                    :loading="isLoading"
+                    :loading="isLoading || enFrappe"
                     @test="runFromBank(q)"
                     @remove="bank.removeItem(q)" />
         </div>
@@ -124,6 +124,7 @@
 <script setup lang="ts">
 import { useChat } from '~/composables/useChat'
 import { useBank, type BankItem } from '~/composables/useBank'
+import { etapesDeFrappe } from '~/utils/playground'
 
 const route = useRoute()
 const id = route.params.id as string
@@ -137,6 +138,9 @@ const peutGerer = ref(false)
 
 const draft = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
+const chatEl = ref<HTMLElement | null>(null)
+/** Une question de la banque s'écrit dans le champ avant de partir : on voit qu'elle est prise en compte. */
+const enFrappe = ref(false)
 
 /** Remember which bank items have been run through the chat this session,
  *  so the BankCard can switch its button label to "Re-tester". */
@@ -148,11 +152,12 @@ const turnToBankItem = new Map<string, BankItem>()
 
 // Une question posée pendant une panne échouerait : on le dit avant le clic.
 const { rechercheIndisponible } = useEtatService()
-const canSend = computed(() => !isLoading.value && !rechercheIndisponible.value && draft.value.trim().length > 0)
+const canSend = computed(() => !isLoading.value && !enFrappe.value && !rechercheIndisponible.value && draft.value.trim().length > 0)
 
 function scrollToBottom() {
   nextTick(() => {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    amenerLaSaisie()
   })
 }
 
@@ -160,7 +165,10 @@ async function send() {
   if (!canSend.value) return
   const q = draft.value.trim()
   draft.value = ''
-  const assistant = await sendMessage(q)
+  // Défiler dès l'envoi : la question et « L'assistant réfléchit… » se voient sans attendre la réponse.
+  const envoi = sendMessage(q)
+  scrollToBottom()
+  const assistant = await envoi
   scrollToBottom()
   if (assistant?.turnId) {
     // Unlinked ad-hoc question — vote handler will create a QR/feedback with
@@ -169,9 +177,52 @@ async function send() {
   }
 }
 
+const attendre = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const mouvementReduit = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+/** Le bas de la conversation sous les yeux : le champ de saisie à sa place, les derniers messages
+ *  juste au-dessus. Le champ reste collé en bas de l'écran (sticky) : sans ce défilement, sur petit
+ *  écran, il recouvrirait la question qui vient de partir et « L'assistant réfléchit… ». */
+function amenerLaSaisie() {
+  const el = chatEl.value
+  if (!el) return
+  // Déjà en place : le bas de la conversation est dans l'écran, champ de saisie compris.
+  const bas = el.getBoundingClientRect().bottom
+  const saisie = (el.lastElementChild as HTMLElement | null)?.offsetHeight || 0
+  if (bas <= window.innerHeight && bas >= saisie) return
+  el.scrollIntoView({ behavior: mouvementReduit() ? 'auto' : 'smooth', block: 'end' })
+}
+
+/** La question choisie s'écrit dans le champ de saisie, que la page amène sous les yeux (sur petit
+ *  écran, la banque est sous la conversation). Sans animation si la personne les a désactivées. */
+async function taper(texte: string) {
+  enFrappe.value = true
+  try {
+    amenerLaSaisie()
+    if (mouvementReduit()) {
+      draft.value = texte
+      return
+    }
+    for (const n of etapesDeFrappe(texte.length)) {
+      draft.value = texte.slice(0, n)
+      await attendre(18)
+    }
+    await attendre(250)
+  }
+  finally {
+    enFrappe.value = false
+  }
+}
+
 async function runFromBank(item: BankItem) {
+  if (isLoading.value || enFrappe.value) return
   testedIds.value.add(item.id)
-  const assistant = await sendMessage(item.question)
+  await taper(item.question)
+  // La question quitte le champ et entre dans la conversation, avec « L'assistant réfléchit… » dessous.
+  const envoi = sendMessage(item.question)
+  draft.value = ''
+  scrollToBottom()
+  const assistant = await envoi
   scrollToBottom()
   if (assistant?.turnId) {
     turnToBankItem.set(assistant.turnId, item)
@@ -306,6 +357,28 @@ onMounted(async () => {
   bottom: 0;
   background: #fff;
   padding-top: 0.4rem;
+}
+/* Une question de la banque s'écrit dans le champ : il s'éclaire le temps de la frappe. */
+.myrag-playground__input--frappe .fr-input {
+  box-shadow: inset 0 -2px 0 0 var(--border-active-blue-france), 0 0 0 3px var(--background-action-low-blue-france);
+  transition: box-shadow 0.2s;
+}
+.myrag-playground__attente {
+  color: #666;
+  padding: 0.4rem 0;
+}
+.myrag-playground__points span {
+  animation: myrag-point 1.2s infinite;
+  opacity: 0.2;
+}
+.myrag-playground__points span:nth-child(2) { animation-delay: 0.2s; }
+.myrag-playground__points span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes myrag-point {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .myrag-playground__points span { animation: none; opacity: 1; }
 }
 
 .myrag-playground__bank {
