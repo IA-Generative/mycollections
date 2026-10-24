@@ -58,3 +58,22 @@ class TestOpenRAGClient:
             mock_get.return_value = {"data": [{"id": "openrag-test"}]}
             result = await client.list_models()
             assert len(result.data) == 1
+
+
+@pytest.mark.asyncio
+async def test_file_markdown_rend_le_texte_ou_la_raison(client, monkeypatch):
+    """#147 : la copie Markdown d'un document, ou pourquoi elle manque."""
+    import httpx
+
+    reponses = {
+        "/partition/p/file/a/markdown": httpx.Response(200, text="## Titre fictif"),
+        "/partition/p/file/b/markdown": httpx.Response(404, json={"detail": "[MARKDOWN_NOT_AVAILABLE]: indexé sans copie"}),
+        "/partition/p/file/c/markdown": httpx.Response(404, json={"detail": "[FILE_NOT_FOUND]: absent"}),
+        "/partition/p/file/d/markdown": httpx.Response(404, json={"detail": "Not Found"}),
+    }
+    vrai = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: vrai(transport=httpx.MockTransport(lambda r: reponses[r.url.path]), **kw))
+    assert await client.file_markdown("p", "a") == ("## Titre fictif", "")
+    assert await client.file_markdown("p", "b") == (None, "MARKDOWN_NOT_AVAILABLE")
+    assert await client.file_markdown("p", "c") == (None, "FILE_NOT_FOUND")
+    assert await client.file_markdown("p", "d") == (None, "ROUTE_ABSENTE")  # OpenRAG plus ancien

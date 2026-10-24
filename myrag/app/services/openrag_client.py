@@ -439,6 +439,32 @@ class OpenRAGClient:
             raise
         return FileDetail.model_validate(data) if isinstance(data, dict) else None
 
+    async def file_markdown(self, partition: str, file_id: str) -> tuple[str | None, str]:
+        """Le document entier tel que lu par l'indexeur, en Markdown (après OCR et descriptions
+        d'images, avant découpage ; `GET /partition/<p>/file/<id>/markdown`, OpenRAG avec
+        SAVE_MARKDOWN). Rend (texte, "") ou (None, raison) : `MARKDOWN_NOT_AVAILABLE` (indexé sans
+        copie), `FILE_NOT_FOUND`, ou `ROUTE_ABSENTE` (OpenRAG plus ancien)."""
+        path = f"/partition/{partition}/file/{file_id}/markdown"
+        _verifier_chemin(path)
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(f"{self.base_url}{path}", headers=self._headers())
+        if resp.status_code == 200:
+            return resp.text, ""
+        if resp.status_code == 404:
+            detail = ""
+            try:
+                detail = str((resp.json() or {}).get("detail") or "")
+            except ValueError:
+                pass
+            for code in ("MARKDOWN_NOT_AVAILABLE", "FILE_NOT_FOUND"):
+                if code in detail:
+                    return None, code
+            return None, "ROUTE_ABSENTE"
+        if resp.status_code == 405:
+            return None, "ROUTE_ABSENTE"
+        resp.raise_for_status()
+        return None, "ROUTE_ABSENTE"
+
     async def partition_chunks(self, partition: str, file_id: str | None = None, limit: int | None = None) -> list[MorceauOpenRAG] | None:
         """Les morceaux d'une partition, texte compris, sans vecteurs (`GET /partition/<p>/chunks`),
         filtrés sur un fichier si `file_id`. `None` si l'instance ne connaît pas la route (OpenRAG
