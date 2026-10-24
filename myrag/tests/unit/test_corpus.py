@@ -96,12 +96,13 @@ def test_les_morceaux_se_lisent_dans_les_liens_dans_l_ordre_sans_doublon():
 RELU = "[CONTEXT]\n\nRésumé du document.\n\n* filename: x.md\n\n[CHUNK_START]\n\nLe texte du morceau {n}.\n\n[CHUNK_END]"
 
 
-def _openrag(fichiers=FICHIERS, detail=None, morceaux=None):
+def _openrag(fichiers=FICHIERS, detail=None, morceaux=None, markdown=(None, "MARKDOWN_NOT_AVAILABLE")):
     """Un OpenRAG de remplacement, posé à l'endroit où la route le construit."""
     p = patch("app.routers.corpus.OpenRAGClient")
     cls = p.start()
     c = cls.return_value
     c.list_files = AsyncMock(return_value=fichiers)
+    c.file_markdown = AsyncMock(return_value=markdown)
     c.file_detail = AsyncMock(return_value=FileDetail.model_validate(detail) if detail is not None else None)
 
     def _extrait(cid):
@@ -219,5 +220,34 @@ def test_openrag_en_panne_donne_un_502_lisible(client, en_tant_que, creer_collec
     try:
         r = client.get(f"/api/collections/{nom}/documents")
         assert r.status_code == 502 and "OpenRAG" in r.json()["detail"] and "connexion refusée" not in r.text
+    finally:
+        p.stop()
+
+
+def test_le_document_entier_fidele_est_servi_quand_l_indexeur_le_garde(client, en_tant_que, creer_collection, nom):
+    """#147 : la copie Markdown de l'indexeur (après OCR, avant découpage) passe avant les morceaux
+    recollés ; un document lu par OCR le dit."""
+    creer_collection(nom)
+    en_tant_que(personne("lecteur"))
+    detail = {"metadata": {"partition": nom, "file_id": "uuid-1", "original_filename": "releve.pdf", "ocr": True}, "documents": [{"link": "https://o/extract/1"}]}
+    md = "<!-- page 1 -->\n## Relevé de décisions fictif\n\n<table><tr><td>A</td></tr></table>"
+    p, c = _openrag(detail=detail, markdown=(md, ""))
+    try:
+        d = client.get(f"/api/collections/{nom}/documents/uuid-1").json()
+        assert d["fidele"] is True and d["markdown"] == md and d["ocr"] is True and d["morceaux"] == []
+        c.extract.assert_not_awaited()  # rien à recoller
+    finally:
+        p.stop()
+
+
+def test_sans_copie_entiere_les_morceaux_et_la_raison(client, en_tant_que, creer_collection, nom):
+    creer_collection(nom)
+    en_tant_que(personne("lecteur"))
+    detail = {"metadata": {"partition": nom, "file_id": "uuid-1", "original_filename": "guide.md"}, "documents": [{"link": "https://o/extract/1"}]}
+    p, _ = _openrag(detail=detail, morceaux={"1": {"page_content": RELU.format(n=1)}})
+    try:
+        d = client.get(f"/api/collections/{nom}/documents/uuid-1").json()
+        assert d["fidele"] is False and d["fidele_raison"] == "MARKDOWN_NOT_AVAILABLE" and len(d["morceaux"]) == 1
+        assert "ocr" not in d
     finally:
         p.stop()

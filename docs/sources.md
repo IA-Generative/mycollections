@@ -41,6 +41,23 @@ lecture, servie par le backend en page HTML autonome.
 
 Cette page n'a pas de lien « Retour » : un onglet neuf n'a pas d'historique à remonter.
 
+### 4. Le document entier, fidèle (onglet « Documents » de la fiche)
+
+`GET /api/collections/{n}/documents/{file_id}` sert d'abord **la copie entière que l'indexeur garde
+du document** (`markdown`, `fidele: true`) : le texte tel qu'il l'a lu, après OCR et descriptions
+d'images, avant découpage, avec ses titres, listes et tableaux (en HTML selon le parseur). C'est
+la route OpenRAG `GET /partition/{p}/file/{id}/markdown`, avec `SAVE_MARKDOWN=true` (#147).
+
+- La fenêtre de lecture rend visibles les repères `<!-- page N -->` d'un document de plusieurs
+  pages (`utils/corpus.ts` → `markdownFidele`). Le rendu Markdown est assaini (DOMPurify) et garde
+  les tableaux HTML. L'export Word part de ce rendu.
+- Un document lu par OCR (`ocr: true`) le dit : le texte peut contenir des erreurs, le document
+  d'origine fait foi.
+- Sans copie, faute de `SAVE_MARKDOWN` au moment de l'indexation (`fidele_raison:
+  MARKDOWN_NOT_AVAILABLE`), le texte est recomposé à partir des morceaux, comme avant, et la fenêtre
+  dit qu'une ré-indexation donnera la version intégrale. Un OpenRAG plus ancien, sans la route,
+  donne aussi les morceaux, sans rien dire.
+
 ## Ce qu'il faut savoir pour y toucher
 
 | Quoi | Où |

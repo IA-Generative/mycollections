@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { avertissementLecture, libellePlage, libelleType, texteDuDocument } from '../../utils/corpus'
+import { avertissementLecture, libellePlage, libelleType, markdownFidele, texteDuDocument } from '../../utils/corpus'
 
 describe('libelleType', () => {
   it('nomme les types courants', () => {
@@ -47,5 +47,26 @@ describe('libellePlage', () => {
   })
   it('dit quand il n’y a rien', () => {
     expect(libellePlage({ total: 0, page: 1, par_page: 50 }, 0)).toBe('Aucun document')
+  })
+})
+
+describe('le document entier, fidèle (#147)', () => {
+  const vide = { morceaux: [], total_morceaux: 3, illisibles: 0, tronque: false }
+
+  it('montre les repères de page d\'un document de plusieurs pages, garde titres et tableaux', () => {
+    const md = '<!-- page 1 -->\n## Relevé fictif\n\n<table><tr><td>A</td></tr></table>\n<!-- page 2 -->\nSuite.'
+    expect(markdownFidele(md)).toBe('*— page 1 —*\n\n\n## Relevé fictif\n\n<table><tr><td>A</td></tr></table>\n\n\n*— page 2 —*\n\n\nSuite.')
+    expect(markdownFidele('<!-- page 1 -->\nUne seule page.')).toBe('Une seule page.')
+  })
+
+  it('préfère la copie entière aux morceaux', () => {
+    expect(texteDuDocument({ ...vide, markdown: 'Texte entier.', morceaux: [{ id: '1', texte: 'Morceau.', page: null }] })).toBe('Texte entier.')
+  })
+
+  it('dit l\'OCR et la version intégrale manquante', () => {
+    expect(avertissementLecture({ ...vide, markdown: 'x', ocr: true })).toMatch(/^Texte reconnu automatiquement/)
+    expect(avertissementLecture({ ...vide, markdown: 'x' })).toBe('')
+    const recompose = avertissementLecture({ ...vide, morceaux: [{ id: '1', texte: 'a', page: null }], fidele_raison: 'MARKDOWN_NOT_AVAILABLE' })
+    expect(recompose).toMatch(/^Version intégrale indisponible/)
   })
 })

@@ -58,6 +58,19 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
         raise HTTPException(status_code=404, detail="Document introuvable dans cette collection")
 
     ids = corpus.identifiants_des_morceaux(detail)
+    resume = corpus.resumer_fichier(FichierOpenRAG.model_validate({**meta, "file_id": file_id}))
+    # Lu par OCR : le texte a été reconnu automatiquement, l'original fait foi.
+    ocr = {"ocr": True} if meta.get("ocr") is True else {}
+
+    # Le document entier, tel que l'indexeur l'a lu (#147), quand il en garde la copie : plus
+    # fidèle que les morceaux recollés (titres, tableaux, sans chevauchements).
+    try:
+        markdown, raison = await client.file_markdown(name, file_id)
+    except Exception:
+        markdown, raison = None, "ROUTE_ABSENTE"
+    if markdown:
+        return {**resume, **ocr, "contexte": "", "markdown": markdown, "fidele": True, "morceaux": [], "total_morceaux": len(ids), "illisibles": 0, "tronque": False}
+
     a_lire = ids[: corpus.MORCEAUX_MAX]
     verrou = asyncio.Semaphore(_LECTURES_PARALLELES)
 
@@ -80,9 +93,12 @@ async def lire_document(name: str, file_id: str, fiche: dict = Depends(collectio
         if corps:
             morceaux.append({"id": cid, "texte": corps, "page": page if page not in ("", None) else None})
 
-    resume = corpus.resumer_fichier(FichierOpenRAG.model_validate({**meta, "file_id": file_id}))
     return {
         **resume,
+        **ocr,
+        "fidele": False,
+        # `MARKDOWN_NOT_AVAILABLE` : indexé sans copie entière ; une ré-indexation la donnera.
+        "fidele_raison": raison,
         "contexte": contexte,
         "morceaux": morceaux,
         "total_morceaux": len(ids),
