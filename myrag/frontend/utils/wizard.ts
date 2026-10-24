@@ -20,6 +20,19 @@ export function etapesEnPhrase (): string {
   return ETAPES_ASSISTANT.map(e => e.toLowerCase()).join(', ')
 }
 
+/**
+ * L'adresse des étapes 3 à 5 pour une collection créée. Une collection Résana a sa propre étape 3
+ * (le suivi de l'indexation, dans `admin/create/resana`) et garde `source=resana` jusqu'au bout :
+ * l'étape 5 sait ainsi qu'elle ne se partage pas (règle v1, docs/resana.md).
+ */
+export function lienEtape (numero: 3 | 4 | 5, collection: string, source = ''): string {
+  const c = encodeURIComponent(collection)
+  if (source === 'resana') {
+    return numero === 3 ? `/admin/create/resana?collection=${c}` : `/admin/create/step-${numero}?collection=${c}&source=resana`
+  }
+  return `/admin/create/step-${numero}?collection=${c}`
+}
+
 export interface Source {
   cle: string
   nom: string

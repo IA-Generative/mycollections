@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { lienEtape } from '~/utils/wizard'
+
 const route = useRoute()
 const collection = route.query.collection as string
+// Une collection Résana reste privée à qui l'a importée (règle v1, docs/resana.md) : elle ne se
+// partage pas, l'étape 5 le dit et mène à sa fiche.
+const source = (route.query.source as string) || ''
+const resana = source === 'resana'
 const { titre } = useTitreCollection(collection)
 const { post } = useApi()
 
@@ -45,7 +51,7 @@ async function terminer () {
   <WizardEtape
     :numero="5"
     :titre="`Partager — ${titre || collection}`"
-    chapeau="Votre collection est créée. Qui doit pouvoir l'interroger dès maintenant ?"
+    :chapeau="resana ? 'Votre collection est créée. Elle reste privée : vous seul l\'interrogez, avec vos droits Résana.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
   >
     <template #formulaire>
       <div
@@ -57,6 +63,22 @@ async function terminer () {
             Retour à l'étape 1
           </NuxtLink>
         </p>
+      </div>
+
+      <div
+        v-else-if="resana"
+        class="fr-col-12 fr-col-md-8"
+      >
+        <div class="fr-callout fr-mb-4w">
+          <h2 class="fr-callout__title fr-h6">
+            Pas de partage pour une collection Résana
+          </h2>
+          <p class="fr-callout__text fr-text--sm">
+            Ses documents viennent de vos espaces Résana : d'autres personnes y liraient ce que Résana leur refuse
+            peut-être. Elle ne se publie donc pas dans l'assistant. Vous l'interrogez depuis son bac à sable, et vous
+            la mettez à jour depuis « Gérer les documents », sur sa fiche.
+          </p>
+        </div>
       </div>
 
       <div
@@ -185,13 +207,21 @@ async function terminer () {
         </li>
         <li>
           <NuxtLink
-            :to="`/admin/create/step-4?collection=${collection}`"
+            :to="lienEtape(4, collection, source)"
             class="fr-btn fr-btn--secondary"
           >
             Étape précédente
           </NuxtLink>
         </li>
-        <li>
+        <li v-if="resana">
+          <NuxtLink
+            :to="`/c/${encodeURIComponent(collection)}`"
+            class="fr-btn"
+          >
+            Ouvrir la fiche de la collection
+          </NuxtLink>
+        </li>
+        <li v-else>
           <button
             class="fr-btn"
             :disabled="!collection || envoi || (choix === 'groupe' && !groupe.trim())"

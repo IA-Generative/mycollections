@@ -283,6 +283,12 @@ dans `frontend/utils/libelles.ts`) :
 
    « Créer et indexer » fait **un seul appel** (`POST /collections`) : identifiant, collection
    privée, import.
+4. **Suivre l'indexation** (étape 3 de l'assistant, `admin/create/resana?collection=<id>`) : la
+   carte de la collection et sa sensibilité. L'indexation continue en arrière-plan ; « Étape
+   suivante » mène à la vérification des réponses (étape 4), puis à l'étape 5, qui dit qu'une
+   collection Résana ne se partage pas et mène à sa fiche. Les étapes 4 et 5 gardent
+   `source=resana` dans l'adresse (`lienEtape` dans `frontend/utils/wizard.ts`). L'adresse porte
+   la collection : un rechargement ou un retour depuis l'étape 4 rouvre l'étape 3.
 
 **Page « Gérer les documents »** (`/c/<id>/upload`) : la carte ci-dessous et la sensibilité,
 sans dépôt de fichiers ni choix du découpage. Une collection Résana se remplit par sa sélection

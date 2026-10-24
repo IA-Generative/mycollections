@@ -2,7 +2,7 @@
 import type { VerdictTechnique } from '~/utils/wizard'
 import { messageErreur } from '~/utils/collectif'
 import { renderMarkdownSafe } from '~/utils/sanitize'
-import { chargeAuJeu, completerQuestions, NB_QUESTIONS_TEST, questionsSuggerees, verdictTechnique } from '~/utils/wizard'
+import { chargeAuJeu, completerQuestions, lienEtape, NB_QUESTIONS_TEST, questionsSuggerees, verdictTechnique } from '~/utils/wizard'
 
 /**
  * Étape 4 de l'assistant : un test technique, pas encore la qualité. Trois questions (suggérées
@@ -12,6 +12,7 @@ import { chargeAuJeu, completerQuestions, NB_QUESTIONS_TEST, questionsSuggerees,
  */
 const route = useRoute()
 const collection = route.query.collection as string
+const source = (route.query.source as string) || ''
 const { get, post } = useApi()
 
 interface Essai {
@@ -228,7 +229,7 @@ onMounted(async () => {
         </li>
         <li>
           <NuxtLink
-            :to="`/admin/create/step-3?collection=${collection}`"
+            :to="lienEtape(3, collection, source)"
             class="fr-btn fr-btn--secondary"
           >
             Étape précédente
@@ -236,10 +237,10 @@ onMounted(async () => {
         </li>
         <li>
           <NuxtLink
-            :to="`/admin/create/step-5?collection=${collection}`"
+            :to="lienEtape(5, collection, source)"
             class="fr-btn"
           >
-            Continuer vers la publication
+            {{ source === 'resana' ? 'Étape suivante' : 'Continuer vers la publication' }}
           </NuxtLink>
         </li>
       </ul>

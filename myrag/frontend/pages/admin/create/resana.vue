@@ -5,18 +5,26 @@
  * unique d'un espace). Les dossiers cochés sont un réglage d'indexation, modifiable ensuite.
  * 1. l'espace (avec une recherche), et les collections déjà ancrées dessus ;
  * 2. les dossiers à indexer, cochés dans l'arbre de l'espace ;
- * 3. la fiche : titre (le nom de l'espace), entité administrative, identifiant expliqué.
+ * 3. la fiche : titre (le nom de l'espace), entité administrative, identifiant expliqué ;
+ * 4. une fois créée (étape 3 de l'assistant, `?collection=`) : l'indexation suivie, la sensibilité,
+ *    et la suite de l'assistant (vérifier les réponses, puis l'étape 5 qui dit qu'elle reste privée).
  */
 import type { ErreurResana, EspaceResana } from '~/utils/resana'
 import { descriptionParDefaut, erreurResana, etiquetteResana, titreDepuisEspace } from '~/utils/resana'
+import { lienEtape } from '~/utils/wizard'
 
 interface Existante { collection: string, titre: string, chemins: string[], couverture: string }
 
+const route = useRoute()
 const router = useRouter()
 const { get, post } = useApi()
 const champ = useId()
 
-const phase = ref<'choisir' | 'fiche'>('choisir')
+// La collection créée est dans l'adresse : l'étape 3 se rouvre telle quelle (rechargement, retour
+// depuis l'étape 4).
+const creee = computed(() => (route.query.collection as string) || '')
+const phase = ref<'choisir' | 'fiche' | 'documents'>(creee.value ? 'documents' : 'choisir')
+const { capacites, charger: chargerCapacites } = useCapacites()
 const erreur = ref<ErreurResana | null>(null)
 
 // ─── Les dossiers cochés (2), déclarés d'abord : choisir un autre espace les vide ─────────────
@@ -110,7 +118,8 @@ async function creerEtIndexer () {
       entite: entite.value.trim(),
       suffixe: suffixe.value.trim(),
     })
-    router.push(`/c/${r.collection}/upload`)
+    await router.replace({ query: { collection: r.collection } })
+    phase.value = 'documents'
   }
   catch (e) {
     erreur.value = erreurResana(e)
@@ -121,12 +130,56 @@ async function creerEtIndexer () {
   }
 }
 
-onMounted(chargerEspaces)
+onMounted(() => {
+  chargerCapacites()
+  if (phase.value !== 'documents') {
+    chargerEspaces()
+  }
+})
 onBeforeUnmount(() => clearTimeout(minuterie))
 </script>
 
 <template>
   <WizardEtape
+    v-if="phase === 'documents'"
+    :numero="3"
+    titre="Suivre l'indexation"
+    chapeau="Votre collection est créée. L'indexation continue en arrière-plan : vous pouvez passer à l'étape suivante sans attendre."
+  >
+    <template #formulaire>
+      <DepotEtatResana
+        v-if="capacites.resana"
+        :collection="creee"
+      />
+      <DepotSensibiliteResana
+        class="fr-mt-4w"
+        :collection="creee"
+      />
+    </template>
+    <template #actions>
+      <ul class="fr-btns-group fr-btns-group--right fr-btns-group--inline-md">
+        <li>
+          <NuxtLink
+            :to="`/c/${encodeURIComponent(creee)}`"
+            class="fr-btn fr-btn--tertiary-no-outline"
+          >
+            Ouvrir la fiche de la collection
+          </NuxtLink>
+        </li>
+        <li>
+          <NuxtLink
+            :to="lienEtape(4, creee, 'resana')"
+            class="fr-btn"
+          >
+            Étape suivante
+          </NuxtLink>
+        </li>
+      </ul>
+    </template>
+  </WizardEtape>
+
+  <WizardEtape
+    v-else
     :numero="phase === 'choisir' ? 1 : 2"
     :titre="phase === 'choisir' ? 'Choisir dans Résana' : 'Relire la fiche'"
   >

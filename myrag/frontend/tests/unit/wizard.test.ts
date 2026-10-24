@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REGLES_PAR_DEFAUT } from '../../utils/collectionName'
-import { cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
+import { cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, lienEtape, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
 
 describe('les étapes de l\'assistant', () => {
   it('les cinq libellés, dans l\'ordre', () => {
@@ -132,5 +132,18 @@ describe('completerQuestions', () => {
   })
   it('garde une question déjà tapée quand la suggestion arrive après', () => {
     expect(completerQuestions(['Ma question ?', ' ', ''], ['A ?', 'B ?', 'C ?'])).toEqual(['Ma question ?', 'B ?', 'C ?'])
+  })
+})
+
+describe('lienEtape', () => {
+  it('une collection ordinaire suit les étapes 3 à 5 de l\'assistant', () => {
+    expect(lienEtape(3, 'ma-collection')).toBe('/admin/create/step-3?collection=ma-collection')
+    expect(lienEtape(5, 'ma-collection', 'drive')).toBe('/admin/create/step-5?collection=ma-collection')
+  })
+
+  it('une collection Résana suit son indexation à l\'étape 3 et garde sa source jusqu\'au partage', () => {
+    expect(lienEtape(3, 'resana-206', 'resana')).toBe('/admin/create/resana?collection=resana-206')
+    expect(lienEtape(4, 'resana-206', 'resana')).toBe('/admin/create/step-4?collection=resana-206&source=resana')
+    expect(lienEtape(5, 'resana-206', 'resana')).toBe('/admin/create/step-5?collection=resana-206&source=resana')
   })
 })
