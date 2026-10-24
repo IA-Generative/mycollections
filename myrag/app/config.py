@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     #: (contexte des passages, images) par une passerelle partagée avec le chat : au-delà de son quota,
     #: plus d'envois donnent plus de refus, pas plus de débit (chantier #143).
     resana_envois_paralleles: int = Field(default=4, validation_alias=AliasChoices("MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES", "resana_envois_paralleles"))
+    #: Service de conversion des formats bureautiques en PDF (Gotenberg, route LibreOffice : #146) ;
+    #: vide ⇒ ces formats restent écartés.
+    conversion_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CONVERSION_URL", "conversion_url"))
+    #: Délai accordé à une conversion (un gros tableur peut demander une minute).
+    conversion_delai_s: float = Field(default=120.0, validation_alias=AliasChoices("MYCOLLECTIONS_CONVERSION_DELAI_S", "conversion_delai_s"))
 
     # Open WebUI (used by /publish to create model aliases)
     # Défaut d'EXEMPLE : chaque déploiement pose son adresse par OWUI_URL. Nommer ici

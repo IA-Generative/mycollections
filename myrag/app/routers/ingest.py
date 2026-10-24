@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.auth import CurrentUser, current_user
 from app.config import settings
 from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
-from app.services import formats
+from app.services import conversion, formats
 from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
 from app.services.indexeur import DejaPresent, Indexeur, IndexeurOpenRAG, Refuse, qualite_echec
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
@@ -289,6 +289,14 @@ async def _ingest_content(
 ) -> DepotResultat:
     """Common ingest logic for file upload and URL fetch."""
     nature = formats.nature(filename, content)
+    if nature is None and conversion.active() and conversion.convertible(filename):
+        # Un format bureautique que l'indexeur ne lit pas part converti en PDF (#146).
+        try:
+            content = await conversion.en_pdf(filename, content)
+        except conversion.ConversionImpossible as e:
+            raise HTTPException(status_code=422, detail=f"« {filename} » n'a pas pu être converti en PDF ({e}). Déposez-le en PDF.") from None
+        filename = conversion.nom_pdf(filename)
+        nature = formats.nature(filename, content)
     if nature is None:
         raise HTTPException(status_code=415, detail=MESSAGE_FORMAT)
     if nature is formats.Nature.DOCUMENT:

@@ -151,6 +151,12 @@ spec:
                   name: myrag-config
                   key: MYCOLLECTIONS_GENERATION_LLM_MODELE
                   optional: true
+            - name: MYCOLLECTIONS_CONVERSION_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: myrag-config
+                  key: MYCOLLECTIONS_CONVERSION_URL
+                  optional: true
             - name: MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE
               valueFrom:
                 configMapKeyRef:

@@ -1,0 +1,55 @@
+# Service de conversion des formats bureautiques en PDF (#146) : Gotenberg, LibreOffice seul (sans
+# Chromium). Mes collections l'appelle par MYCOLLECTIONS_CONVERSION_URL ; rien n'y est exposé hors du
+# namespace. Une conversion à la fois côté Mes collections ; le service redémarre LibreOffice de
+# lui-même après un nombre de conversions borné.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myrag-conversion
+  namespace: myrag
+  labels:
+    app: myrag-conversion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myrag-conversion
+  template:
+    metadata:
+      labels:
+        app: myrag-conversion
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: gotenberg
+          image: gotenberg/gotenberg:8.37.0-libreoffice
+          args:
+            - gotenberg
+            - --api-timeout=180s
+            - --libreoffice-restart-after=50
+            - --libreoffice-auto-start=true
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

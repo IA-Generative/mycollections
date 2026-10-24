@@ -42,7 +42,7 @@ from app.models.db import Publication, SourceFile, utcnow
 from app.routers import ingest as depot
 from app.routers._commun import capacite
 from app.routers._droits import gerer_la_collection, lire_la_collection
-from app.services import formats, nommage, resana_perimetre
+from app.services import conversion, formats, nommage, resana_perimetre
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
@@ -779,6 +779,15 @@ def _irrecevable(nom: str, contenu: bytes) -> str | None:
     return None if texte.strip() else "document vide"
 
 
+def _convertible_desormais(ecart: dict) -> bool:
+    """Un document écarté pour son format, que le service de conversion saurait lire. Sans extension
+    notée (écarts d'avant #146), tout écart de format est retenté une fois."""
+    if not str(ecart.get("raison", "")).startswith("format non pris en charge"):
+        return False
+    ext = ecart.get("extension")
+    return conversion.convertible(f"x{ext}") if ext else True
+
+
 def _nom_de(doc: DocumentResana, nom_recu: str) -> str:
     """Le nom donné par le service au fichier ; celui de la liste s'il porte seul une extension."""
     if formats.extension(nom_recu) or not formats.extension(doc.nom_fichier):
@@ -889,6 +898,8 @@ async def _comparer_et_appliquer(
             continue
         if ec.get("doublon_de") and ec["doublon_de"] not in stables_ids:
             continue  # l'original change ou disparaît : on relit le doublon
+        if conversion.active() and _convertible_desormais(ec):
+            continue  # écarté faute de savoir le lire : le service de conversion est là
         toujours_ecartes[d.id] = {**ec, "titre": d.titre}
     a_relire_ = [d for d in docs if d.id not in stables_ids and d.id not in toujours_ecartes]
     stables = [d for d in docs if d.id in stables_ids]
@@ -926,9 +937,23 @@ async def _comparer_et_appliquer(
     for recu in r.recus:
         doc = recu.doc
         ancien = connus.get(doc.id)
-        nom = ancien["fichier"] if ancien and ancien.get("fichier") else _nom_de(doc, recu.nom)
+        nom_origine = _nom_de(doc, recu.nom)
+        nom = ancien["fichier"] if ancien and ancien.get("fichier") else nom_origine
         contenu = await asyncio.to_thread(recu.chemin.read_bytes)
-        raison = _irrecevable(nom, contenu)
+        # Un format bureautique que l'indexeur ne lit pas part converti en PDF, si le service de
+        # conversion est là (#146). L'empreinte reste celle de l'original : c'est lui qui change.
+        converti_depuis = ""
+        raison = None
+        if conversion.active() and conversion.convertible(nom_origine):
+            try:
+                contenu = await conversion.en_pdf(nom_origine, contenu)
+                await asyncio.to_thread(recu.chemin.write_bytes, contenu)
+                converti_depuis = formats.extension(nom_origine)
+                if not (ancien and ancien.get("fichier")):
+                    nom = conversion.nom_pdf(nom_origine)
+            except conversion.ConversionImpossible as e:
+                raison = f"conversion en PDF impossible ({e})"
+        raison = raison or _irrecevable(nom, contenu)
         # Un scan (PDF sans texte) part quand même : l'indexeur le lira s'il a l'OCR (#145).
         scan = raison is None and await asyncio.to_thread(formats.est_un_scan, nom, contenu)
         del contenu
@@ -945,6 +970,8 @@ async def _comparer_et_appliquer(
                 "titre": doc.titre,
                 "raison": raison,
                 "doublon_de": doublon_de,
+                # L'extension dit, après coup, quels formats manquent (« 12 tableurs… »).
+                "extension": formats.extension(nom_origine),
             }
             if ancien and ancien.get("file_id"):
                 a_retirer.append(ancien["file_id"])  # son ancienne version ne doit pas rester seule
@@ -966,6 +993,7 @@ async def _comparer_et_appliquer(
             "sensitivity": sensibilite.value,
             **({"url": _url(doc)} if _url(doc) else {}),
             **({"scan": True} if scan else {}),
+            **({"converti_depuis": converti_depuis} if converti_depuis else {}),
         }
         a_envoyer.append((nom, recu, meta))
         gardes[doc.id] = {
