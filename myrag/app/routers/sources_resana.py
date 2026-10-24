@@ -571,15 +571,33 @@ async def _suivre(collection: str, **champs) -> None:
         await update_collection(collection, {"source_config_json": json.dumps(cfg)})
 
 
+#: Les erreurs de lecture passagères (délai, service) : le document est renvoyé à la passe suivante.
+#: Les autres (« n'a pas pu lire » : PDF sans texte, format refusé) ne se retentent que si le
+#: document change, pour ne pas renvoyer à chaque passe ce qui échouera de nouveau.
+_ERREURS_PASSAGERES = ("n'a pas fini de lire", "impossible :", "a répondu 5")
+
+
+def erreur_passagere(erreur: str | None) -> bool:
+    return bool(erreur) and any(m in erreur for m in _ERREURS_PASSAGERES)
+
+
+def meme_version(doc: DocumentResana, fiche: dict) -> bool:
+    """Résana annonce-t-il la même version que celle notée ? (Rien d'annoncé : on ne sait pas.)"""
+    if not doc.modifie_le and not doc.version_fichier:
+        return False
+    return (doc.version_fichier, doc.modifie_le) == (fiche.get("version_fichier"), fiche.get("modifie_le"))
+
+
 def a_relire(doc: DocumentResana, ancien: dict | None) -> bool:
     """Faut-il retélécharger ce document ? Oui s'il est nouveau, si Résana annonce une autre date ou
-    une autre version, ou si la fiche gardée est incomplète. Sinon, rien à télécharger : la liste
-    du dossier suffit (l'empreinte ne se vérifie qu'en vérification complète)."""
+    une autre version, si la fiche gardée est incomplète, ou si sa dernière lecture a échoué pour une
+    raison passagère. Sinon, rien à télécharger : la liste du dossier suffit (l'empreinte ne se
+    vérifie qu'en vérification complète)."""
     if not ancien or not ancien.get("sha256") or not ancien.get("file_id"):
         return True
-    if not doc.modifie_le and not doc.version_fichier:
-        return True  # Résana ne dit rien : seule l'empreinte peut trancher
-    return (doc.version_fichier, doc.modifie_le) != (ancien.get("version_fichier"), ancien.get("modifie_le"))
+    if erreur_passagere(ancien.get("erreur")):
+        return True
+    return not meme_version(doc, ancien)
 
 
 def identifiant_dans_l_index(ident: str, sha256: str) -> str:
@@ -652,7 +670,7 @@ async def _rapatrier(collection: str, client: ClientExportResana, espace: str, d
                 r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
                 continue
             ancien = connus.get(doc.id) or {}
-            if ancien.get("sha256") == f.sha256 and ancien.get("file_id"):
+            if ancien.get("sha256") == f.sha256 and ancien.get("file_id") and not erreur_passagere(ancien.get("erreur")):
                 r.identiques.append(doc)
             else:
                 if _place_libre(attente) - len(f.contenu) < PLACE_LIBRE_MIN:
@@ -780,9 +798,23 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     _, sensibilite = _strategie(col)
     nom_espace = str(_espace_de(cfg).get("nom") or "")
 
+    # Les documents écartés à une passe précédente (doublon, format) : notés avec leur version, ils
+    # ne sont pas retéléchargés tant qu'elle ne change pas — sauf le doublon dont l'original ne
+    # sera plus là pour porter le contenu.
+    ecartes_connus: dict[str, dict] = dict(cfg.get("ecartes") or {})
+
     # Ce que la liste suffit à dire : inchangés (même date, même version), et à relire.
-    a_relire_ = [d for d in docs if complet or a_relire(d, connus.get(d.id))]
-    stables = [d for d in docs if d not in a_relire_]
+    stables_ids = {d.id for d in docs if not complet and d.id in connus and not a_relire(d, connus[d.id])}
+    toujours_ecartes: dict[str, dict] = {}
+    for d in docs:
+        ec = ecartes_connus.get(d.id)
+        if complet or d.id in connus or not ec or not meme_version(d, ec):
+            continue
+        if ec.get("doublon_de") and ec["doublon_de"] not in stables_ids:
+            continue  # l'original change ou disparaît : on relit le doublon
+        toujours_ecartes[d.id] = {**ec, "titre": d.titre}
+    a_relire_ = [d for d in docs if d.id not in stables_ids and d.id not in toujours_ecartes]
+    stables = [d for d in docs if d.id in stables_ids]
     await _suivre(collection, phase="telechargement", total=len(a_relire_), faits=0, inchanges_annonces=len(stables))
     r = await _rapatrier(collection, client, espace, a_relire_, connus)
     if r.erreur is not None and not r.recus and not r.identiques:
@@ -803,8 +835,14 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
             "modifie_le": doc.modifie_le,
         }
     pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
-    condensats = {v["sha256"]: v.get("titre", "") for v in gardes.values() if v.get("sha256")}
-    ecartes = list(r.ecartes)
+    # Empreinte → (titre, identifiant) des documents gardés : un contenu identique n'est indexé
+    # qu'une fois ; le premier gardé porte le contenu, les autres sont écartés (sans rien bloquer).
+    condensats = {v["sha256"]: (v.get("titre", ""), k) for k, v in gardes.items() if v.get("sha256")}
+    ecartes = list(r.ecartes) + [{"id": k, "titre": v.get("titre", ""), "raison": v.get("raison", "")} for k, v in toujours_ecartes.items()]
+    nouveaux_ecartes: dict[str, dict] = dict(toujours_ecartes)
+    # Les documents déjà indexés passent d'abord : face à un nouveau doublon, l'existant garde sa place.
+    rang = {d.id: i for i, d in enumerate(docs)}
+    r.recus.sort(key=lambda x: (x.doc.id not in connus, rang[x.doc.id]))
     a_envoyer: list[tuple[str, Recu, dict]] = []
     a_retirer: list[str] = []
     ajoutes = modifies = 0
@@ -813,14 +851,24 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         ancien = connus.get(doc.id)
         nom = ancien["fichier"] if ancien and ancien.get("fichier") else _nom_de(doc, recu.nom)
         raison = _irrecevable(nom, await asyncio.to_thread(recu.chemin.read_bytes))
+        doublon_de = None
         if raison is None and recu.sha256 in condensats:
-            raison = f"même contenu que « {condensats[recu.sha256]} »"
+            titre_original, doublon_de = condensats[recu.sha256]
+            raison = f"même contenu que « {titre_original} »"
         if raison:
             ecartes.append({"id": doc.id, "titre": doc.titre, "raison": raison})
+            nouveaux_ecartes[doc.id] = {
+                "sha256": recu.sha256,
+                "version_fichier": doc.version_fichier,
+                "modifie_le": doc.modifie_le,
+                "titre": doc.titre,
+                "raison": raison,
+                "doublon_de": doublon_de,
+            }
             if ancien and ancien.get("file_id"):
                 a_retirer.append(ancien["file_id"])  # son ancienne version ne doit pas rester seule
             continue
-        condensats[recu.sha256] = doc.titre
+        condensats[recu.sha256] = (doc.titre, doc.id)
         if not ancien:
             nom = nom_unique(nom, doc.id, pris)
         if ancien and ancien.get("file_id"):
@@ -843,6 +891,9 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     if partiel:
         for k, v in connus.items():
             gardes.setdefault(k, v)
+        for k, v in ecartes_connus.items():
+            if k not in gardes:
+                nouveaux_ecartes.setdefault(k, v)
         disparus: list[dict] = []
     else:
         disparus = [v for k, v in connus.items() if k not in gardes]
@@ -891,7 +942,8 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         **bilan,
         "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
     }
-    champs: dict = {"documents": gardes, "travail": travail}
+    presents = {d.id for d in docs}
+    champs: dict = {"documents": gardes, "ecartes": {k: v for k, v in nouveaux_ecartes.items() if k in presents or partiel}, "travail": travail}
     if partiel and r.erreur is not None:
         travail.update({k: v for k, v in r.erreur.detail().items() if k in ("code", "message", "url_connexion")})
     else:
