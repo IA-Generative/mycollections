@@ -41,11 +41,11 @@ def test_types_mime_annonces_a_openrag():
     assert formats.type_mime("dossier/b.PPTX").endswith("presentationml.presentation")
 
 
-def _client(etats=("QUEUED", "RUNNING", "COMPLETED"), envoi=None, erreur=""):
+def _client(etats=("QUEUED", "RUNNING", "COMPLETED"), envoi=None, erreur="", details=None):
     c = AsyncMock()
     c.create_partition = AsyncMock(return_value=ResultatPartition(status="ok"))
     c.upload_document = envoi or AsyncMock(return_value=EnvoiDocument(file_id="f1", task_id="t1"))
-    c.task_state = AsyncMock(side_effect=[EtatTache(task_state=e) for e in etats])
+    c.task_state = AsyncMock(side_effect=[EtatTache(task_state=e, details=details if e == etats[-1] else None) for e in etats])
     c.task_error = AsyncMock(return_value=erreur)
     return c
 
@@ -85,6 +85,25 @@ async def test_une_tache_en_echec_rend_le_travail_en_echec_avec_la_raison():
     j = await get_job(job["job_id"])
     assert j is not None
     assert j["status"] == "done_with_errors" and "PDF chiffré" in j["error"]
+
+
+@pytest.mark.asyncio
+async def test_un_document_lu_sans_tout_son_contexte_reussit_et_le_dit():
+    job = await create_job("x", "a.pdf", "openrag", "public")
+    details = {"degraded_stages": {"contextualize": "429"}, "contextualization": {"total": 17, "failed": 7}}
+    with patch("app.routers.ingest.OpenRAGClient", return_value=_client(("RUNNING", "COMPLETED"), details=details)):
+        identifiant, erreur, qualite = await ingest._indexer_document_background(job["job_id"], "x", "a.pdf", PDF)
+    assert (identifiant, erreur) == ("f1", None) and qualite["etat"] == "sans_contexte"
+    j = await get_job(job["job_id"])
+    assert j is not None and j["status"] == "done" and "7 de ses 17 passages n'ont pas leur contexte" in j["error"]
+
+
+@pytest.mark.asyncio
+async def test_un_scan_sans_texte_est_note_comme_tel():
+    job = await create_job("x", "scan.pdf", "openrag", "public")
+    with patch("app.routers.ingest.OpenRAGClient", return_value=_client(("RUNNING", "FAILED"), erreur="NoIndexableContentError: NO_INDEXABLE_CONTENT")):
+        _, erreur, qualite = await ingest._indexer_document_background(job["job_id"], "x", "scan.pdf", PDF)
+    assert erreur and qualite == {"etat": "sans_texte"}
 
 
 @pytest.mark.asyncio

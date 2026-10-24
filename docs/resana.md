@@ -230,6 +230,19 @@ gardée comme adresse d'origine de chaque fichier, et envoyée à OpenRAG en mé
 fait déjà pointer ses liens de source vers cette adresse quand elle existe. Les citations du bac à
 sable de Mes collections passent encore par l'extrait OpenRAG.
 
+### Ce que vaut l'index, et « Ré-indexer les documents incomplets »
+
+Chaque document garde sa **qualité** (`documents[id].qualite`, voir `docs/indexeur.md`), et `/status`
+la compte : `qualite.par_etat` (`complet`, `sans_contexte`, `degrade`, `sans_texte`, `echec`,
+`inconnue` pour un document indexé avant ce suivi), `qualite.a_reprendre`, et le nombre de passages
+sans contexte quand l'indexeur le donne. La carte de la collection l'écrit en phrases. Pour les
+scans, elle conseille de déposer plutôt la version électronique, de préférence non signée.
+
+`POST /sync/{collection}` avec `{"incomplets": true}` renvoie les documents `sans_contexte`,
+`degrade` et `sans_texte` **même inchangés dans Résana** : après une panne de quota, ou quand l'OCR
+arrive pour les scans. Les autres documents restent en place. Le travail s'appelle alors
+`reindexation`. Un format refusé (`echec`) n'est pas renvoyé : il échouerait à l'identique.
+
 ## Une collection ancrée sur un espace
 
 Une collection Résana est ancrée sur **un espace**. Les dossiers à indexer sont un **réglage

@@ -25,7 +25,7 @@ import logging
 import re
 import shutil
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +47,7 @@ from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
 from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, nom_unique, reparer_accents
+from app.services.indexeur import qualite_echec
 
 logger = logging.getLogger("myrag.sources.resana")
 
@@ -302,6 +303,9 @@ class SynchroResana(BaseModel):
     #: Vérification complète : retélécharger chaque document et comparer son empreinte, même si
     #: Résana annonce la même date et la même version (rare : un contenu changé sans nouvelle date).
     complet: bool = False
+    #: Ré-indexer les documents incomplets (`QUALITES_A_REPRENDRE`) : retéléchargés et renvoyés,
+    #: même inchangés — après une panne de quota, ou quand l'OCR arrive pour les scans.
+    incomplets: bool = False
 
 
 async def _a_des_documents(collection: str) -> bool:
@@ -496,8 +500,10 @@ async def synchroniser(collection: str, corps: SynchroResana | None = None, auth
         # Le périmètre a changé : le journal de la collection le garde (quels dossiers, quand, qui).
         await consigner("synchronisation", collection, "perimetre.modifie", user.sub, collection_name=collection, detail={"source": SOURCE, "ajoutes": ajoutes, "retires": retires})
     complet = bool(corps and corps.complet)
-    await _demarrer(collection, _executer(collection, client, espace, dossiers, docs, "synchronisation", user, complet=complet))
-    return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None}
+    reprendre = a_reprendre(cfg) if corps is not None and corps.incomplets else set()
+    action = "reindexation" if reprendre else "synchronisation"
+    await _demarrer(collection, _executer(collection, client, espace, dossiers, docs, action, user, complet=complet, reprendre=reprendre))
+    return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None, "a_reprendre": len(reprendre)}
 
 
 @router.get("/status/{collection}", dependencies=[Depends(lire_la_collection)])
@@ -521,6 +527,7 @@ async def statut(collection: str, authorization: str | None = Header(default=Non
         "dossiers": [{"id": d["id"], "chemin": d.get("chemin")} for d in _dossiers_de(cfg)],
         "dossier_chemin": " · ".join(d.get("chemin") or d["id"] for d in _dossiers_de(cfg)),
         "documents": len(cfg.get("documents") or {}),
+        "qualite": bilan_qualite(cfg),
         "last_sync_at": cfg.get("last_sync_at"),
         "travail": travail or None,
         "est_importeur": est_importeur,
@@ -608,6 +615,48 @@ def meme_version(doc: DocumentResana, fiche: dict) -> bool:
     return (doc.version_fichier, doc.modifie_le) == (fiche.get("version_fichier"), fiche.get("modifie_le"))
 
 
+#: Les documents que « Ré-indexer les documents incomplets » renvoie : lus sans tout leur contexte,
+#: avec une étape en échec, ou sans texte (des scans : ils seront lus quand l'OCR sera là). Un
+#: format refusé (`echec`) échouerait de nouveau à l'identique.
+QUALITES_A_REPRENDRE = ("sans_contexte", "degrade", "sans_texte")
+
+
+def qualite_de(fiche: dict) -> str:
+    """L'état de qualité d'un document gardé (`indexeur.ETATS_QUALITE`), ou `inconnue` : indexé
+    avant que Mes collections ne le note, ou par un indexeur qui ne le dit pas. Une erreur de
+    lecture notée avant la qualité dit au moins « sans texte » ou « échec »."""
+    q = fiche.get("qualite")
+    if isinstance(q, dict) and q.get("etat"):
+        return str(q["etat"])
+    if fiche.get("erreur"):
+        return qualite_echec(str(fiche["erreur"]))["etat"]
+    return "inconnue"
+
+
+def bilan_qualite(cfg: dict) -> dict:
+    """Le compte des documents par état de qualité, et combien « Ré-indexer les documents
+    incomplets » en reprendrait. Le nombre de passages sans contexte s'ajoute quand l'indexeur le dit."""
+    documents = (cfg.get("documents") or {}).values()
+    par_etat: dict[str, int] = {}
+    passages = sans_contexte = 0
+    for d in documents:
+        etat = qualite_de(d)
+        par_etat[etat] = par_etat.get(etat, 0) + 1
+        q = d.get("qualite") if isinstance(d.get("qualite"), dict) else {}
+        passages += int(q.get("passages") or 0)
+        sans_contexte += int(q.get("sans_contexte") or 0)
+    return {
+        "par_etat": par_etat,
+        "a_reprendre": sum(par_etat.get(e, 0) for e in QUALITES_A_REPRENDRE),
+        **({"passages": passages, "passages_sans_contexte": sans_contexte} if passages else {}),
+    }
+
+
+def a_reprendre(cfg: dict) -> set[str]:
+    """Les identifiants Résana des documents incomplets, à renvoyer même inchangés."""
+    return {k for k, v in (cfg.get("documents") or {}).items() if qualite_de(v) in QUALITES_A_REPRENDRE}
+
+
 def a_relire(doc: DocumentResana, ancien: dict | None) -> bool:
     """Faut-il retélécharger ce document ? Oui s'il est nouveau, si Résana annonce une autre date ou
     une autre version, si la fiche gardée est incomplète, ou si sa dernière lecture a échoué pour une
@@ -667,7 +716,9 @@ def _place_libre(chemin: Path) -> int:
     return shutil.disk_usage(chemin).free
 
 
-async def _rapatrier(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], connus: dict[str, dict]) -> Rapatriement:
+async def _rapatrier(
+    collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], connus: dict[str, dict], reprendre: Collection[str] = frozenset()
+) -> Rapatriement:
     """Télécharge les documents à relire, quelques-uns à la fois. Un contenu identique au précédent
     est jeté aussitôt ; un contenu nouveau ou changé attend sur le disque, pas en mémoire. Une
     erreur bloquante (ou un disque presque plein) arrête le téléchargement : ce qui est déjà reçu
@@ -690,7 +741,7 @@ async def _rapatrier(collection: str, client: ClientExportResana, espace: str, d
                 r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
                 continue
             ancien = connus.get(doc.id) or {}
-            if ancien.get("sha256") == f.sha256 and ancien.get("file_id") and not erreur_passagere(ancien.get("erreur")):
+            if ancien.get("sha256") == f.sha256 and ancien.get("file_id") and not erreur_passagere(ancien.get("erreur")) and doc.id not in reprendre:
                 r.identiques.append(doc)
             else:
                 if _place_libre(attente) - len(f.contenu) < PLACE_LIBRE_MIN:
@@ -789,7 +840,7 @@ async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sen
     from app.services.job_store import create_job, update_job
 
     verrou = asyncio.Semaphore(envois_paralleles())
-    rendu: dict[str, tuple[str | None, str | None]] = {}
+    rendu: dict[str, tuple[str | None, str | None, dict | None]] = {}
     faits = {"n": 0}
 
     async def un(nom: str, recu: Recu, meta: dict) -> None:
@@ -809,7 +860,9 @@ async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sen
     return rendu
 
 
-async def _comparer_et_appliquer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], action: str, *, complet: bool = False) -> dict:
+async def _comparer_et_appliquer(
+    collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana], action: str, *, complet: bool = False, reprendre: Collection[str] = frozenset()
+) -> dict:
     col = await get_collection(collection)
     if not col:
         raise ErreurResana(404, "introuvable")
@@ -825,7 +878,7 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     ecartes_connus: dict[str, dict] = dict(cfg.get("ecartes") or {})
 
     # Ce que la liste suffit à dire : inchangés (même date, même version), et à relire.
-    stables_ids = {d.id for d in docs if not complet and d.id in connus and not a_relire(d, connus[d.id])}
+    stables_ids = {d.id for d in docs if not complet and d.id not in reprendre and d.id in connus and not a_relire(d, connus[d.id])}
     toujours_ecartes: dict[str, dict] = {}
     for d in docs:
         ec = ecartes_connus.get(d.id)
@@ -837,7 +890,7 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     a_relire_ = [d for d in docs if d.id not in stables_ids and d.id not in toujours_ecartes]
     stables = [d for d in docs if d.id in stables_ids]
     await _suivre(collection, phase="telechargement", total=len(a_relire_), faits=0, inchanges_annonces=len(stables))
-    r = await _rapatrier(collection, client, espace, a_relire_, connus)
+    r = await _rapatrier(collection, client, espace, a_relire_, connus, reprendre)
     if r.erreur is not None and not r.recus and not r.identiques:
         raise r.erreur
     # Arrêté en route (session expirée, disque) : on garde ce qui est arrivé, sans rien retirer ;
@@ -944,7 +997,7 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     envois = await _envoyer(collection, a_envoyer, sensibilite)
     duree_indexation = time.monotonic() - debut_indexation
     en_erreur = 0
-    for ident, (file_id, erreur) in envois.items():
+    for ident, (file_id, erreur, qualite) in envois.items():
         if file_id:
             gardes[ident]["file_id"] = file_id
         if erreur:
@@ -952,9 +1005,13 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
             gardes[ident]["erreur"] = erreur
         else:
             gardes[ident].pop("erreur", None)
+        if qualite:
+            gardes[ident]["qualite"] = qualite
+        else:
+            gardes[ident].pop("qualite", None)
     # Un document qu'OpenRAG n'a même pas reçu n'est pas dans l'index : on l'oublie, la passe
     # suivante le renverra.
-    for ident in [i for i, (file_id, _) in envois.items() if not file_id]:
+    for ident in [i for i, (file_id, _, _) in envois.items() if not file_id]:
         gardes.pop(ident, None)
     await _noter_sources(collection, gardes)
 
@@ -1004,13 +1061,22 @@ async def _filtrer(collection: str, client: ClientExportResana, espace: str, doc
 
 
 async def _executer(
-    collection: str, client: ClientExportResana, espace: str, dossiers: list[dict], docs: list[DocumentResana] | None, action: str, user: CurrentUser, *, complet: bool = False
+    collection: str,
+    client: ClientExportResana,
+    espace: str,
+    dossiers: list[dict],
+    docs: list[DocumentResana] | None,
+    action: str,
+    user: CurrentUser,
+    *,
+    complet: bool = False,
+    reprendre: Collection[str] = frozenset(),
 ) -> None:
     # Le dossier d'attente d'une passe précédente (service arrêté en route) ne sert plus.
     shutil.rmtree(_attente(collection), ignore_errors=True)
     _CLIENTS[collection] = client
     try:
-        await _executer_passe(collection, client, espace, dossiers, docs, action, user, complet=complet)
+        await _executer_passe(collection, client, espace, dossiers, docs, action, user, complet=complet, reprendre=reprendre)
     finally:
         if _CLIENTS.get(collection) is client:
             del _CLIENTS[collection]
@@ -1018,7 +1084,16 @@ async def _executer(
 
 
 async def _executer_passe(
-    collection: str, client: ClientExportResana, espace: str, dossiers: list[dict], docs: list[DocumentResana] | None, action: str, user: CurrentUser, *, complet: bool = False
+    collection: str,
+    client: ClientExportResana,
+    espace: str,
+    dossiers: list[dict],
+    docs: list[DocumentResana] | None,
+    action: str,
+    user: CurrentUser,
+    *,
+    complet: bool = False,
+    reprendre: Collection[str] = frozenset(),
 ) -> None:
     try:
         if docs is None:
@@ -1035,7 +1110,7 @@ async def _executer_passe(
             raise ErreurResana(400, "selection_vide", MESSAGE_SELECTION_VIDE)
         await _ecrire_config(collection, documents_disponibles=disponibles, documents_perimetre=len(docs))
         await _suivre(collection, phase="telechargement", total=len(docs))
-        bilan = await _comparer_et_appliquer(collection, client, espace, docs, action, complet=complet)
+        bilan = await _comparer_et_appliquer(collection, client, espace, docs, action, complet=complet, reprendre=reprendre)
     except ErreurResana as e:
         logger.info("résana %s : %s arrêté (%s)", collection, action, e.code)
         detail = e.detail()

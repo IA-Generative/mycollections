@@ -13,7 +13,7 @@ export interface ErreurResana {
 
 export interface TravailResana {
   etat?: 'en_cours' | 'termine' | 'a_jour' | 'partiel' | 'echec' | 'interrompu' | string
-  action?: 'import' | 'synchronisation' | string
+  action?: 'import' | 'synchronisation' | 'reindexation' | string
   /** En cours : le service prépare la liste d'un grand dossier, ou les documents arrivent. */
   phase?: 'preparation' | 'telechargement' | string
   dossiers_lus?: number | null
@@ -35,8 +35,21 @@ export interface TravailResana {
   documents_ecartes?: { titre: string, raison: string }[]
 }
 
+/**
+ * Le compte des documents par qualité d'indexation (#144) : `complet`, `sans_contexte`, `degrade`,
+ * `sans_texte` (des scans, le plus souvent), `echec`, `inconnue` (indexés avant le suivi).
+ */
+export interface QualiteResana {
+  par_etat: Record<string, number>
+  /** Ceux que « Ré-indexer les documents incomplets » renverrait. */
+  a_reprendre: number
+  passages?: number
+  passages_sans_contexte?: number
+}
+
 export interface StatutResana {
   configured: boolean
+  qualite?: QualiteResana | null
   espace_nom?: string | null
   dossier_chemin?: string | null
   documents: number
@@ -92,8 +105,8 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
   if (!t || !t.etat) {
     return ''
   }
-  const feminin = t.action === 'synchronisation'
-  const quoi = feminin ? 'Synchronisation' : 'Import'
+  const feminin = t.action === 'synchronisation' || t.action === 'reindexation'
+  const quoi = t.action === 'reindexation' ? 'Ré-indexation' : (feminin ? 'Synchronisation' : 'Import')
   const e = feminin ? 'e' : ''
   switch (t.etat) {
     case 'en_cours':
@@ -363,4 +376,33 @@ export const CONFIRMATION_DROITS_RESANA = 'J\'ai vérifié que chaque membre des
 /** Le partage d'une collection Résana peut partir : au moins un groupe et la confirmation cochée. */
 export function partageResanaPret (groupes: readonly string[], confirme: boolean): boolean {
   return groupes.length > 0 && confirme
+}
+
+/**
+ * Ce que vaut l'index, en phrases courtes, du plus grave au plus bénin ; vide si tout est complet.
+ * Les scans viennent avec le conseil de déposer la version électronique (#145).
+ */
+export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
+  const n = (etat: string) => q?.par_etat?.[etat] ?? 0
+  if (!q || !Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0)) {
+    return []
+  }
+  const phrases: string[] = []
+  if (n('sans_texte')) {
+    phrases.push(`${compte(n('sans_texte'), 'document n\'a', 'documents n\'ont')} aucun texte lisible : ce sont le plus souvent des scans. Ils seront lus quand la reconnaissance de caractères sera en place ; si vous avez leur version électronique (Word, LibreOffice, PDF exporté), de préférence non signée, déposez-la plutôt dans Résana.`)
+  }
+  if (n('sans_contexte')) {
+    const detail = q.passages && q.passages_sans_contexte ? ` (${q.passages_sans_contexte} passages sur ${q.passages})` : ''
+    phrases.push(`${compte(n('sans_contexte'), 'document est indexé', 'documents sont indexés')} sans tout le contexte qui aide à les retrouver${detail}.`)
+  }
+  if (n('degrade')) {
+    phrases.push(`${compte(n('degrade'), 'document a', 'documents ont')} une étape d'indexation en échec (description des images…).`)
+  }
+  if (n('echec')) {
+    phrases.push(`${compte(n('echec'), 'document n\'a', 'documents n\'ont')} pas pu être lu${n('echec') > 1 ? 's' : ''} (format ou fichier refusé).`)
+  }
+  if (n('inconnue')) {
+    phrases.push(`${compte(n('inconnue'), 'document a été indexé', 'documents ont été indexés')} avant le suivi de la qualité : elle sera connue à ${n('inconnue') > 1 ? 'leur' : 'sa'} prochaine lecture.`)
+  }
+  return phrases
 }
