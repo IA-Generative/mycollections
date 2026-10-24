@@ -39,8 +39,8 @@ describe('garder la session ouverte', () => {
   const t0 = 1_800_000_000_000 // ms
   const s = t0 / 1000
   it('renouvelle avant la première échéance : le jeton de rafraîchissement (10 min) avant l\'accès (15 min)', () => {
-    expect(delaiAvantRenouvellement(t0, s + 900, s + 600)).toBe((600 - 90) * 1000)
-    expect(delaiAvantRenouvellement(t0, s + 300, s + 600)).toBe((300 - 90) * 1000)
+    expect(delaiAvantRenouvellement(t0, s + 900, s + 600)).toBe((600 - 180) * 1000)
+    expect(delaiAvantRenouvellement(t0, s + 300, s + 600)).toBe((300 - 180) * 1000)
   })
   it('jamais trop tôt ni dans le passé ; rien à planifier sans échéance', () => {
     expect(delaiAvantRenouvellement(t0, s + 30, s + 600)).toBe(5000)

@@ -51,14 +51,14 @@ export function contenuJwt (jeton: string | null | undefined): Record<string, un
  * l'est. Le SSO de la bêta donne un jeton d'accès de 15 min mais un jeton de rafraîchissement de
  * 10 min (inactivité de la session) : renouveler à l'approche de la fin du jeton d'ACCÈS, comme le
  * fait la bibliothèque, arrivait trop tard — la session était déjà close. On renouvelle donc avant
- * la PREMIÈRE des deux échéances, avec une marge. Échéances en secondes (claims `exp`), `maintenant`
+ * la PREMIÈRE des deux échéances, avec une marge de 3 min (un onglet en arrière-plan voit ses minuteries retardées d'environ une minute). Échéances en secondes (claims `exp`), `maintenant`
  * en millisecondes ; jamais moins de `plancher` ms ; null si aucune échéance n'est connue.
  */
 export function delaiAvantRenouvellement (
   maintenant: number,
   accesExp: number | null | undefined,
   rafraichissementExp: number | null | undefined,
-  marge = 90,
+  marge = 180,
   plancher = 5000,
 ): number | null {
   const echeances = [accesExp, rafraichissementExp].filter((e): e is number => typeof e === 'number' && e > 0)
