@@ -506,6 +506,48 @@ async def synchroniser(collection: str, corps: SynchroResana | None = None, auth
     return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None, "a_reprendre": len(reprendre)}
 
 
+@router.post("/qualite/{collection}")
+async def relire_la_qualite(collection: str, user: CurrentUser = Depends(current_user)):
+    """Relire auprès de l'indexeur ce que vaut chaque document, sans rien renvoyer ni passer par
+    Résana (pas de session Résana requise) : après une ré-indexation faite côté indexeur, ou pour
+    une collection importée avant le suivi de la qualité. Rend le bilan."""
+    await gerer_la_collection(collection, user)
+    col = await get_collection(collection)
+    if not col or col.get("source_type") != SOURCE:
+        raise _refus(400, "pas_resana", "Cette collection n'est pas reliée à Résana.")
+    if _occupee(collection):
+        raise _refus(409, "travail_en_cours", "Une synchronisation est en cours pour cette collection.")
+    try:
+        lues = await depot._indexeur().qualites(collection)
+    except Exception:  # noqa: BLE001
+        raise _refus(502, "indexeur_injoignable", "Le moteur de recherche ne répond pas : réessayez dans un instant.") from None
+    cfg = await get_source_config(collection)
+    documents = dict(cfg.get("documents") or {})
+    mises_a_jour = appliquer_qualites(documents, lues)
+    if mises_a_jour:
+        await _ecrire_config(collection, documents=documents)
+    return {"collection": collection, "mises_a_jour": mises_a_jour, "qualite": bilan_qualite({**cfg, "documents": documents})}
+
+
+def appliquer_qualites(documents: dict[str, dict], lues: dict[str, dict]) -> int:
+    """Pose sur chaque document la qualité que l'indexeur garde pour son identifiant. Un scan noté
+    sans texte le reste tant que l'indexeur ne dit pas l'avoir lu par OCR : son vieux passage vide
+    ne vaut pas lecture. Rend le nombre de documents changés."""
+    n = 0
+    for fiche in documents.values():
+        q = lues.get(str(fiche.get("file_id") or ""))
+        if not q:
+            continue
+        if fiche.get("scan") and qualite_de(fiche) == "sans_texte" and not q.get("ocr"):
+            continue
+        if fiche.get("qualite") != q:
+            fiche["qualite"] = q
+            if q["etat"] != "sans_texte":
+                fiche.pop("erreur", None)
+            n += 1
+    return n
+
+
 @router.get("/status/{collection}", dependencies=[Depends(lire_la_collection)])
 async def statut(collection: str, authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
     col = await get_collection(collection)

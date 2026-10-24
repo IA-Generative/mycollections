@@ -66,3 +66,69 @@ def test_une_erreur_notee_avant_la_qualite_compte_quand_meme():
     }
     assert sources_resana.bilan_qualite(cfg) == {"par_etat": {"sans_texte": 1, "inconnue": 1, "echec": 1}, "a_reprendre": 1}
     assert sources_resana.a_reprendre(cfg) == {"1"}
+
+
+def test_le_bilan_se_relit_aupres_de_l_indexeur_sans_session_resana(client, en_tant_que, faux, privee, monkeypatch):
+    """Après une ré-indexation faite côté indexeur (ou une collection d'avant le suivi), « Relire
+    le bilan » pose la qualité que l'indexeur garde, sans rien renvoyer. Un scan noté sans texte
+    le reste tant que l'indexeur ne dit pas l'avoir lu par OCR."""
+    from unittest.mock import AsyncMock
+
+    from app.routers import ingest
+    from app.services.openrag_client import FichierOpenRAG
+
+    faux.documents = [_doc("a", "# A\n\nTexte fictif a."), _doc("b", "# B\n\nTexte fictif b."), _doc("c", "# C\n\nTexte fictif c.")]
+    envoyes: list[str] = []
+    monkeypatch.setattr(sources_resana.depot, "_indexer_document_background", _indexeur_qui_note(envoyes, {"note-c.md": {"etat": "sans_texte"}}))
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    # c est un scan noté comme tel ; a et b n'ont pas de qualité (indexés « avant »).
+    cfg = _fiche(privee)
+    ids = {f["fichier"]: f["file_id"] for f in cfg["documents"].values()}
+    _marquer_scan(privee, ids["note-c.md"])
+
+    listing = [
+        FichierOpenRAG(file_id=ids["note-a.md"], degraded_stages=[], contextualization={"total": 3, "failed": 0}),
+        FichierOpenRAG(file_id=ids["note-b.md"], degraded_stages=["contextualize"], contextualization={"total": 5, "failed": 2}),
+        FichierOpenRAG(file_id=ids["note-c.md"], degraded_stages=[]),  # son vieux passage vide : pas une lecture
+    ]
+    indexeur = ingest._indexeur()
+    indexeur.client.list_files = AsyncMock(return_value=listing)
+    monkeypatch.setattr(ingest, "_indexeur", lambda timeout=300.0: indexeur)
+    envoyes.clear()
+    r = client.post(f"/api/sources/resana/qualite/{privee}")
+    assert r.status_code == 200, r.text
+    assert envoyes == []  # rien n'est renvoyé
+    assert r.json()["qualite"]["par_etat"] == {"complet": 1, "sans_contexte": 1, "sans_texte": 1}
+
+
+def _fiche(collection: str) -> dict:
+    import asyncio
+
+    from app.services.collection_store import get_source_config
+
+    return asyncio.run(get_source_config(collection))
+
+
+def _marquer_scan(collection: str, file_id: str) -> None:
+    import asyncio
+    import json
+
+    from app.services.collection_store import get_source_config, update_collection
+
+    async def faire():
+        cfg = await get_source_config(collection)
+        for d in cfg["documents"].values():
+            if d.get("file_id") == file_id:
+                d["scan"] = True
+        await update_collection(collection, {"source_config_json": json.dumps(cfg)})
+
+    asyncio.run(faire())
+
+
+def test_appliquer_qualites_garde_un_scan_sans_texte_tant_qu_il_n_est_pas_lu_par_ocr():
+    documents = {"1": {"file_id": "f1", "scan": True, "qualite": {"etat": "sans_texte"}}, "2": {"file_id": "f2"}}
+    assert sources_resana.appliquer_qualites(documents, {"f1": {"etat": "complet"}, "f2": {"etat": "complet"}}) == 1
+    assert documents["1"]["qualite"] == {"etat": "sans_texte"}
+    assert sources_resana.appliquer_qualites(documents, {"f1": {"etat": "complet", "ocr": True}}) == 1
+    assert documents["1"]["qualite"] == {"etat": "complet", "ocr": True}

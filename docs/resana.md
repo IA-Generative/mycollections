@@ -243,6 +243,11 @@ scans, elle conseille de déposer plutôt la version électronique, de préfére
 arrive pour les scans. Les autres documents restent en place. Le travail s'appelle alors
 `reindexation`. Un format refusé (`echec`) n'est pas renvoyé : il échouerait à l'identique.
 
+`POST /qualite/{collection}` (bouton « Relire le bilan auprès du moteur », pour qui gère la
+collection) **relit la qualité auprès de l'indexeur**, sans rien renvoyer ni passer par Résana :
+après une ré-indexation faite côté indexeur, ou pour une collection importée avant ce suivi. Un
+scan noté sans texte le reste tant que l'indexeur ne dit pas l'avoir lu par OCR.
+
 ## Une collection ancrée sur un espace
 
 Une collection Résana est ancrée sur **un espace**. Les dossiers à indexer sont un **réglage
