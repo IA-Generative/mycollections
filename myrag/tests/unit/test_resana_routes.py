@@ -331,7 +331,7 @@ def test_synchroniser_ne_relit_que_ce_qui_a_change(client, en_tant_que, faux, pr
     assert (travail["ajoutes"], travail["modifies"], travail["retires"], travail["inchanges"]) == (1, 1, 1, 0)
     assert sorted(q.url.path.split("/")[-2] for q in faux.requetes if q.url.path.endswith("/fichier")) == ["b", "f"]
     assert sorted(c.args[1] for c in faux.openrag.delete_file.await_args_list) == sorted(
-        sources_resana.identifiant_openrag(i, h) for i, h in (("a", _sha("# A\n\nPremier texte fictif.")), ("b", _sha("# B\n\nDeuxième texte fictif.")))
+        sources_resana.identifiant_dans_l_index(i, h) for i, h in (("a", _sha("# A\n\nPremier texte fictif.")), ("b", _sha("# B\n\nDeuxième texte fictif.")))
     )
     assert not faux.openrag.delete_partition.await_count
     assert sorted(_envoyes(faux)) == ["note-b.md", "note-f.md"]

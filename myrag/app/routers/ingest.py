@@ -15,8 +15,9 @@ from app.config import settings
 from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
 from app.services import formats
 from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
+from app.services.indexeur import DejaPresent, Indexeur, IndexeurOpenRAG, Refuse
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
-from app.services.openrag_client import EnvoiDocument, OpenRAGClient
+from app.services.openrag_client import OpenRAGClient
 
 router = APIRouter(prefix="/api/ingest", tags=["Ingest"])
 logger = logging.getLogger("myrag.ingest")
@@ -76,42 +77,46 @@ _ETATS_REUSSIS = ("COMPLETED", "SUCCESS")
 _ETATS_ECHOUES = ("FAILED", "CANCELLED")
 
 
+def _indexeur(timeout: float = 300.0) -> Indexeur:
+    """Le moteur qui reçoit les documents (app.services.indexeur) : OpenRAG aujourd'hui. Seul point
+    où il se construit, pour les documents déposés comme pour Résana."""
+    return IndexeurOpenRAG(OpenRAGClient(timeout=timeout))
+
+
 async def _indexer_document_background(
     job_id: str, collection: str, filename: str, content: bytes, metadata: dict | None = None, file_id: str | None = None
 ) -> tuple[str | None, str | None]:
-    """Un document entier part vers OpenRAG, qui le lit et le découpe ; on suit sa tâche jusqu'au
-    bout pour que le travail dise vrai (réussi, ou en échec avec la raison d'OpenRAG). Rend
-    (identifiant du fichier chez OpenRAG s'il a été reçu, erreur ou None) : l'import Résana garde
-    l'identifiant pour remplacer ou retirer ce document plus tard, même si sa lecture a échoué ou
-    traîne. `metadata` complète le titre ; `file_id` fixe l'identifiant (un 409 dit alors que ce
-    fichier-là est déjà chez OpenRAG)."""
+    """Un document entier part vers l'indexeur, qui le lit et le découpe ; on suit sa lecture
+    jusqu'au bout pour que le travail dise vrai (réussi, ou en échec avec la raison). Rend
+    (identifiant du document chez l'indexeur s'il l'a reçu, erreur ou None) : l'import Résana
+    garde l'identifiant pour remplacer ou retirer ce document plus tard, même si sa lecture a
+    échoué ou traîne. `metadata` complète le titre ; `file_id` fixe l'identifiant (`DejaPresent`
+    dit alors que ce document-là est déjà indexé, compté comme réussi)."""
     import time
 
-    client = OpenRAGClient(timeout=300.0)
+    indexeur = _indexeur()
     await update_job(job_id, status="uploading")
     erreur = None
-    envoi = None
+    identifiant = None
     try:
-        envoi = await client.upload_document(collection, filename, content, formats.type_mime(filename), metadata={"title": filename, **(metadata or {})}, file_id=file_id)
-        tache, debut = envoi.task_id, time.monotonic()
+        envoi = await indexeur.envoyer(collection, filename, content, mime=formats.type_mime(filename), metadata={"title": filename, **(metadata or {})}, identifiant=file_id)
+        identifiant, tache, debut = envoi.identifiant, envoi.tache, time.monotonic()
         while tache:
-            etat = str((await client.task_state(tache)).task_state or "").upper()
-            if etat in _ETATS_REUSSIS:
+            suivi = await indexeur.suivre(tache)
+            if suivi.lecture == "lu":
                 break
-            if etat in _ETATS_ECHOUES:
-                erreur = f"OpenRAG n'a pas pu lire « {filename} » : {await client.task_error(tache) or etat}"
+            if suivi.lecture == "echec":
+                erreur = f"OpenRAG n'a pas pu lire « {filename} » : {suivi.raison}"
                 break
             if time.monotonic() - debut > SUIVI_DOCUMENT_MAX_S:
                 erreur = f"OpenRAG n'a pas fini de lire « {filename} » en {int(SUIVI_DOCUMENT_MAX_S // 60)} minutes."
                 break
             await asyncio.sleep(SUIVI_DOCUMENT_S)
-    except httpx.HTTPStatusError as e:
-        # 409 : OpenRAG a déjà ce document (reprise après arrêt) — compté comme réussi.
-        if e.response is not None and e.response.status_code == 409 and file_id:
-            envoi = EnvoiDocument(file_id=file_id, task_id="")
-        if e.response is None or e.response.status_code != 409:
-            code = e.response.status_code if e.response is not None else "?"
-            erreur = f"OpenRAG a refusé « {filename} » (format ou taille)." if code in (413, 415, 422) else f"OpenRAG a répondu {code} pour « {filename} »."
+    except DejaPresent:
+        # Déjà indexé (reprise après arrêt) — compté comme réussi.
+        identifiant = file_id
+    except Refuse as e:
+        erreur = f"OpenRAG a refusé « {filename} » (format ou taille)." if e.statut in (413, 415, 422) else f"OpenRAG a répondu {e.statut or '?'} pour « {filename} »."
     except Exception as e:  # noqa: BLE001
         erreur = f"Envoi de « {filename} » à OpenRAG impossible : {type(e).__name__}"
     if erreur:
@@ -119,7 +124,7 @@ async def _indexer_document_background(
         await update_job(job_id, error=erreur)
     await increment_job_progress(job_id, success=erreur is None)
     await complete_job(job_id)
-    return (envoi.file_id if envoi is not None else None), erreur
+    return identifiant, erreur
 
 
 ETATS_EN_COURS = ("chunking", "chunking_done", "pending", "uploading")
