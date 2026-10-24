@@ -6,7 +6,7 @@
  * sélection » (ajouter ou retirer des sous-dossiers, pour poursuivre l'indexation).
  */
 import type { AvisResana, CouvertureResana, ErreurResana, StatutResana } from '~/utils/resana'
-import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, travailEnCours } from '~/utils/resana'
+import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
 
 const props = defineProps<{ collection: string }>()
 
@@ -29,6 +29,8 @@ let minuterie: ReturnType<typeof setTimeout> | undefined
 const enCours = computed(() => travailEnCours(statut.value?.travail))
 const phrase = computed(() => libelleTravail(statut.value?.travail))
 const ecartes = computed(() => statut.value?.travail?.documents_ecartes || [])
+const qualite = computed(() => phrasesQualite(statut.value?.qualite))
+const aReprendre = computed(() => statut.value?.qualite?.a_reprendre ?? 0)
 const derniere = computed(() => {
   const d = statut.value?.last_sync_at
   return d ? new Date(d.endsWith('Z') || d.includes('+') ? d : `${d}Z`).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : ''
@@ -53,12 +55,14 @@ async function charger () {
   }
 }
 
-async function synchroniser (dossiers?: { id: string, chemin: string }[], complet = false) {
+async function synchroniser (dossiers?: { id: string, chemin: string }[], complet = false, incomplets = false) {
   envoi.value = true
   erreur.value = null
   try {
     // Changer la sélection remplace la liste des dossiers inclus (et efface d'anciennes exclusions).
-    const corps = dossiers || complet ? { ...(dossiers ? { dossiers, exclus: [] } : {}), ...(complet ? { complet: true } : {}) } : undefined
+    const corps = dossiers || complet || incomplets
+      ? { ...(dossiers ? { dossiers, exclus: [] } : {}), ...(complet ? { complet: true } : {}), ...(incomplets ? { incomplets: true } : {}) }
+      : undefined
     await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, corps)
     edition.value = false
   }
@@ -123,6 +127,23 @@ onBeforeUnmount(() => {
     <p class="fr-text--xs resana-discret">
       Collection privée : seule la personne qui a importé le dossier l'interroge et la met à jour.
     </p>
+
+    <div
+      v-if="qualite.length && !enCours"
+      class="fr-callout fr-callout--yellow-moutarde fr-py-2w fr-px-3w fr-mb-2w"
+    >
+      <p class="fr-callout__text fr-text--sm fr-mb-1w">
+        <strong>Ce que vaut l'index</strong>
+      </p>
+      <ul class="fr-text--sm fr-mb-0">
+        <li
+          v-for="(p, i) in qualite"
+          :key="i"
+        >
+          {{ p }}
+        </li>
+      </ul>
+    </div>
 
     <div
       v-if="statut.avis && !enCours"
@@ -197,6 +218,17 @@ onBeforeUnmount(() => {
           @click="synchroniser()"
         >
           {{ enCours || envoi ? 'Mise à jour en cours…' : (statut.avis?.action.libelle || 'Mettre à jour') }}
+        </button>
+      </li>
+      <li v-if="aReprendre">
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--secondary"
+          :disabled="enCours || envoi"
+          title="Renvoie au moteur de recherche les documents indexés sans tout leur contexte, ou sans texte lisible, même s'ils n'ont pas changé dans Résana"
+          @click="synchroniser(undefined, false, true)"
+        >
+          Ré-indexer les documents incomplets ({{ aReprendre }})
         </button>
       </li>
       <li>

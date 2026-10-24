@@ -12,7 +12,7 @@ pas réécrire les sources.
 |---|---|
 | `preparer(collection)` | l'espace qui accueille les documents de la collection existe |
 | `envoyer(collection, nom, contenu, mime=, metadata=, identifiant=)` | confier un document entier, sous un identifiant choisi par Mes collections ; rend `Envoi(identifiant, tache)` |
-| `suivre(tache)` | où en est la lecture : `en_cours`, `lu`, ou `echec` avec sa raison |
+| `suivre(tache)` | où en est la lecture : `en_cours`, `lu`, ou `echec` avec sa raison ; une fois lu, `qualite` dit ce que vaut l'indexation (voir plus bas) |
 | `retirer(collection, identifiant)` | le document sort de l'index ; un document absent n'est pas une erreur |
 | `vider(collection)` | toute la collection sort de l'index |
 
@@ -28,6 +28,28 @@ Les métadonnées envoyées sont :
 - la langue (`language`, `fr` par défaut). L'indexeur rédige dans cette langue le contexte de chaque
   passage ; sans elle, OpenRAG l'écrit en anglais ;
 - pour Résana, l'adresse du document d'origine (`url`), l'espace, le dossier et la sensibilité.
+
+## La qualité d'un document indexé
+
+Lu ne veut pas dire bien indexé. Sur un import réel (2026-10-24), 93 % des passages ont perdu leur
+contexte (quota de la passerelle de modèles) et 21 % des PDF étaient des scans sans texte, sans
+que rien ne le signale. `suivre` rend donc aussi la **qualité** (`indexeur.qualite_lecture`) :
+
+| État | Sens |
+|---|---|
+| `complet` | lu, chaque passage a son contexte |
+| `sans_contexte` | lu, mais une part des passages n'a pas le contexte écrit par le modèle |
+| `degrade` | lu, mais une étape d'enrichissement a échoué (description des images…) |
+| `sans_texte` | rien à indexer : un scan, le plus souvent (`NO_INDEXABLE_CONTENT`) |
+| `echec` | non lu, pour une autre raison (format refusé…) |
+
+OpenRAG 2.3 le dit dans le statut de tâche : `degraded_stages`, et, depuis la 2.3.2-2,
+`contextualization` (`total`, `failed`) ; avec le repli OCR (#152), `parse_backend`, `ocr` et
+`ocr_failed_pages`, gardés dans la qualité (`ocr`, `pages_perdues` ; des pages perdues font un état
+`degrade`, étape `parse`). Un indexeur qui ne dit rien rend `qualite = None` : on ne
+sait pas. Un dépôt manuel dégradé réussit, et son travail dit ce qui manque. Une collection Résana
+garde la qualité de chaque document, la compte (`/status` → `qualite`) et sait renvoyer les seuls
+documents incomplets (`docs/resana.md`).
 
 ## Ce que Mes collections garde de son côté
 

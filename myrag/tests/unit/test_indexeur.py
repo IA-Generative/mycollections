@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from app.services.indexeur import DejaPresent, Envoi, IndexeurOpenRAG, Refuse, Suivi
+from app.services.indexeur import DejaPresent, Envoi, IndexeurOpenRAG, Refuse, Suivi, qualite_echec, qualite_lecture
 from app.services.openrag_client import EnvoiDocument, EtatTache
 
 
@@ -34,6 +34,42 @@ async def test_openrag_traduit_ses_reponses():
     with pytest.raises(Refuse) as e:
         await idx.envoyer("c", "a.pdf", b"%PDF", mime="application/pdf", metadata={})
     assert e.value.statut == 413
+
+
+def test_qualite_d_un_document_lu():
+    # OpenRAG 2.3 : étapes en échec (liste ou dictionnaire) et compte des passages sans contexte.
+    assert qualite_lecture(None) is None
+    assert qualite_lecture({"file_id": "f"}) is None  # l'indexeur ne dit rien : on ne sait pas
+    assert qualite_lecture({"degraded_stages": []}) == {"etat": "complet"}
+    assert qualite_lecture({"degraded_stages": {}, "contextualization": {"total": 12, "failed": 0}}) == {"etat": "complet", "passages": 12, "sans_contexte": 0}
+    assert qualite_lecture({"degraded_stages": {"contextualize": "429"}, "contextualization": {"total": 17, "failed": 7}}) == {
+        "etat": "sans_contexte",
+        "passages": 17,
+        "sans_contexte": 7,
+        "etapes": ["contextualize"],
+    }
+    assert qualite_lecture({"degraded_stages": ["contextualize"]})["etat"] == "sans_contexte"
+    assert qualite_lecture({"degraded_stages": ["caption"]}) == {"etat": "degrade", "etapes": ["caption"]}
+    # Le repli OCR d'OpenRAG (#152) : lu par OCR, et des pages perdues font un état dégradé.
+    assert qualite_lecture({"parse_backend": "marker", "ocr": True, "ocr_fallback": True}) == {"etat": "complet", "ocr": True}
+    assert qualite_lecture({"parse_backend": "pdf_client", "ocr": True, "ocr_failed_pages": 2, "degraded_stages": ["parse"]}) == {
+        "etat": "degrade",
+        "etapes": ["parse"],
+        "ocr": True,
+        "pages_perdues": 2,
+    }
+    assert qualite_echec("NoIndexableContentError: NO_INDEXABLE_CONTENT: No indexable content") == {"etat": "sans_texte"}
+    assert qualite_echec("PDF chiffré") == {"etat": "echec"}
+
+
+@pytest.mark.asyncio
+async def test_openrag_rend_la_qualite_avec_la_lecture():
+    client = MagicMock()
+    details = {"degraded_stages": {"contextualize": "x"}, "contextualization": {"total": 4, "failed": 1}}
+    client.task_state = AsyncMock(side_effect=[EtatTache(task_state="COMPLETED", details=details), EtatTache(task_state="COMPLETED_DEGRADED", details={"degraded_stages": []})])
+    idx = IndexeurOpenRAG(client)
+    assert await idx.suivre("t") == Suivi("lu", qualite={"etat": "sans_contexte", "passages": 4, "sans_contexte": 1, "etapes": ["contextualize"]})
+    assert (await idx.suivre("t")).qualite == {"etat": "complet"}
 
 
 class IndexeurEnMemoire:

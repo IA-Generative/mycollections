@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -142,5 +142,31 @@ describe('ouvrir une collection Résana à un groupe', () => {
     expect(partageResanaPret(['/g/equipe-a', '/g/equipe-b'], true)).toBe(true)
     expect(partageResanaPret(['/g/equipe'], false)).toBe(false)
     expect(partageResanaPret([], true)).toBe(false)
+  })
+})
+
+describe('ce que vaut l\'index (#144)', () => {
+  it('ne dit rien quand tout est complet', () => {
+    expect(phrasesQualite(null)).toEqual([])
+    expect(phrasesQualite({ par_etat: { complet: 12 }, a_reprendre: 0 })).toEqual([])
+  })
+
+  it('dit les scans, avec le conseil de la version électronique, puis les contextes manquants', () => {
+    const p = phrasesQualite({ par_etat: { complet: 10, sans_texte: 3, sans_contexte: 2 }, a_reprendre: 5, passages: 40, passages_sans_contexte: 6 })
+    expect(p).toHaveLength(2)
+    expect(p[0]).toMatch(/^3 documents n'ont aucun texte lisible/)
+    expect(p[0]).toContain('de préférence non signée')
+    expect(p[1]).toBe('2 documents sont indexés sans tout le contexte qui aide à les retrouver (6 passages sur 40).')
+  })
+
+  it('accorde au singulier', () => {
+    expect(phrasesQualite({ par_etat: { echec: 1, inconnue: 1 }, a_reprendre: 0 })).toEqual([
+      '1 document n\'a pas pu être lu (format ou fichier refusé).',
+      '1 document a été indexé avant le suivi de la qualité : elle sera connue à sa prochaine lecture.',
+    ])
+  })
+
+  it('nomme la ré-indexation', () => {
+    expect(libelleTravail({ etat: 'termine', action: 'reindexation', ajoutes: 0, modifies: 2, retires: 0 })).toBe('Ré-indexation terminée : 0 ajouté, 2 modifiés, 0 retiré.')
   })
 })

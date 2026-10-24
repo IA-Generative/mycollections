@@ -32,7 +32,7 @@ def test_le_reglage_limite_vraiment_les_envois_et_le_debit_est_mesure(client, en
         en_vol["max"] = max(en_vol["max"], en_vol["n"])
         await asyncio.sleep(0.02)
         en_vol["n"] -= 1
-        return file_id, None
+        return file_id, None, {"etat": "complet"}
 
     monkeypatch.setattr(sources_resana.depot, "_indexer_document_background", indexer)
     en_tant_que(CREATEUR)

@@ -15,7 +15,7 @@ from app.config import settings
 from app.security_utils import assert_public_http_url, ensure_within, safe_filename, ssrf_request_guard
 from app.services import formats
 from app.services.chunker import Sensitivity, Strategy, chunk_document, valider_sensibilite, valider_strategy
-from app.services.indexeur import DejaPresent, Indexeur, IndexeurOpenRAG, Refuse
+from app.services.indexeur import DejaPresent, Indexeur, IndexeurOpenRAG, Refuse, qualite_echec
 from app.services.job_store import complete_job, create_job, get_job, increment_job_progress, list_jobs, update_job
 from app.services.openrag_client import OpenRAGClient
 
@@ -107,10 +107,11 @@ def _indexeur(timeout: float = 300.0) -> Indexeur:
 
 async def _indexer_document_background(
     job_id: str, collection: str, filename: str, content: bytes, metadata: dict | None = None, file_id: str | None = None
-) -> tuple[str | None, str | None]:
+) -> tuple[str | None, str | None, dict | None]:
     """Un document entier part vers l'indexeur, qui le lit et le découpe ; on suit sa lecture
     jusqu'au bout pour que le travail dise vrai (réussi, ou en échec avec la raison). Rend
-    (identifiant du document chez l'indexeur s'il l'a reçu, erreur ou None) : l'import Résana
+    (identifiant du document chez l'indexeur s'il l'a reçu, erreur ou None, qualité de
+    l'indexation ou None — `indexeur.qualite_lecture`) : l'import Résana
     garde l'identifiant pour remplacer ou retirer ce document plus tard, même si sa lecture a
     échoué ou traîne. `metadata` complète le titre ; `file_id` fixe l'identifiant (`DejaPresent`
     dit alors que ce document-là est déjà indexé, compté comme réussi)."""
@@ -120,6 +121,7 @@ async def _indexer_document_background(
     await update_job(job_id, status="uploading")
     erreur = None
     identifiant = None
+    qualite: dict | None = None
     try:
         envoi = await indexeur.envoyer(
             collection, filename, content, mime=formats.type_mime(filename), metadata={"title": filename, "language": LANGUE_PAR_DEFAUT, **(metadata or {})}, identifiant=file_id
@@ -128,9 +130,11 @@ async def _indexer_document_background(
         while tache:
             suivi = await indexeur.suivre(tache)
             if suivi.lecture == "lu":
+                qualite = suivi.qualite
                 break
             if suivi.lecture == "echec":
                 erreur = f"OpenRAG n'a pas pu lire « {filename} » : {suivi.raison}"
+                qualite = qualite_echec(suivi.raison)
                 break
             if time.monotonic() - debut > SUIVI_DOCUMENT_MAX_S:
                 erreur = f"OpenRAG n'a pas fini de lire « {filename} » en {int(SUIVI_DOCUMENT_MAX_S // 60)} minutes."
@@ -141,14 +145,34 @@ async def _indexer_document_background(
         identifiant = file_id
     except Refuse as e:
         erreur = f"OpenRAG a refusé « {filename} » (format ou taille)." if e.statut in (413, 415, 422) else f"OpenRAG a répondu {e.statut or '?'} pour « {filename} »."
+        qualite = {"etat": "echec"}
     except Exception as e:  # noqa: BLE001
         erreur = f"Envoi de « {filename} » à OpenRAG impossible : {type(e).__name__}"
     if erreur:
         logger.warning("Job %s : %s", job_id, erreur)
         await update_job(job_id, error=erreur)
+    elif avis := avis_qualite(filename, qualite):
+        # Lu, mais pas entièrement : le travail réussit, et dit ce qui manque.
+        await update_job(job_id, error=avis)
     await increment_job_progress(job_id, success=erreur is None)
     await complete_job(job_id)
-    return identifiant, erreur
+    return identifiant, erreur, qualite
+
+
+def avis_qualite(filename: str, qualite: dict | None) -> str | None:
+    """La phrase qui dit ce qui manque à un document lu, ou None s'il est complet (ou si l'indexeur
+    ne le dit pas)."""
+    etat = (qualite or {}).get("etat")
+    if etat == "sans_contexte":
+        n, total = qualite.get("sans_contexte"), qualite.get("passages")
+        if isinstance(n, int) and isinstance(total, int):
+            manque = f"{n} de ses {total} passages n'a pas son contexte" if n == 1 else f"{n} de ses {total} passages n'ont pas leur contexte"
+        else:
+            manque = "une part de ses passages n'a pas son contexte"
+        return f"« {filename} » est indexé, mais {manque} : ils se retrouveront moins bien. Ré-indexez-le plus tard."
+    if etat == "degrade":
+        return f"« {filename} » est indexé, mais une étape a échoué ({', '.join(qualite.get('etapes') or [])})."
+    return None
 
 
 ETATS_EN_COURS = ("chunking", "chunking_done", "pending", "uploading")
