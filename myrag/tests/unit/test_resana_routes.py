@@ -74,6 +74,14 @@ def _envoyes(faux) -> dict[str, str]:
     return {c.args[1]: (c.kwargs.get("metadata") or {}).get("url", "") for c in faux.envois.await_args_list}
 
 
+def _sql(requete: str, params=()) -> list[tuple]:
+    con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
+    try:
+        return con.execute(requete, params).fetchall()
+    finally:
+        con.close()
+
+
 def _sources(nom) -> list[str]:
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     try:
@@ -387,7 +395,53 @@ def test_la_fiche_ne_rouvre_pas_une_collection_resana(client, en_tant_que, faux,
         r = client.patch(f"/api/collections/{privee}", json=champs)
         assert r.status_code == 409, champs
     assert client.patch(f"/api/collections/{privee}", json={"titre": "Notes fictives", "scope": "private", "scope_groups": []}).status_code == 200
-    assert client.post(f"/api/collections/{privee}/publish", json={"visibility": "all"}).status_code == 409
+
+
+# --- Partager à un groupe (décision du 2026-10-24) ------------------------------------------------
+
+GROUPE = "/g/mirai-beta-testeurs"
+
+
+@pytest.fixture
+def socle(monkeypatch):
+    from app.services import fiche_socle
+
+    synchro = AsyncMock(return_value={"nom": "Notes fictives"})
+    monkeypatch.setattr(fiche_socle, "synchroniser_fiche", synchro)
+    return synchro
+
+
+def test_une_collection_resana_ne_s_ouvre_jamais_a_tous(client, en_tant_que, faux, privee, socle):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    r = client.post(f"/api/collections/{privee}/publish", json={"visibility": "all", "droits_resana_confirmes": True})
+    assert r.status_code == 409 and "jamais à tout le monde" in r.json()["detail"]
+    r = client.post(f"/api/collections/{privee}/publish", json={"visibility": "group", "visibility_groups": [" "], "droits_resana_confirmes": True})
+    assert r.status_code == 409
+    socle.assert_not_awaited()
+
+
+def test_ouvrir_a_un_groupe_demande_de_confirmer_les_droits_resana(client, en_tant_que, faux, privee, socle):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    corps = {"visibility": "group", "visibility_groups": [GROUPE]}
+    r = client.post(f"/api/collections/{privee}/publish", json=corps)
+    assert r.status_code == 409 and "c'est vous qui pilotez" in r.json()["detail"]
+    socle.assert_not_awaited()
+
+    r = client.post(f"/api/collections/{privee}/publish", json={**corps, "droits_resana_confirmes": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "published" and r.json()["visibility_groups"] == [GROUPE]
+    socle.assert_awaited_once()
+    # La confirmation est gardée dans l'historique de la publication.
+    historique = _sql("SELECT details_json FROM publication_history WHERE collection_name = ? ORDER BY id DESC LIMIT 1", (privee,))
+    assert '"droits_resana_confirmes": true' in historique[0][0]
+
+
+def test_un_brouillon_resana_n_a_rien_a_confirmer(client, en_tant_que, faux, privee, socle):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    assert client.post(f"/api/collections/{privee}/publish", json={"state": "draft", "visibility": "all"}).status_code == 200
 
 
 def test_on_ne_devient_pas_resana_par_la_fiche(client, en_tant_que, privee):
