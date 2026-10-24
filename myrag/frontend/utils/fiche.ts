@@ -26,7 +26,7 @@ export function actionsFiche (droits: { ecrire?: boolean } | null | undefined, g
     { cle: 'question', libelle: 'Poser une question', vers: `${base}/playground`, icone: 'fr-icon-chat-3-line' },
   ]
   if (gere) {
-    principales.push({ cle: 'partager', libelle: 'Partager', vers: `${base}/publish`, icone: 'fr-icon-share-forward-line', aide: 'Rendre la collection disponible dans Mon assistant, et choisir qui la voit.' })
+    principales.push({ cle: 'partager', libelle: 'Partager', vers: `${base}/publish`, icone: 'fr-icon-share-forward-line', aide: 'Rendre la collection disponible dans le chat MirAI, et choisir qui la voit.' })
   }
   const plus: ActionFiche[] = []
   if (gere) {

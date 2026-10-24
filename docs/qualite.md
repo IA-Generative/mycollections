@@ -132,7 +132,7 @@ mènent à la page Qualité.
 
 Une réponse fiable est validée par le gestionnaire pour être **donnée telle quelle**. Le drapeau est
 posé et compté ; le service qui la sert en priorité dans le bac à sable (avant la recherche) est
-préparé mais pas branché. Limite connue : l'assistant (Open WebUI) interroge OpenRAG directement,
+préparé mais pas branché. Limite connue : le chat MirAI (Open WebUI) interroge OpenRAG directement,
 il ne passera pas par ce raccourci.
 
 ## Réglages

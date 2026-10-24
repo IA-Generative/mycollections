@@ -30,6 +30,9 @@ data:
   # public ingress. Auth is per-user: the admin's OWUI API key is sent
   # with each publish request.
   OWUI_URL: "http://openwebui.myrag.svc.cluster.local"
+  # Page d'installation de « MirAI Assistant pour navigateur », servie par le device management
+  # (https seulement ; vide = pas de lien à l'écran).
+  MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL: ""
   # Génération de questions par persona (docs/generation.md). La passerelle MirAI, OpenAI-compatible.
   # Le jeton (MYCOLLECTIONS_GENERATION_LLM_CLE) est dans myrag-secrets ; il doit être PROPRE à Mes
   # collections : la passerelle compte son quota par jeton. Vides ⇒ les routes répondent 503.

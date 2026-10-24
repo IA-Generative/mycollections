@@ -1,7 +1,7 @@
 <template>
   <div class="avis">
     <p class="fr-text--sm">
-      Les votes 👍 / 👎 des usagers, dans le bac à sable et dans l'assistant. Un avis négatif est souvent une
+      Les votes 👍 / 👎 des usagers, dans le bac à sable et dans le chat MirAI. Un avis négatif est souvent une
       question de référence toute trouvée : écrivez la bonne réponse, elle rejoint le jeu, validée.
     </p>
     <div class="avis__filtres">

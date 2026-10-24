@@ -299,7 +299,7 @@ onMounted(async () => {
           for="titre"
         >
           Titre de la collection *
-          <span class="fr-hint-text">Ce que liront vos collègues dans l'assistant. Soyez précis et différenciant : reprenez le nom habituel du document.</span>
+          <span class="fr-hint-text">Ce que liront vos collègues dans le chat MirAI. Soyez précis et différenciant : reprenez le nom habituel du document.</span>
         </label>
         <input
           id="titre"

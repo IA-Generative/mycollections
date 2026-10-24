@@ -3,9 +3,9 @@
 Une collection **publiée à tous** ne vit pas que dans Mes collections. Le bac à sable
 sert à l'essayer ; pour s'en servir au quotidien, trois portes, sur les mêmes données.
 
-## Dans l'agent conversationnel de MirAI Next
+## Dans le chat MirAI
 
-Chaque collection publiée à tous apparaît dans l'assistant comme un modèle nommé
+Chaque collection publiée à tous apparaît dans le chat MirAI comme un modèle nommé
 `openrag-<nom de la collection>` — `openrag-dgef-sdst-faq`, `openrag-amorce-natinf`.
 Choisissez-le dans la liste des modèles : la conversation répond à partir des documents
 de la collection, avec les sources.
@@ -46,11 +46,11 @@ le garant reste joignable : le contact est sur la fiche.
 ## Le geste dans l'outil
 
 Ouvrez la fiche d'une collection publiée à tous : l'encart « Où interroger cette
-collection » donne le modèle pour l'assistant et les deux appels d'API, prêts à copier.
+collection » donne le modèle pour le chat MirAI et les deux appels d'API, prêts à copier.
 
 ## Exemple
 
 La sous-direction du séjour publie `dgef-sdst-faq` à tous. Le lendemain, l'outil de
 réponse aux usagers d'une préfecture interroge `openrag-dgef-sdst-faq` par l'API pour
 pré-rédiger les réponses sur les APS ; les agents de guichet posent les mêmes questions
-dans l'assistant. Une FAQ mise à jour dans la collection change les deux à la fois.
+dans le chat MirAI. Une FAQ mise à jour dans la collection change les deux à la fois.

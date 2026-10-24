@@ -193,7 +193,7 @@ const dateVersion = (iso: string) => iso ? new Date(FUSEAU.test(iso) ? iso : `${
               Retirer l'assistant
             </h2>
             <p class="fr-text--sm fr-mb-2w">
-              Archiver le retire de la liste : il ne répond plus et l'extension ne le propose plus. Rien
+              Archiver le retire de la liste : il ne répond plus et MirAI Assistant pour navigateur ne le propose plus. Rien
               n'est effacé : ses versions et ses consignes sont conservées.
             </p>
             <button

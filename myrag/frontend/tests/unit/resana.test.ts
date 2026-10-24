@@ -138,8 +138,9 @@ describe('la page des documents d\'une collection Résana (#134)', () => {
 
 describe('ouvrir une collection Résana à un groupe', () => {
   it('demande un groupe et la confirmation des droits Résana', () => {
-    expect(partageResanaPret('/g/equipe', true)).toBe(true)
-    expect(partageResanaPret('/g/equipe', false)).toBe(false)
-    expect(partageResanaPret('  ', true)).toBe(false)
+    expect(partageResanaPret(['/g/equipe'], true)).toBe(true)
+    expect(partageResanaPret(['/g/equipe-a', '/g/equipe-b'], true)).toBe(true)
+    expect(partageResanaPret(['/g/equipe'], false)).toBe(false)
+    expect(partageResanaPret([], true)).toBe(false)
   })
 })

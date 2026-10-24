@@ -95,7 +95,7 @@ function next () {
         {{ bientot }}
       </p>
       <p class="fr-text--xs fr-mt-1w fr-mb-0 diffusion">
-        <strong>Diffusion</strong> : chatbot MirAI, votre application (API MirAI), plug-in IAssistant (un chatbot dans votre
+        <strong>Diffusion</strong> : chat MirAI, votre application (API MirAI), MirAI Assistant pour navigateur (un chatbot dans votre
         application) ou ici même. Vous choisirez à l'étape « Partage ».
       </p>
     </template>

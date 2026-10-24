@@ -5,12 +5,16 @@ même harnais, avec le jeton de la personne. Décision : [ADR-0003](adr/ADR-0003
 
 À écrire par le lot C.
 
-## Sites déclarés : la bulle « + IA » de l'extension du navigateur
+## Sites déclarés : la bulle « + IA » de MirAI Assistant pour navigateur
 
-L'extension IAssistant-Direct propose une bulle « + IA » sur les pages que les gestionnaires ont
+L'extension MirAI Assistant pour navigateur propose une bulle « + IA » sur les pages que les gestionnaires ont
 déclarées pertinentes pour une collection ou un assistant (rubrique Publication de l'un et de
 l'autre). L'extension télécharge la liste et compare elle-même l'adresse de la page : aucune
 adresse visitée n'est envoyée au service.
+
+**L'installer** : l'extension s'installe depuis la page du device management. Quand
+`MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL` donne son adresse (https seulement), la rubrique « Dans
+le navigateur » propose le lien « Installer MirAI Assistant pour navigateur » ; vide, pas de lien.
 
 **Déclarer** : `GET|PUT /api/collections/{name}/sites` et `GET|PUT /api/assistants/{id}/sites`,
 corps `{"motifs": ["https://www.fake-domain.name/guides/*"]}`. Lecture par qui lit la fiche,

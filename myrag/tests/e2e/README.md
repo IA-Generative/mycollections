@@ -2,7 +2,7 @@
 
 Ce dossier joue **la séquence d'usage de Mes collections** telle qu'une personne la vit : se
 connecter au SSO, découvrir l'accueil, interroger une collection, en créer une en cinq étapes,
-la faire passer par son circuit de vérification, la publier, la retrouver dans Mon assistant
+la faire passer par son circuit de vérification, la publier, la retrouver dans le chat MirAI
 **avec le compte du testeur**, déposer une demande, lire le guide. Chaque pas est un test ; le
 tout est rejouable pour chaque campagne, et produit des captures d'écran.
 
@@ -40,7 +40,7 @@ gestionnaire de secrets de votre plateforme.
 | `E2E_TESTEUR_USERNAME` / `_PASSWORD` | compte membre du groupe requis | la suite échoue net |
 | `E2E_HORS_GROUPE_USERNAME` / `_PASSWORD` | compte valide hors du groupe | le test de refus est ignoré |
 | `E2E_ADMIN_USERNAME` / `_PASSWORD` | compte superadmin **et** membre du groupe | les parcours d'administration sont ignorés |
-| `E2E_ASSISTANT_URL` | adresse publique de Mon assistant (Open WebUI) | la preuve dans l'assistant est ignorée |
+| `E2E_ASSISTANT_URL` | adresse publique du chat MirAI (Open WebUI) | la preuve dans l'assistant est ignorée |
 | `E2E_CAPTURES` | dossier de sortie des captures | pas de captures (sauf à l'échec, dans le dossier temporaire) |
 | `E2E_HEADED` | `1` pour voir le navigateur | sans écran |
 

@@ -10,3 +10,11 @@ export function groupPaths(groups: unknown): string[] {
   if (valeurs.some((g) => !g.startsWith('/'))) return []
   return valeurs
 }
+
+/**
+ * Les groupes saisis pour un partage, un par ligne (ou séparés par des virgules) : sans espaces
+ * autour, sans ligne vide, sans doublon, dans l'ordre de saisie.
+ */
+export function lignesVersGroupes(texte: string): string[] {
+  return [...new Set(texte.split(/[\n,]/).map((g) => g.trim()).filter(Boolean))]
+}

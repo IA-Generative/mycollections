@@ -47,8 +47,8 @@ export const LIBELLES_CONSIGNES: Record<string, string> = {
 
 /** Ce que l'historique de publication a enregistré (`action`). */
 export const LIBELLES_ACTION_PUBLICATION: Record<string, string> = {
-  published: "Rendue disponible dans l'assistant",
-  disabled: "Retirée de l'assistant",
+  published: "Rendue disponible dans le chat MirAI",
+  disabled: "Retirée du chat MirAI",
   archived: 'Archivée',
   unarchived: 'Désarchivée',
   draft: 'Brouillon',

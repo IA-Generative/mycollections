@@ -75,7 +75,7 @@ async function rechargerEtat () {
 }
 
 function appLabel (app: string) {
-  return { assistant: 'Mon assistant' }[app] || app
+  return { assistant: 'Chat MirAI' }[app] || app
 }
 
 function etatLabel (s: string) {
@@ -270,7 +270,7 @@ async function save () {
             :title="t.model_id"
           >{{ appLabel(t.app) }}</span>
           <br>
-          Nom dans l'assistant : <strong>{{ partage.alias_name || '—' }}</strong> ·
+          Nom dans le chat MirAI : <strong>{{ partage.alias_name || '—' }}</strong> ·
           Visible par : <strong>{{ visibiliteLabel(partage.visibility) }}</strong>
           <span v-if="partage.published_at"> · depuis le {{ partage.published_at.slice(0, 10) }}</span>
         </p>
@@ -279,14 +279,14 @@ async function save () {
           class="fr-callout__text fr-text--sm"
         >
           Cette collection <strong>n'est partagée dans aucune application</strong>
-          ({{ etatLabel(partage.state) }}) : elle n'apparaît pas dans l'assistant.
+          ({{ etatLabel(partage.state) }}) : elle n'apparaît pas dans le chat MirAI.
         </p>
         <NuxtLink
           :to="`/c/${id}/publish`"
           class="fr-btn fr-btn--sm fr-btn--secondary fr-btn--icon-left fr-icon-share-forward-line fr-mt-1w"
-          title="Rendre la collection disponible dans Mon assistant, et choisir qui la voit."
+          title="Rendre la collection disponible dans le chat MirAI, et choisir qui la voit."
         >
-          {{ estServie ? 'Modifier le partage' : 'Partager dans Mon assistant' }}
+          {{ estServie ? 'Modifier le partage' : 'Partager dans le chat MirAI' }}
         </NuxtLink>
       </div>
 
@@ -298,7 +298,7 @@ async function save () {
         >
           Titre affiché
           <span class="fr-hint-text">
-            Ce que lisent vos collègues au catalogue et dans l'assistant — par exemple « Codes NATINF ».
+            Ce que lisent vos collègues au catalogue et dans le chat MirAI — par exemple « Codes NATINF ».
             L'identifiant technique <code>{{ id }}</code>, lui, ne change pas : c'est celui que tapent les applications.
           </span>
         </label>

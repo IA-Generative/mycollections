@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Les sites où proposer la bulle « + IA » de l'extension du navigateur, pour une collection ou un
+ * Les sites où proposer la bulle « + IA » de MirAI Assistant pour navigateur, pour une collection ou un
  * assistant. Un motif par ligne ; le serveur valide et normalise (`docs/clients.md`).
  */
 import { lignesVersMotifs, messageRefus, motifsVersLignes } from '~/utils/sites'
@@ -20,6 +20,8 @@ const envoi = ref(false)
 const message = ref('')
 const erreur = ref('')
 const champ = useId()
+// La page d'installation de l'extension, servie par le device management (vide : pas de lien).
+const installation = ref('')
 
 async function charger () {
   try {
@@ -49,7 +51,13 @@ async function enregistrer () {
   }
 }
 
-onMounted(charger)
+onMounted(async () => {
+  charger()
+  try {
+    installation.value = (await get('/api/config')).navigateur_installation_url || ''
+  }
+  catch { /* sans adresse, pas de lien */ }
+})
 </script>
 
 <template>
@@ -64,9 +72,21 @@ onMounted(charger)
       Dans le navigateur
     </h2>
     <p class="fr-text--sm fr-mb-2w">
-      Sur les pages qui correspondent à ces adresses, l'extension IAssistant-Direct propose une bulle
-      « + IA » qui interroge {{ objet }}. L'extension compare elle-même l'adresse de la page :
+      Sur les pages qui correspondent à ces adresses, MirAI Assistant pour navigateur propose une bulle
+      « + IA » qui interroge {{ objet }}. Il compare lui-même l'adresse de la page :
       aucune page visitée n'est envoyée au service.
+    </p>
+    <p
+      v-if="installation"
+      class="fr-text--sm fr-mb-2w"
+    >
+      Pas encore installé ?
+      <a
+        :href="installation"
+        class="fr-link fr-text--sm"
+        target="_blank"
+        rel="noopener"
+      >Installer MirAI Assistant pour navigateur<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
     </p>
     <div class="fr-input-group">
       <label

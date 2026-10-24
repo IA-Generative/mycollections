@@ -6,7 +6,7 @@ describe('libellés des réglages', () => {
     expect(libelleStrategie('article')).toBe('Découpage par article')
     expect(libelleSensibilite('internal')).toBe('Interne')
     expect(libelleConsignes('generic')).toBe('Consignes générales')
-    expect(libelleActionPublication('disabled')).toBe("Retirée de l'assistant")
+    expect(libelleActionPublication('disabled')).toBe("Retirée du chat MirAI")
   })
 
   it("rend une valeur inconnue telle quelle, plutôt que de la faire disparaître", () => {

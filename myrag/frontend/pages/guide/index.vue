@@ -6,7 +6,7 @@
     <ol v-else class="fr-mt-3w">
       <li v-for="p in pages" :key="p.slug" class="fr-mb-2w"><NuxtLink :to="`/guide/${p.slug}`" class="fr-link fr-text--lg">{{ p.titre }}</NuxtLink></li>
     </ol>
-    <p class="fr-text--sm" style="color:var(--text-mention-grey)">Ce guide est aussi une collection interrogeable depuis l'assistant, ouverte aux propositions de modification :
+    <p class="fr-text--sm" style="color:var(--text-mention-grey)">Ce guide est aussi une collection interrogeable depuis le chat MirAI, ouverte aux propositions de modification :
       <NuxtLink to="/c/guide-soyez-acteurs" class="fr-link fr-text--sm">Guide « Soyez acteurs vous-mêmes »</NuxtLink>.</p>
   </div>
 </template>

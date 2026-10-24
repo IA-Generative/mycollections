@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     # Adresse PUBLIQUE de l'assistant (celle qu'ouvre un navigateur) — `owui_url` est l'adresse interne,
     # pour les appels de service. Vide : les écrans ne proposent pas d'ouvrir l'assistant.
     owui_public_url: str = Field(default="")
+    # Page d'installation de « MirAI Assistant pour navigateur » (l'extension), servie par le device
+    # management. Vide, ou autre chose qu'une adresse https : les écrans ne proposent pas le lien.
+    navigateur_installation_url: str = Field(
+        default="", validation_alias=AliasChoices("MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL", "MYRAG_NAVIGATEUR_INSTALLATION_URL", "navigateur_installation_url")
+    )
 
     # Graph
     graphrag_viewer_url: str = Field(default="")

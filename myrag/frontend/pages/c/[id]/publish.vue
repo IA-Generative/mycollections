@@ -1,19 +1,19 @@
 <template>
   <div>
-    <FilAriane :collection="id" :titre="titre" rubrique="Partager dans Mon assistant" />
+    <FilAriane :collection="id" :titre="titre" rubrique="Partager dans le chat MirAI" />
 
-    <h1 class="fr-h3">Partager dans Mon assistant — {{ titre }}</h1>
+    <h1 class="fr-h3">Partager dans le chat MirAI — {{ titre }}</h1>
 
     <div class="fr-callout fr-mb-4w">
-      <h2 class="fr-callout__title fr-h6">Partager dans Mon assistant, qu'est-ce que ça change ?</h2>
+      <h2 class="fr-callout__title fr-h6">Partager dans le chat MirAI, qu'est-ce que ça change ?</h2>
       <p class="fr-callout__text fr-text--sm">
         Tant qu'une collection n'est pas partagée, elle ne s'interroge qu'ici, dans son bac à sable.
-        <strong>La partager la fait apparaître dans Mon assistant</strong>, là où vos collègues posent
-        leurs questions : ils la choisissent dans la liste des modèles, et l'assistant leur répond à
+        <strong>La partager la fait apparaître dans le chat MirAI</strong>, là où vos collègues posent
+        leurs questions : ils la choisissent dans la liste des modèles, et le chat MirAI leur répond à
         partir de vos documents, en citant ses sources.
       </p>
       <p class="fr-text--sm fr-mb-0">
-        Rien n'est définitif : « Désactiver » la retire de l'assistant sans toucher aux documents,
+        Rien n'est définitif : « Désactiver » la retire du chat MirAI sans toucher aux documents,
         et vous pouvez la partager à nouveau quand vous voulez.
       </p>
     </div>
@@ -36,14 +36,14 @@
 
       <div class="fr-grid-row fr-grid-row--gutters">
         <div class="fr-col-8">
-          <!-- 1. Dans l'assistant -->
+          <!-- 1. Dans le chat MirAI -->
           <fieldset class="fr-fieldset fr-mb-4w">
-            <legend class="fr-fieldset__legend fr-h5">1. Dans Mon assistant</legend>
+            <legend class="fr-fieldset__legend fr-h5">1. Dans le chat MirAI</legend>
             <div class="fr-fieldset__element">
               <div class="fr-checkbox-group">
                 <input type="checkbox" id="alias" v-model="form.alias_enabled" />
                 <label class="fr-label" for="alias">
-                  Proposer la collection dans la liste des modèles de l'assistant
+                  Proposer la collection dans la liste des modèles du chat MirAI
                   <span class="fr-hint-text">
                     Vos collègues la verront sous le nom ci-dessous, à côté des autres modèles. Ils la
                     sélectionnent, posent leur question, et la réponse s'appuie sur vos documents.
@@ -55,7 +55,7 @@
             <div v-if="form.alias_enabled" class="fr-fieldset__element fr-ml-4w">
               <div class="fr-input-group">
                 <label class="fr-label" for="nom-fiche">
-                  Nom dans l'assistant
+                  Nom dans le chat MirAI
                   <span class="fr-hint-text">Laissez vide : c'est le titre de la collection, et il suivra ses corrections.</span>
                 </label>
                 <input id="nom-fiche" class="fr-input" v-model="form.alias_name" :placeholder="titre" />
@@ -63,7 +63,7 @@
               <div class="fr-input-group fr-mt-1w">
                 <label class="fr-label" for="desc-fiche">
                   Description
-                  <span class="fr-hint-text">Une phrase qui dit à quoi sert la collection : elle s'affiche sous son nom dans l'assistant.</span>
+                  <span class="fr-hint-text">Une phrase qui dit à quoi sert la collection : elle s'affiche sous son nom dans le chat MirAI.</span>
                 </label>
                 <input id="desc-fiche" class="fr-input" v-model="form.alias_description" placeholder="Répond aux questions sur le CESEDA, article par article" />
               </div>
@@ -72,7 +72,7 @@
 
           <!-- 2. Qui la voit -->
           <fieldset class="fr-fieldset fr-mb-4w">
-            <legend class="fr-fieldset__legend fr-h5">2. Qui la verra dans l'assistant</legend>
+            <legend class="fr-fieldset__legend fr-h5">2. Qui la verra dans le chat MirAI</legend>
             <div class="fr-fieldset__element">
               <!-- Une collection Résana ne s'ouvre jamais à tous : l'encadré Résana suffit. -->
               <div v-if="etat && etat.mention && !resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
@@ -82,14 +82,15 @@
               </div>
               <div v-if="resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
                 <p>Ses documents viennent de Résana, où chacun ne voit que les espaces où il est invité. Elle s'ouvre donc
-                  à un groupe que vous choisissez, jamais à tout le monde. Avant de la partager, vérifiez que chaque membre
-                  du groupe a accès, dans Résana, aux dossiers indexés : c'est vous qui pilotez.</p>
+                  aux groupes que vous choisissez, jamais à tout le monde. Avant de la partager, vérifiez que chaque membre
+                  de ces groupes a accès, dans Résana, aux dossiers indexés, sans quoi les liens vers les documents cités ne
+                  s'ouvriront pas pour lui : c'est vous qui pilotez.</p>
               </div>
               <div v-if="!resana" class="fr-radio-group">
                 <input type="radio" id="vis-all" value="all" v-model="form.visibility" :disabled="!!(etat && etat.mention)" />
                 <label class="fr-label" for="vis-all">
                   Tout le monde
-                  <span class="fr-hint-text">Toute personne connectée à l'assistant. Réservé aux collections vérifiées : leurs réponses engagent.</span>
+                  <span class="fr-hint-text">Toute personne connectée au chat MirAI. Réservé aux collections vérifiées : leurs réponses engagent.</span>
                 </label>
               </div>
             </div>
@@ -97,15 +98,15 @@
               <div class="fr-radio-group">
                 <input type="radio" id="vis-group" value="group" v-model="form.visibility" />
                 <label class="fr-label" for="vis-group">
-                  Un groupe
-                  <span class="fr-hint-text">Seuls les membres du groupe indiqué la verront. Pour tester à plusieurs avant d'ouvrir à tous.</span>
+                  Un ou plusieurs groupes
+                  <span class="fr-hint-text">Seuls les membres des groupes indiqués la verront. Pour tester à plusieurs avant d'ouvrir à tous.</span>
                 </label>
               </div>
               <div v-if="form.visibility === 'group'" class="fr-input-group fr-ml-4w fr-mt-1w">
-                <label class="fr-label" for="vis-groupe-nom">Groupe
-                  <span class="fr-hint-text">Son nom tel qu'il apparaît dans l'assistant (Réglages, Groupes). Un nom inconnu de l'assistant est refusé : la collection ne viserait personne.</span>
+                <label class="fr-label" for="vis-groupe-nom">Groupes, un par ligne
+                  <span class="fr-hint-text">Chaque nom tel qu'il apparaît dans le chat MirAI (Réglages, Groupes). Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
                 </label>
-                <input id="vis-groupe-nom" class="fr-input" v-model="form.visibility_group"  />
+                <textarea id="vis-groupe-nom" class="fr-input" rows="3" v-model="form.visibility_group"></textarea>
               </div>
               <div v-if="resana && form.visibility === 'group'" class="fr-checkbox-group fr-ml-4w fr-mt-2w">
                 <input type="checkbox" id="droits-resana" v-model="form.droits_resana_confirmes" />
@@ -113,10 +114,10 @@
               </div>
             </div>
             <p v-if="resana" class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
-              Ce réglage ne concerne que l'assistant. La fiche de la collection et son bac à sable restent privés.
+              Ce réglage ne concerne que le chat MirAI. La fiche de la collection et son bac à sable restent privés.
             </p>
             <p v-else class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
-              Ce réglage ne concerne que l'assistant. Qui peut ouvrir cette fiche et son bac à sable se règle dans
+              Ce réglage ne concerne que le chat MirAI. Qui peut ouvrir cette fiche et son bac à sable se règle dans
               <NuxtLink :to="`/c/${id}/config`" class="fr-link fr-text--xs">Réglages → Portée</NuxtLink>.
             </p>
           </fieldset>
@@ -135,7 +136,7 @@
                 <input type="checkbox" id="tool" v-model="form.tool_enabled" disabled />
                 <label class="fr-label" for="tool">
                   Comme outil, dans n'importe quelle conversation
-                  <span class="fr-hint-text">L'assistant irait chercher de lui-même dans la collection quand la question s'y prête, quel que soit le modèle choisi.</span>
+                  <span class="fr-hint-text">Le chat MirAI irait chercher de lui-même dans la collection quand la question s'y prête, quel que soit le modèle choisi.</span>
                 </label>
               </div>
               <div class="fr-checkbox-group fr-mt-1w">
@@ -151,15 +152,15 @@
           <!-- Actions -->
           <div class="fr-btns-group fr-btns-group--inline">
             <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee || !resanaPret"
-                    title="Fait apparaître la collection dans l'assistant, pour les personnes choisies ci-dessus.">
-              {{ publishing ? 'Partage en cours…' : 'Partager dans Mon assistant' }}
+                    title="Fait apparaître la collection dans le chat MirAI, pour les personnes choisies ci-dessus.">
+              {{ publishing ? 'Partage en cours…' : 'Partager dans le chat MirAI' }}
             </button>
             <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee || !resanaPret"
                     title="Applique vos changements (nom, description, qui la voit) à la collection déjà publiée.">
               {{ publishing ? 'Mise à jour…' : 'Mettre à jour' }}
             </button>
             <button v-if="pub.state === 'published'" class="fr-btn fr-btn--secondary" :disabled="occupe" @click="unpublish"
-                    title="Retire la collection de l'assistant. Les documents restent, et vous pourrez republier.">
+                    title="Retire la collection du chat MirAI. Les documents restent, et vous pourrez republier.">
               Désactiver
             </button>
           </div>
@@ -169,7 +170,7 @@
                :class="owuiError ? 'fr-alert--warning' : 'fr-alert--success'">
             <p>{{ result }}</p>
             <p v-if="owuiError" class="fr-text--sm" style="margin-top:0.4rem;">
-              <strong>Assistant :</strong> {{ owuiError }}
+              <strong>Chat MirAI :</strong> {{ owuiError }}
             </p>
           </div>
         </div>
@@ -182,10 +183,11 @@
         <div v-if="!pub.archivee" class="fr-col-12 fr-mt-4w">
           <div class="publier-retrait">
             <div>
-              <h3 class="fr-h6 fr-mb-1v">Retirer la collection</h3>
+              <h3 class="fr-h6 fr-mb-1v">Archiver la collection</h3>
               <p class="fr-text--sm fr-mb-0">
-                Archiver la retire du catalogue et empêche de la publier. Rien n'est supprimé : ses documents sont conservés,
-                et vous pourrez la désarchiver d'ici.
+                Une collection archivée n'apparaît plus dans le catalogue ni dans le chat MirAI : plus personne ne
+                l'interroge, et elle ne peut plus être partagée. Rien n'est supprimé : ses documents sont conservés,
+                et vous pourrez la désarchiver depuis cette page.
               </p>
             </div>
             <button class="fr-btn fr-btn--tertiary fr-btn--sm" :disabled="occupe" @click="confirmerArchivage = true">Archiver…</button>
@@ -220,7 +222,7 @@
                 </div>
                 <div class="fr-modal__content">
                   <h1 id="archiver-titre" class="fr-modal__title">Archiver « {{ titre }} » ?</h1>
-                  <p>La collection disparaîtra du catalogue et ne pourra plus être publiée tant qu'elle sera archivée.</p>
+                  <p>La collection disparaîtra du catalogue et du chat MirAI, et ne pourra plus être partagée tant qu'elle sera archivée.</p>
                   <p class="fr-text--sm">Ses documents, ses réglages et son historique sont conservés. Vous pourrez la désarchiver depuis cette page.</p>
                 </div>
                 <div class="fr-modal__footer">
@@ -241,6 +243,7 @@
 <script setup lang="ts">
 import { dateCourte, libelleEtat, messageErreur } from '~/utils/collectif'
 import { libelleActionPublication } from '~/utils/libelles'
+import { lignesVersGroupes } from '~/utils/groupes'
 import { CONFIRMATION_DROITS_RESANA, estCollectionResana, partageResanaPret } from '~/utils/resana'
 const route = useRoute()
 const id = route.params.id as string
@@ -274,7 +277,7 @@ const form = ref({
 })
 // Une collection Résana : un groupe choisi, et la confirmation des droits Résana de ses membres.
 const resana = ref(false)
-const resanaPret = computed(() => !resana.value || partageResanaPret(form.value.visibility_group, form.value.droits_resana_confirmes))
+const resanaPret = computed(() => !resana.value || partageResanaPret(lignesVersGroupes(form.value.visibility_group), form.value.droits_resana_confirmes))
 
 function stateBadge(s: string) {
   return {
@@ -297,13 +300,14 @@ async function publish() {
     erreur.value = ''
     // L'API lit `visibility_groups` (une LISTE). La page envoyait `visibility_group` (une chaîne),
     // que l'API ignorait : publier « à un groupe » publiait pour personne.
-    const groupe = form.value.visibility_group.trim()
-    const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' && groupe ? [groupe] : [] }
+    // Plusieurs groupes : un par ligne.
+    const groupes = lignesVersGroupes(form.value.visibility_group)
+    const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' ? groupes : [] }
     const data = await post(`/api/collections/${id}/publish`, corps)
     pub.value = await get(`/api/collections/${id}/publication`)
     const base = 'Collection partagée'
     if (data?.owui?.synced) {
-      result.value = `${base} : elle apparaît dans l'assistant sous le modèle « ${data.owui.model_id} ».`
+      result.value = `${base} : elle apparaît dans le chat MirAI sous le modèle « ${data.owui.model_id} ».`
     } else if (data?.owui?.error) {
       result.value = base
       owuiError.value = data.owui.error
@@ -357,7 +361,7 @@ onMounted(async () => {
       form.value.embed_enabled = pub.value.embed_enabled ?? false
       form.value.visibility = resana.value ? 'group' : pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
       if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
-      form.value.visibility_group = (pub.value.visibility_groups || [])[0] || pub.value.visibility_group || ''
+      form.value.visibility_group = (pub.value.visibility_groups || []).join('\n') || pub.value.visibility_group || ''
     }
   } catch (e) {}
 })

@@ -438,6 +438,15 @@ def test_ouvrir_a_un_groupe_demande_de_confirmer_les_droits_resana(client, en_ta
     assert '"droits_resana_confirmes": true' in historique[0][0]
 
 
+def test_une_collection_resana_s_ouvre_a_plusieurs_groupes(client, en_tant_que, faux, privee, socle):
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    groupes = [GROUPE, "/g/equipe-fictive"]
+    r = client.post(f"/api/collections/{privee}/publish", json={"visibility": "group", "visibility_groups": groupes, "droits_resana_confirmes": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["visibility_groups"] == groupes
+
+
 def test_un_brouillon_resana_n_a_rien_a_confirmer(client, en_tant_que, faux, privee, socle):
     en_tant_que(CREATEUR)
     _importer(client, privee)

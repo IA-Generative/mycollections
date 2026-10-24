@@ -313,7 +313,7 @@ async def _exiger_importable(col: dict, user: CurrentUser) -> None:
     if await _a_des_documents(col["name"]):
         raise _refus(409, "collection_non_vide", "Un dossier Résana s'importe dans une collection vide : créez-en une pour lui.")
     if await _est_publiee(col["name"]):
-        raise _refus(409, "collection_publiee", "Retirez d'abord la collection de l'assistant : une collection Résana n'y est pas publiée.")
+        raise _refus(409, "collection_publiee", "Retirez d'abord la collection du chat MirAI : une collection Résana n'y est pas publiée.")
 
 
 def _exiger_importeur(col: dict, user: CurrentUser) -> None:
