@@ -66,6 +66,7 @@ async def init_db():
         await _rendre_run_id_facultatif(conn)
         await _creer_index_questions(conn)
         await _migrer_sensibilites(conn)
+        await _resana_interne(conn)
 
 
 #: (colonne, type SQLite, type PostgreSQL) ajoutées à paire_qa pour le jeu de questions.
@@ -188,6 +189,36 @@ async def _migrer_sensibilites(conn):
     for table in ("collections", "ingest_jobs"):
         for ancienne, nouvelle in ANCIENNES_SENSIBILITES.items():
             await conn.execute(text(f"UPDATE {table} SET sensitivity = :n WHERE sensitivity = :a"), {"n": nouvelle, "a": ancienne})
+
+
+#: Le journal garde le passage à « Interne » : il ne se rejoue jamais sur la même collection.
+EVENEMENT_RESANA_INTERNE = "sensibilite.resana_interne"
+
+
+async def _resana_interne(conn):
+    """Les collections Résana nées avant la sensibilité « Interne » par défaut (#134) étaient en
+    « public » : elles passent à « internal », UNE fois. L'événement écrit au journal de chaque
+    collection empêche de rejouer : un « public » choisi ensuite par qui la gère est respecté."""
+    import json
+    import uuid
+
+    from sqlalchemy import text
+
+    from app.models.db import utcnow
+
+    lignes = await conn.execute(
+        text(
+            "SELECT name FROM collections WHERE source_type = 'resana' AND sensitivity = 'public' "
+            "AND name NOT IN (SELECT objet_id FROM evenement WHERE objet_type = 'collection' AND type = :t)"
+        ),
+        {"t": EVENEMENT_RESANA_INTERNE},
+    )
+    for (name,) in lignes.fetchall():
+        await conn.execute(text("UPDATE collections SET sensitivity = 'internal' WHERE name = :n"), {"n": name})
+        await conn.execute(
+            text("INSERT INTO evenement (id, objet_type, objet_id, collection_name, type, robot, detail_json, cree_le) VALUES (:id, 'collection', :n, :n, :t, 'serveur', :d, :le)"),
+            {"id": str(uuid.uuid4()), "n": name, "t": EVENEMENT_RESANA_INTERNE, "d": json.dumps({"de": "public", "vers": "internal"}), "le": utcnow()},
+        )
 
 
 async def _retro_remplir_titres(conn):

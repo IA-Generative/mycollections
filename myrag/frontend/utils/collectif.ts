@@ -109,6 +109,7 @@ export function libelleEvenement(type: string, detail: Record<string, any> = {})
     'import.echoue': 'Import échoué',
     'synchro.terminee': 'Synchronisation terminée',
     'source.enregistree': 'Source enregistrée',
+    'sensibilite.resana_interne': 'Sensibilité passée à « Interne », le défaut d’une collection Résana',
   }
   return t[type] || type
 }
