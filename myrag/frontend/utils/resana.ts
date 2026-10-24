@@ -352,3 +352,15 @@ export function estCollectionResana (fiche: { source_type?: string | null } | nu
 export function titrePageDocuments (fiche: { source_type?: string | null } | null | undefined): string {
   return estCollectionResana(fiche) ? 'Gérer les documents' : 'Ajouter des documents'
 }
+
+/**
+ * Ouvrir une collection Résana à un groupe (décision du 2026-10-24, docs/resana.md) : qui la gère
+ * choisit le groupe et confirme que chacun de ses membres a accès, dans Résana, aux dossiers
+ * indexés. Jamais à tout le monde. Même phrase dans l'assistant de création et dans « Partager ».
+ */
+export const CONFIRMATION_DROITS_RESANA = 'J\'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers indexés. J\'en suis responsable.'
+
+/** Le partage d'une collection Résana peut partir : un groupe nommé et la confirmation cochée. */
+export function partageResanaPret (groupe: string, confirme: boolean): boolean {
+  return !!groupe.trim() && confirme
+}

@@ -74,12 +74,18 @@
           <fieldset class="fr-fieldset fr-mb-4w">
             <legend class="fr-fieldset__legend fr-h5">2. Qui la verra dans l'assistant</legend>
             <div class="fr-fieldset__element">
-              <div v-if="etat && etat.mention" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
+              <!-- Une collection Résana ne s'ouvre jamais à tous : l'encadré Résana suffit. -->
+              <div v-if="etat && etat.mention && !resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
                 <p>Cette collection est <strong>{{ libelleEtat(etat.etat).toLowerCase() }}</strong> : elle ne peut être partagée qu'avec son groupe.
                   Publier à tous demande de la faire d'abord « publiée à tous » dans son parcours de contrôle
                   (<NuxtLink :to="`/c/${id}`" class="fr-link fr-text--sm">fiche de la collection</NuxtLink>).</p>
               </div>
-              <div class="fr-radio-group">
+              <div v-if="resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
+                <p>Ses documents viennent de Résana, où chacun ne voit que les espaces où il est invité. Elle s'ouvre donc
+                  à un groupe que vous choisissez, jamais à tout le monde. Avant de la partager, vérifiez que chaque membre
+                  du groupe a accès, dans Résana, aux dossiers indexés : vous en êtes responsable.</p>
+              </div>
+              <div v-if="!resana" class="fr-radio-group">
                 <input type="radio" id="vis-all" value="all" v-model="form.visibility" :disabled="!!(etat && etat.mention)" />
                 <label class="fr-label" for="vis-all">
                   Tout le monde
@@ -101,8 +107,15 @@
                 </label>
                 <input id="vis-groupe-nom" class="fr-input" v-model="form.visibility_group"  />
               </div>
+              <div v-if="resana && form.visibility === 'group'" class="fr-checkbox-group fr-ml-4w fr-mt-2w">
+                <input type="checkbox" id="droits-resana" v-model="form.droits_resana_confirmes" />
+                <label class="fr-label" for="droits-resana">{{ CONFIRMATION_DROITS_RESANA }}</label>
+              </div>
             </div>
-            <p class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
+            <p v-if="resana" class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
+              Ce réglage ne concerne que l'assistant. La fiche de la collection et son bac à sable restent privés.
+            </p>
+            <p v-else class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
               Ce réglage ne concerne que l'assistant. Qui peut ouvrir cette fiche et son bac à sable se règle dans
               <NuxtLink :to="`/c/${id}/config`" class="fr-link fr-text--xs">Réglages → Portée</NuxtLink>.
             </p>
@@ -137,11 +150,11 @@
 
           <!-- Actions -->
           <div class="fr-btns-group fr-btns-group--inline">
-            <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
+            <button v-if="pub.state !== 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee || !resanaPret"
                     title="Fait apparaître la collection dans l'assistant, pour les personnes choisies ci-dessus.">
               {{ publishing ? 'Partage en cours…' : 'Partager dans Mon assistant' }}
             </button>
-            <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee"
+            <button v-if="pub.state === 'published'" class="fr-btn" @click="publish" :disabled="publishing || pub.archivee || !resanaPret"
                     title="Applique vos changements (nom, description, qui la voit) à la collection déjà publiée.">
               {{ publishing ? 'Mise à jour…' : 'Mettre à jour' }}
             </button>
@@ -228,6 +241,7 @@
 <script setup lang="ts">
 import { dateCourte, libelleEtat, messageErreur } from '~/utils/collectif'
 import { libelleActionPublication } from '~/utils/libelles'
+import { CONFIRMATION_DROITS_RESANA, estCollectionResana, partageResanaPret } from '~/utils/resana'
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
@@ -256,7 +270,11 @@ const form = ref({
   embed_enabled: false,
   visibility: 'all',
   visibility_group: '',
+  droits_resana_confirmes: false,
 })
+// Une collection Résana : un groupe choisi, et la confirmation des droits Résana de ses membres.
+const resana = ref(false)
+const resanaPret = computed(() => !resana.value || partageResanaPret(form.value.visibility_group, form.value.droits_resana_confirmes))
 
 function stateBadge(s: string) {
   return {
@@ -320,6 +338,10 @@ async function archive() {
 
 onMounted(async () => {
   try {
+    resana.value = estCollectionResana(await get(`/api/collections/${id}`))
+    if (resana.value) form.value.visibility = 'group'
+  } catch (e) {}
+  try {
     etat.value = await get(`/api/collections/${id}/etat`)
     if (etat.value?.mention) form.value.visibility = 'group'
   } catch (e) {}
@@ -333,7 +355,7 @@ onMounted(async () => {
       form.value.tool_enabled = pub.value.tool_enabled ?? false
       form.value.tool_methods = pub.value.tool_methods || [...allMethods]
       form.value.embed_enabled = pub.value.embed_enabled ?? false
-      form.value.visibility = pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
+      form.value.visibility = resana.value ? 'group' : pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
       if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
       form.value.visibility_group = (pub.value.visibility_groups || [])[0] || pub.value.visibility_group || ''
     }

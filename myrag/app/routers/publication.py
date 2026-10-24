@@ -20,7 +20,10 @@ MESSAGE_VERIFICATION = (
 )
 
 MESSAGE_ARCHIVEE = "Cette collection est archivée : elle ne peut pas être publiée. Désarchivez-la d'abord (page Publication, ou catalogue d'administration)."
-MESSAGE_RESANA = "Une collection importée de Résana reste privée à la personne qui l'a importée : elle ne se publie pas dans l'assistant."
+MESSAGE_RESANA_GROUPE = "Une collection importée de Résana ne s'ouvre qu'à un groupe que vous choisissez, jamais à tout le monde : ses documents suivent les droits de Résana."
+MESSAGE_RESANA_CONFIRMATION = (
+    "Avant d'ouvrir une collection Résana à un groupe, confirmez que chacun de ses membres a accès, dans Résana, aux dossiers indexés : vous en êtes responsable."
+)
 
 router = APIRouter(prefix="/api/collections", tags=["Publication"])
 
@@ -60,6 +63,9 @@ class PublishRequest(BaseModel):
     visibility_groups: list[str] = []
     widget_enabled: bool = False
     browser_enabled: bool = False
+    #: Collection Résana : qui la publie confirme que les membres du groupe ont, dans Résana, les
+    #: droits sur les dossiers indexés (docs/resana.md, « Partager une collection Résana »).
+    droits_resana_confirmes: bool = False
     published_by: str = ""
     state: str = ""  # allow "draft" for save-as-draft
 
@@ -97,10 +103,15 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     # que le nom de la collection (« Publication OWUI echouee : <nom> »).
     if (fiche or {}).get("archived_at") and req.state != "draft":
         raise HTTPException(status_code=409, detail=MESSAGE_ARCHIVEE)
-    # Une collection Résana reste privée à qui l'a importée (docs/resana.md, décision v1) : elle
-    # ne part pas dans l'assistant, où d'autres l'interrogeraient. Un brouillon reste permis.
-    if (fiche or {}).get("source_type") == "resana" and req.state != "draft":
-        raise HTTPException(status_code=409, detail=MESSAGE_RESANA)
+    # Une collection Résana a été lue avec les droits Résana de qui l'a importée. Qui la gère peut
+    # l'ouvrir à un groupe de son choix, jamais à tous, et confirme avoir vérifié que les membres
+    # ont ces droits dans Résana : c'est sa responsabilité (docs/resana.md, décision du 2026-10-24).
+    resana = (fiche or {}).get("source_type") == "resana"
+    if resana and req.state != "draft":
+        if req.visibility != "group" or not [g for g in req.visibility_groups if g.strip()]:
+            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_GROUPE)
+        if not req.droits_resana_confirmes:
+            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_CONFIRMATION)
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 
@@ -152,6 +163,7 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
                     "tool": pub.tool_enabled,
                     "embed": pub.embed_enabled,
                     "visibility": pub.visibility,
+                    **({"droits_resana_confirmes": True} if resana and pub.state == "published" else {}),
                 }
             ),
         )
@@ -202,7 +214,12 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
         "publication.publiee" if pub.state == "published" else "publication.brouillon",
         user.sub,
         collection_name=name,
-        detail={"visibility": pub.visibility, "alias": pub.alias_enabled, "owui": owui_result is not None},
+        detail={
+            "visibility": pub.visibility,
+            "alias": pub.alias_enabled,
+            "owui": owui_result is not None,
+            **({"groupes": json.loads(pub.visibility_groups_json or "[]"), "droits_resana_confirmes": True} if resana and pub.state == "published" else {}),
+        },
     )
     result = pub.to_dict()
     result["mention"] = mention

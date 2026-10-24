@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { CONFIRMATION_DROITS_RESANA, partageResanaPret } from '~/utils/resana'
 import { lienEtape } from '~/utils/wizard'
 
 const route = useRoute()
 const collection = route.query.collection as string
-// Une collection Résana reste privée à qui l'a importée (règle v1, docs/resana.md) : elle ne se
-// partage pas, l'étape 5 le dit et mène à sa fiche.
+// Une collection Résana s'ouvre à un groupe choisi, jamais à tous, et qui la partage confirme
+// les droits Résana des membres (docs/resana.md, décision du 2026-10-24).
 const source = (route.query.source as string) || ''
 const resana = source === 'resana'
 const { titre } = useTitreCollection(collection)
@@ -13,6 +14,8 @@ const { post } = useApi()
 const choix = ref<'plus-tard' | 'groupe'>('plus-tard')
 const groupe = ref('')
 const nomFiche = ref('')
+const droitsConfirmes = ref(false)
+const pret = computed(() => choix.value !== 'groupe' || (resana ? partageResanaPret(groupe.value, droitsConfirmes.value) : !!groupe.value.trim()))
 const envoi = ref(false)
 const resultat = ref('')
 const erreur = ref(false)
@@ -32,10 +35,13 @@ async function terminer () {
       alias_name: nomFiche.value.trim(),
       visibility: 'group',
       visibility_groups: [chemin],
+      ...(resana ? { droits_resana_confirmes: droitsConfirmes.value } : {}),
     })
     resultat.value = r?.owui?.error
       ? `La collection est publiée, mais l'assistant ne l'a pas encore reçue : ${r.owui.error}`
-      : `Votre collection est visible du groupe « ${chemin} » dans l'assistant. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
+      : resana
+        ? `Votre collection est visible du groupe « ${chemin} » dans l'assistant.`
+        : `Votre collection est visible du groupe « ${chemin} » dans l'assistant. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
   }
   catch (e) {
     erreur.value = true
@@ -51,7 +57,7 @@ async function terminer () {
   <WizardEtape
     :numero="5"
     :titre="`Partager — ${titre || collection}`"
-    :chapeau="resana ? 'Votre collection est créée et ses documents s\'indexent. Dernière étape : savoir qui peut l\'utiliser.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
+    :chapeau="resana ? 'Votre collection est créée et ses documents s\'indexent. Dernière étape : choisir qui peut l\'utiliser.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
   >
     <template #formulaire>
       <div
@@ -66,47 +72,33 @@ async function terminer () {
       </div>
 
       <div
-        v-else-if="resana"
-        class="fr-col-12 fr-col-md-8"
-      >
-        <h2 class="fr-h5">
-          Qui peut utiliser cette collection ?
-        </h2>
-        <p>
-          <strong>Pour l'instant, vous seul.</strong> Ses documents viennent de vos espaces Résana. Dans Résana, chacun
-          ne voit que les espaces où il est invité. Si d'autres personnes pouvaient interroger votre collection, elles
-          liraient peut-être des documents que Résana ne leur montre pas. C'est pourquoi une collection Résana ne se
-          partage pas encore et n'apparaît pas dans l'assistant MirAI.
-        </p>
-
-        <h2 class="fr-h5">
-          Ce que vous pouvez faire maintenant
-        </h2>
-        <p class="fr-mb-1w">
-          Tout se passe sur la fiche de la collection (bouton ci-dessous) :
-        </p>
-        <ul class="fr-mb-3w">
-          <li><strong>lui poser des questions</strong> : bouton « Poser une question » ;</li>
-          <li>
-            <strong>la tenir à jour</strong> quand des documents changent dans Résana : onglet « Documents », bouton
-            « Gérer les documents », puis « Mettre à jour » ;
-          </li>
-          <li><strong>ajouter ou retirer des dossiers</strong> : même page, « Modifier la sélection ».</li>
-        </ul>
-
-        <div class="fr-callout fr-mb-4w">
-          <p class="fr-callout__text fr-text--sm">
-            Le partage avec des collègues viendra plus tard, quand les règles d'accès auront été décidées. Il se fera
-            alors depuis la fiche de la collection, avec le bouton « Partager ».
-          </p>
-        </div>
-      </div>
-
-      <div
         v-else
         class="fr-col-12 fr-col-md-8"
       >
-        <div class="fr-callout fr-mb-4w">
+        <template v-if="resana">
+          <h2 class="fr-h5">
+            Qui peut utiliser cette collection ?
+          </h2>
+          <p>
+            <strong>Pour l'instant, vous seul.</strong> Vous pouvez aussi l'ouvrir à un groupe de collègues, qui la
+            retrouveront dans l'assistant MirAI.
+          </p>
+          <div class="fr-callout fr-mb-4w">
+            <h3 class="fr-callout__title fr-h6">
+              Avant de l'ouvrir à un groupe
+            </h3>
+            <p class="fr-callout__text fr-text--sm">
+              Ses documents viennent de vos espaces Résana. Dans Résana, chacun ne voit que les espaces où il est
+              invité. Un membre du groupe qui n'est pas invité dans ces espaces lirait, par l'assistant, des documents
+              que Résana ne lui montre pas. Vérifiez donc que chaque membre du groupe a accès aux dossiers indexés :
+              c'est votre responsabilité. Une collection Résana ne s'ouvre jamais à tout le monde.
+            </p>
+          </div>
+        </template>
+        <div
+          v-else
+          class="fr-callout fr-mb-4w"
+        >
           <h2 class="fr-callout__title fr-h6">
             Ce qui se passe ensuite
           </h2>
@@ -169,6 +161,20 @@ async function terminer () {
                 v-model="groupe"
                 class="fr-input"
               >
+            </div>
+            <div
+              v-if="resana && choix === 'groupe'"
+              class="fr-checkbox-group fr-ml-4w fr-mt-2w"
+            >
+              <input
+                id="part-droits-resana"
+                v-model="droitsConfirmes"
+                type="checkbox"
+              >
+              <label
+                class="fr-label"
+                for="part-droits-resana"
+              >{{ CONFIRMATION_DROITS_RESANA }}</label>
             </div>
           </div>
           <div
@@ -234,18 +240,10 @@ async function terminer () {
             Étape précédente
           </NuxtLink>
         </li>
-        <li v-if="resana">
-          <NuxtLink
-            :to="`/c/${encodeURIComponent(collection)}`"
-            class="fr-btn"
-          >
-            Ouvrir la fiche de la collection
-          </NuxtLink>
-        </li>
-        <li v-else>
+        <li>
           <button
             class="fr-btn"
-            :disabled="!collection || envoi || (choix === 'groupe' && !groupe.trim())"
+            :disabled="!collection || envoi || !pret"
             @click="terminer"
           >
             {{ envoi ? 'Enregistrement…' : choix === 'groupe' ? 'Partager avec ce groupe' : 'Terminer' }}

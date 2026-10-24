@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -133,5 +133,13 @@ describe('la page des documents d\'une collection Résana (#134)', () => {
       expect(estCollectionResana(fiche)).toBe(false)
       expect(titrePageDocuments(fiche)).toBe('Ajouter des documents')
     }
+  })
+})
+
+describe('ouvrir une collection Résana à un groupe', () => {
+  it('demande un groupe et la confirmation des droits Résana', () => {
+    expect(partageResanaPret('/g/equipe', true)).toBe(true)
+    expect(partageResanaPret('/g/equipe', false)).toBe(false)
+    expect(partageResanaPret('  ', true)).toBe(false)
   })
 })

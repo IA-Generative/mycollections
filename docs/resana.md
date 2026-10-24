@@ -4,8 +4,9 @@ Une personne choisit un dossier d'un de ses espaces Résana et l'importe dans un
 compris. Elle interroge ensuite la collection comme les autres. « Synchroniser » relit le dossier et
 réindexe ce qui a changé. Aucune synchronisation n'est planifiée.
 
-Ce n'est pas encore un partage : en v1, **la collection reste privée à la personne qui a importé le
-dossier**, et elle seule peut la synchroniser.
+**La collection naît privée à la personne qui a importé le dossier**, et elle seule peut la
+synchroniser. Qui la gère peut ensuite l'ouvrir, dans l'assistant, à un groupe de son choix, sous sa
+responsabilité (voir « Partager une collection Résana »).
 
 ## Comment Mes collections lit Résana
 
@@ -57,11 +58,11 @@ quand la session est absente. Deux exceptions :
   déconnecte pas la personne pour une affaire entre deux services ;
 - le lien de connexion n'est transmis que s'il est en `https://`.
 
-## La règle de la v1 : privée à qui importe
+## Privée à qui importe, partageable à un groupe
 
 Importer, c'est lire Résana avec ses propres droits. Si la collection s'ouvrait à d'autres, ceux-ci
-liraient ce que Résana leur refuse peut-être. Tant qu'aucune décision n'ouvre ce partage (avec une
-confirmation explicite), une collection Résana reste privée :
+liraient ce que Résana leur refuse peut-être. La collection naît donc privée, et ne s'ouvre qu'à un
+groupe choisi, avec une confirmation explicite :
 
 - **Import** : seulement par la personne qui a créé la collection (`created_by`), dans une collection
   **privée, sans groupe lecteur, vide et non publiée**. L'assistant de création la crée ainsi : à
@@ -72,8 +73,23 @@ confirmation explicite), une collection Résana reste privée :
 - **Fiche** : `PATCH /api/collections/{nom}` refuse (409) de changer `scope`, `scope_groups`,
   `source_type`, `source_url` ou `source_config_json` d'une collection Résana. Renvoyer la même valeur
   passe. Aucune collection ne devient Résana par sa fiche.
-- **Publication** : une collection Résana ne se publie pas dans l'assistant (409). Un brouillon reste
-  permis.
+- **Publication** : voir ci-dessous. Un brouillon reste permis sans condition.
+
+### Partager une collection Résana
+
+Décision du 2026-10-24 : les droits viennent du SSO, et le groupe est déclaré par qui gère la
+collection. C'est cette personne qui choisit qui la voit ; elle s'assure que chaque membre du groupe a
+les bons droits dans Résana, et elle en est responsable.
+
+- **Dans l'assistant, à un groupe seulement** (`POST /api/collections/{nom}/publish`, `visibility:
+  group` et au moins un groupe) ; jamais à tout le monde (409).
+- **Avec une confirmation** : `droits_resana_confirmes: true`, sinon 409. L'écran la demande par une
+  case à cocher (« J'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers
+  indexés. J'en suis responsable. »), dans « Partager » et à l'étape 5 de l'assistant.
+- **Une trace** : la confirmation est gardée dans l'historique de la publication et dans le journal
+  de la collection (`publication.publiee`, avec les groupes).
+- **Ce qui ne change pas** : la fiche et le bac à sable restent privés (portée verrouillée),
+  et seule la personne qui a importé synchronise, avec sa session Résana.
 
 Ce qui reste ouvert, comme pour toute collection privée : les administrateurs du service et les membres
 du groupe `<racine>/<nom>-admin` la lisent.
@@ -287,8 +303,8 @@ dans `frontend/utils/libelles.ts`) :
    privée, import.
 4. **Suivre l'indexation** (étape 3 de l'assistant, `admin/create/resana?collection=<id>`) : la
    carte de la collection et sa sensibilité. L'indexation continue en arrière-plan ; « Étape
-   suivante » mène à la vérification des réponses (étape 4), puis à l'étape 5, qui dit qu'une
-   collection Résana ne se partage pas et mène à sa fiche. Les étapes 4 et 5 gardent
+   suivante » mène à la vérification des réponses (étape 4), puis à l'étape 5, qui propose de
+   l'ouvrir à un groupe, avec la confirmation des droits Résana. Les étapes 4 et 5 gardent
    `source=resana` dans l'adresse (`lienEtape` dans `frontend/utils/wizard.ts`). L'adresse porte
    la collection : un rechargement ou un retour depuis l'étape 4 rouvre l'étape 3.
 
