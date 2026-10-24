@@ -36,12 +36,12 @@ export interface Source {
 
 /** Les sources, dans l'ordre d'affichage. Une source devient une carte quand elle est branchée. */
 export const SOURCES: readonly Source[] = [
-  { cle: 'file', nom: 'Un fichier', court: 'un fichier', icone: 'fr-icon-file-line', disponible: true, description: 'PDF, Word, texte, Markdown… depuis votre poste, ou l\'adresse web d\'un fichier. D\'autres s\'ajoutent ensuite depuis la fiche.' },
-  { cle: 'directory', nom: 'Un dossier de votre poste', court: 'un dossier', icone: 'fr-icon-folder-2-line', disponible: true, description: 'Tout un dossier, sous-dossiers compris. Chaque fichier est suivi jusqu\'à ce qu\'il soit prêt.' },
+  { cle: 'file', nom: 'Un fichier', court: 'un fichier', icone: 'fr-icon-file-line', disponible: true, description: 'PDF, Word, texte… depuis votre poste ou une adresse web.' },
+  { cle: 'directory', nom: 'Un dossier de votre poste', court: 'un dossier', icone: 'fr-icon-folder-2-line', disponible: true, description: 'Tout un dossier, sous-dossiers compris.' },
   { cle: 'legifrance', nom: 'Légifrance', court: 'Légifrance', icone: 'fr-icon-scales-3-line', disponible: false, miseAJourAuto: true, description: 'Un code ou une loi, découpé par article.' },
   { cle: 'drive', nom: 'Un dossier Drive', court: 'Drive', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier de la Suite numérique, réindexé quand son contenu change.' },
   { cle: 'nextcloud', nom: 'Nextcloud', court: 'Nextcloud', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier Nextcloud, réindexé quand il change.' },
-  { cle: 'resana', nom: 'Un dossier Résana', court: 'Résana', icone: 'fr-icon-team-line', disponible: false, drapeau: 'resana', description: 'Un dossier d\'un de vos espaces Résana, lu avec vos droits. La collection reste privée : vous seul l\'interrogez.' },
+  { cle: 'resana', nom: 'Un dossier Résana', court: 'Résana', icone: 'fr-icon-team-line', disponible: false, drapeau: 'resana', description: 'Un dossier de vos espaces, lu avec vos droits. Reste privée.' },
   { cle: 'website', nom: 'Une page ou un site', court: 'un site web', icone: 'fr-icon-global-line', disponible: false, miseAJourAuto: true, description: 'Une adresse web, relue et découpée page par page.' },
   { cle: 'mcp', nom: 'Un outil MCP', court: 'un outil MCP', icone: 'fr-icon-links-line', disponible: false, description: 'Les ressources d\'un serveur MCP, comme documents.' },
 ]
