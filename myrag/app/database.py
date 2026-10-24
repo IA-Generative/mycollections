@@ -65,6 +65,7 @@ async def init_db():
             await _migrate_add_column(conn, col, lite, pg, table="paire_qa")
         await _rendre_run_id_facultatif(conn)
         await _creer_index_questions(conn)
+        await _migrer_sensibilites(conn)
 
 
 #: (colonne, type SQLite, type PostgreSQL) ajoutées à paire_qa pour le jeu de questions.
@@ -174,6 +175,19 @@ async def _elargir_objets_evenement(conn):
         sync_conn.execute(text(f"ALTER TABLE evenement ADD CONSTRAINT evenement_objet_valide CHECK (objet_type IN ({domaine}))"))
 
     await conn.run_sync(_sync)
+
+
+async def _migrer_sensibilites(conn):
+    """Réécrit les sensibilités d'avant la nouvelle liste (#134) : `confidential` et `secret`
+    deviennent `restricted`, jamais un niveau moins protecteur. Idempotent : ne touche que les
+    anciennes valeurs."""
+    from sqlalchemy import text
+
+    from app.services.chunker import ANCIENNES_SENSIBILITES
+
+    for table in ("collections", "ingest_jobs"):
+        for ancienne, nouvelle in ANCIENNES_SENSIBILITES.items():
+            await conn.execute(text(f"UPDATE {table} SET sensitivity = :n WHERE sensitivity = :a"), {"n": nouvelle, "a": ancienne})
 
 
 async def _retro_remplir_titres(conn):

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { titreDe } from '~/utils/catalogue'
+import { libelleSensibilite } from '~/utils/libelles'
 
 import { etapesEnPhrase } from '~/utils/wizard'
 
@@ -184,7 +185,7 @@ onMounted(async () => {
               >{{ col.name }}</code>
             </td>
             <td>{{ col.strategy }}</td>
-            <td><span class="fr-badge fr-badge--sm">{{ col.sensitivity }}</span></td>
+            <td><span class="fr-badge fr-badge--sm">{{ libelleSensibilite(col.sensitivity) }}</span></td>
             <td>{{ col.graph_enabled ? '✅' : '—' }}</td>
             <td>{{ col.ai_summary_enabled ? '✅' : '—' }}</td>
             <td>

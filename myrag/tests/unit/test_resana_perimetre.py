@@ -233,6 +233,7 @@ def test_creer_depuis_un_espace_pose_l_identifiant_et_la_fiche(client, en_tant_q
     assert r.json()["collection"] == "resana-e1"
     fiche = client.get("/api/collections/resana-e1").json()
     assert fiche["titre"] == "Alpha fictif" and fiche["scope"] == "private" and fiche["source_type"] == "resana"
+    assert fiche["sensitivity"] == "internal", "un espace Résana est interne d'emblée (#134)"
     assert fiche["description"] == "Espace Résana « Alpha fictif » (n° e-1), Préfecture fictive."
     assert fiche["source_resume"]["entite"] == "Préfecture fictive" and fiche["source_resume"]["nb_dossiers"] == 2
     # Les deux dossiers (et leurs sous-dossiers), sans les documents rangés à la racine de l'espace.
@@ -248,7 +249,7 @@ def test_creer_depuis_un_espace_pose_l_identifiant_et_la_fiche(client, en_tant_q
     assert cfg["espace"] | {} == cfg["espace"] and cfg["espace"]["objet"] == "Essais" and cfg["espace"]["parent_id"] == "123" and cfg["espace"]["cree_le"].startswith("2019")
     # Chaque document part avec son origine.
     meta = faux.envois.await_args_list[0].kwargs["metadata"]
-    assert meta["source"] == "resana" and meta["espace"] == "Alpha fictif" and meta["dossier"]
+    assert meta["source"] == "resana" and meta["espace"] == "Alpha fictif" and meta["dossier"] and meta["sensitivity"] == "internal"
 
 
 def test_un_meme_espace_deux_fois_demande_un_suffixe(client, en_tant_que, faux, espace_libre):

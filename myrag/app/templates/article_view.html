@@ -38,8 +38,8 @@
                        font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
         .sensitivity-public { background: #b8fec9; color: #0d6635; }
         .sensitivity-internal { background: #fef3cd; color: #856404; }
-        .sensitivity-restricted { background: #fddede; color: #9a1b1b; }
-        .sensitivity-confidential { background: #d63384; color: white; }
+        .sensitivity-personal, .sensitivity-controlled { background: #feecc2; color: #6e4400; }
+        .sensitivity-personal_sensitive, .sensitivity-restricted { background: #fddede; color: #9a1b1b; }
     </style>
     <script>
         const ro = new ResizeObserver(() => {
@@ -62,7 +62,7 @@
         {% if livre %}Livre {{ livre }}{% endif %}
         {% if titre %} — Titre {{ titre }}{% endif %}
         {% if chapitre %} — Chapitre {{ chapitre }}{% endif %}
-        {% if sensitivity %}<span class="sensitivity sensitivity-{{ sensitivity }}">{{ sensitivity }}</span>{% endif %}
+        {% if sensitivity %}<span class="sensitivity sensitivity-{{ sensitivity }}">{{ sensibilite_libelle }}</span>{% endif %}
     </div>
 
     <div class="content">{{ content }}</div>

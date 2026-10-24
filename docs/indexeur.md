@@ -23,7 +23,7 @@ Deux exceptions :
 - `Refuse(statut)` : le moteur refuse le document, pour une question de format ou de taille.
 
 Les métadonnées envoyées sont le titre (`title`) et, pour Résana, l'adresse du document d'origine
-(`url`).
+(`url`) et la sensibilité de la collection (`sensitivity`, voir `docs/resana.md`).
 
 ## Ce que Mes collections garde de son côté
 

@@ -226,7 +226,34 @@ Le service d'export donne, quand il les a, `description`, `objet`, `cree_le` et 
   (n° 206379), entité. ».
 
 Chaque document envoyé à l'indexeur porte aussi son origine : `source: resana`, l'espace, le
-chemin de son dossier et l'adresse de consultation.
+chemin de son dossier et l'adresse de consultation, ainsi que la sensibilité de la collection
+(`sensitivity`).
+
+### La sensibilité : « Interne » d'emblée
+
+Un espace Résana est un espace de travail entre agents : sa collection naît **« Interne »**
+(`POST /collections`). La page « Gérer les documents » la montre et la change ; le changement
+s'enregistre aussitôt dans la fiche et vaut pour les documents envoyés à partir de la mise à jour
+suivante (ceux déjà indexés gardent la leur jusqu'à leur prochain envoi).
+
+La liste vaut pour toutes les collections (`Sensitivity` dans `app/services/chunker.py`, libellés
+dans `frontend/utils/libelles.ts`) :
+
+| Valeur | Libellé |
+|---|---|
+| `public` | Public — internet |
+| `internal` | Interne |
+| `personal` | Données personnelles |
+| `personal_sensitive` | Données personnelles sensibles |
+| `controlled` | Diffusion contrôlée |
+| `restricted` | Diffusion restreinte |
+
+- **Les anciennes valeurs** `confidential` et `secret` deviennent `restricted`, le niveau le plus
+  protecteur : un document n'est jamais rangé moins protégé qu'avant. Le démarrage les réécrit
+  dans les collections et les travaux d'indexation ; l'API les accepte encore en entrée.
+- **Une valeur inconnue est refusée** (422) à la création et dans la fiche.
+- **La sensibilité ne change encore aucun droit.** Ce qu'un niveau interdit (publication dans
+  l'assistant, partage hors de la collection) reste à décider.
 
 ## Écrans
 
@@ -256,6 +283,11 @@ chemin de son dossier et l'adresse de consultation.
 
    « Créer et indexer » fait **un seul appel** (`POST /collections`) : identifiant, collection
    privée, import.
+
+**Page « Gérer les documents »** (`/c/<id>/upload`) : la carte ci-dessous et la sensibilité,
+sans dépôt de fichiers ni choix du découpage. Une collection Résana se remplit par sa sélection
+de dossiers, et c'est l'indexeur qui découpe ; un fichier déposé à la main se mêlerait à l'index
+Résana sans source ni mise à jour.
 
 **Page de la collection** (`DepotEtatResana`) :
 - l'espace, son entité et les dossiers inclus ;
@@ -346,4 +378,8 @@ port d'export.
 - `myrag/frontend/tests/unit/resana.test.ts` teste l'écran :
   - la lecture des erreurs ;
   - les phrases d'avancement ;
-  - la carte qui suit la capacité.
+  - la carte qui suit la capacité ;
+  - la page « Gérer les documents », sans dépôt manuel.
+- `myrag/tests/unit/test_sensibilite.py` teste la liste des sensibilités, la reprise des anciennes
+  valeurs et le refus d'une valeur inconnue ; `test_resana_perimetre.py`, la sensibilité
+  « Interne » d'une collection Résana et sa métadonnée.

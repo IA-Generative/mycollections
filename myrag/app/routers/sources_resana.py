@@ -413,7 +413,15 @@ async def creer(req: CreationResana, authorization: str | None = Header(default=
     if docs is not None and not docs:
         raise _refus(400, "dossier_vide", MESSAGE_DOSSIER_VIDE)
     await creer_collection(
-        CreateCollectionRequest(name=nom, titre=req.titre.strip(), description=req.description.strip() or _description_par_defaut(espace), scope="private", scope_groups=[]),
+        CreateCollectionRequest(
+            name=nom,
+            titre=req.titre.strip(),
+            description=req.description.strip() or _description_par_defaut(espace),
+            # Un espace Résana est un espace de travail entre agents : « Interne » d'emblée (#134).
+            sensitivity=Sensitivity.INTERNAL,
+            scope="private",
+            scope_groups=[],
+        ),
         user,
         source=SOURCE,
     )
@@ -722,9 +730,9 @@ def _strategie(col: dict) -> tuple[Strategy, Sensitivity]:
     except ValueError:
         strategie = Strategy.AUTO
     try:
-        sensibilite = Sensitivity(col.get("sensitivity") or "public")
+        sensibilite = Sensitivity(col.get("sensitivity") or Sensitivity.INTERNAL)
     except ValueError:
-        sensibilite = Sensitivity.PUBLIC
+        sensibilite = Sensitivity.INTERNAL
     return strategie, sensibilite
 
 
@@ -873,7 +881,8 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
             nom = nom_unique(nom, doc.id, pris)
         if ancien and ancien.get("file_id"):
             a_retirer.append(ancien["file_id"])
-        meta = {"source": SOURCE, "espace": nom_espace, "dossier": doc.chemin, **({"url": _url(doc)} if _url(doc) else {})}
+        # La sensibilité suit le document chez l'indexeur, comme elle suit un morceau déposé (#134).
+        meta = {"source": SOURCE, "espace": nom_espace, "dossier": doc.chemin, "sensitivity": sensibilite.value, **({"url": _url(doc)} if _url(doc) else {})}
         a_envoyer.append((nom, recu, meta))
         gardes[doc.id] = {
             "sha256": recu.sha256,

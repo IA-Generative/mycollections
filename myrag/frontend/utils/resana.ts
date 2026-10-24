@@ -338,3 +338,17 @@ export function descriptionParDefaut (espace: EspaceResana, entite: string): str
   const e = entite.trim() ? `, ${entite.trim()}` : ''
   return `Espace Résana « ${espace.nom || espace.id} » (n° ${espace.id})${e}.`
 }
+
+/**
+ * Une collection Résana se remplit par sa sélection de dossiers, découpée par l'indexeur : sa page
+ * « Gérer les documents » n'a ni dépôt de fichiers ni choix du découpage (#134). Un fichier déposé
+ * à la main se mêlerait à l'index Résana, sans source ni mise à jour.
+ */
+export function estCollectionResana (fiche: { source_type?: string | null } | null | undefined): boolean {
+  return fiche?.source_type === 'resana'
+}
+
+/** Le titre de la page des documents d'une collection. */
+export function titrePageDocuments (fiche: { source_type?: string | null } | null | undefined): string {
+  return estCollectionResana(fiche) ? 'Gérer les documents' : 'Ajouter des documents'
+}

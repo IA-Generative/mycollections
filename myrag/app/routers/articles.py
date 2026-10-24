@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from app.routers._acces_navigateur import lecture_de_la_collection
 from app.services import liens
+from app.services.chunker import LIBELLES_SENSIBILITE, valider_sensibilite
 from app.services.graph_builder import GraphBuilder
 
 # Servies sans jeton (lien, iframe) : la garde accepte une collection publiée à tous, un lien
@@ -41,6 +42,8 @@ async def view_article(collection: str, article_id: str, request: Request):
     from app.services.nommage import titre_de
 
     fiche = await get_collection(collection)
+    # Un graphe construit avant #134 peut porter une ancienne valeur : elle se lit dans la nouvelle liste.
+    sensibilite = valider_sensibilite(node.get("sensitivity") or "public")
     template = _env.get_template("article_view.html")
     html = template.render(
         collection=collection,
@@ -50,7 +53,8 @@ async def view_article(collection: str, article_id: str, request: Request):
         livre=node.get("livre", ""),
         titre=node.get("titre", ""),
         chapitre=node.get("chapitre", ""),
-        sensitivity=node.get("sensitivity", "public"),
+        sensitivity=sensibilite or "",
+        sensibilite_libelle=LIBELLES_SENSIBILITE.get(sensibilite or "", ""),
         references=references,
         referenced_by=referenced_by,
         # Les liens de la page portent la signature reçue, pour rester ouvrables.
