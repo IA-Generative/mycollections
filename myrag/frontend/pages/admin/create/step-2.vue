@@ -2,6 +2,7 @@
 import type { Categorie } from '~/types/collection'
 import type { ReglesNommage } from '~/utils/collectionName'
 import { isConflictError, motifRefus, REGLES_PAR_DEFAUT, slugifyCollectionName } from '~/utils/collectionName'
+import { SENSIBILITES } from '~/utils/libelles'
 import { identifiantPropose, reglagesAvancesDefaut, replierReglagesAvances } from '~/utils/wizard'
 
 /**
@@ -572,20 +573,12 @@ onMounted(async () => {
               v-model="form.sensitivity"
               class="fr-select"
             >
-              <option value="public">
-                Données ouvertes
-              </option>
-              <option value="internal">
-                Interne au ministère
-              </option>
-              <option value="personal">
-                Données personnelles
-              </option>
-              <option value="confidential">
-                Confidentiel
-              </option>
-              <option value="restricted">
-                Diffusion restreinte
+              <option
+                v-for="s in SENSIBILITES"
+                :key="s.valeur"
+                :value="s.valeur"
+              >
+                {{ s.libelle }}
               </option>
             </select>
           </div>

@@ -30,14 +30,44 @@ class Strategy(StrEnum):
     AUTO = "auto"
 
 
-# Sensitivity levels for access control filtering
-# Based on French classification convention + platform capability
 class Sensitivity(StrEnum):
-    PUBLIC = "public"
-    INTERNAL = "internal"
-    RESTRICTED = "restricted"
-    CONFIDENTIAL = "confidential"
-    SECRET = "secret"
+    """Le niveau de sensibilité des documents d'une collection (issue #134).
+
+    Il est porté par la fiche, les travaux d'indexation et les métadonnées des morceaux ; il ne
+    change aujourd'hui aucun droit. Les anciennes valeurs (`confidential`, `secret`) se lisent
+    encore et deviennent `restricted`, le niveau le plus protecteur de la liste : un document
+    n'est jamais rangé moins protégé qu'avant (`database._migrer_sensibilites` les réécrit au
+    démarrage).
+    """
+
+    PUBLIC = "public"  # Public — internet
+    INTERNAL = "internal"  # Interne ; le défaut d'une collection Résana
+    PERSONAL = "personal"  # Données personnelles
+    PERSONAL_SENSITIVE = "personal_sensitive"  # Données personnelles sensibles
+    CONTROLLED = "controlled"  # Diffusion contrôlée
+    RESTRICTED = "restricted"  # Diffusion restreinte
+
+    @classmethod
+    def _missing_(cls, value):
+        ancienne = ANCIENNES_SENSIBILITES.get(value) if isinstance(value, str) else None
+        return cls(ancienne) if ancienne else None
+
+
+#: Ce que l'écran affiche (miroir de `frontend/utils/libelles.ts`).
+LIBELLES_SENSIBILITE = {
+    "public": "Public — internet",
+    "internal": "Interne",
+    "personal": "Données personnelles",
+    "personal_sensitive": "Données personnelles sensibles",
+    "controlled": "Diffusion contrôlée",
+    "restricted": "Diffusion restreinte",
+}
+
+#: Les valeurs d'avant #134 et ce qu'elles deviennent.
+ANCIENNES_SENSIBILITES = {
+    "confidential": "restricted",
+    "secret": "restricted",
+}
 
 
 def valider_strategy(valeur: str) -> Strategy | None:
@@ -49,20 +79,15 @@ def valider_strategy(valeur: str) -> Strategy | None:
 
 
 def valider_sensibilite(valeur: str) -> Sensitivity | None:
-    """The sensitivity if it is a known one, None otherwise."""
+    """The sensitivity if it is a known one (an old value gives its new one), None otherwise."""
     try:
         return Sensitivity(valeur)
     except ValueError:
         return None
 
 
-SENSITIVITY_LEVELS = {
-    "public": 0,  # Accessible a tous (ex: textes de loi publies au JO)
-    "internal": 1,  # Usage interne organisation (ex: notes de service)
-    "restricted": 2,  # Diffusion restreinte (ex: procedures internes)
-    "confidential": 3,  # Confidentiel (ex: donnees personnelles, avis juridiques)
-    "secret": 4,  # Secret (ex: defense nationale — hors scope plateforme)
-}
+#: Le rang de chaque niveau, dans l'ordre de la liste.
+SENSITIVITY_LEVELS = {s.value: rang for rang, s in enumerate(Sensitivity)}
 
 
 def detect_strategy(text: str) -> Strategy:

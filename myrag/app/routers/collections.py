@@ -17,6 +17,7 @@ from app.models.collection import (
 )
 from app.routers._droits import exiger_administration
 from app.services import access, nommage
+from app.services.chunker import Sensitivity
 from app.services.collection_store import (
     create_collection as db_create_collection,
 )
@@ -90,7 +91,7 @@ class CreateCollectionRequest(BaseModel):
     titre: str = ""
     description: str = ""
     strategy: str = "auto"
-    sensitivity: str = "public"
+    sensitivity: Sensitivity = Sensitivity.PUBLIC
     prompt_template: str = DEFAULT_TEMPLATE_KEY
     system_prompt: str | None = None
     graph_enabled: bool = False
@@ -354,6 +355,7 @@ async def creer_collection(req: CreateCollectionRequest, user: CurrentUser, *, s
         pass  # OpenRAG may not be reachable
 
     data = req.model_dump()
+    data["sensitivity"] = req.sensitivity.value
     data["system_prompt"] = system_prompt
     data["created_by"] = user.sub  # garantit l'accès du créateur à sa collection
     collection = await db_create_collection(data)
@@ -466,6 +468,14 @@ def _garder_resana(existing: dict, updates: dict) -> None:
         raise HTTPException(status_code=409, detail="Une collection Résana reste privée à la personne qui a importé le dossier : sa portée et sa source ne se modifient pas.")
 
 
+def _sensibilite(valeur) -> str:
+    """Un niveau de la liste (une ancienne valeur donne sa nouvelle), sinon 422."""
+    try:
+        return Sensitivity(valeur).value
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"reason": "sensitivity", "message": f"Sensibilité inconnue : {valeur}"}) from None
+
+
 @router.patch("/{name}")
 async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser = Depends(current_user)):
     existing = await db_get_collection(name)
@@ -479,6 +489,8 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
     ):
         raise HTTPException(status_code=403, detail="Accès refusé à cette collection")
     _garder_resana(existing, updates)
+    if "sensitivity" in updates:
+        updates["sensitivity"] = _sensibilite(updates["sensitivity"])
     if "categorie" in updates:
         # Qui gère la collection la range lui-même parmi les catégories existantes ; le changement
         # s'écrit au journal comme un reclassement de l'administration.

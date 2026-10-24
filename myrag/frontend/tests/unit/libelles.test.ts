@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleActionPublication } from '../../utils/libelles'
+import { libelleStrategie, libelleSensibilite, libelleConsignes, libelleActionPublication, SENSIBILITES } from '../../utils/libelles'
 
 describe('libellés des réglages', () => {
   it('traduit les valeurs connues', () => {
     expect(libelleStrategie('article')).toBe('Découpage par article')
-    expect(libelleSensibilite('internal')).toBe('Interne au ministère')
+    expect(libelleSensibilite('internal')).toBe('Interne')
     expect(libelleConsignes('generic')).toBe('Consignes générales')
     expect(libelleActionPublication('disabled')).toBe("Retirée de l'assistant")
   })
@@ -18,5 +18,19 @@ describe('libellés des réglages', () => {
     expect(libelleSensibilite('')).toBe('')
     expect(libelleSensibilite(undefined)).toBe('')
     expect(libelleStrategie(null)).toBe('')
+  })
+})
+
+describe('sensibilités (#134)', () => {
+  it('propose les six niveaux, dans cet ordre', () => {
+    expect(SENSIBILITES.map(s => s.libelle)).toEqual([
+      'Public — internet',
+      'Interne',
+      'Données personnelles',
+      'Données personnelles sensibles',
+      'Diffusion contrôlée',
+      'Diffusion restreinte',
+    ])
+    expect(libelleSensibilite('personal_sensitive')).toBe('Données personnelles sensibles')
   })
 })

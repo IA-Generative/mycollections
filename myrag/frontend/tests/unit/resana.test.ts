@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -119,5 +119,19 @@ describe('choisir l\'espace et les dossiers', () => {
     expect(titreDepuisEspace({ id: '206', nom: 'Instances de gouvernance régionale' })).toBe('Instances de gouvernance régionale')
     expect(descriptionParDefaut({ id: '206', nom: 'Instances' }, 'Préfecture fictive')).toBe('Espace Résana « Instances » (n° 206), Préfecture fictive.')
     expect(descriptionParDefaut({ id: '206', nom: 'Instances' }, '')).toBe('Espace Résana « Instances » (n° 206).')
+  })
+})
+
+describe('la page des documents d\'une collection Résana (#134)', () => {
+  it('se gère par la sélection de dossiers : ni dépôt manuel ni découpage', () => {
+    expect(estCollectionResana({ source_type: 'resana' })).toBe(true)
+    expect(titrePageDocuments({ source_type: 'resana' })).toBe('Gérer les documents')
+  })
+
+  it('une autre collection garde le dépôt de fichiers', () => {
+    for (const fiche of [{ source_type: null }, { source_type: 'drive' }, {}, null, undefined]) {
+      expect(estCollectionResana(fiche)).toBe(false)
+      expect(titrePageDocuments(fiche)).toBe('Ajouter des documents')
+    }
   })
 })

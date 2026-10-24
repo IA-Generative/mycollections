@@ -18,14 +18,21 @@ export const LIBELLES_STRATEGIE: Record<string, string> = {
   directory: 'Découpage par dossier',
 }
 
+/**
+ * Les niveaux de sensibilité des documents, dans l'ordre des listes (#134 ; pendant backend :
+ * `Sensitivity` dans `app/services/chunker.py`). Une collection Résana naît « Interne ».
+ */
+export const SENSIBILITES = [
+  { valeur: 'public', libelle: 'Public — internet' },
+  { valeur: 'internal', libelle: 'Interne' },
+  { valeur: 'personal', libelle: 'Données personnelles' },
+  { valeur: 'personal_sensitive', libelle: 'Données personnelles sensibles' },
+  { valeur: 'controlled', libelle: 'Diffusion contrôlée' },
+  { valeur: 'restricted', libelle: 'Diffusion restreinte' },
+] as const
+
 /** Le niveau de sensibilité des documents. */
-export const LIBELLES_SENSIBILITE: Record<string, string> = {
-  public: 'Données ouvertes',
-  internal: 'Interne au ministère',
-  personal: 'Données personnelles',
-  restricted: 'Diffusion restreinte',
-  confidential: 'Confidentiel',
-}
+export const LIBELLES_SENSIBILITE: Record<string, string> = Object.fromEntries(SENSIBILITES.map(s => [s.valeur, s.libelle]))
 
 /** Les modèles de consignes données à l'assistant (clé `prompt_template`). */
 export const LIBELLES_CONSIGNES: Record<string, string> = {

@@ -5,6 +5,7 @@ import { libelleEtat, messageErreur } from '~/utils/collectif'
 import { actionsFiche, dateFiche, ligneMeta, ONGLET_PAR_DEFAUT, ongletDepuisAncien, ongletsFiche } from '~/utils/fiche'
 import { libelleSansCompteur, ongletDeLAdresse } from '~/utils/filAriane'
 import { appreciation, dateMesure } from '~/utils/qualite'
+import { titrePageDocuments } from '~/utils/resana'
 
 /**
  * La fiche d'une collection (refonte du 2026-10-19) : en-tête, actions, « Ce qu'en pensent vos
@@ -586,7 +587,7 @@ onMounted(async () => {
               :to="`/c/${id}/upload`"
               class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-file-add-line"
             >
-              Ajouter des documents
+              {{ titrePageDocuments(collection) }}
             </NuxtLink>
           </div>
           <CorpusDocuments

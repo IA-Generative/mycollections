@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { SENSIBILITES } from '~/utils/libelles'
+
 const route = useRoute()
 const id = route.params.id as string
 const { titre, retenir } = useTitreCollection(id, { charger: false })
@@ -486,20 +488,12 @@ async function save () {
               v-model="form.sensitivity"
               class="fr-select"
             >
-              <option value="public">
-                Données ouvertes
-              </option>
-              <option value="internal">
-                Interne au ministère
-              </option>
-              <option value="personal">
-                Données personnelles
-              </option>
-              <option value="confidential">
-                Confidentiel
-              </option>
-              <option value="restricted">
-                Diffusion restreinte
+              <option
+                v-for="s in SENSIBILITES"
+                :key="s.valeur"
+                :value="s.valeur"
+              >
+                {{ s.libelle }}
               </option>
             </select>
           </div>

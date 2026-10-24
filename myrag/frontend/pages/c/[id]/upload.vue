@@ -1,64 +1,149 @@
+<script setup lang="ts">
+import { SENSIBILITES } from '~/utils/libelles'
+import { estCollectionResana, titrePageDocuments } from '~/utils/resana'
+
+const route = useRoute()
+const id = route.params.id as string
+const { titre, retenir } = useTitreCollection(id, { charger: false })
+const { get } = useApi()
+// Le document irait au moteur de recherche : pendant une panne, l'envoi échouerait.
+const { rechercheIndisponible } = useEtatService()
+const strategy = ref('auto')
+const sensitivity = ref('public')
+// undefined tant que la fiche n'a pas répondu (rien ne s'affiche : pas de dépôt montré puis
+// retiré) ; null si elle est illisible (une partition sans fiche garde le dépôt).
+const fiche = ref<{ source_type?: string | null, sensitivity?: string } | null | undefined>(undefined)
+const resana = computed(() => estCollectionResana(fiche.value))
+const titrePage = computed(() => titrePageDocuments(fiche.value))
+// La carte Résana suit la capacité (docs/resana.md).
+const { capacites, charger } = useCapacites()
+
+onMounted(async () => {
+  charger()
+  try {
+    const f = await get(`/api/collections/${id}`)
+    retenir(f)
+    fiche.value = f
+    if (f?.sensitivity) {
+      sensitivity.value = f.sensitivity
+    }
+  }
+  catch {
+    fiche.value = null
+  }
+})
+</script>
+
 <template>
   <div>
-    <FilAriane :collection="id" :titre="titre" rubrique="Ajouter des documents" />
+    <FilAriane
+      :collection="id"
+      :titre="titre"
+      :rubrique="titrePage"
+    />
 
-    <h1 class="fr-h3">Ajouter des documents — {{ titre }}</h1>
+    <h1 class="fr-h3">
+      {{ titrePage }} — {{ titre }}
+    </h1>
 
-    <div class="fr-grid-row fr-grid-row--gutters">
-      <div class="fr-col-12 fr-col-lg-8">
+    <div
+      v-if="fiche !== undefined"
+      class="fr-grid-row fr-grid-row--gutters"
+    >
+      <!-- Une collection Résana se remplit par sa sélection de dossiers : ni dépôt ni découpage. -->
+      <div
+        v-if="resana"
+        class="fr-col-12 fr-col-lg-8"
+      >
         <DepotEtatResana
           v-if="capacites.resana"
           :collection="id"
           class="fr-mt-2w"
         />
+        <p
+          v-else
+          class="fr-message fr-message--info fr-mt-2w"
+        >
+          La connexion à Résana est fermée pour le moment : la sélection et la mise à jour reviendront avec elle.
+        </p>
 
+        <DepotSensibiliteResana
+          class="fr-mt-4w"
+          :collection="id"
+          :valeur="fiche?.sensitivity"
+        />
+      </div>
+
+      <div
+        v-else
+        class="fr-col-12 fr-col-lg-8"
+      >
         <!-- Strategy -->
         <div class="fr-select-group fr-mt-2w">
-          <label class="fr-label" for="strategy">Découpage du document
+          <label
+            class="fr-label"
+            for="strategy"
+          >Découpage du document
             <span class="fr-hint-text">Comment un fichier texte (.txt, .md, .csv) est coupé en passages, que l'assistant retrouve et cite. Les PDF, Word et autres documents sont découpés par le moteur de recherche.</span>
           </label>
-          <select id="strategy" class="fr-select" v-model="strategy">
-            <option value="auto">Automatique (détection du type)</option>
-            <option value="article">Par article (code juridique)</option>
-            <option value="section">Par section (rapport)</option>
-            <option value="qr">Par question-réponse (FAQ)</option>
-            <option value="length">Par longueur fixe</option>
+          <select
+            id="strategy"
+            v-model="strategy"
+            class="fr-select"
+          >
+            <option value="auto">
+              Automatique (détection du type)
+            </option>
+            <option value="article">
+              Par article (code juridique)
+            </option>
+            <option value="section">
+              Par section (rapport)
+            </option>
+            <option value="qr">
+              Par question-réponse (FAQ)
+            </option>
+            <option value="length">
+              Par longueur fixe
+            </option>
           </select>
         </div>
 
         <!-- Sensitivity -->
         <div class="fr-select-group fr-mt-2w">
-          <label class="fr-label" for="sensitivity">Sensibilité</label>
-          <select id="sensitivity" class="fr-select" v-model="sensitivity">
-            <option value="public">Public</option>
-            <option value="internal">Interne</option>
-            <option value="restricted">Restreint</option>
-            <option value="confidential">Confidentiel</option>
+          <label
+            class="fr-label"
+            for="sensitivity"
+          >Sensibilité</label>
+          <select
+            id="sensitivity"
+            v-model="sensitivity"
+            class="fr-select"
+          >
+            <option
+              v-for="s in SENSIBILITES"
+              :key="s.valeur"
+              :value="s.valeur"
+            >
+              {{ s.libelle }}
+            </option>
           </select>
         </div>
 
-        <DepotZone class="fr-mt-4w" :collection="id" :strategy="strategy" :sensitivity="sensitivity" :desactive="rechercheIndisponible" />
-        <p v-if="rechercheIndisponible" class="fr-message fr-message--info fr-mt-1w">
+        <DepotZone
+          class="fr-mt-4w"
+          :collection="id"
+          :strategy="strategy"
+          :sensitivity="sensitivity"
+          :desactive="rechercheIndisponible"
+        />
+        <p
+          v-if="rechercheIndisponible"
+          class="fr-message fr-message--info fr-mt-1w"
+        >
           L'ajout de documents reviendra avec la recherche. Le bandeau en haut de la page vous préviendra.
         </p>
-        <div v-if="error" class="fr-alert fr-alert--error fr-mt-4w">
-          <p>{{ error }}</p>
-        </div>
       </div>
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-const route = useRoute()
-const id = route.params.id as string
-const { titre } = useTitreCollection(id)
-// Le document irait au moteur de recherche : pendant une panne, l'envoi échouerait.
-const { rechercheIndisponible } = useEtatService()
-const strategy = ref('auto')
-const sensitivity = ref('public')
-const error = ref('')
-// Une collection Résana : son dossier et « Synchroniser » (la carte ne s'affiche que si elle l'est).
-const { capacites, charger } = useCapacites()
-onMounted(charger)
-</script>

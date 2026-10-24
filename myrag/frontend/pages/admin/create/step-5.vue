@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { lienEtape } from '~/utils/wizard'
+
 const route = useRoute()
 const collection = route.query.collection as string
+// Une collection Résana reste privée à qui l'a importée (règle v1, docs/resana.md) : elle ne se
+// partage pas, l'étape 5 le dit et mène à sa fiche.
+const source = (route.query.source as string) || ''
+const resana = source === 'resana'
 const { titre } = useTitreCollection(collection)
 const { post } = useApi()
 
@@ -45,7 +51,7 @@ async function terminer () {
   <WizardEtape
     :numero="5"
     :titre="`Partager — ${titre || collection}`"
-    chapeau="Votre collection est créée. Qui doit pouvoir l'interroger dès maintenant ?"
+    :chapeau="resana ? 'Votre collection est créée et ses documents s\'indexent. Dernière étape : savoir qui peut l\'utiliser.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
   >
     <template #formulaire>
       <div
@@ -57,6 +63,43 @@ async function terminer () {
             Retour à l'étape 1
           </NuxtLink>
         </p>
+      </div>
+
+      <div
+        v-else-if="resana"
+        class="fr-col-12 fr-col-md-8"
+      >
+        <h2 class="fr-h5">
+          Qui peut utiliser cette collection ?
+        </h2>
+        <p>
+          <strong>Pour l'instant, vous seul.</strong> Ses documents viennent de vos espaces Résana. Dans Résana, chacun
+          ne voit que les espaces où il est invité. Si d'autres personnes pouvaient interroger votre collection, elles
+          liraient peut-être des documents que Résana ne leur montre pas. C'est pourquoi une collection Résana ne se
+          partage pas encore et n'apparaît pas dans l'assistant MirAI.
+        </p>
+
+        <h2 class="fr-h5">
+          Ce que vous pouvez faire maintenant
+        </h2>
+        <p class="fr-mb-1w">
+          Tout se passe sur la fiche de la collection (bouton ci-dessous) :
+        </p>
+        <ul class="fr-mb-3w">
+          <li><strong>lui poser des questions</strong> : bouton « Poser une question » ;</li>
+          <li>
+            <strong>la tenir à jour</strong> quand des documents changent dans Résana : onglet « Documents », bouton
+            « Gérer les documents », puis « Mettre à jour » ;
+          </li>
+          <li><strong>ajouter ou retirer des dossiers</strong> : même page, « Modifier la sélection ».</li>
+        </ul>
+
+        <div class="fr-callout fr-mb-4w">
+          <p class="fr-callout__text fr-text--sm">
+            Le partage avec des collègues viendra plus tard, quand les règles d'accès auront été décidées. Il se fera
+            alors depuis la fiche de la collection, avec le bouton « Partager ».
+          </p>
+        </div>
       </div>
 
       <div
@@ -185,13 +228,21 @@ async function terminer () {
         </li>
         <li>
           <NuxtLink
-            :to="`/admin/create/step-4?collection=${collection}`"
+            :to="lienEtape(4, collection, source)"
             class="fr-btn fr-btn--secondary"
           >
             Étape précédente
           </NuxtLink>
         </li>
-        <li>
+        <li v-if="resana">
+          <NuxtLink
+            :to="`/c/${encodeURIComponent(collection)}`"
+            class="fr-btn"
+          >
+            Ouvrir la fiche de la collection
+          </NuxtLink>
+        </li>
+        <li v-else>
           <button
             class="fr-btn"
             :disabled="!collection || envoi || (choix === 'groupe' && !groupe.trim())"
