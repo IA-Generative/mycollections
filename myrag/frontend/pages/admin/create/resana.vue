@@ -252,9 +252,10 @@ onBeforeUnmount(() => {
             v-if="phase === 'choisir'"
             type="button"
             class="fr-btn fr-btn--sm fr-btn--tertiary"
+            :disabled="chargeEspaces || chargeDossiers"
             @click="espaces.length ? (dossier ? chargerInventaire() : chargerDossiers()) : chargerEspaces()"
           >
-            Réessayer
+            {{ chargeEspaces || chargeDossiers ? 'Nouvelle tentative…' : 'Réessayer' }}
           </button>
         </p>
       </div>

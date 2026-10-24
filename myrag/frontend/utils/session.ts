@@ -10,9 +10,13 @@ export const MESSAGE_SESSION_EXPIREE = 'Votre session a expiré : reconnectez-vo
 
 /**
  * Faire l'appel ; sur un 401, renouveler le jeton et le refaire une fois. Si le renouvellement
- * échoue, `expiree()` est appelée (une seule fois par appel) et la réponse 401 est rendue telle
- * quelle. Un 401 malgré un renouvellement réussi n'est PAS une expiration (le service refuse pour
- * une autre raison) : rien n'est signalé.
+ * échoue, ou si l'API refuse ENCORE le jeton tout neuf, la session est inutilisable : `expiree()`
+ * est appelée (une seule fois par appel) et la réponse 401 est rendue telle quelle.
+ *
+ * L'API de Mes collections ne répond 401 QUE pour l'authentification (« Jeton invalide ou
+ * expiré », « Authentification requise ») : un service tiers qui refuse (Résana, par exemple) est
+ * rendu en 502. Un 401 après renouvellement n'a donc qu'un remède, se reconnecter — avant, il
+ * laissait l'écran sur « Jeton invalide ou expiré » et « Réessayer » rejouait le même refus.
  */
 export async function avecRenouvellement (
   faire: () => Promise<Response>,
@@ -27,7 +31,11 @@ export async function avecRenouvellement (
     expiree()
     return premiere
   }
-  return faire()
+  const seconde = await faire()
+  if (seconde.status === 401) {
+    expiree()
+  }
+  return seconde
 }
 
 /** Le contenu (non vérifié) d'un jeton JWT ; null s'il n'en est pas un. */

@@ -17,15 +17,16 @@ import { avecRenouvellement } from '~/utils/session'
 export function useApi() {
   const config = useRuntimeConfig()
   const baseUrl = config.public.myragApiUrl
+  // Pris une fois, ici, dans le contexte de l'application : rappelés plus tard (après un await),
+  // ils ne dépendent plus de ce contexte.
+  const { renewToken, signalerExpiration, getAccessToken } = useAuth()
 
   function authHeaders(): Record<string, string> {
-    const { getAccessToken } = useAuth()
     const token = getAccessToken()
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
   async function tryRenew(): Promise<boolean> {
-    const { renewToken } = useAuth()
     const t = await renewToken()
     return !!t
   }
@@ -41,7 +42,7 @@ export function useApi() {
       })
     // Un 401 qu'aucun renouvellement ne répare : la session est finie, l'écran le dit et
     // propose de se reconnecter (au lieu de laisser travailler sans jeton valide).
-    return avecRenouvellement(doFetch, tryRenew, () => useAuth().signalerExpiration())
+    return avecRenouvellement(doFetch, tryRenew, signalerExpiration)
   }
 
   async function get<T = any>(path: string, params?: Record<string, string>): Promise<T> {
