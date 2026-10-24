@@ -39,7 +39,7 @@ describe('libellés', () => {
     expect(etatAssistant(3)).toEqual({ libelle: 'Version 3', classe: 'fr-badge--success' })
   })
   it('les canaux ouverts', () => {
-    expect(canauxActifs({ socle: true, api: true })).toEqual(['Mon assistant', 'L\'API'])
+    expect(canauxActifs({ socle: true, api: true })).toEqual(['Chat MirAI', 'L\'API'])
     expect(canauxActifs(null)).toEqual([])
   })
   it('les sources, sans nommer celles que l\'on ne lit pas', () => {

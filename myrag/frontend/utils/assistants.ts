@@ -55,7 +55,7 @@ export function libelleRegime (r: Regime): string {
 
 /** Où l'assistant peut être servi, dit simplement. */
 export const CANAUX: readonly { cle: Canal, libelle: string, aide: string }[] = [
-  { cle: 'socle', libelle: 'Mon assistant', aide: 'Il apparaît dans la liste des modèles de Mon assistant.' },
+  { cle: 'socle', libelle: 'Chat MirAI', aide: 'Il apparaît dans la liste des modèles du chat MirAI.' },
   { cle: 'portail', libelle: 'Mon portail', aide: 'Ses réponses s\'affichent dans la recherche de Mon portail.' },
   { cle: 'fenetre_js', libelle: 'Une fenêtre sur un site', aide: 'Une ligne à coller dans une page intranet ouvre l\'assistant dans une fenêtre.' },
   { cle: 'api', libelle: 'L\'API', aide: 'D\'autres applications l\'interrogent, sur clé d\'API.' },

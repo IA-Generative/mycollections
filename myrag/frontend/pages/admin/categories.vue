@@ -20,10 +20,10 @@
 
     <div v-if="resyncConseillee" class="fr-callout fr-callout--blue-ecume fr-mb-3w">
       <p class="fr-callout__text fr-text--sm">
-        Le catalogue est à jour. <strong>Mon assistant</strong>, lui, montre encore les anciennes étiquettes :
+        Le catalogue est à jour. <strong>Le chat MirAI</strong>, lui, montre encore les anciennes étiquettes :
         la catégorie d'une collection y est l'étiquette de son modèle.
       </p>
-      <button class="fr-btn fr-btn--sm" :disabled="occupe" @click="resynchroniser">Mettre à jour l'assistant</button>
+      <button class="fr-btn fr-btn--sm" :disabled="occupe" @click="resynchroniser">Mettre à jour le chat MirAI</button>
     </div>
 
     <!-- ─── Les catégories ─────────────────────────────────────────────────── -->
@@ -330,7 +330,7 @@ function resynchroniser() {
     resyncConseillee.value = r.echecs.length > 0
     return r.echecs.length
       ? `${r.fiches.length} fiche(s) mise(s) à jour, ${r.echecs.length} en échec : ${r.echecs.map((e: any) => e.collection).join(', ')}.`
-      : `${r.fiches.length} fiche(s) de l'assistant mise(s) à jour.`
+      : `${r.fiches.length} fiche(s) du chat MirAI mise(s) à jour.`
   })
 }
 

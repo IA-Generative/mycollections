@@ -108,7 +108,7 @@ async function purger () {
 
     <template v-if="!archivee">
       <p class="fr-text--sm">
-        Archiver retire la collection du catalogue et de l'assistant. Ses documents sont gardés : vous pourrez la désarchiver.
+        Archiver retire la collection du catalogue et du chat MirAI. Ses documents sont gardés : vous pourrez la désarchiver.
       </p>
       <div
         v-if="confirmationArchive"

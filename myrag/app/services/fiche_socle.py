@@ -1,4 +1,4 @@
-"""La fiche d'une collection dans le SOCLE (Open WebUI, « Mon assistant ») : ce qu'on y LIT.
+"""La fiche d'une collection dans le SOCLE (Open WebUI, « Chat MirAI ») : ce qu'on y LIT.
 
 Vocabulaire (ADR-0003) : « le socle » est Open WebUI ; « un assistant » est, dans le reste du
 code, un assistant de recherche (app/harnais). Ce module s'appelait `fiche_assistant`.
@@ -32,7 +32,7 @@ class GroupeInconnu(ValueError):
 
     def __init__(self, noms: list[str]):
         self.noms = noms
-        super().__init__("groupe inconnu de l'assistant : " + ", ".join(noms) + ". Indiquez le nom d'un groupe tel qu'il apparaît dans l'assistant.")
+        super().__init__("groupe inconnu du chat MirAI : " + ", ".join(noms) + ". Indiquez le nom d'un groupe tel qu'il apparaît dans le chat MirAI.")
 
 
 class PasPubliee(Exception):

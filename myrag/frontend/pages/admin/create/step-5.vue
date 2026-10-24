@@ -38,10 +38,10 @@ async function terminer () {
       ...(resana ? { droits_resana_confirmes: droitsConfirmes.value } : {}),
     })
     resultat.value = r?.owui?.error
-      ? `La collection est publiée, mais l'assistant ne l'a pas encore reçue : ${r.owui.error}`
+      ? `La collection est publiée, mais le chat MirAI ne l'a pas encore reçue : ${r.owui.error}`
       : resana
-        ? `Votre collection est visible du groupe « ${chemin} » dans l'assistant.`
-        : `Votre collection est visible du groupe « ${chemin} » dans l'assistant. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
+        ? `Votre collection est visible du groupe « ${chemin} » dans le chat MirAI.`
+        : `Votre collection est visible du groupe « ${chemin} » dans le chat MirAI. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
   }
   catch (e) {
     erreur.value = true
@@ -81,7 +81,7 @@ async function terminer () {
           </h2>
           <p>
             <strong>Pour l'instant, vous seul.</strong> Vous pouvez aussi l'ouvrir à un groupe de collègues, qui la
-            retrouveront dans l'assistant MirAI.
+            retrouveront dans le chat MirAI.
           </p>
           <div class="fr-callout fr-mb-4w">
             <h3 class="fr-callout__title fr-h6">
@@ -89,7 +89,7 @@ async function terminer () {
             </h3>
             <p class="fr-callout__text fr-text--sm">
               Ses documents viennent de vos espaces Résana. Dans Résana, chacun ne voit que les espaces où il est
-              invité. Un membre du groupe qui n'est pas invité dans ces espaces lirait, par l'assistant, des documents
+              invité. Un membre du groupe qui n'est pas invité dans ces espaces lirait, par le chat MirAI, des documents
               que Résana ne lui montre pas. Vérifiez donc que chaque membre du groupe a accès aux dossiers indexés :
               c'est votre responsabilité. Une collection Résana ne s'ouvre jamais à tout le monde.
             </p>
@@ -111,7 +111,7 @@ async function terminer () {
 
         <fieldset class="fr-fieldset fr-mb-4w">
           <legend class="fr-fieldset__legend fr-h5">
-            Dans l'assistant MirAI
+            Dans le chat MirAI
           </legend>
           <div class="fr-fieldset__element">
             <div class="fr-radio-group">
@@ -143,7 +143,7 @@ async function terminer () {
                 for="part-groupe"
               >
                 Un groupe, pour la tester à plusieurs
-                <span class="fr-hint-text">Seuls les membres du groupe indiqué la verront dans la liste des modèles de l'assistant.</span>
+                <span class="fr-hint-text">Seuls les membres du groupe indiqué la verront dans la liste des modèles du chat MirAI.</span>
               </label>
             </div>
             <div
@@ -154,7 +154,7 @@ async function terminer () {
                 class="fr-label"
                 for="part-groupe-nom"
               >Groupe
-                <span class="fr-hint-text">Son nom tel qu'il apparaît dans l'assistant. Un nom inconnu de l'assistant est refusé : la collection ne viserait personne.</span>
+                <span class="fr-hint-text">Son nom tel qu'il apparaît dans le chat MirAI. Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
               </label>
               <input
                 id="part-groupe-nom"
@@ -185,7 +185,7 @@ async function terminer () {
               <label
                 class="fr-label"
                 for="nom-fiche"
-              >Nom dans l'assistant
+              >Nom dans le chat MirAI
                 <span class="fr-hint-text">Laissez vide : c'est le titre de la collection.</span>
               </label>
               <input
@@ -202,8 +202,8 @@ async function terminer () {
           class="fr-text--sm"
           style="color:var(--text-mention-grey)"
         >
-          D'autres façons de l'interroger (comme outil dans toute conversation, depuis une page web, depuis une
-          extension du navigateur) sont prévues ; elles n'existent pas encore et ne sont donc pas proposées ici.
+          D'autres façons de l'interroger (comme outil dans toute conversation, depuis une page web, depuis
+          MirAI Assistant pour navigateur) sont prévues ; elles n'existent pas encore et ne sont donc pas proposées ici.
         </p>
 
         <div

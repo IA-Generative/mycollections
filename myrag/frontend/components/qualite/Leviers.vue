@@ -82,7 +82,7 @@
         </p>
         <p class="fr-text--sm"><strong>{{ fiables }}</strong> réponse{{ fiables > 1 ? 's' : '' }} fiable{{ fiables > 1 ? 's' : '' }} aujourd'hui.</p>
         <p class="fr-text--xs leviers__discret">
-          Bientôt : ces réponses seront servies en priorité dans le bac à sable et l'assistant. Pour l'instant, elles
+          Bientôt : ces réponses seront servies en priorité dans le bac à sable et le chat MirAI. Pour l'instant, elles
           servent de référence aux mesures.
         </p>
         <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary" @click="emit('voirFiables')">Voir les réponses fiables</button>

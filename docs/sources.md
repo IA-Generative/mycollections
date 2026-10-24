@@ -34,7 +34,7 @@ un onglet.
 
 ### 3. Dans un onglet : une page autonome
 
-« Ouvrir dans un onglet », un Ctrl-clic, ou un lien cité depuis l'assistant mènent à la même
+« Ouvrir dans un onglet », un Ctrl-clic, ou un lien cité depuis le chat MirAI mènent à la même
 lecture, servie par le backend en page HTML autonome.
 
 ![Page d'extrait ouverte dans un onglet : titre, métadonnées, passage en paragraphes, résumé du document](images/source-page-en-onglet.png)

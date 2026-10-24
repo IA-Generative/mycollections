@@ -5,7 +5,7 @@ compris. Elle interroge ensuite la collection comme les autres. « Synchroniser 
 réindexe ce qui a changé. Aucune synchronisation n'est planifiée.
 
 **La collection naît privée à la personne qui a importé le dossier**, et elle seule peut la
-synchroniser. Qui la gère peut ensuite l'ouvrir, dans l'assistant, à un groupe de son choix, sous sa
+synchroniser. Qui la gère peut ensuite l'ouvrir, dans le chat MirAI, à un groupe de son choix, sous sa
 responsabilité (voir « Partager une collection Résana »).
 
 ## Comment Mes collections lit Résana
@@ -81,7 +81,7 @@ Décision du 2026-10-24 : les droits viennent du SSO, et le groupe est déclaré
 collection. C'est cette personne qui choisit qui la voit ; elle s'assure que chaque membre du groupe a
 les bons droits dans Résana, et elle en est responsable.
 
-- **Dans l'assistant, à un groupe seulement** (`POST /api/collections/{nom}/publish`, `visibility:
+- **Dans le chat MirAI, à un groupe seulement** (`POST /api/collections/{nom}/publish`, `visibility:
   group` et au moins un groupe) ; jamais à tout le monde (409).
 - **Avec une confirmation** : `droits_resana_confirmes: true`, sinon 409. L'écran la demande par une
   case à cocher (« J'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers
@@ -271,7 +271,7 @@ dans `frontend/utils/libelles.ts`) :
 - **Tout document indexé porte une sensibilité** : celle de la collection, par défaut. La changer
   document par document, et faire suivre le changement à l'indexeur, est l'objet de #139.
 - **La sensibilité ne change encore aucun droit.** Ce qu'un niveau interdit (publication dans
-  l'assistant, partage hors de la collection) reste à décider.
+  le chat MirAI, partage hors de la collection) reste à décider.
 
 ## Écrans
 
@@ -361,7 +361,7 @@ passe. L'invitation apparaît :
 
 - **sous une réponse du bac à sable** (champ `avis` de `POST /api/playground/{c}/chat`) ;
 - **dans la recherche** (`GET /api/v1/search`) : clé `notices`, absente s'il n'y en a pas, lue par
-  l'extension IAssistant-Direct (docs/clients.md) ;
+  MirAI Assistant pour navigateur (docs/clients.md) ;
 - **sur la page de la collection**.
 
 Le lien d'action ouvre la page de la collection (`/c/<nom>/upload?synchroniser=1`), où le bouton

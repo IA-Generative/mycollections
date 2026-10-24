@@ -973,15 +973,15 @@
           <label for="query">Filtrer le graphe — ou préparer une question</label>
           <textarea id="query" name="query" rows="4" placeholder="Un mot, un numéro d'article…"></textarea>
           <div class="question-helper-row">
-            <span class="helper" id="aideFiltre"><strong>Un mot ou un numéro</strong> réduit le graphe aux éléments qui le contiennent, et à leurs voisins — puis « Actualiser ». <strong>Une phrase entière ne filtre rien</strong> : le graphe ne comprend pas les questions. <span id="aideAssistant">Pour interroger la collection, écrivez votre question et ouvrez-la dans l'assistant avec le bouton ci-contre.</span></span>
+            <span class="helper" id="aideFiltre"><strong>Un mot ou un numéro</strong> réduit le graphe aux éléments qui le contiennent, et à leurs voisins — puis « Actualiser ». <strong>Une phrase entière ne filtre rien</strong> : le graphe ne comprend pas les questions. <span id="aideAssistant">Pour interroger la collection, écrivez votre question et ouvrez-la dans le chat MirAI avec le bouton ci-contre.</span></span>
             <div class="question-action-bar">
               <button
                 id="openWebuiButton"
                 class="secondary icon-action"
                 type="button"
-                title="Relancer dans le chat"
-                data-tooltip="Relancer dans le chat"
-                aria-label="Relancer dans le chat">
+                title="Relancer dans le chat MirAI"
+                data-tooltip="Relancer dans le chat MirAI"
+                aria-label="Relancer dans le chat MirAI">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path fill="currentColor" d="M12 5a7 7 0 1 1-6.64 9.2 1 1 0 1 1 1.9-.62A5 5 0 1 0 8.2 8.22H11a1 1 0 1 1 0 2H5.5A1.5 1.5 0 0 1 4 8.72V3.5a1 1 0 1 1 2 0v2.81A6.97 6.97 0 0 1 12 5Z" />
                 </svg>
@@ -1541,7 +1541,7 @@
       const question = queryInput.value.trim();
       if (!question) {
         queryInput.focus();
-        setOverlayState("Question requise", "Saisissez ou modifiez une question avant de la relancer dans Open WebUI.", true);
+        setOverlayState("Question requise", "Saisissez ou modifiez une question avant de la relancer dans le chat MirAI.", true);
         return;
       }
 
@@ -1552,7 +1552,7 @@
       if (!openedWindow) {
         setOverlayState(
           "Ouverture bloquée",
-          "Le navigateur a bloqué l'ouverture d'Open WebUI. Autorisez les pop-ups puis réessayez.",
+          "Le navigateur a bloqué l'ouverture du chat MirAI. Autorisez les pop-ups puis réessayez.",
           true
         );
         setChip("Relance bloquée");
@@ -1562,15 +1562,15 @@
       if (copied) {
         setOverlayState(
           "Question prête",
-          "Open WebUI a été ouvert dans un nouvel onglet avec la question préremplie. Elle a aussi été copiée en secours."
+          "Le chat MirAI a été ouvert dans un nouvel onglet avec la question préremplie. Elle a aussi été copiée en secours."
         );
       } else {
         setOverlayState(
           "Question prête",
-          "Open WebUI a été ouvert dans un nouvel onglet avec la question préremplie."
+          "Le chat MirAI a été ouvert dans un nouvel onglet avec la question préremplie."
         );
       }
-      setChip("Relance vers Open WebUI");
+      setChip("Relance vers le chat MirAI");
     }
 
     function setEmptyDetails() {
@@ -2804,7 +2804,7 @@
         if (data.query && data.query_matched === false) {
           setOverlayState(
             "Aucun élément ne contient ce texte",
-            `« ${data.query} » n'apparaît dans aucun élément : le graphe entier est affiché. Essayez un mot ou un numéro d'article — ou posez la question à l'assistant.`,
+            `« ${data.query} » n'apparaît dans aucun élément : le graphe entier est affiché. Essayez un mot ou un numéro d'article — ou posez la question au chat MirAI.`,
             true
           );
           updateUrl();
@@ -3077,8 +3077,8 @@
         if (aideAssistant) aideAssistant.style.display = "none";
       } else if (versAssistant) {
         const dit = cfg.assistant_model
-          ? "Poser cette question à l'assistant MirAI, sur cette collection"
-          : "Poser cette question à l'assistant MirAI (la collection n'y est pas publiée à tous : il répondra sans elle)";
+          ? "Poser cette question au chat MirAI, sur cette collection"
+          : "Poser cette question au chat MirAI (la collection n'y est pas publiée à tous : il répondra sans elle)";
         for (const attribut of ["title", "data-tooltip", "aria-label"]) versAssistant.setAttribute(attribut, dit);
       }
 

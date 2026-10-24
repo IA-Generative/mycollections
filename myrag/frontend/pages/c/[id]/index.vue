@@ -487,7 +487,7 @@ onMounted(async () => {
             <span
               v-if="collection.acces"
               class="fr-text--sm"
-            ><strong>Où l'interroger :</strong> ici, dans Mon assistant (modèle <code>{{ collection.acces.assistant.model_id }}</code>), ou par l'API.</span>
+            ><strong>Où l'interroger :</strong> ici, dans le chat MirAI (modèle <code>{{ collection.acces.assistant.model_id }}</code>), ou par l'API.</span>
             <span
               v-else
               class="fr-text--sm"
@@ -511,7 +511,7 @@ onMounted(async () => {
           >
             <ul class="fr-text--sm">
               <li>
-                <strong>dans l'agent conversationnel de MirAI Next</strong>, en choisissant le modèle
+                <strong>dans le chat MirAI</strong>, en choisissant le modèle
                 <code>{{ collection.acces.assistant.model_id }}</code> ;
               </li>
               <li v-if="collection.acces.api">

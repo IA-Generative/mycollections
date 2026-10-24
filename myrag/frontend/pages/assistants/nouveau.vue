@@ -141,7 +141,7 @@ onMounted(async () => {
             class="fr-label"
             for="titre"
           >Titre de l'assistant *
-            <span class="fr-hint-text">Ce que liront vos collègues dans Mon assistant.</span>
+            <span class="fr-hint-text">Ce que liront vos collègues dans le chat MirAI.</span>
           </label>
           <input
             id="titre"

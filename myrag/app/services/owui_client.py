@@ -235,7 +235,7 @@ class OwuiClient:
         if garder_les_droits and not existante:
             # Rien à reconduire : créer la fiche ici poserait une portée que personne ne
             # vient de choisir. C'est une PUBLICATION qui crée une fiche.
-            raise FicheAbsente(f"{model_id} n'a pas de fiche dans l'assistant : republier la collection")
+            raise FicheAbsente(f"{model_id} n'a pas de fiche dans le chat MirAI : republier la collection")
         body = {
             "id": model_id,
             "name": name,

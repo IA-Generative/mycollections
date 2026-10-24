@@ -269,6 +269,8 @@ async def get_config():
         "graphrag_viewer_url": settings.graphrag_viewer_url,
         "myrag_public_url": settings.myrag_public_url,
         "drive_url": settings.drive_url,
+        # Où installer « MirAI Assistant pour navigateur » (device management) ; en https seulement.
+        "navigateur_installation_url": settings.navigateur_installation_url if settings.navigateur_installation_url.startswith("https://") else "",
         # La génération de questions est-elle installée et configurée ? (l'onglet ne s'affiche que si oui)
         "generation": generation_paquet.prete(),
         # Le collectif : les drapeaux et le seuil lus chez le menu commun (cache court,

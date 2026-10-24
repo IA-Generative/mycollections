@@ -1,4 +1,4 @@
-"""De « amorcée » à « publiée à tous », puis dans Mon assistant : la preuve de l'export.
+"""De « amorcée » à « publiée à tous », puis dans le chat MirAI : la preuve de l'export.
 
 Le circuit de vérification est joué par l'interface (grille, relecture, passages d'état,
 page de publication). La preuve, elle, est lue avec le compte du testeur dans l'assistant :
@@ -62,7 +62,7 @@ def test_publier_a_tous_par_la_page_de_publication(session_testeur, collection_e
     assert page.locator("#alias").is_checked(), "la case « proposer dans l'assistant » doit être cochée par défaut"
     page.locator("label[for=vis-all]").click()
     captures.prendre(page, "06-publication-a-tous", mobile=False)
-    page.get_by_role("button", name=re.compile(r"^(Publier|Partager dans Mon assistant|Mettre à jour)$")).click()
+    page.get_by_role("button", name=re.compile(r"^(Publier|Partager dans le chat MirAI|Mettre à jour)$")).click()
     attendre(lambda: page.locator(".fr-alert--success, .fr-alert--warning, .fr-alert--error").count() > 0, delai=90, pas=1, motif="le retour de la publication")
     captures.prendre(page, "06-publication-resultat", mobile=False)
     publication = session_testeur.get(f"/api/collections/{collection_essai}/publication").json()
