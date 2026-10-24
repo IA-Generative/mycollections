@@ -128,7 +128,8 @@ def couverture(cfg: dict) -> dict:
     """Ce que l'index couvre du dossier choisi, lisible par l'écran et par les listes :
     `totale` si rien n'est exclu et que la dernière passe est allée au bout, sinon `partielle`
     avec ses raisons (`selection` : des sous-dossiers sont exclus ; `interrompue` : la dernière
-    passe s'est arrêtée en route ; `a_faire` : rien n'est encore indexé)."""
+    passe s'est arrêtée en route ; `a_faire` : rien n'est encore indexé ; `erreurs_de_lecture` :
+    le moteur n'a pas su lire certains documents)."""
     exclus = list((cfg.get("perimetre") or {}).get("exclus") or [])
     travail = cfg.get("travail") or {}
     indexes = len(cfg.get("documents") or {})
@@ -137,9 +138,15 @@ def couverture(cfg: dict) -> dict:
         raisons.append("selection")
     if travail.get("etat") in ("partiel", "echec", "interrompu") or (travail.get("etat") == "en_cours" and indexes):
         raisons.append("interrompue")
-    if not cfg.get("last_sync_at") and not indexes:
+    if not indexes:
         raisons.append("a_faire")
+    elif travail.get("en_erreur"):
+        raisons.append("erreurs_de_lecture")
+    dossiers = (cfg.get("perimetre") or {}).get("dossiers") or ([{"chemin": cfg.get("dossier_chemin")}] if cfg.get("dossier_id") else [])
     return {
+        "espace_nom": (cfg.get("espace") or {}).get("nom") or cfg.get("espace_nom"),
+        "entite": (cfg.get("espace") or {}).get("entite") or None,
+        "nb_dossiers": len(dossiers),
         "couverture": "partielle" if raisons else "totale",
         "raisons": raisons,
         "documents_indexes": indexes,

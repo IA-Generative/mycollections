@@ -316,6 +316,12 @@ async def create_collection_endpoint(
     user: CurrentUser = Depends(current_user),
 ):
     """Create a new collection (operators only: superadmin or a collection-admin)."""
+    return await creer_collection(req, user)
+
+
+async def creer_collection(req: CreateCollectionRequest, user: CurrentUser, *, source: str | None = None) -> dict:
+    """La création d'une collection, partagée par la route et par l'import Résana (`source="resana"`,
+    seul autorisé à poser le préfixe réservé « resana- »)."""
     if not access.can_create_collection(user.groups):
         raise HTTPException(status_code=403, detail="Création réservée aux opérateurs")
     # L'identifiant est ce que taperont les applications (`openrag-<identifiant>`) : il se
@@ -323,9 +329,10 @@ async def create_collection_endpoint(
     # qui existe déjà chez OpenRAG — son nom est un fait, on ne peut que l'adopter.
     demande = req.name
     req.name = req.name.strip().lower()
-    motif = nommage.motif_de_refus(req.name)
+    motif = nommage.motif_de_refus(req.name, source=source)
     # En preview, jamais d'adoption hors préfixe : ce serait rattacher une partition de la bêta.
-    if motif and (motif == "preview" or not await _partition_existe(demande)):
+    # « resana » : jamais d'adoption non plus — le préfixe réservé ne s'obtient que par l'import Résana.
+    if motif and (motif in ("preview", "resana") or not await _partition_existe(demande)):
         raise HTTPException(status_code=422, detail={"reason": motif, "message": nommage.MOTIFS[motif]})
     if motif:
         req.name = demande  # adoption : le nom de la partition, tel quel

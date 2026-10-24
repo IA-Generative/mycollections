@@ -5,12 +5,18 @@
  * jour un index ancien, et — pour la personne qui a importé — « Mettre à jour » et « Modifier la
  * sélection » (ajouter ou retirer des sous-dossiers, pour poursuivre l'indexation).
  */
-import type { AvisResana, CouvertureResana, ErreurResana, InventaireResana, StatutResana } from '~/utils/resana'
-import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, preparation, travailEnCours } from '~/utils/resana'
+import type { AvisResana, CouvertureResana, ErreurResana, StatutResana } from '~/utils/resana'
+import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, travailEnCours } from '~/utils/resana'
 
 const props = defineProps<{ collection: string }>()
 
-type Statut = StatutResana & CouvertureResana & { espace_id?: string | null, dossier_id?: string | null, exclus: string[], avis?: AvisResana | null }
+type Statut = StatutResana & CouvertureResana & {
+  espace_id?: string | null
+  espace?: { id: string, nom: string, entite?: string } | null
+  dossiers?: { id: string, chemin: string }[]
+  exclus: string[]
+  avis?: AvisResana | null
+}
 
 const route = useRoute()
 const { get, post } = useApi()
@@ -19,7 +25,6 @@ const erreur = ref<ErreurResana | null>(null)
 const envoi = ref(false)
 const bouton = ref<HTMLButtonElement | null>(null)
 let minuterie: ReturnType<typeof setTimeout> | undefined
-let rappel: ReturnType<typeof setTimeout> | undefined
 
 const enCours = computed(() => travailEnCours(statut.value?.travail))
 const phrase = computed(() => libelleTravail(statut.value?.travail))
@@ -31,9 +36,8 @@ const derniere = computed(() => {
 
 // ─── Modifier la sélection ───────────────────────────────────────────────────
 const edition = ref(false)
-const inventaire = ref<InventaireResana | null>(null)
-const enPreparation = ref<{ dossiers_lus?: number | null, dossiers?: number | null } | null>(null)
-const exclus = ref<string[]>([])
+const choisis = ref<string[]>([])
+const dossiersChoisis = ref<{ id: string, chemin: string }[]>([])
 
 async function charger () {
   clearTimeout(minuterie)
@@ -49,11 +53,12 @@ async function charger () {
   }
 }
 
-async function synchroniser (nouveauxExclus?: string[], complet = false) {
+async function synchroniser (dossiers?: { id: string, chemin: string }[], complet = false) {
   envoi.value = true
   erreur.value = null
   try {
-    const corps = nouveauxExclus || complet ? { ...(nouveauxExclus ? { exclus: nouveauxExclus } : {}), ...(complet ? { complet: true } : {}) } : undefined
+    // Changer la sélection remplace la liste des dossiers inclus (et efface d'anciennes exclusions).
+    const corps = dossiers || complet ? { ...(dossiers ? { dossiers, exclus: [] } : {}), ...(complet ? { complet: true } : {}) } : undefined
     await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, corps)
     edition.value = false
   }
@@ -66,37 +71,12 @@ async function synchroniser (nouveauxExclus?: string[], complet = false) {
   await charger()
 }
 
-async function chargerInventaire () {
-  clearTimeout(rappel)
-  const s = statut.value
-  if (!s?.espace_id || !s.dossier_id || !edition.value) {
-    return
-  }
-  erreur.value = null
-  try {
-    const r = await get(`/api/sources/resana/espaces/${encodeURIComponent(s.espace_id)}/inventaire`, { dossier: s.dossier_id })
-    if (r.en_preparation) {
-      enPreparation.value = r
-      rappel = setTimeout(chargerInventaire, 5000)
-      return
-    }
-    enPreparation.value = null
-    inventaire.value = r
-  }
-  catch (e) {
-    erreur.value = erreurResana(e)
-  }
-}
-
 function ouvrirEdition () {
-  exclus.value = [...(statut.value?.exclus || [])]
-  inventaire.value = null
+  choisis.value = (statut.value?.dossiers || []).map(d => d.id)
   edition.value = true
-  chargerInventaire()
 }
 
 function fermerEdition () {
-  clearTimeout(rappel)
   edition.value = false
 }
 
@@ -111,7 +91,6 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   clearTimeout(minuterie)
-  clearTimeout(rappel)
 })
 </script>
 
@@ -126,7 +105,7 @@ onBeforeUnmount(() => {
         id="etat-resana-titre"
         class="fr-h5 fr-mb-0"
       >
-        Dossier Résana
+        Espace Résana
       </h2>
       <span
         class="fr-badge fr-badge--sm fr-badge--no-icon"
@@ -134,7 +113,9 @@ onBeforeUnmount(() => {
       >{{ etiquetteResana(statut) }}</span>
     </div>
     <p class="fr-text--sm fr-mt-1w fr-mb-1w">
-      <strong>{{ statut.espace_nom }}</strong> › {{ statut.dossier_chemin }}{{ derniere ? ` — dernière lecture le ${derniere}` : '' }}.
+      <strong>{{ statut.espace_nom }}</strong><template v-if="statut.espace?.entite">
+        ({{ statut.espace.entite }})
+      </template> › {{ statut.dossier_chemin }}{{ derniere ? ` — dernière lecture le ${derniere}` : '' }}.
     </p>
     <p class="fr-text--sm fr-mb-1w">
       {{ phraseCouverture(statut) }}
@@ -245,32 +226,19 @@ onBeforeUnmount(() => {
       v-if="edition"
       class="fr-mt-2w"
     >
-      <p
-        v-if="enPreparation"
-        class="fr-text--sm"
-        role="status"
-      >
-        Résana prépare l'inventaire du dossier{{ preparation(enPreparation.dossiers_lus, enPreparation.dossiers) }}…
-      </p>
-      <p
-        v-else-if="!inventaire && !erreur"
-        class="fr-text--sm"
-        role="status"
-      >
-        Inventaire du dossier…
-      </p>
-      <DepotArbreResana
-        v-if="inventaire"
-        v-model="exclus"
-        :inventaire="inventaire"
+      <DepotDossiersResana
+        v-if="statut.espace_id"
+        v-model="choisis"
+        :espace="statut.espace_id"
+        @dossiers="dossiersChoisis = $event"
       />
       <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-2w">
         <li>
           <button
             type="button"
             class="fr-btn fr-btn--sm"
-            :disabled="!inventaire || envoi"
-            @click="synchroniser(exclus)"
+            :disabled="!dossiersChoisis.length || envoi"
+            @click="synchroniser(dossiersChoisis)"
           >
             Enregistrer et mettre à jour
           </button>

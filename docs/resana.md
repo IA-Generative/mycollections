@@ -43,9 +43,11 @@ sans elle, chaque route répond 404 et l'écran ne propose pas Résana.
 | `GET /espaces/{id}/dossiers?recherche=` | toute personne connectée | les dossiers de l'espace |
 | `GET /espaces/{id}/apercu?dossier=` | toute personne connectée | le nombre de documents et leur taille approchée ; `202 {en_preparation, dossiers_lus, dossiers}` tant que le service prépare la liste |
 | `GET /espaces/{id}/inventaire?dossier=` | toute personne connectée | les sous-dossiers du dossier, avec le nombre de documents de chacun et de son sous-arbre ; 202 pendant la préparation |
-| `GET /existant?espace=&dossier=&chemin=` | toute personne connectée | ses propres collections Résana qui indexent déjà ce dossier, un parent ou un sous-dossier |
-| `POST /add` | la personne qui a **créé** la collection | relie la collection au dossier (`exclus` : les sous-dossiers à ne pas indexer) et lance l'import |
-| `POST /sync/{collection}` | la personne qui a importé | relit le dossier et réindexe s'il a changé ; avec `{"exclus": […]}`, change d'abord la sélection |
+| `GET /existant?espace=` | toute personne connectée | ses propres collections Résana déjà ancrées sur cet espace |
+| `GET /proposition?espace=&suffixe=` | toute personne connectée | l'identifiant que recevra la collection, et s'il est libre |
+| `POST /collections` | toute personne connectée | crée la collection ancrée sur l'espace (identifiant posé par le serveur, privée) et lance l'import, en un appel |
+| `POST /add` | la personne qui a **créé** la collection | relie une collection déjà créée à un dossier et lance l'import (ancienne voie, remplacée par `POST /collections`) |
+| `POST /sync/{collection}` | la personne qui a importé | relit les dossiers et réindexe ce qui a changé ; avec `{"dossiers": […]}` (et `exclus`), change d'abord la sélection ; `{"complet": true}` retélécharge tout |
 | `GET /status/{collection}` | qui peut lire la collection | le dossier relié, la couverture, l'avancement, l'invitation à mettre à jour, `est_importeur` (et, pour lui, la sélection) |
 
 Les erreurs du service sont rendues telles quelles : `{code, message, reessayable}`, plus `url_connexion`
@@ -175,61 +177,96 @@ gardée comme adresse d'origine de chaque fichier, et envoyée à OpenRAG en mé
 fait déjà pointer ses liens de source vers cette adresse quand elle existe. Les citations du bac à
 sable de Mes collections passent encore par l'extrait OpenRAG.
 
-## Écrans : Résana d'abord
+## Une collection ancrée sur un espace
 
-On part de Résana : la personne choisit ce qu'elle veut indexer, l'outil construit la collection
-autour (`pages/admin/create/resana.vue`).
+Une collection Résana est ancrée sur **un espace**. Les dossiers à indexer sont un **réglage
+d'indexation** (le périmètre), modifiable à tout moment. Ajouter ou retirer un dossier ne change
+ni le nom ni le titre de la collection.
 
-1. **Choisir dans Résana** (la carte « Un dossier Résana » de l'étape 1, visible si la capacité est
-   allumée).
-   - L'espace. La première ouverture de session peut prendre une minute et demie, et un message le dit.
-     Sans session Résana, un avertissement donne le lien de connexion du service et « Réessayer ».
-   - Le dossier, avec un filtre. Pour tout l'espace, on prend son dossier principal.
-   - **L'existant**, vérifié aussitôt (`GET /existant`) : si une de vos collections indexe déjà ce
-     dossier, un dossier qui le contient ou un de ses sous-dossiers, l'écran le dit, avec le lien
-     pour la mettre à jour plutôt que d'en créer une de plus. Seulement les vôtres : une collection
-     Résana est privée, celles des autres ne se révèlent pas.
-   - **Que faut-il indexer ?** (`GET /inventaire`, composant `DepotArbreResana`) : les sous-dossiers en
-     arbre, avec le nombre de documents (et la taille approchée) de chacun, cochés par défaut. Un
-     texte rappelle de n'indexer que ce qui sert : chaque document de plus allonge l'import et les
-     mises à jour, et peut mêler aux réponses des textes hors sujet. Le total de la sélection se met
-     à jour à chaque case. Pendant la préparation d'un grand dossier, l'écran affiche « n dossiers
-     lus sur N » ; on peut continuer sans attendre (tout le dossier sera indexé).
-2. **Relire la fiche**, déjà remplie : titre (le nom du dossier), identifiant proposé, description
-   (« Les documents du dossier … de l'espace Résana … »), et les étiquettes **Résana**,
-   **Index complet / partiel**, **Privée**. « Créer et indexer » crée la collection (privée) et lance
-   l'import, puis ouvre la page de la collection. Si l'import ne démarre pas, la collection reste et
-   le bouton devient « Relancer l'indexation ».
+### L'identifiant : `resana-<numéro de l'espace>`
 
-**Page « Ajouter des documents »** d'une collection Résana (`DepotEtatResana`) :
-- le badge **Résana · index complet** ou **Résana · index partiel**, et la phrase qui l'explique
-  (« 412 documents indexés sur 2 141 dans le dossier Résana : index partiel (certains sous-dossiers
-  sont exclus) ») ;
-- l'avancement, les documents écartés, et l'invitation à mettre à jour si l'index vieillit ;
-- pour la personne qui a importé : **Mettre à jour**, et **Modifier la sélection**. Ce bouton rouvre
-  l'arbre avec les dossiers exclus décochés. « Enregistrer et mettre à jour » applique la sélection :
-  un dossier ajouté s'indexe, un dossier retiré sort de l'index. C'est ainsi qu'on **poursuit une
-  indexation partielle**.
+- **Le serveur seul le pose** (`POST /collections`). L'écran l'affiche en lecture seule, avec sa
+  raison.
+- **Le numéro de l'espace est la seule clé unique dans Résana.** Le nom ne l'est pas : chaque
+  entité peut avoir ses « Instances de gouvernance régionale ».
+- **Une seconde collection sur le même espace** demande un suffixe d'usage :
+  `resana-206379-car`. L'écran le demande quand l'identifiant est pris.
+- **Le préfixe `resana-` est réservé.** Une création manuelle le refuse (422, motif `resana`), même
+  pour adopter une partition existante. Il reste ainsi un marqueur fiable, jusque dans les
+  partitions de l'indexeur.
+- **En preview**, l'identifiant suit le préfixe imposé : `<préfixe>resana-<numéro>`.
 
-**Mes collections** : l'étiquette « Résana · index complet / partiel » sur la carte de la collection.
+### La fiche d'identité de l'espace
+
+Le service d'export donne, quand il les a, `description`, `objet`, `cree_le` et `parent_id`
+(l'espace parent). Mes collections les garde dans `source_config_json.espace`, avec :
+
+- **l'entité administrative**, saisie par la personne. Résana ne la donne pas. Le champ est
+  facultatif, avec un exemple grisé (« ex. Préfecture de la région Bretagne »). Elle sert à
+  distinguer plus tard des espaces de même nom d'une entité à l'autre ;
+- **une description par défaut**, posée si la personne n'en écrit pas : « Espace Résana « nom »
+  (n° 206379), entité. ».
+
+Chaque document envoyé à l'indexeur porte aussi son origine : `source: resana`, l'espace, le
+chemin de son dossier et l'adresse de consultation.
+
+## Écrans
+
+1. **L'espace**, dans une **liste déroulante riche** (`components/ListeDeroulanteRiche.vue`).
+   - On tape une partie du nom, de l'objet ou de la description ; les accents et la casse sont
+     ignorés, et chaque mot doit figurer.
+   - Chaque espace montre son objet en gris, ce qui départage des homonymes.
+   - Le composant suit la maquette DSFR « Liste déroulante riche », en bêta et pas encore publiée
+     en code, et le motif « combobox » du W3C. Clavier : les flèches pour parcourir, Entrée pour
+     choisir, Échap pour fermer, Tab pour quitter.
+   - À remplacer par le composant du DSFR le jour où il existe en code.
+   - Si une de vos collections est déjà ancrée sur cet espace, l'écran le dit et propose d'y
+     ajouter des dossiers plutôt que d'en créer une autre (`GET /existant?espace=`). Seules vos
+     collections apparaissent : une collection Résana est privée.
+2. **Les dossiers** (composant `DepotDossiersResana`) : l'arbre de l'espace, avec une case par
+   dossier et une recherche qui garde le chemin des dossiers trouvés.
+   - Un dossier coché emporte ses sous-dossiers, qui apparaissent cochés et grisés.
+   - Sous l'arbre, les dossiers choisis, chacun avec son nombre de documents, ou « préparation
+     chez Résana… » pour un grand dossier ; puis le total.
+   - Un texte rappelle de n'indexer que ce qui sert.
+3. **La fiche** :
+   - le titre (le nom de l'espace, modifiable) ;
+   - l'entité administrative ;
+   - la description (aperçu de celle par défaut) ;
+   - l'identifiant expliqué, et le suffixe s'il est pris ;
+   - les étiquettes Résana et Privée.
+
+   « Créer et indexer » fait **un seul appel** (`POST /collections`) : identifiant, collection
+   privée, import.
+
+**Page de la collection** (`DepotEtatResana`) :
+- l'espace, son entité et les dossiers inclus ;
+- la couverture, l'avancement et l'invitation à mettre à jour ;
+- **« Modifier la sélection »**, qui rouvre l'arbre avec les dossiers déjà choisis dépliés.
+  L'enregistrer remplace la liste des dossiers (`POST /sync/{c}` avec `dossiers`) : un dossier
+  ajouté s'indexe, un dossier retiré sort de l'index. Le journal de la collection garde le
+  changement (`perimetre.modifie`, avec les dossiers ajoutés et retirés).
+
+**Mes collections** : l'étiquette « Résana · index complet / partiel ».
 
 ## Périmètre et couverture
 
-Le périmètre s'écrit en **exclusions** (`source_config_json.perimetre.exclus`) : le dossier choisi
-est indexé, sauf les sous-dossiers exclus et tout ce qu'ils contiennent. Un sous-dossier créé plus
-tard dans Résana entre donc de lui-même dans l'index, sauf s'il est rangé sous un dossier exclu. Les
-documents rangés directement dans le dossier choisi sont toujours indexés.
+- **Le périmètre** (`source_config_json.perimetre`) :
+  - `dossiers` : les dossiers inclus (identifiant, chemin), chacun avec son sous-arbre ;
+  - `exclus` : des sous-dossiers exclus. L'écran ne les pose plus (il coche ce qu'il faut inclure),
+    mais une collection d'avant les garde, et ils restent appliqués.
+- **La liste des documents** se lit dossier par dossier, puisque le service n'indexe pas un espace
+  entier. Les documents sont réunis sans doublon.
+- **Les configurations d'avant** (un seul `dossier_id`) se lisent comme une liste d'un dossier.
 
-La **couverture** (`source_resume` dans la fiche d'une collection, et dans `/status`) dit ce que
-l'index couvre du dossier :
+La **couverture** (`source_resume` dans la fiche, et dans `/status`) :
 
 | Champ | Sens |
 |---|---|
 | `couverture` | `totale` ou `partielle` |
-| `raisons` | `selection` (des sous-dossiers exclus), `interrompue` (la dernière passe s'est arrêtée en route), `a_faire` (rien d'indexé encore) |
-| `documents_indexes` | documents dans l'index |
-| `documents_perimetre` | documents de la sélection lors de la dernière passe |
-| `documents_disponibles` | documents du dossier Résana (sous-dossiers exclus compris) |
+| `raisons` | `selection` (des sous-dossiers exclus), `interrompue` (passe arrêtée en route), `a_faire` (rien d'indexé), `erreurs_de_lecture` (le moteur n'a pas su lire certains documents) |
+| `espace_nom`, `entite`, `nb_dossiers` | de quoi situer la collection dans une liste |
+| `documents_indexes`, `documents_perimetre`, `documents_disponibles` | comptes |
 | `derniere_lecture` | date de la dernière passe complète |
 
 ## Inviter à mettre à jour

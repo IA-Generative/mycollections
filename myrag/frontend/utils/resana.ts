@@ -152,83 +152,118 @@ export function resumeApercu (a: { total: number, taille_approx_mo?: number | nu
   return `${docs}, ${mo}`
 }
 
-// ─── Le périmètre : quels sous-dossiers indexer ─────────────────────────────────────────────
+// ─── Le périmètre : les dossiers inclus, cochés dans l'arbre de l'espace ─────────────────────
 
-/** Un sous-dossier du dossier choisi, avec ses comptes (route `/inventaire`). */
-export interface NoeudResana {
+/** Un dossier de l'espace (route `/espaces/{id}/dossiers`). */
+export interface DossierResana {
   id: string
   titre: string
   parent_id: string | null
-  profondeur: number
-  /** Documents rangés directement dans ce dossier. */
-  documents: number
-  /** Documents de tout son sous-arbre. */
-  documents_total: number
-  taille_approx_mo?: number | null
+  chemin: string
 }
 
-export interface InventaireResana {
-  total: number
-  taille_approx_mo?: number | null
-  documents_a_la_racine: number
-  dossiers: NoeudResana[]
+/** Un espace Résana et sa fiche d'identité (champs facultatifs, selon le service). */
+export interface EspaceResana {
+  id: string
+  nom: string
+  description?: string
+  objet?: string
 }
 
-/** Exclu de lui-même ou par un dossier parent exclu. */
-export function estExclu (id: string, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): boolean {
-  const parents = new Map(noeuds.map(n => [n.id, n.parent_id]))
-  let courant: string | null | undefined = id
-  const vus = new Set<string>()
-  while (courant && !vus.has(courant)) {
-    if (exclus.has(courant)) {
-      return true
-    }
-    vus.add(courant)
-    courant = parents.get(courant)
+const DIACRITIQUES = /[\u0300-\u036F]/g
+
+function sansAccents (s: string): string {
+  return s.normalize('NFD').replace(DIACRITIQUES, '').toLowerCase()
+}
+
+/** Les espaces dont le nom, l'objet ou la description contient la recherche (accents ignorés). */
+export function filtrerEspaces (espaces: readonly EspaceResana[], recherche: string): EspaceResana[] {
+  const q = sansAccents(recherche.trim())
+  if (!q) {
+    return [...espaces]
   }
-  return false
+  return espaces.filter(e => sansAccents(`${e.nom} ${e.objet || ''} ${e.description || ''}`).includes(q))
 }
 
-/** Exclu par un parent : sa case est grisée (on ne réinclut pas un dossier dans un dossier exclu). */
-export function exclusParUnParent (n: NoeudResana, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): boolean {
-  return !!n.parent_id && estExclu(n.parent_id, exclus, noeuds)
+/** {parent: enfants} et la liste des racines (dossiers dont le parent n'est pas dans la liste). */
+export function arbreDossiers (dossiers: readonly DossierResana[]): { enfants: Map<string | null, DossierResana[]>, racines: DossierResana[] } {
+  const ids = new Set(dossiers.map(d => d.id))
+  const enfants = new Map<string | null, DossierResana[]>()
+  const racines: DossierResana[] = []
+  for (const d of dossiers) {
+    const parent = d.parent_id && ids.has(d.parent_id) ? d.parent_id : null
+    if (parent === null) {
+      racines.push(d)
+    }
+    enfants.set(parent, [...(enfants.get(parent) || []), d])
+  }
+  const parTitre = (a: DossierResana, b: DossierResana) => a.titre.localeCompare(b.titre, 'fr')
+  for (const liste of enfants.values()) {
+    liste.sort(parTitre)
+  }
+  return { enfants, racines: racines.sort(parTitre) }
+}
+
+/** Les ancêtres d'un dossier, du parent à la racine. */
+export function ancetres (id: string, dossiers: readonly DossierResana[]): string[] {
+  const parents = new Map(dossiers.map(d => [d.id, d.parent_id]))
+  const rendu: string[] = []
+  let p = parents.get(id) ?? null
+  while (p && parents.has(p) && !rendu.includes(p)) {
+    rendu.push(p)
+    p = parents.get(p) ?? null
+  }
+  return rendu
+}
+
+/** Coché par un dossier parent : il est déjà inclus (case cochée et grisée). */
+export function inclusParUnParent (id: string, choisis: ReadonlySet<string>, dossiers: readonly DossierResana[]): boolean {
+  return ancetres(id, dossiers).some(a => choisis.has(a))
 }
 
 /**
- * Cocher ou décocher un dossier. Décocher l'exclut avec tout son contenu ; les exclusions plus
- * fines sous lui deviennent inutiles et sont retirées, pour que la liste reste la plus courte.
+ * Cocher ou décocher un dossier. Cocher un dossier inclut tout son contenu : les sous-dossiers déjà
+ * cochés deviennent redondants et sont retirés, pour que la liste reste la plus courte.
  */
-export function basculer (id: string, exclus: ReadonlySet<string>, noeuds: readonly NoeudResana[]): Set<string> {
-  const suivant = new Set(exclus)
+export function basculerDossier (id: string, choisis: ReadonlySet<string>, dossiers: readonly DossierResana[]): Set<string> {
+  const suivant = new Set(choisis)
   if (suivant.has(id)) {
     suivant.delete(id)
     return suivant
   }
   suivant.add(id)
   for (const autre of [...suivant]) {
-    if (autre !== id && estExclu(autre, new Set([id]), noeuds)) {
+    if (autre !== id && ancetres(autre, dossiers).includes(id)) {
       suivant.delete(autre)
     }
   }
   return suivant
 }
 
-/** Ce que la sélection indexera : documents et dossiers retenus. */
-export function selection (inv: InventaireResana, exclus: ReadonlySet<string>): { documents: number, dossiers: number } {
-  let documents = inv.documents_a_la_racine
-  let dossiers = 0
-  for (const n of inv.dossiers) {
-    if (!estExclu(n.id, exclus, inv.dossiers)) {
-      documents += n.documents
-      dossiers += 1
+/** Les dossiers à montrer pour une recherche : ceux qui correspondent, et leurs ancêtres (pour le contexte). */
+export function dossiersVisibles (dossiers: readonly DossierResana[], recherche: string): Set<string> | null {
+  const q = sansAccents(recherche.trim())
+  if (!q) {
+    return null
+  }
+  const rendu = new Set<string>()
+  for (const d of dossiers) {
+    if (sansAccents(`${d.titre} ${d.chemin}`).includes(q)) {
+      rendu.add(d.id)
+      for (const a of ancetres(d.id, dossiers)) {
+        rendu.add(a)
+      }
     }
   }
-  return { documents, dossiers }
+  return rendu
 }
 
 /** Le résumé de couverture d'une collection Résana (`source_resume`, ou l'état de `/status`). */
 export interface CouvertureResana {
   couverture: 'totale' | 'partielle' | string
+  espace_nom?: string | null
+  entite?: string | null
+  nb_dossiers?: number
   raisons?: string[]
   documents_indexes?: number
   documents_perimetre?: number | null
@@ -249,11 +284,11 @@ export function phraseCouverture (c: CouvertureResana | null | undefined): strin
     return ''
   }
   const indexes = c.documents_indexes ?? 0
-  const sur = typeof c.documents_disponibles === 'number' ? ` sur ${c.documents_disponibles} dans le dossier Résana` : ''
+  const sur = typeof c.documents_disponibles === 'number' ? ` sur ${c.documents_disponibles} dans les dossiers choisis` : ''
   const base = `${indexes} document${indexes > 1 ? 's' : ''} indexé${indexes > 1 ? 's' : ''}${sur}`
   const raisons = c.raisons || []
   if (c.couverture === 'totale') {
-    return `${base} : index complet du dossier.`
+    return `${base} : index complet.`
   }
   const pourquoi: string[] = []
   if (raisons.includes('selection')) {
@@ -263,7 +298,10 @@ export function phraseCouverture (c: CouvertureResana | null | undefined): strin
     pourquoi.push('la dernière mise à jour s\'est arrêtée en route')
   }
   if (raisons.includes('a_faire')) {
-    pourquoi.push('l\'indexation n\'a pas encore eu lieu')
+    pourquoi.push('rien n\'est encore indexé')
+  }
+  if (raisons.includes('erreurs_de_lecture')) {
+    pourquoi.push('le moteur n\'a pas su lire certains documents')
   }
   return `${base} : index partiel${pourquoi.length ? ` (${pourquoi.join(', ')})` : ''}.`
 }
@@ -290,12 +328,13 @@ export function avisDeReponse (brut: unknown): AvisResana[] {
     && !(a as AvisResana).action.url.startsWith('//'))
 }
 
-/** La fiche proposée pour un dossier Résana : titre et description déjà écrits, à relire. */
-export function ficheDepuisResana (d: { titre: string, chemin: string }, espaceNom: string): { titre: string, description: string } {
-  const titre = (d.titre || d.chemin.split(' / ').pop() || 'Dossier Résana').trim()
-  const ou = d.chemin && d.chemin !== titre ? ` (${d.chemin})` : ''
-  return {
-    titre,
-    description: `Les documents du dossier « ${titre} »${ou} de l'espace Résana « ${espaceNom} ».`,
-  }
+/** Le titre proposé pour une collection ancrée sur un espace : le nom de l'espace. */
+export function titreDepuisEspace (espace: EspaceResana): string {
+  return (espace.nom || `Espace Résana ${espace.id}`).trim()
+}
+
+/** La description que le serveur posera si on n'en écrit pas (aperçu dans le champ). */
+export function descriptionParDefaut (espace: EspaceResana, entite: string): string {
+  const e = entite.trim() ? `, ${entite.trim()}` : ''
+  return `Espace Résana « ${espace.nom || espace.id} » (n° ${espace.id})${e}.`
 }

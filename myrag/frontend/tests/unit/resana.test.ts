@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { avisDeReponse, basculer, erreurResana, estExclu, etiquetteResana, exclusParUnParent, ficheDepuisResana, libelleTravail, phraseCouverture, preparation, resumeApercu, selection, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, phraseCouverture, preparation, resumeApercu, titreDepuisEspace, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -66,36 +66,14 @@ describe('la carte Résana suit la capacité', () => {
   })
 })
 
-describe('le périmètre', () => {
-  const noeuds = [
-    { id: 'a', titre: 'Comptes rendus', parent_id: 'r', profondeur: 0, documents: 1, documents_total: 3 },
-    { id: 'a1', titre: '2026', parent_id: 'a', profondeur: 1, documents: 2, documents_total: 2 },
-    { id: 'b', titre: 'Procédures', parent_id: 'r', profondeur: 0, documents: 4, documents_total: 4 },
-  ]
-  const inv = { total: 8, documents_a_la_racine: 1, dossiers: noeuds }
-  it('exclure un dossier exclut son contenu', () => {
-    const exclus = new Set(['a'])
-    expect(estExclu('a1', exclus, noeuds)).toBe(true)
-    expect(exclusParUnParent(noeuds[1]!, exclus, noeuds)).toBe(true)
-    expect(selection(inv, exclus)).toEqual({ documents: 5, dossiers: 1 })
-    expect(selection(inv, new Set())).toEqual({ documents: 8, dossiers: 3 })
-  })
-  it('basculer garde la liste la plus courte', () => {
-    const fin = basculer('a1', new Set(), noeuds)
-    expect([...fin]).toEqual(['a1'])
-    expect([...basculer('a', fin, noeuds)]).toEqual(['a'])
-    expect([...basculer('a', new Set(['a']), noeuds)]).toEqual([])
-  })
-})
-
 describe('la couverture', () => {
   it('étiquette et phrase', () => {
     expect(etiquetteResana({ couverture: 'totale' })).toBe('Résana · index complet')
     expect(etiquetteResana({ couverture: 'partielle' })).toBe('Résana · index partiel')
     expect(etiquetteResana(null)).toBe('')
     expect(phraseCouverture({ couverture: 'partielle', raisons: ['selection'], documents_indexes: 412, documents_disponibles: 2141 }))
-      .toBe('412 documents indexés sur 2141 dans le dossier Résana : index partiel (certains sous-dossiers sont exclus).')
-    expect(phraseCouverture({ couverture: 'totale', documents_indexes: 1 })).toBe('1 document indexé : index complet du dossier.')
+      .toBe('412 documents indexés sur 2141 dans les dossiers choisis : index partiel (certains sous-dossiers sont exclus).')
+    expect(phraseCouverture({ couverture: 'totale', documents_indexes: 1 })).toBe('1 document indexé : index complet.')
   })
   it('les avis d\'une réponse : seulement des liens internes', () => {
     const bon = { collection: 'c', code: 'resana_ancien', message: 'L\'index semble ancien.', action: { libelle: 'Mettre à jour', url: '/c/c/upload?synchroniser=1' } }
@@ -104,12 +82,42 @@ describe('la couverture', () => {
   })
 })
 
-describe('la fiche proposée', () => {
-  it('reprend le dossier et l\'espace', () => {
-    expect(ficheDepuisResana({ titre: '2026', chemin: 'Comptes rendus / 2026' }, 'Alpha fictif')).toEqual({
-      titre: '2026',
-      description: 'Les documents du dossier « 2026 » (Comptes rendus / 2026) de l\'espace Résana « Alpha fictif ».',
-    })
-    expect(ficheDepuisResana({ titre: 'Notes', chemin: 'Notes' }, 'Alpha').description).toBe('Les documents du dossier « Notes » de l\'espace Résana « Alpha ».')
+describe('choisir l\'espace et les dossiers', () => {
+  const espaces = [
+    { id: '1', nom: 'Instances de gouvernance régionale', objet: 'Préfecture fictive de l\'Ouest' },
+    { id: '2', nom: 'Équipe projet', description: 'Fictif' },
+  ]
+  it('la recherche d\'un espace ignore les accents et lit l\'objet', () => {
+    expect(filtrerEspaces(espaces, 'equipe').map(e => e.id)).toEqual(['2'])
+    expect(filtrerEspaces(espaces, 'PRÉFECTURE').map(e => e.id)).toEqual(['1'])
+    expect(filtrerEspaces(espaces, '  ')).toHaveLength(2)
+  })
+  const dossiers = [
+    { id: 'r', titre: 'CAR', parent_id: null, chemin: 'CAR' },
+    { id: 'a', titre: 'Comptes rendus', parent_id: 'r', chemin: 'CAR / Comptes rendus' },
+    { id: 'a1', titre: '2026', parent_id: 'a', chemin: 'CAR / Comptes rendus / 2026' },
+    { id: 'b', titre: 'Archives', parent_id: null, chemin: 'Archives' },
+  ]
+  it('l\'arbre : racines et enfants triés', () => {
+    const { racines, enfants } = arbreDossiers(dossiers)
+    expect(racines.map(d => d.id)).toEqual(['b', 'r'])
+    expect(enfants.get('r')!.map(d => d.id)).toEqual(['a'])
+  })
+  it('cocher un dossier inclut son contenu ; la liste reste la plus courte', () => {
+    let choisis = basculerDossier('a1', new Set(), dossiers)
+    choisis = basculerDossier('r', choisis, dossiers)
+    expect([...choisis]).toEqual(['r'])
+    expect(inclusParUnParent('a1', choisis, dossiers)).toBe(true)
+    expect(inclusParUnParent('b', choisis, dossiers)).toBe(false)
+    expect([...basculerDossier('r', choisis, dossiers)]).toEqual([])
+  })
+  it('la recherche d\'un dossier garde ses ancêtres pour le contexte', () => {
+    expect([...dossiersVisibles(dossiers, '2026')!].sort()).toEqual(['a', 'a1', 'r'])
+    expect(dossiersVisibles(dossiers, '')).toBeNull()
+  })
+  it('titre et description proposés', () => {
+    expect(titreDepuisEspace({ id: '206', nom: 'Instances de gouvernance régionale' })).toBe('Instances de gouvernance régionale')
+    expect(descriptionParDefaut({ id: '206', nom: 'Instances' }, 'Préfecture fictive')).toBe('Espace Résana « Instances » (n° 206), Préfecture fictive.')
+    expect(descriptionParDefaut({ id: '206', nom: 'Instances' }, '')).toBe('Espace Résana « Instances » (n° 206).')
   })
 })
