@@ -129,7 +129,8 @@ async def espaces(authorization: str | None = Header(default=None), user: Curren
         rendu = await _client(authorization).espaces()
     except ErreurResana as e:
         raise _http(e) from None
-    return {"espaces": [{"id": e.id, "nom": e.nom} for e in sorted(rendu, key=lambda e: e.nom.lower())]}
+    # La fiche d'identité (objet, description) aide à distinguer des espaces de même nom.
+    return {"espaces": [{"id": e.id, "nom": e.nom, "objet": e.objet, "description": e.description} for e in sorted(rendu, key=lambda e: (e.nom.lower(), e.objet.lower()))]}
 
 
 @router.get("/espaces/{espace}/dossiers")

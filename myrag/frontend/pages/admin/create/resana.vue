@@ -1,19 +1,16 @@
 <script setup lang="ts">
 /**
- * Créer une collection depuis Résana, dans l'ordre où l'on pense (docs/resana.md) : d'abord
- * choisir dans Résana l'espace, le dossier et ce qu'il faut en indexer ; l'outil vérifie qu'aucune
- * de vos collections ne le couvre déjà ; puis la fiche, déjà remplie, à relire ; un clic crée la
- * collection (privée) et lance l'indexation.
+ * Créer une collection depuis Résana (docs/resana.md). La collection est ancrée sur un ESPACE :
+ * c'est lui qui la nomme (`resana-<numéro>`, posé par le serveur — le numéro est la seule clé
+ * unique d'un espace). Les dossiers cochés sont un réglage d'indexation, modifiable ensuite.
+ * 1. l'espace (avec une recherche), et les collections déjà ancrées dessus ;
+ * 2. les dossiers à indexer, cochés dans l'arbre de l'espace ;
+ * 3. la fiche : titre (le nom de l'espace), entité administrative, identifiant expliqué.
  */
-import type { ReglesNommage } from '~/utils/collectionName'
-import type { ErreurResana, InventaireResana } from '~/utils/resana'
-import { isConflictError, motifRefus, REGLES_PAR_DEFAUT } from '~/utils/collectionName'
-import { erreurResana, etiquetteResana, ficheDepuisResana, preparation, selection } from '~/utils/resana'
-import { identifiantPropose } from '~/utils/wizard'
+import type { ErreurResana, EspaceResana } from '~/utils/resana'
+import { descriptionParDefaut, erreurResana, etiquetteResana, filtrerEspaces, titreDepuisEspace } from '~/utils/resana'
 
-interface Espace { id: string, nom: string }
-interface Dossier { id: string, titre: string, chemin: string }
-interface Existante { collection: string, titre: string, dossier_chemin?: string, couverture: string }
+interface Existante { collection: string, titre: string, chemins: string[], couverture: string }
 
 const router = useRouter()
 const { get, post } = useApi()
@@ -22,25 +19,18 @@ const champ = useId()
 const phase = ref<'choisir' | 'fiche'>('choisir')
 const erreur = ref<ErreurResana | null>(null)
 
-// ─── Choisir dans Résana ─────────────────────────────────────────────────────
-const espaces = ref<Espace[]>([])
-const espace = ref('')
-const dossiers = ref<Dossier[]>([])
-const dossier = ref('')
-const recherche = ref('')
-const chargeEspaces = ref(false)
-const chargeDossiers = ref(false)
-const inventaire = ref<InventaireResana | null>(null)
-const enPreparation = ref<{ dossiers_lus?: number | null, dossiers?: number | null } | null>(null)
-const exclus = ref<string[]>([])
-const existant = ref<{ meme_dossier: Existante[], dossier_parent: Existante[], sous_dossiers: Existante[] } | null>(null)
-let minuterie: ReturnType<typeof setTimeout> | undefined
-let rappel: ReturnType<typeof setTimeout> | undefined
+// ─── Les dossiers cochés (2), déclarés d'abord : choisir un autre espace les vide ─────────────
+const choisis = ref<string[]>([])
+const dossiersChoisis = ref<{ id: string, chemin: string }[]>([])
 
+// ─── 1. L'espace ─────────────────────────────────────────────────────────────
+const espaces = ref<EspaceResana[]>([])
+const espace = ref('')
+const rechercheEspace = ref('')
+const chargeEspaces = ref(false)
+const existantes = ref<Existante[]>([])
+const espacesFiltres = computed(() => filtrerEspaces(espaces.value, rechercheEspace.value))
 const espaceChoisi = computed(() => espaces.value.find(e => e.id === espace.value) || null)
-const dossierChoisi = computed(() => dossiers.value.find(d => d.id === dossier.value) || null)
-const retenus = computed(() => (inventaire.value ? selection(inventaire.value, new Set(exclus.value)) : null))
-const peutContinuer = computed(() => !!dossierChoisi.value && (enPreparation.value !== null || (retenus.value?.documents ?? 0) > 0))
 
 async function chargerEspaces () {
   chargeEspaces.value = true
@@ -56,183 +46,98 @@ async function chargerEspaces () {
   }
 }
 
-async function chargerDossiers () {
-  clearTimeout(rappel)
-  dossier.value = ''
-  inventaire.value = null
-  enPreparation.value = null
-  existant.value = null
-  dossiers.value = []
+watch(espace, async (id) => {
+  existantes.value = []
+  choisis.value = []
+  if (!id) {
+    return
+  }
+  try {
+    existantes.value = (await get('/api/sources/resana/existant', { espace: id })).collections || []
+  }
+  catch {}
+})
+
+const peutContinuer = computed(() => !!espaceChoisi.value && dossiersChoisis.value.length > 0)
+
+// ─── 3. La fiche ─────────────────────────────────────────────────────────────
+const titre = ref('')
+const entite = ref('')
+const description = ref('')
+const suffixe = ref('')
+const proposition = ref<{ identifiant: string, disponible: boolean, motif: string | null } | null>(null)
+const envoi = ref(false)
+let minuterie: ReturnType<typeof setTimeout> | undefined
+
+async function proposer () {
   if (!espace.value) {
     return
   }
-  chargeDossiers.value = true
-  erreur.value = null
   try {
-    const params: Record<string, string> = recherche.value.trim() ? { recherche: recherche.value.trim() } : {}
-    dossiers.value = (await get(`/api/sources/resana/espaces/${encodeURIComponent(espace.value)}/dossiers`, params)).dossiers || []
+    proposition.value = await get('/api/sources/resana/proposition', { espace: espace.value, suffixe: suffixe.value })
   }
-  catch (e) {
-    erreur.value = erreurResana(e)
-  }
-  finally {
-    chargeDossiers.value = false
+  catch {
+    proposition.value = null
   }
 }
 
-function chercher () {
+watch(suffixe, () => {
   clearTimeout(minuterie)
-  minuterie = setTimeout(chargerDossiers, 350)
-}
-
-async function choisirDossier () {
-  exclus.value = []
-  inventaire.value = null
-  existant.value = null
-  const d = dossierChoisi.value
-  if (!d) {
-    return
-  }
-  get('/api/sources/resana/existant', { espace: espace.value, dossier: d.id, chemin: d.chemin })
-    .then((r) => {
-      existant.value = r
-    })
-    .catch(() => {})
-  await chargerInventaire()
-}
-
-async function chargerInventaire () {
-  clearTimeout(rappel)
-  const demande = dossier.value
-  if (!demande) {
-    return
-  }
-  erreur.value = null
-  try {
-    const r = await get(`/api/sources/resana/espaces/${encodeURIComponent(espace.value)}/inventaire`, { dossier: demande })
-    if (demande !== dossier.value) {
-      return // un autre dossier a été choisi entre-temps
-    }
-    if (r.en_preparation) {
-      enPreparation.value = r
-      rappel = setTimeout(chargerInventaire, 5000)
-      return
-    }
-    enPreparation.value = null
-    inventaire.value = r
-  }
-  catch (e) {
-    erreur.value = erreurResana(e)
-  }
-}
-
-// ─── La fiche ────────────────────────────────────────────────────────────────
-const titre = ref('')
-const description = ref('')
-const identifiant = ref('')
-const regles = ref<ReglesNommage>(REGLES_PAR_DEFAUT)
-const pris = ref(new Set<string>())
-const envoi = ref(false)
-const creee = ref('')
-const erreurFiche = ref('')
+  minuterie = setTimeout(proposer, 300)
+})
 
 function continuer () {
-  if (!dossierChoisi.value || !espaceChoisi.value) {
+  if (!espaceChoisi.value) {
     return
   }
-  const f = ficheDepuisResana(dossierChoisi.value, espaceChoisi.value.nom)
-  titre.value = f.titre
-  description.value = f.description
-  identifiant.value = identifiantPropose(f.titre, pris.value, regles.value)
+  titre.value = titreDepuisEspace(espaceChoisi.value)
+  suffixe.value = ''
+  proposer()
   phase.value = 'fiche'
 }
 
-watch(titre, (t) => {
-  if (phase.value === 'fiche' && !creee.value) {
-    identifiant.value = identifiantPropose(t, pris.value, regles.value)
-  }
-})
-
 async function creerEtIndexer () {
-  if (!dossierChoisi.value || !espaceChoisi.value) {
+  if (!espaceChoisi.value) {
     return
   }
   envoi.value = true
-  erreurFiche.value = ''
   erreur.value = null
   try {
-    if (!creee.value) {
-      const motif = motifRefus(identifiant.value, regles.value)
-      if (!identifiant.value || motif) {
-        erreurFiche.value = motif ? (regles.value.motifs[motif] || 'Identifiant refusé.') : 'Donnez un titre à la collection.'
-        return
-      }
-      try {
-        await post('/api/collections', {
-          name: identifiant.value,
-          titre: titre.value.trim(),
-          description: description.value.trim(),
-          scope: 'private',
-          scope_groups: [],
-          strategy: 'auto',
-        })
-      }
-      catch (e) {
-        if (isConflictError(e)) {
-          pris.value = new Set([...pris.value, identifiant.value])
-          identifiant.value = identifiantPropose(titre.value, pris.value, regles.value)
-          erreurFiche.value = 'Cet identifiant venait d\'être pris : un autre vous est proposé, relancez.'
-          return
-        }
-        throw e
-      }
-      creee.value = identifiant.value
-    }
-    await post('/api/sources/resana/add', {
-      collection: creee.value,
+    const r = await post('/api/sources/resana/collections', {
       espace_id: espace.value,
-      espace_nom: espaceChoisi.value.nom,
-      dossier_id: dossierChoisi.value.id,
-      dossier_chemin: dossierChoisi.value.chemin,
-      exclus: exclus.value,
+      dossiers: dossiersChoisis.value,
+      titre: titre.value.trim(),
+      description: description.value.trim(),
+      entite: entite.value.trim(),
+      suffixe: suffixe.value.trim(),
     })
-    router.push(`/c/${creee.value}/upload`)
+    router.push(`/c/${r.collection}/upload`)
   }
   catch (e) {
     erreur.value = erreurResana(e)
+    proposer()
   }
   finally {
     envoi.value = false
   }
 }
 
-onMounted(async () => {
-  chargerEspaces()
-  get('/api/collections/regles-nommage')
-    .then((r) => {
-      regles.value = { ...REGLES_PAR_DEFAUT, ...r }
-    })
-    .catch(() => {})
-  try {
-    pris.value = new Set(((await get('/api/collections')).collections || []).map((c: { name: string }) => c.name))
-  }
-  catch {}
-})
-onBeforeUnmount(() => {
-  clearTimeout(minuterie)
-  clearTimeout(rappel)
-})
+onMounted(chargerEspaces)
+onBeforeUnmount(() => clearTimeout(minuterie))
 </script>
 
 <template>
   <WizardEtape
     :numero="phase === 'choisir' ? 1 : 2"
     :titre="phase === 'choisir' ? 'Choisir dans Résana' : 'Relire la fiche'"
-    :chapeau="phase === 'choisir'
-      ? 'Choisissez l\'espace, le dossier, puis ce qu\'il faut en indexer. La collection reste privée : vous seul l\'interrogez, avec vos droits Résana.'
-      : 'Tout est prérempli d\'après le dossier : relisez, puis créez. L\'indexation se fait en arrière-plan.'"
   >
     <template #formulaire>
+      <p class="fr-text--lg fr-mb-2w">
+        {{ phase === 'choisir'
+          ? 'Un espace, puis les dossiers à indexer. La collection reste privée : vous seul l\'interrogez, avec vos droits Résana.'
+          : 'Tout est prérempli d\'après l\'espace : relisez, puis créez. L\'indexation se fait en arrière-plan.' }}
+      </p>
+
       <div
         v-if="erreur"
         class="fr-alert fr-alert--sm fr-mb-2w"
@@ -249,17 +154,18 @@ onBeforeUnmount(() => {
             rel="noopener"
           >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
           <button
-            v-if="phase === 'choisir'"
+            v-if="phase === 'choisir' && !espaces.length"
             type="button"
             class="fr-btn fr-btn--sm fr-btn--tertiary"
-            @click="espaces.length ? (dossier ? chargerInventaire() : chargerDossiers()) : chargerEspaces()"
+            :disabled="chargeEspaces"
+            @click="chargerEspaces"
           >
-            Réessayer
+            {{ chargeEspaces ? 'Nouvelle tentative…' : 'Réessayer' }}
           </button>
         </p>
       </div>
 
-      <!-- 1. Choisir dans Résana -->
+      <!-- 1 et 2 : l'espace, puis les dossiers -->
       <template v-if="phase === 'choisir'">
         <p
           v-if="chargeEspaces"
@@ -268,35 +174,68 @@ onBeforeUnmount(() => {
         >
           Ouverture de votre session Résana… Cela peut prendre jusqu'à une minute et demie la première fois.
         </p>
-        <div
+
+        <fieldset
           v-if="espaces.length"
-          class="fr-select-group"
+          class="bloc"
+          :aria-labelledby="`${champ}-espaces`"
         >
-          <label
-            class="fr-label"
-            :for="`${champ}-espace`"
-          >Espace</label>
-          <select
-            :id="`${champ}-espace`"
-            v-model="espace"
-            class="fr-select"
-            @change="chargerDossiers"
+          <legend
+            :id="`${champ}-espaces`"
+            class="bloc__legende"
           >
-            <option
-              value=""
-              disabled
+            <span class="fr-h6 fr-mb-0">Espace</span>
+            <span class="fr-hint-text">{{ espaces.length }} espace{{ espaces.length > 1 ? 's' : '' }} ouvert{{ espaces.length > 1 ? 's' : '' }} à votre compte.</span>
+          </legend>
+          <div class="fr-input-group fr-mb-1w recherche">
+            <label
+              class="fr-label"
+              :for="`${champ}-recherche-espace`"
+            >Rechercher un espace</label>
+            <input
+              :id="`${champ}-recherche-espace`"
+              v-model="rechercheEspace"
+              class="fr-input"
+              type="search"
+              placeholder="Nom, objet ou description…"
+              autocomplete="off"
             >
-              Choisissez un espace
-            </option>
-            <option
-              v-for="e in espaces"
+          </div>
+          <ul
+            v-if="espacesFiltres.length"
+            class="liste"
+          >
+            <li
+              v-for="e in espacesFiltres"
               :key="e.id"
-              :value="e.id"
+              class="fr-radio-group fr-radio-group--sm liste__ligne"
             >
-              {{ e.nom }}
-            </option>
-          </select>
-        </div>
+              <input
+                :id="`${champ}-e-${e.id}`"
+                v-model="espace"
+                type="radio"
+                :name="`${champ}-espace`"
+                :value="e.id"
+              >
+              <label
+                class="fr-label"
+                :for="`${champ}-e-${e.id}`"
+              >
+                {{ e.nom }}
+                <span
+                  v-if="e.objet || e.description"
+                  class="fr-hint-text"
+                >{{ e.objet || e.description }}</span>
+              </label>
+            </li>
+          </ul>
+          <p
+            v-else
+            class="fr-text--sm"
+          >
+            Aucun espace ne correspond.
+          </p>
+        </fieldset>
         <p
           v-else-if="!chargeEspaces && !erreur"
           class="fr-text--sm"
@@ -304,204 +243,112 @@ onBeforeUnmount(() => {
           Aucun espace Résana ne vous est ouvert.
         </p>
 
-        <template v-if="espace">
-          <div class="fr-input-group">
-            <label
-              class="fr-label"
-              :for="`${champ}-recherche`"
-            >Dossier
-              <span class="fr-hint-text">Pour tout l'espace, choisissez son dossier principal : vous retirerez ensuite ce qui ne sert pas.</span>
-            </label>
-            <input
-              :id="`${champ}-recherche`"
-              v-model="recherche"
-              class="fr-input"
-              type="search"
-              placeholder="Filtrer les dossiers…"
-              autocomplete="off"
-              @input="chercher"
-            >
-          </div>
-          <p
-            v-if="chargeDossiers"
-            class="fr-text--sm"
-            role="status"
-          >
-            Lecture des dossiers…
-          </p>
-          <div
-            v-else-if="dossiers.length"
-            class="fr-select-group"
-          >
-            <label
-              class="fr-label"
-              :for="`${champ}-dossier`"
-            >Dossier à indexer</label>
-            <select
-              :id="`${champ}-dossier`"
-              v-model="dossier"
-              class="fr-select"
-              @change="choisirDossier"
-            >
-              <option
-                value=""
-                disabled
-              >
-                Choisissez un dossier ({{ dossiers.length }})
-              </option>
-              <option
-                v-for="d in dossiers"
-                :key="d.id"
-                :value="d.id"
-              >
-                {{ d.chemin || d.titre }}
-              </option>
-            </select>
-          </div>
-          <p
-            v-else
-            class="fr-text--sm"
-          >
-            Aucun dossier{{ recherche.trim() ? ' ne correspond' : '' }}.
-          </p>
-        </template>
-
-        <!-- Ce qui existe déjà : le reprendre plutôt que de créer une collection de plus. -->
+        <!-- Déjà ancrées sur cet espace : les reprendre plutôt qu'en créer une de plus. -->
         <div
-          v-if="existant && (existant.meme_dossier.length || existant.dossier_parent.length || existant.sous_dossiers.length)"
+          v-if="existantes.length"
           class="fr-alert fr-alert--info fr-alert--sm fr-my-2w"
         >
           <p
-            v-for="c in existant.meme_dossier"
-            :key="`m-${c.collection}`"
-          >
-            Ce dossier est déjà indexé dans votre collection
-            <NuxtLink :to="`/c/${c.collection}/upload`">
-              « {{ c.titre }} »
-            </NuxtLink> ({{ etiquetteResana(c) }}) : mettez-la à jour
-            ou ajoutez-y des sous-dossiers plutôt que d'en créer une autre.
-          </p>
-          <p
-            v-for="c in existant.dossier_parent"
-            :key="`p-${c.collection}`"
+            v-for="c in existantes"
+            :key="c.collection"
           >
             Votre collection <NuxtLink :to="`/c/${c.collection}/upload`">
               « {{ c.titre }} »
-            </NuxtLink> indexe déjà un dossier qui contient
-            celui-ci (« {{ c.dossier_chemin }} »).
-          </p>
-          <p
-            v-for="c in existant.sous_dossiers"
-            :key="`s-${c.collection}`"
-          >
-            Ce dossier contient « {{ c.dossier_chemin }} », déjà indexé dans votre collection
-            <NuxtLink :to="`/c/${c.collection}/upload`">
-              « {{ c.titre }} »
-            </NuxtLink>.
+            </NuxtLink> indexe déjà cet espace ({{ etiquetteResana(c) }}, {{ c.chemins.join(', ') }}) : vous pouvez y ajouter
+            des dossiers par « Modifier la sélection ». Une seconde collection sur le même espace demandera un suffixe.
           </p>
         </div>
 
-        <p
-          v-if="enPreparation"
-          class="fr-text--sm fr-mt-2w"
-          role="status"
-        >
-          Résana prépare l'inventaire de ce grand dossier{{ preparation(enPreparation.dossiers_lus, enPreparation.dossiers) }}.
-          Cela peut prendre plusieurs minutes ; vous pouvez aussi continuer : tout le dossier sera indexé, et vous retirerez
-          des sous-dossiers ensuite.
-        </p>
-        <p
-          v-else-if="dossier && !inventaire && !erreur"
-          class="fr-text--sm fr-mt-2w"
-          role="status"
-        >
-          Inventaire du dossier…
-        </p>
-        <DepotArbreResana
-          v-if="inventaire"
-          v-model="exclus"
+        <DepotDossiersResana
+          v-if="espaceChoisi"
+          v-model="choisis"
           class="fr-mt-3w"
-          :inventaire="inventaire"
+          :espace="espace"
+          @dossiers="dossiersChoisis = $event"
         />
       </template>
 
-      <!-- 2. La fiche -->
-      <template v-else>
+      <!-- 3 : la fiche -->
+      <template v-else-if="espaceChoisi">
         <div class="fr-input-group">
           <label
             class="fr-label"
             :for="`${champ}-titre`"
-          >Titre</label>
+          >Titre
+            <span class="fr-hint-text">Le nom de l'espace ; vous pouvez le préciser.</span>
+          </label>
           <input
             :id="`${champ}-titre`"
             v-model="titre"
             class="fr-input"
-            :disabled="!!creee"
           >
         </div>
-        <p class="fr-text--sm resana-discret">
-          Identifiant : <code>{{ identifiant || '—' }}</code>
-        </p>
+        <div class="fr-input-group">
+          <label
+            class="fr-label"
+            :for="`${champ}-entite`"
+          >Entité administrative (facultatif)
+            <span class="fr-hint-text">Résana ne la donne pas : elle distingue des espaces de même nom d'une entité à l'autre.</span>
+          </label>
+          <input
+            :id="`${champ}-entite`"
+            v-model="entite"
+            class="fr-input"
+            placeholder="ex. Préfecture de la région Bretagne"
+            autocomplete="organization"
+          >
+        </div>
         <div class="fr-input-group">
           <label
             class="fr-label"
             :for="`${champ}-description`"
-          >Description</label>
+          >Description (facultatif)</label>
           <textarea
             :id="`${champ}-description`"
             v-model="description"
             class="fr-input"
-            rows="3"
-            :disabled="!!creee"
+            rows="2"
+            :placeholder="descriptionParDefaut(espaceChoisi, entite)"
           />
         </div>
-        <ul class="fr-tags-group fr-mb-2w">
+
+        <div class="identifiant fr-mb-2w">
+          <p class="fr-text--sm fr-mb-1v">
+            Identifiant : <code>{{ proposition?.identifiant || '…' }}</code>
+          </p>
+          <p class="fr-text--xs fr-mb-0 identifiant__pourquoi">
+            Posé d'après le numéro de l'espace, la seule clé unique dans Résana (plusieurs entités ont des espaces de même
+            nom). Le préfixe « resana- » est réservé aux collections importées de Résana. Il ne change pas si la sélection
+            de dossiers change.
+          </p>
+          <div
+            v-if="proposition && !proposition.disponible"
+            class="fr-input-group fr-mt-2w fr-mb-0"
+          >
+            <label
+              class="fr-label"
+              :for="`${champ}-suffixe`"
+            >Suffixe
+              <span class="fr-hint-text">Une collection porte déjà cet identifiant : nommez l'usage de la seconde (ex. car, comites).</span>
+            </label>
+            <input
+              :id="`${champ}-suffixe`"
+              v-model="suffixe"
+              class="fr-input"
+              maxlength="30"
+            >
+          </div>
+        </div>
+
+        <ul class="fr-tags-group fr-mb-1w">
           <li><span class="fr-tag fr-tag--sm">Résana</span></li>
-          <li>
-            <span class="fr-tag fr-tag--sm">{{ exclus.length ? 'Index partiel' : 'Index complet' }}</span>
-          </li>
           <li><span class="fr-tag fr-tag--sm">Privée</span></li>
         </ul>
-        <p class="fr-text--sm">
-          <strong>{{ espaceChoisi?.nom }}</strong> › {{ dossierChoisi?.chemin }}
-          <template v-if="retenus">
-            — {{ retenus.documents }} document{{ retenus.documents > 1 ? 's' : '' }} à indexer{{ exclus.length ? `, ${exclus.length} sous-dossier${exclus.length > 1 ? 's' : ''} exclu${exclus.length > 1 ? 's' : ''}` : '' }}.
-          </template>
-          <template v-else>
-            — tout le dossier (inventaire en cours chez Résana).
-          </template>
-        </p>
-        <div
-          v-if="erreurFiche"
-          class="fr-alert fr-alert--error fr-alert--sm"
-          role="alert"
-        >
-          <p>{{ erreurFiche }}</p>
-        </div>
-        <p
-          v-if="creee"
-          class="fr-text--sm"
-        >
-          La collection « {{ creee }} » est créée ; l'indexation n'a pas pu démarrer. Réessayez, ou retrouvez-la dans
-          <NuxtLink to="/mes-collections">
-            Mes collections
-          </NuxtLink>.
+        <p class="fr-text--sm fr-mb-0">
+          <strong>{{ espaceChoisi.nom }}</strong> — {{ dossiersChoisis.length }} dossier{{ dossiersChoisis.length > 1 ? 's' : '' }} :
+          {{ dossiersChoisis.map(d => d.chemin).join(', ') }}.
         </p>
       </template>
-    </template>
-
-    <template #encadre>
-      <h2 class="fr-callout__title fr-h6">
-        Ce qui se passe
-      </h2>
-      <ol class="fr-callout__text fr-text--sm">
-        <li><strong>Lecture :</strong> les documents sont lus dans Résana avec vos droits.</li>
-        <li><strong>Indexation :</strong> en arrière-plan ; un grand dossier peut demander plusieurs passes.</li>
-        <li><strong>Mise à jour :</strong> quand l'index vieillit, l'outil vous propose de le mettre à jour, jusque dans les réponses.</li>
-      </ol>
-      <p class="fr-text--xs fr-mb-0">
-        La collection reste privée : seul vous l'interrogez et la mettez à jour.
-      </p>
     </template>
 
     <template #actions>
@@ -514,7 +361,7 @@ onBeforeUnmount(() => {
             Annuler
           </NuxtLink>
         </li>
-        <li v-if="phase === 'fiche' && !creee">
+        <li v-if="phase === 'fiche'">
           <button
             type="button"
             class="fr-btn fr-btn--secondary"
@@ -537,10 +384,10 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="fr-btn"
-            :disabled="envoi || !titre.trim()"
+            :disabled="envoi || !titre.trim() || !proposition?.disponible"
             @click="creerEtIndexer"
           >
-            {{ envoi ? 'Création…' : (creee ? 'Relancer l\'indexation' : 'Créer et indexer') }}
+            {{ envoi ? 'Création…' : 'Créer et indexer' }}
           </button>
         </li>
       </ul>
@@ -549,5 +396,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.resana-discret { color: var(--text-mention-grey); }
+.bloc { border: 0; padding: 0; margin: 0; min-width: 0; }
+.bloc__legende { float: left; width: 100%; padding: 0; margin: 0 0 .5rem; }
+.bloc__legende + * { clear: both; }
+.recherche { max-width: 32rem; }
+.liste { list-style: none; margin: 0; padding: .5rem .75rem; max-height: 16rem; overflow-y: auto; border: 1px solid var(--border-default-grey); }
+.liste__ligne { margin: 0 0 .25rem; }
+.identifiant__pourquoi { color: var(--text-mention-grey); }
 </style>
