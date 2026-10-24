@@ -5,8 +5,8 @@ compris. Elle interroge ensuite la collection comme les autres. « Synchroniser 
 réindexe ce qui a changé. Aucune synchronisation n'est planifiée.
 
 **La collection naît privée à la personne qui a importé le dossier**, et elle seule peut la
-synchroniser. Qui la gère peut ensuite l'ouvrir, dans le chat MirAI, à un groupe de son choix, sous sa
-responsabilité (voir « Partager une collection Résana »).
+synchroniser. Qui la gère peut ensuite l'ouvrir, dans le chat MirAI, à un groupe de son choix : c'est
+elle qui pilote (voir « Partager une collection Résana »).
 
 ## Comment Mes collections lit Résana
 
@@ -79,13 +79,13 @@ groupe choisi, avec une confirmation explicite :
 
 Décision du 2026-10-24 : les droits viennent du SSO, et le groupe est déclaré par qui gère la
 collection. C'est cette personne qui choisit qui la voit ; elle s'assure que chaque membre du groupe a
-les bons droits dans Résana, et elle en est responsable.
+les bons droits dans Résana : c'est elle qui pilote.
 
 - **Dans le chat MirAI, à un groupe seulement** (`POST /api/collections/{nom}/publish`, `visibility:
   group` et au moins un groupe) ; jamais à tout le monde (409).
 - **Avec une confirmation** : `droits_resana_confirmes: true`, sinon 409. L'écran la demande par une
   case à cocher (« J'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers
-  indexés. J'en suis responsable. »), dans « Partager » et à l'étape 5 de l'assistant.
+  indexés. C'est moi qui pilote ce partage. »), dans « Partager » et à l'étape 5 de l'assistant.
 - **Une trace** : la confirmation est gardée dans l'historique de la publication et dans le journal
   de la collection (`publication.publiee`, avec les groupes).
 - **Ce qui ne change pas** : la fiche et le bac à sable restent privés (portée verrouillée),

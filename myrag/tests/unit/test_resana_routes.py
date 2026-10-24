@@ -426,7 +426,7 @@ def test_ouvrir_a_un_groupe_demande_de_confirmer_les_droits_resana(client, en_ta
     _importer(client, privee)
     corps = {"visibility": "group", "visibility_groups": [GROUPE]}
     r = client.post(f"/api/collections/{privee}/publish", json=corps)
-    assert r.status_code == 409 and "vous en êtes responsable" in r.json()["detail"]
+    assert r.status_code == 409 and "c'est vous qui pilotez" in r.json()["detail"]
     socle.assert_not_awaited()
 
     r = client.post(f"/api/collections/{privee}/publish", json={**corps, "droits_resana_confirmes": True})

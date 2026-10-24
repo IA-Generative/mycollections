@@ -83,7 +83,7 @@
               <div v-if="resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
                 <p>Ses documents viennent de Résana, où chacun ne voit que les espaces où il est invité. Elle s'ouvre donc
                   à un groupe que vous choisissez, jamais à tout le monde. Avant de la partager, vérifiez que chaque membre
-                  du groupe a accès, dans Résana, aux dossiers indexés : vous en êtes responsable.</p>
+                  du groupe a accès, dans Résana, aux dossiers indexés : c'est vous qui pilotez.</p>
               </div>
               <div v-if="!resana" class="fr-radio-group">
                 <input type="radio" id="vis-all" value="all" v-model="form.visibility" :disabled="!!(etat && etat.mention)" />
