@@ -44,7 +44,9 @@ que rien ne le signale. `suivre` rend donc aussi la **qualité** (`indexeur.qual
 | `echec` | non lu, pour une autre raison (format refusé…) |
 
 OpenRAG 2.3 le dit dans le statut de tâche : `degraded_stages`, et, depuis la 2.3.2-2,
-`contextualization` (`total`, `failed`). Un indexeur qui ne dit rien rend `qualite = None` : on ne
+`contextualization` (`total`, `failed`) ; avec le repli OCR (#152), `parse_backend`, `ocr` et
+`ocr_failed_pages`, gardés dans la qualité (`ocr`, `pages_perdues` ; des pages perdues font un état
+`degrade`, étape `parse`). Un indexeur qui ne dit rien rend `qualite = None` : on ne
 sait pas. Un dépôt manuel dégradé réussit, et son travail dit ce qui manque. Une collection Résana
 garde la qualité de chaque document, la compte (`/status` → `qualite`) et sait renvoyer les seuls
 documents incomplets (`docs/resana.md`).

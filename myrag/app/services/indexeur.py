@@ -79,7 +79,7 @@ def qualite_lecture(details: dict[str, Any] | None) -> dict | None:
         etat = "sans_contexte"
     elif etapes:
         etat = "degrade"
-    elif "degraded_stages" in details or ctx:
+    elif "degraded_stages" in details or ctx or "parse_backend" in details:
         etat = "complet"
     else:
         return None
@@ -90,6 +90,11 @@ def qualite_lecture(details: dict[str, Any] | None) -> dict | None:
         q["sans_contexte"] = sans_contexte
     if etapes:
         q["etapes"] = etapes
+    # Le parseur le dit depuis le repli OCR d'OpenRAG (#152) : lu par OCR, et pages perdues.
+    if details.get("ocr") is True:
+        q["ocr"] = True
+    if isinstance(details.get("ocr_failed_pages"), int) and details["ocr_failed_pages"] > 0:
+        q["pages_perdues"] = details["ocr_failed_pages"]
     return q
 
 

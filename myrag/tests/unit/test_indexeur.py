@@ -50,6 +50,14 @@ def test_qualite_d_un_document_lu():
     }
     assert qualite_lecture({"degraded_stages": ["contextualize"]})["etat"] == "sans_contexte"
     assert qualite_lecture({"degraded_stages": ["caption"]}) == {"etat": "degrade", "etapes": ["caption"]}
+    # Le repli OCR d'OpenRAG (#152) : lu par OCR, et des pages perdues font un état dégradé.
+    assert qualite_lecture({"parse_backend": "marker", "ocr": True, "ocr_fallback": True}) == {"etat": "complet", "ocr": True}
+    assert qualite_lecture({"parse_backend": "pdf_client", "ocr": True, "ocr_failed_pages": 2, "degraded_stages": ["parse"]}) == {
+        "etat": "degrade",
+        "etapes": ["parse"],
+        "ocr": True,
+        "pages_perdues": 2,
+    }
     assert qualite_echec("NoIndexableContentError: NO_INDEXABLE_CONTENT: No indexable content") == {"etat": "sans_texte"}
     assert qualite_echec("PDF chiffré") == {"etat": "echec"}
 
