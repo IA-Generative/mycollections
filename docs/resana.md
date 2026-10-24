@@ -127,10 +127,28 @@ du groupe `<racine>/<nom>-admin` la lisent.
      passe.
    - Pas de plafond par passe. Seule garde : laisser au moins 1 Go libre sur le volume.
 5. **Le tri** :
-   - un contenu déjà vu sous un autre document est écarté (doublon) ;
    - un format non pris en charge est écarté ;
    - un document refusé par Résana (`hors_droits`, `introuvable`, `trop_volumineux`) est écarté, et
-     retiré s'il avait été importé.
+     retiré s'il avait été importé ;
+   - **les doublons** : voir ci-dessous.
+
+   **Doublons dans une collection.** Personne n'est bloqué : un contenu identique n'est simplement
+   indexé qu'une fois. Ce qui ne l'est pas : les doublons entre collections, et les quasi-doublons
+   (une v1 et une v2, un Word et son PDF). L'empreinte (sha256) ne voit que l'identique.
+   - **Qui garde la place** : le premier document gardé porte le contenu. Les autres sont écartés,
+     avec la raison « même contenu que « … » », et restent visibles dans « Documents écartés ».
+   - **Stabilité** : face à un nouveau doublon, le document déjà indexé garde sa place, même si
+     Résana rend la liste dans un autre ordre. Rien n'est retiré puis renvoyé pour rien.
+   - **Mémoire des écartés** (`source_config_json.ecartes`) : un doublon ou un format refusé est noté
+     avec la version annoncée par Résana, et n'est **pas retéléchargé** tant qu'elle ne change pas.
+   - **Relais** : si l'original change ou disparaît, son doublon est relu, et il porte alors le
+     contenu : rien ne sort de l'index.
+   - **Fin du doublon** : un doublon qui change redevient un document à part entière.
+   - **Erreurs de lecture d'OpenRAG** :
+     - passagères (délai dépassé, service indisponible) : le document est renvoyé à la passe
+       suivante, l'essai raté étant retiré d'abord ;
+     - définitives (« n'a pas pu lire » : PDF sans texte) : le document n'est retenté que s'il
+       change.
 6. **OpenRAG, document par document** (par l'interface de l'indexeur, `docs/indexeur.md`). La partition n'est jamais vidée, et la recherche continue
    pendant la mise à jour.
    - L'ancienne version d'un document modifié et les documents disparus sont retirés un par un
