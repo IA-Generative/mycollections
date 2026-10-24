@@ -252,6 +252,8 @@ dans `frontend/utils/libelles.ts`) :
   protecteur : un document n'est jamais rangé moins protégé qu'avant. Le démarrage les réécrit
   dans les collections et les travaux d'indexation ; l'API les accepte encore en entrée.
 - **Une valeur inconnue est refusée** (422) à la création et dans la fiche.
+- **Tout document indexé porte une sensibilité** : celle de la collection, par défaut. La changer
+  document par document, et faire suivre le changement à l'indexeur, est l'objet de #139.
 - **La sensibilité ne change encore aucun droit.** Ce qu'un niveau interdit (publication dans
   l'assistant, partage hors de la collection) reste à décider.
 

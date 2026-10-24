@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * La sensibilité d'une collection Résana (#134) : celle de la fiche (« Interne » à la création),
- * enregistrée dès qu'on la change. Elle accompagne chaque document envoyé à l'indexeur.
+ * La sensibilité par défaut d'une collection Résana (#134) : celle de la fiche (« Interne » à la
+ * création), enregistrée dès qu'on la change. Tout document indexé en porte une : celle-ci
+ * accompagne chaque document envoyé à l'indexeur.
  * Partagée par « Gérer les documents » et par l'étape 3 de l'assistant Résana.
  */
 import { SENSIBILITES } from '~/utils/libelles'
@@ -65,8 +66,8 @@ async function enregistrer () {
     <label
       class="fr-label"
       :for="champ"
-    >Sensibilité
-      <span class="fr-hint-text">Elle accompagne chaque document envoyé à l'indexeur, à partir de la prochaine mise à jour. Elle ne change pas qui peut lire la collection.</span>
+    >Sensibilité par défaut des documents et de la collection
+      <span class="fr-hint-text">Tout document indexé doit porter une information de sensibilité. Celle-ci s'applique par défaut à chaque document de la collection, à partir de la prochaine mise à jour ; elle peut être changée ensuite. Elle ne change pas qui peut lire la collection.</span>
     </label>
     <select
       :id="champ"
