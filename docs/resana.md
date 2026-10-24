@@ -81,11 +81,14 @@ Décision du 2026-10-24 : les droits viennent du SSO, et le groupe est déclaré
 collection. C'est cette personne qui choisit qui la voit ; elle s'assure que chaque membre du groupe a
 les bons droits dans Résana : c'est elle qui pilote.
 
-- **Dans le chat MirAI, à un groupe seulement** (`POST /api/collections/{nom}/publish`, `visibility:
-  group` et au moins un groupe) ; jamais à tout le monde (409).
+- **Dans le chat MirAI, à un ou plusieurs groupes** (`POST /api/collections/{nom}/publish`,
+  `visibility: group` et au moins un groupe ; l'écran les prend un par ligne) ; jamais à tout le
+  monde (409).
 - **Avec une confirmation** : `droits_resana_confirmes: true`, sinon 409. L'écran la demande par une
-  case à cocher (« J'ai vérifié que chaque membre de ce groupe a accès, dans Résana, aux dossiers
-  indexés. C'est moi qui pilote ce partage. »), dans « Partager » et à l'étape 5 de l'assistant.
+  case à cocher, dans « Partager » et à l'étape 5 de l'assistant (`CONFIRMATION_DROITS_RESANA`
+  dans `frontend/utils/resana.ts`). Elle explique la conséquence concrète : un membre sans accès
+  dans Résana verrait les réponses, mais les liens vers les documents cités ne s'ouvriraient pas
+  pour lui.
 - **Une trace** : la confirmation est gardée dans l'historique de la publication et dans le journal
   de la collection (`publication.publiee`, avec les groupes).
 - **Ce qui ne change pas** : la fiche et le bac à sable restent privés (portée verrouillée),

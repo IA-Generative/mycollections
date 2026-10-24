@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { lignesVersGroupes } from '~/utils/groupes'
 import { CONFIRMATION_DROITS_RESANA, partageResanaPret } from '~/utils/resana'
 import { lienEtape } from '~/utils/wizard'
 
@@ -15,7 +16,9 @@ const choix = ref<'plus-tard' | 'groupe'>('plus-tard')
 const groupe = ref('')
 const nomFiche = ref('')
 const droitsConfirmes = ref(false)
-const pret = computed(() => choix.value !== 'groupe' || (resana ? partageResanaPret(groupe.value, droitsConfirmes.value) : !!groupe.value.trim()))
+// Plusieurs groupes : un par ligne.
+const groupes = computed(() => lignesVersGroupes(groupe.value))
+const pret = computed(() => choix.value !== 'groupe' || (resana ? partageResanaPret(groupes.value, droitsConfirmes.value) : groupes.value.length > 0))
 const envoi = ref(false)
 const resultat = ref('')
 const erreur = ref(false)
@@ -29,19 +32,21 @@ async function terminer () {
   }
   envoi.value = true
   try {
-    const chemin = groupe.value.trim()
+    const choisis = groupes.value
+    const liste = choisis.map(g => `« ${g} »`).join(', ')
+    const qui = choisis.length > 1 ? `des groupes ${liste}` : `du groupe ${liste}`
     const r: any = await post(`/api/collections/${collection}/publish`, {
       alias_enabled: true,
       alias_name: nomFiche.value.trim(),
       visibility: 'group',
-      visibility_groups: [chemin],
+      visibility_groups: choisis,
       ...(resana ? { droits_resana_confirmes: droitsConfirmes.value } : {}),
     })
     resultat.value = r?.owui?.error
       ? `La collection est publiée, mais le chat MirAI ne l'a pas encore reçue : ${r.owui.error}`
       : resana
-        ? `Votre collection est visible du groupe « ${chemin} » dans le chat MirAI.`
-        : `Votre collection est visible du groupe « ${chemin} » dans le chat MirAI. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
+        ? `Votre collection est visible ${qui} dans le chat MirAI.`
+        : `Votre collection est visible ${qui} dans le chat MirAI. Pour l'ouvrir à tous, vérifiez-la depuis sa fiche.`
   }
   catch (e) {
     erreur.value = true
@@ -89,8 +94,9 @@ async function terminer () {
             </h3>
             <p class="fr-callout__text fr-text--sm">
               Ses documents viennent de vos espaces Résana. Dans Résana, chacun ne voit que les espaces où il est
-              invité. Un membre du groupe qui n'est pas invité dans ces espaces lirait, par le chat MirAI, des documents
-              que Résana ne lui montre pas. Vérifiez donc que chaque membre du groupe a accès aux dossiers indexés :
+              invité. Un membre d'un groupe qui n'est pas invité dans ces espaces lirait, par le chat MirAI, des documents
+              que Résana ne lui montre pas, et les liens vers ces documents ne s'ouvriraient pas pour lui. Vérifiez donc
+              que chaque membre des groupes choisis a accès aux dossiers indexés :
               c'est vous qui pilotez. Une collection Résana ne s'ouvre jamais à tout le monde.
             </p>
           </div>
@@ -142,8 +148,8 @@ async function terminer () {
                 class="fr-label"
                 for="part-groupe"
               >
-                Un groupe, pour la tester à plusieurs
-                <span class="fr-hint-text">Seuls les membres du groupe indiqué la verront dans la liste des modèles du chat MirAI.</span>
+                Un ou plusieurs groupes, pour la tester à plusieurs
+                <span class="fr-hint-text">Seuls les membres des groupes indiqués la verront dans la liste des modèles du chat MirAI.</span>
               </label>
             </div>
             <div
@@ -153,14 +159,15 @@ async function terminer () {
               <label
                 class="fr-label"
                 for="part-groupe-nom"
-              >Groupe
-                <span class="fr-hint-text">Son nom tel qu'il apparaît dans le chat MirAI. Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
+              >Groupes, un par ligne
+                <span class="fr-hint-text">Chaque nom tel qu'il apparaît dans le chat MirAI. Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
               </label>
-              <input
+              <textarea
                 id="part-groupe-nom"
                 v-model="groupe"
                 class="fr-input"
-              >
+                rows="3"
+              />
             </div>
             <div
               v-if="resana && choix === 'groupe'"
@@ -246,7 +253,7 @@ async function terminer () {
             :disabled="!collection || envoi || !pret"
             @click="terminer"
           >
-            {{ envoi ? 'Enregistrement…' : choix === 'groupe' ? 'Partager avec ce groupe' : 'Terminer' }}
+            {{ envoi ? 'Enregistrement…' : choix === 'groupe' ? (groupes.length > 1 ? 'Partager avec ces groupes' : 'Partager avec ce groupe') : 'Terminer' }}
           </button>
         </li>
       </ul>
