@@ -183,10 +183,11 @@
         <div v-if="!pub.archivee" class="fr-col-12 fr-mt-4w">
           <div class="publier-retrait">
             <div>
-              <h3 class="fr-h6 fr-mb-1v">Retirer la collection</h3>
+              <h3 class="fr-h6 fr-mb-1v">Archiver la collection</h3>
               <p class="fr-text--sm fr-mb-0">
-                Archiver la retire du catalogue et empêche de la publier. Rien n'est supprimé : ses documents sont conservés,
-                et vous pourrez la désarchiver d'ici.
+                Une collection archivée n'apparaît plus dans le catalogue ni dans le chat MirAI : plus personne ne
+                l'interroge, et elle ne peut plus être partagée. Rien n'est supprimé : ses documents sont conservés,
+                et vous pourrez la désarchiver depuis cette page.
               </p>
             </div>
             <button class="fr-btn fr-btn--tertiary fr-btn--sm" :disabled="occupe" @click="confirmerArchivage = true">Archiver…</button>
@@ -221,7 +222,7 @@
                 </div>
                 <div class="fr-modal__content">
                   <h1 id="archiver-titre" class="fr-modal__title">Archiver « {{ titre }} » ?</h1>
-                  <p>La collection disparaîtra du catalogue et ne pourra plus être publiée tant qu'elle sera archivée.</p>
+                  <p>La collection disparaîtra du catalogue et du chat MirAI, et ne pourra plus être partagée tant qu'elle sera archivée.</p>
                   <p class="fr-text--sm">Ses documents, ses réglages et son historique sont conservés. Vous pourrez la désarchiver depuis cette page.</p>
                 </div>
                 <div class="fr-modal__footer">
