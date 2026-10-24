@@ -61,6 +61,22 @@ préférence non signée. Une collection Résana garde `scan` par document et co
 et ceux que l'OCR a lus (`qualite.scans`, `qualite.scans_lus`). `scripts/marquer_scans.py` marque
 les scans indexés avant ce repérage, d'après la liste que rend leur relecture.
 
+### Les formats bureautiques que l'indexeur ne lit pas
+
+OpenRAG ne lit ni `.odt`, `.odp`, `.ods`, ni `.ppt`, `.xls`, `.xlsx`, `.rtf`. Ce sont pourtant des
+formats courants dans l'administration. Quand `MYCOLLECTIONS_CONVERSION_URL` désigne un service
+**Gotenberg** (route LibreOffice, `myrag/k8s/deployment-conversion.yaml`), Mes collections les
+convertit en PDF avant l'envoi (`app/services/conversion.py`) :
+
+- le fichier part sous le nom `budget (ods).pdf`, avec la métadonnée `converti_depuis` ;
+- l'empreinte gardée reste celle de l'original : c'est lui dont on suit les versions ;
+- une conversion à la fois, avec un délai borné (`MYCOLLECTIONS_CONVERSION_DELAI_S`). Un échec écarte
+  le document avec sa raison, sans bloquer les autres ;
+- un document Résana écarté pour son format est retenté à la mise à jour suivante, dès que le
+  service est là. L'écart garde désormais l'extension.
+
+Sans service, rien ne change : ces formats restent écartés.
+
 ## Ce que Mes collections garde de son côté
 
 Pour que le moteur soit remplaçable, la référence de ce qui est indexé est chez Mes collections, pas

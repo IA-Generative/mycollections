@@ -180,6 +180,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/chunker.py` | 4 strategies de decoupage |
 | `myrag/app/services/graph_builder.py` | Graph NetworkX + Cytoscape.js |
 | `myrag/app/routers/ingest.py` | Upload + from-url + reindex |
+| `myrag/app/services/conversion.py` | Conversion en PDF des formats bureautiques que l'indexeur ne lit pas, par un service à part (Gotenberg) ; dépôt et Résana |
 | `myrag/app/services/indexeur.py` | L'indexeur (OpenRAG aujourd'hui) derrière une interface : envoyer, suivre, retirer, vider (`docs/indexeur.md`) ; construit dans `ingest._indexeur` |
 | `myrag/app/routers/sources_resana.py`, `app/services/connectors/resana.py`, `app/services/resana_perimetre.py`, `frontend/pages/admin/create/resana.vue` | Import d'un dossier Résana : client du service d'export, routes `/api/sources/resana/*`, collection privée à l'importeur (`docs/resana.md`) |
 | `myrag/app/routers/playground.py` | Chat RAG avec fallback |
@@ -266,6 +267,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL` | `` | Page d'installation de « MirAI Assistant pour navigateur » (device management), en https ; vide ⇒ pas de lien |
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `MYCOLLECTIONS_RESANA_EXPORT_URL` / `_SECRET` | `` | Service d'export Résana (owuitools-resana, `/export/v1`) et secret propre à Mes collections ; vides ⇒ routes Résana en 503. Capacité `resana` éteinte par défaut (`docs/resana.md`) |
+| `MYCOLLECTIONS_CONVERSION_URL` / `_DELAI_S` | `` / `120` | Service de conversion des formats bureautiques en PDF (Gotenberg, route LibreOffice ; `myrag/k8s/deployment-conversion.yaml`) : `.odt`, `.odp`, `.ods`, `.ppt`, `.xls`, `.xlsx`… partent convertis vers l'indexeur (#146). Vide ⇒ ces formats restent écartés |
 | `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` | `7` | Au-delà, l'index d'une collection Résana « semble ancien » : invitation à le mettre à jour (bac à sable, `notices` de la recherche, page de la collection) |
 | `MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES` | `4` | Documents Résana confiés en même temps à l'indexeur (1 à 16). L'indexeur appelle les modèles par une passerelle partagée avec le chat : ne pas monter tant qu'elle refuse (429, chantier #143) ; l'état du travail donne `debit_docs_min` |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |

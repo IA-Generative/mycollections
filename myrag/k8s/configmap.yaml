@@ -38,6 +38,9 @@ data:
   # collections : la passerelle compte son quota par jeton. Vides ⇒ les routes répondent 503.
   MYCOLLECTIONS_GENERATION_LLM_URL: "https://passerelle-llm.fake-domain.name/v1"
   MYCOLLECTIONS_GENERATION_LLM_MODELE: "chat"
+  # Conversion des formats bureautiques en PDF avant l'indexation (#146) : le service Gotenberg du
+  # même namespace (deployment-conversion.yaml). Vide ⇒ ces formats restent écartés.
+  MYCOLLECTIONS_CONVERSION_URL: "http://myrag-conversion.myrag.svc.cluster.local:3000"
   MYCOLLECTIONS_GENERATION_EMBEDDINGS_MODELE: "bge-m3"
   MYCOLLECTIONS_GENERATION_APPELS_PAR_MINUTE: "20"
   RAGAS_DO_NOT_TRACK: "true"
