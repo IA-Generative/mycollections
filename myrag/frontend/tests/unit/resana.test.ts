@@ -166,6 +166,12 @@ describe('ce que vaut l\'index (#144)', () => {
     ])
   })
 
+  it('dit les scans lus par OCR, même quand tout est complet', () => {
+    expect(phrasesQualite({ par_etat: { complet: 5 }, a_reprendre: 0, scans: 2, scans_lus: 2 })).toEqual([
+      '2 scans ont été lus par reconnaissance de caractères : le texte peut contenir des erreurs, vérifiez les passages importants dans le document d\'origine.',
+    ])
+  })
+
   it('nomme la ré-indexation', () => {
     expect(libelleTravail({ etat: 'termine', action: 'reindexation', ajoutes: 0, modifies: 2, retires: 0 })).toBe('Ré-indexation terminée : 0 ajouté, 2 modifiés, 0 retiré.')
   })

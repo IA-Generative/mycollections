@@ -80,3 +80,33 @@ def nature(nom: str, contenu: bytes) -> Nature | None:
 
 def type_mime(nom: str) -> str:
     return FORMATS_DOCUMENT.get(extension(nom), "application/octet-stream")
+
+
+#: En dessous de ce nombre moyen de caractères par page, un PDF est tenu pour un scan : une image de
+#: chaque page, sans couche texte. Quelques caractères suffisent à un tampon ou à un numéro de page.
+SCAN_CARACTERES_PAR_PAGE = 30
+#: Pages examinées au plus : la nature d'un PDF se voit dès ses premières pages.
+SCAN_PAGES_EXAMINEES = 10
+
+
+def est_un_scan(nom: str, contenu: bytes) -> bool:
+    """Un PDF sans texte lisible : une numérisation de copieur, le plus souvent. L'indexeur ne le
+    lit qu'avec la reconnaissance de caractères (OCR) ; mieux vaut, quand elle existe, sa version
+    électronique. Un PDF illisible ici n'est pas déclaré scan : l'indexeur dira ce qu'il en est."""
+    if extension(nom) != ".pdf" or not contenu.startswith(b"%PDF"):
+        return False
+    import io
+    import logging
+
+    from pypdf import PdfReader
+
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
+    try:
+        lecteur = PdfReader(io.BytesIO(contenu))
+        pages = lecteur.pages[:SCAN_PAGES_EXAMINEES]
+        if not pages:
+            return False
+        caracteres = sum(len((p.extract_text() or "").strip()) for p in pages)
+    except Exception:  # noqa: BLE001 — chiffré, abîmé : on ne conclut pas
+        return False
+    return caracteres < SCAN_CARACTERES_PAR_PAGE * len(pages)

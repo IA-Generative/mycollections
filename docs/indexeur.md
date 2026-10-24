@@ -51,6 +51,16 @@ sait pas. Un dépôt manuel dégradé réussit, et son travail dit ce qui manque
 garde la qualité de chaque document, la compte (`/status` → `qualite`) et sait renvoyer les seuls
 documents incomplets (`docs/resana.md`).
 
+### Les scans
+
+Un PDF sans texte lisible (moins de 30 caractères par page sur ses 10 premières pages,
+`formats.est_un_scan`) est **repéré avant l'envoi et envoyé quand même**, avec la métadonnée
+`scan: true` : l'indexeur le lit s'il a la reconnaissance de caractères (OCR), sinon il le refuse
+(`sans_texte`). Dans ce cas, le travail ajoute le conseil de déposer la version électronique, de
+préférence non signée. Une collection Résana garde `scan` par document et compte les scans repérés
+et ceux que l'OCR a lus (`qualite.scans`, `qualite.scans_lus`). `scripts/marquer_scans.py` marque
+les scans indexés avant ce repérage, d'après la liste que rend leur relecture.
+
 ## Ce que Mes collections garde de son côté
 
 Pour que le moteur soit remplaçable, la référence de ce qui est indexé est chez Mes collections, pas
