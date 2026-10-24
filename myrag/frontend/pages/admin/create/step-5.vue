@@ -51,7 +51,7 @@ async function terminer () {
   <WizardEtape
     :numero="5"
     :titre="`Partager — ${titre || collection}`"
-    :chapeau="resana ? 'Votre collection est créée. Elle reste privée : vous seul l\'interrogez, avec vos droits Résana.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
+    :chapeau="resana ? 'Votre collection est créée et ses documents s\'indexent. Dernière étape : savoir qui peut l\'utiliser.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
   >
     <template #formulaire>
       <div
@@ -69,14 +69,35 @@ async function terminer () {
         v-else-if="resana"
         class="fr-col-12 fr-col-md-8"
       >
+        <h2 class="fr-h5">
+          Qui peut utiliser cette collection ?
+        </h2>
+        <p>
+          <strong>Pour l'instant, vous seul.</strong> Ses documents viennent de vos espaces Résana. Dans Résana, chacun
+          ne voit que les espaces où il est invité. Si d'autres personnes pouvaient interroger votre collection, elles
+          liraient peut-être des documents que Résana ne leur montre pas. C'est pourquoi une collection Résana ne se
+          partage pas encore et n'apparaît pas dans l'assistant MirAI.
+        </p>
+
+        <h2 class="fr-h5">
+          Ce que vous pouvez faire maintenant
+        </h2>
+        <p class="fr-mb-1w">
+          Tout se passe sur la fiche de la collection (bouton ci-dessous) :
+        </p>
+        <ul class="fr-mb-3w">
+          <li><strong>lui poser des questions</strong> : bouton « Poser une question » ;</li>
+          <li>
+            <strong>la tenir à jour</strong> quand des documents changent dans Résana : onglet « Documents », bouton
+            « Gérer les documents », puis « Mettre à jour » ;
+          </li>
+          <li><strong>ajouter ou retirer des dossiers</strong> : même page, « Modifier la sélection ».</li>
+        </ul>
+
         <div class="fr-callout fr-mb-4w">
-          <h2 class="fr-callout__title fr-h6">
-            Pas de partage pour une collection Résana
-          </h2>
           <p class="fr-callout__text fr-text--sm">
-            Ses documents viennent de vos espaces Résana : d'autres personnes y liraient ce que Résana leur refuse
-            peut-être. Elle ne se publie donc pas dans l'assistant. Vous l'interrogez depuis son bac à sable, et vous
-            la mettez à jour depuis « Gérer les documents », sur sa fiche.
+            Le partage avec des collègues viendra plus tard, quand les règles d'accès auront été décidées. Il se fera
+            alors depuis la fiche de la collection, avec le bouton « Partager ».
           </p>
         </div>
       </div>
