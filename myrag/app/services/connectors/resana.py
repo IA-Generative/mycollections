@@ -145,13 +145,27 @@ def _taille(v) -> float | None:
 _NOM_DISPOSITION = re.compile(r"filename\*=(?:UTF-8|utf-8)''([^;]+)|filename=\"?([^\";]+)\"?")
 
 
+def reparer_accents(texte: str) -> str:
+    """Un texte UTF-8 lu comme du latin-1 (« RÃ©ponse ») rendu à ses accents (« Réponse »). Résana
+    envoie certains noms en `filename="…"` brut, que la chaîne d'export décode en latin-1. Un texte
+    sain, ou que ce décodage ne rend pas lisible, est rendu tel quel."""
+    if not any(c in texte for c in "ÃÂâ"):
+        return texte
+    try:
+        repare = texte.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texte
+    return repare
+
+
 def nom_depuis_disposition(entete: str | None, repli: str) -> str:
-    """Le nom de fichier d'un `Content-Disposition` (forme `filename*=UTF-8''…` d'abord)."""
+    """Le nom de fichier d'un `Content-Disposition` (forme `filename*=UTF-8''…` d'abord), accents
+    réparés s'ils ont été mal décodés en route."""
     m = _NOM_DISPOSITION.search(entete or "")
     if not m:
         return repli
     nom = unquote(m.group(1)) if m.group(1) else m.group(2)
-    nom = nom.replace("/", "_").replace("\\", "_").strip()
+    nom = reparer_accents(nom).replace("/", "_").replace("\\", "_").strip()
     return nom or repli
 
 

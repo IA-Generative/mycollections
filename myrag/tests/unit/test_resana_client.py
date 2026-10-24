@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.services.connectors import resana
-from app.services.connectors.resana import ClientExportResana, DocumentResana, ErreurResana, nom_depuis_disposition, nom_unique, noms_uniques
+from app.services.connectors.resana import ClientExportResana, DocumentResana, ErreurResana, nom_depuis_disposition, nom_unique, noms_uniques, reparer_accents
 from tests.unit._faux_resana import BASE, SECRET, TEMOIN, DocFaux, FauxResana
 
 pytestmark = pytest.mark.asyncio
@@ -161,3 +161,13 @@ async def test_une_preparation_sans_fin_s_arrete(monkeypatch):
     with pytest.raises(ErreurResana) as e:
         await client.documents("e-1", "d-1", attendre=True)
     assert e.value.code == "preparation_trop_longue"
+
+
+def test_accents_mal_decodes_repares():
+    # De l'UTF-8 lu en latin-1 en route : réparé, sous les deux formes de l'en-tête.
+    assert reparer_accents("R\u00c3\u00a9ponse sign\u00c3\u00a9e.pdf") == "Réponse signée.pdf"
+    assert nom_depuis_disposition("attachment; filename*=UTF-8''R%C3%83%C2%A9ponse.pdf", "repli") == "Réponse.pdf"
+    assert nom_depuis_disposition('attachment; filename="pr\u00c3\u00a9fet.pdf"', "repli") == "préfet.pdf"
+    # Un texte sain, même avec « â », reste tel quel.
+    for sain in ("Réponse.pdf", "tâche à faire.pdf", "Âge moyen.pdf", "note.pdf"):
+        assert reparer_accents(sain) == sain

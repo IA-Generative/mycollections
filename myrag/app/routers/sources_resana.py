@@ -46,7 +46,7 @@ from app.services import formats, nommage, resana_perimetre
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
-from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, nom_unique
+from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, nom_unique, reparer_accents
 
 logger = logging.getLogger("myrag.sources.resana")
 
@@ -60,6 +60,9 @@ TELECHARGEMENTS_PARALLELES = 4
 #: Documents confiés à OpenRAG en même temps : au-delà, il ne suit plus (« pas fini de lire en
 #: 30 minutes » pour des centaines de PDF envoyés d'un coup).
 ENVOIS_PARALLELES = 4
+#: La langue des documents Résana, transmise à l'indexeur : il rédige dans cette langue le contexte
+#: de chaque passage. Une détection par document viendra avec #157.
+LANGUE_DES_DOCUMENTS = "fr"
 
 
 def envois_paralleles() -> int:
@@ -811,7 +814,8 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
     if not col:
         raise ErreurResana(404, "introuvable")
     cfg = await get_source_config(collection)
-    connus: dict[str, dict] = dict(cfg.get("documents") or {})
+    # Les noms reçus avant la réparation des accents (« RÃ©ponse ») sont réparés au passage.
+    connus: dict[str, dict] = {k: {**v, "fichier": reparer_accents(str(v.get("fichier", "")))} if v.get("fichier") else v for k, v in (cfg.get("documents") or {}).items()}
     _, sensibilite = _strategie(col)
     nom_espace = str(_espace_de(cfg).get("nom") or "")
 
@@ -891,7 +895,17 @@ async def _comparer_et_appliquer(collection: str, client: ClientExportResana, es
         if ancien and ancien.get("file_id"):
             a_retirer.append(ancien["file_id"])
         # La sensibilité suit le document chez l'indexeur, comme elle suit un morceau déposé (#134).
-        meta = {"source": SOURCE, "espace": nom_espace, "dossier": doc.chemin, "sensitivity": sensibilite.value, **({"url": _url(doc)} if _url(doc) else {})}
+        # Le titre est celui de Résana (lisible, sans extension) ; la langue guide le contexte que
+        # l'indexeur écrit pour chaque passage (sans elle, il l'écrit en anglais).
+        meta = {
+            "title": doc.titre or nom,
+            "language": LANGUE_DES_DOCUMENTS,
+            "source": SOURCE,
+            "espace": nom_espace,
+            "dossier": doc.chemin,
+            "sensitivity": sensibilite.value,
+            **({"url": _url(doc)} if _url(doc) else {}),
+        }
         a_envoyer.append((nom, recu, meta))
         gardes[doc.id] = {
             "sha256": recu.sha256,
