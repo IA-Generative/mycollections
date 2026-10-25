@@ -107,13 +107,13 @@ onMounted(async () => {
             </span>
           </div>
           <p
-            v-if="c.col.source_resume?.type === 'resana'"
+            v-if="c.col.source_resume?.type === 'resana' || c.col.source_resume?.type === 'fichiers'"
             class="fr-mb-0"
           >
             <span
               class="fr-tag fr-tag--sm"
               :title="phraseCouverture(c.col.source_resume)"
-            >{{ etiquetteResana(c.col.source_resume) }}</span>
+            >{{ c.col.source_resume.type === 'fichiers' ? etiquetteResana(c.col.source_resume).replace('Résana', 'Fichiers') : etiquetteResana(c.col.source_resume) }}</span>
           </p>
           <dl class="mes-carte__chiffres">
             <div>

@@ -129,7 +129,12 @@ async def sites_declares(moi: Identite = Depends(identite)) -> dict:
 
 async def _titre_lisible(type_: str, ident: str, moi: Identite, assistants_allumes: bool | None) -> str | None:
     if type_ == "collection":
+        from app.services import sensibilite
+
         col = await get_collection(ident)
+        # Le plafond de sensibilité de l'extension (MYCOLLECTIONS_DESTINATIONS_SENSIBILITE_MAX).
+        if col and not sensibilite.admise(col.get("sensitivity"), "navigateur"):
+            return None
         return titre_de(col) if assistant_droits.lisible(col, moi.user) else None
     if not assistants_allumes:
         return None

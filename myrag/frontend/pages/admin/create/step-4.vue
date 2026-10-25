@@ -334,7 +334,7 @@ onMounted(chargerSuggestions)
             :to="lienEtape(5, collection, source)"
             class="fr-btn"
           >
-            {{ source === 'resana' ? 'Étape suivante' : 'Continuer vers la publication' }}
+            {{ source === 'resana' || source === 'fichiers' ? 'Étape suivante' : 'Continuer vers la publication' }}
           </NuxtLink>
         </li>
       </ul>

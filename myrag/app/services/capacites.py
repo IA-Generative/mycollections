@@ -26,7 +26,7 @@ logger = logging.getLogger("myrag.capacites")
 
 DELAI_S = 2.0
 CACHE_S = 60.0
-DRAPEAUX = ("demandes", "signalements", "assistants", "entraide", "resana")
+DRAPEAUX = ("demandes", "signalements", "assistants", "entraide", "resana", "fichiers")
 
 _cache: dict = {"valeur": None, "expire": 0.0}
 

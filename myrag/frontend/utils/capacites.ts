@@ -4,7 +4,7 @@
  * origine). Un drapeau n'est vrai que s'il vaut exactement `true` — jamais « truthy », comme le
  * fait le menu lui-même.
  */
-export const DRAPEAUX = ['demandes', 'signalements', 'assistants', 'entraide', 'resana'] as const
+export const DRAPEAUX = ['demandes', 'signalements', 'assistants', 'entraide', 'resana', 'fichiers'] as const
 export type Drapeau = typeof DRAPEAUX[number]
 
 export type Capacites = Record<Drapeau, boolean> & { seuil_chantier: number }
@@ -15,6 +15,7 @@ export const CAPACITES_DEFAUT: Capacites = {
   assistants: false,
   entraide: false,
   resana: false,
+  fichiers: false,
   seuil_chantier: 5,
 }
 

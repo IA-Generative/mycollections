@@ -100,6 +100,9 @@ _MOTS_VIDES = frozenset({"le", "la", "les", "l", "un", "une", "des", "de", "du",
 #: Le préfixe des collections importées de Résana : posé par le serveur seul (identifiant
 #: `resana-<numéro de l'espace>`), refusé à une création manuelle — il reste un marqueur fiable.
 PREFIXE_RESANA = "resana-"
+#: Le préfixe des collections importées d'une instance de Fichiers (`fichiers-<instance>-<dossier>`),
+#: réservé de la même façon.
+PREFIXE_FICHIERS = "fichiers-"
 
 MOTIFS = {
     "empty": "Donnez un identifiant.",
@@ -111,6 +114,7 @@ MOTIFS = {
     "partition": "Cet identifiant est déjà pris (une partition porte ce nom).",
     "preview": "Sur cet environnement d'essai, l'identifiant commence par le préfixe imposé.",
     "resana": "Le préfixe « resana- » est réservé aux collections importées de Résana.",
+    "fichiers": "Le préfixe « fichiers- » est réservé aux collections importées de Fichiers.",
 }
 
 
@@ -130,6 +134,20 @@ def prefixes_bannis() -> tuple[str, ...]:
 def est_resana(identifiant: str) -> bool:
     """L'identifiant porte-t-il le préfixe réservé à Résana (après le préfixe imposé d'une preview) ?"""
     return (identifiant or "").removeprefix(prefixe_impose()).startswith(PREFIXE_RESANA)
+
+
+def est_fichiers(identifiant: str) -> bool:
+    return (identifiant or "").removeprefix(prefixe_impose()).startswith(PREFIXE_FICHIERS)
+
+
+def identifiant_fichiers(instance: str, dossier_id: str, suffixe: str = "") -> str:
+    """`fichiers-<instance>-<8 premiers caractères du dossier>[-<suffixe>]` : l'identifiant d'un
+    dossier de Drive est un UUID, ses premiers caractères suffisent à distinguer deux dossiers."""
+    inst = re.sub(r"[^a-z0-9]", "", str(instance).lower())[:12] or "drive"
+    dossier = re.sub(r"[^a-z0-9]", "", str(dossier_id).lower())[:8] or "racine"
+    propre = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", _sans_accents(suffixe or "").lower())).strip("-")
+    ident = f"{prefixe_impose()}{PREFIXE_FICHIERS}{inst}-{dossier}" + (f"-{propre}" if propre else "")
+    return ident[:IDENT_MAX].rstrip("-")
 
 
 def identifiant_resana(espace_id: str, suffixe: str = "") -> str:
@@ -157,6 +175,8 @@ def motif_de_refus(identifiant: str, *, source: str | None = None) -> str | None
         return "prefixe"
     if source != "resana" and est_resana(n):
         return "resana"
+    if source != "fichiers" and est_fichiers(n):
+        return "fichiers"
     impose = prefixe_impose()
     if impose and not (n.startswith(impose) and len(n) > len(impose)):
         return "preview"

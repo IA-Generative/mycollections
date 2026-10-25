@@ -77,7 +77,7 @@ class Collection(Base):
     def _resume_source(self) -> dict | None:
         """Ce que l'index couvre de sa source, pour l'étiquette des listes (« Résana · index
         partiel ») ; seulement pour Résana, et sans rien de la configuration au-delà des comptes."""
-        if self.source_type != "resana":
+        if self.source_type not in ("resana", "fichiers"):
             return None
         from app.services.resana_perimetre import couverture
 
@@ -85,7 +85,7 @@ class Collection(Base):
             cfg = json.loads(self.source_config_json or "{}")
         except ValueError:
             cfg = {}
-        return {"type": "resana", **couverture(cfg if isinstance(cfg, dict) else {})}
+        return {"type": self.source_type, **couverture(cfg if isinstance(cfg, dict) else {})}
 
     def to_dict(self) -> dict:
         return {

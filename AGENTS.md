@@ -134,6 +134,7 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
      ├── /api/openrag/static/{path}      → document complet (repli sur le morceau ; propage ?raw=1)
      ├── /api/sources/check-url          → verification URL distante
      ├── /api/sources/resana/*           → import d'un dossier Résana (capacite resana, docs/resana.md)
+     ├── /api/sources/fichiers/*         → import d'un dossier de Fichiers / Drive, multi-instances (capacite fichiers, docs/fichiers.md)
      ├── /api/sync                       → sync Keycloak ↔ OpenRAG
      ├── /api/collections/{n}/generation → paires question/réponse par persona (ragas)
      ├── /api/v1/search[/scopes]         → recherche de Mon portail (contrat de recherche MirAI, sans LLM)
@@ -183,6 +184,8 @@ echo "Frontend:" && curl -s -o /dev/null -w "%{http_code}" http://localhost:8201
 | `myrag/app/services/conversion.py` | Conversion en PDF des formats bureautiques que l'indexeur ne lit pas, par un service à part (Gotenberg) ; dépôt et Résana |
 | `myrag/app/services/indexeur.py` | L'indexeur (OpenRAG aujourd'hui) derrière une interface : envoyer, suivre, retirer, vider (`docs/indexeur.md`) ; construit dans `ingest._indexeur` |
 | `myrag/app/routers/sources_resana.py`, `app/services/connectors/resana.py`, `app/services/resana_perimetre.py`, `frontend/pages/admin/create/resana.vue` | Import d'un dossier Résana : client du service d'export, routes `/api/sources/resana/*`, collection privée à l'importeur (`docs/resana.md`) |
+| `myrag/app/routers/sources_fichiers.py`, `app/services/connectors/fichiers.py`, `app/services/fichiers_instances.py`, `app/services/synchro_profil.py`, `frontend/pages/admin/create/fichiers.vue` | Import d'un dossier de Fichiers (Drive de La Suite numérique), instance par instance : client Drive (jeton de la personne, `media-auth` + stockage), routes `/api/sources/fichiers/*`, moteur de Résana sous un profil (`docs/fichiers.md`) |
+| `myrag/app/services/sensibilite.py` | Le plafond de sensibilité : une collection ne descend pas sous ses sources ; plafond par destination (chat, recherche, extension) |
 | `myrag/app/routers/playground.py` | Chat RAG avec fallback |
 | `myrag/frontend/components/playground/SourceChip.vue` | Puce de source : bulle au survol (Teleport, position fixe), ouvre la fenetre de lecture |
 | `myrag/frontend/components/playground/SourceViewer.vue` | Fenetre de lecture d'un morceau ou d'un document : Markdown, export Word/PDF |
@@ -272,6 +275,8 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `MYCOLLECTIONS_INDEXEUR_LIT_TABLEURS` | `false` | L'indexeur lit lui-même `.xlsx`, `.xlsm`, `.xls`, `.ods` (lecteur `spreadsheet`, IA-Generative/openrag#15) : ils partent tels quels, sans conversion en PDF (qui coupe le texte des cellules). N'allumer qu'une fois ce lecteur en service (`docs/indexeur.md`) |
 | `MYCOLLECTIONS_RESANA_FRAICHEUR_JOURS` | `7` | Au-delà, l'index d'une collection Résana « semble ancien » : invitation à le mettre à jour (bac à sable, `notices` de la recherche, page de la collection) |
 | `MYCOLLECTIONS_RESANA_ENVOIS_PARALLELES` | `4` | Documents Résana confiés en même temps à l'indexeur (1 à 16). L'indexeur appelle les modèles par une passerelle partagée avec le chat : ne pas monter tant qu'elle refuse (429, chantier #143) ; l'état du travail donne `debit_docs_min` |
+| `MYCOLLECTIONS_FICHIERS_INSTANCES` | `` | Instances de Fichiers (Drive) importables : tableau JSON `[{"id", "titre", "url", "hote_public", "stockage_url", "sensibilite_max", "zone", "groupes"}]` (`docs/fichiers.md`). Vide ⇒ instance implicite `drive` si `DRIVE_URL` est posé. Capacité `fichiers` éteinte par défaut |
+| `MYCOLLECTIONS_DESTINATIONS_SENSIBILITE_MAX` | `` | Niveau de sensibilité maximal par destination : objet JSON `{"chat": "internal", "recherche": "controlled", "navigateur": "internal"}`. Vide ⇒ aucune restriction (`docs/fichiers.md`) |
 | `DRIVE_PUBLIC_HOST` | `` | Hôte public de Drive (en-tête si `drive_url` est interne) |
 | `NATINFO_API_KEY` | `` | Clé natinfo.app (facultative) : enrichit les fiches NATINF (peines) au-delà de 120 appels/h |
 | `MYCOLLECTIONS_GENERATION_LLM_URL` / `_LLM_CLE` / `_LLM_MODELE` | `` | Génération de questions par persona (ragas, `docs/generation.md`) : passerelle MirAI OpenAI-compatible, jeton (secret, propre à Mes collections), modèle. URL+clef vides ⇒ repli sur le `/v1` d'OpenRAG (jeton du service, quota partagé avec l'assistant) ; une seule posée ⇒ 503 ; modèle vide ⇒ le serveur en aval choisit (mode direct OpenRAG, sans retriever) |

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { sourceImportee } from '~/utils/fichiers'
 import { SENSIBILITES } from '~/utils/libelles'
-import { estCollectionResana, titrePageDocuments } from '~/utils/resana'
+import { titrePageDocuments } from '~/utils/resana'
 
 const route = useRoute()
 const id = route.params.id as string
@@ -13,7 +14,11 @@ const sensitivity = ref('public')
 // undefined tant que la fiche n'a pas répondu (rien ne s'affiche : pas de dépôt montré puis
 // retiré) ; null si elle est illisible (une partition sans fiche garde le dépôt).
 const fiche = ref<{ source_type?: string | null, sensitivity?: string } | null | undefined>(undefined)
-const resana = computed(() => estCollectionResana(fiche.value))
+// Une collection importée (Résana, Fichiers) : la carte de sa source, pas le dépôt.
+const source = computed(() => sourceImportee(fiche.value))
+const resana = computed(() => source.value !== null)
+// Fichiers : la sensibilité ne descend pas sous le niveau de l'instance (docs/fichiers.md).
+const minimum = ref<string | undefined>(undefined)
 const titrePage = computed(() => titrePageDocuments(fiche.value))
 // La carte Résana suit la capacité (docs/resana.md).
 const { capacites, charger } = useCapacites()
@@ -26,6 +31,9 @@ onMounted(async () => {
     fiche.value = f
     if (f?.sensitivity) {
       sensitivity.value = f.sensitivity
+    }
+    if (f?.source_type === 'fichiers') {
+      minimum.value = (await get(`/api/sources/fichiers/status/${encodeURIComponent(id)}`))?.sensibilite_min
     }
   }
   catch {
@@ -56,21 +64,23 @@ onMounted(async () => {
         class="fr-col-12 fr-col-lg-8"
       >
         <DepotEtatResana
-          v-if="capacites.resana"
+          v-if="source && capacites[source]"
           :collection="id"
+          :source="source"
           class="fr-mt-2w"
         />
         <p
           v-else
           class="fr-message fr-message--info fr-mt-2w"
         >
-          La connexion à Résana est fermée pour le moment : la sélection et la mise à jour reviendront avec elle.
+          La connexion à {{ source === 'fichiers' ? 'Fichiers' : 'Résana' }} est fermée pour le moment : la sélection et la mise à jour reviendront avec elle.
         </p>
 
         <DepotSensibiliteResana
           class="fr-mt-4w"
           :collection="id"
           :valeur="fiche?.sensitivity"
+          :minimum="minimum"
         />
       </div>
 

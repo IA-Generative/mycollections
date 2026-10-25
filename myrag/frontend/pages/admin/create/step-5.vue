@@ -14,7 +14,8 @@ const collection = route.query.collection as string
 // Une collection Résana s'ouvre à un groupe choisi, jamais à tous, et qui la partage confirme
 // les droits Résana des membres (docs/resana.md, décision du 2026-10-24).
 const source = (route.query.source as string) || ''
-const resana = source === 'resana'
+const resana = source === 'resana' || source === 'fichiers'
+const nomSource = source === 'fichiers' ? 'Fichiers' : 'Résana'
 const { titre, retenir } = useTitreCollection(collection, { charger: false })
 const { get, post } = useApi()
 
@@ -51,7 +52,7 @@ onMounted(async () => {
   const [f, docs, statut, qualite] = await Promise.all([
     get(`/api/collections/${c}`).catch(() => null),
     resana ? Promise.resolve(null) : get(`/api/collections/${c}/documents`, { par_page: '1' }).catch(() => null),
-    resana ? get(`/api/sources/resana/status/${c}`).catch(() => null) : Promise.resolve(null),
+    resana ? get(`/api/sources/${source}/status/${c}`).catch(() => null) : Promise.resolve(null),
     get(`/api/collections/${c}/qualite`).catch(() => null),
   ])
   fiche.value = f
@@ -185,11 +186,11 @@ async function terminer () {
               Avant de l'ouvrir à un groupe
             </h3>
             <p class="fr-callout__text fr-text--sm">
-              Ses documents viennent de vos espaces Résana. Dans Résana, chacun ne voit que les espaces où il est
-              invité. Un membre d'un groupe qui n'est pas invité dans ces espaces lirait, par le chat MirAI, des documents
-              que Résana ne lui montre pas, et les liens vers ces documents ne s'ouvriraient pas pour lui. Vérifiez donc
+              Ses documents viennent de {{ nomSource }}. Dans {{ nomSource }}, chacun ne voit que ce qui lui est
+              ouvert. Un membre d'un groupe qui n'y a pas accès lirait, par le chat MirAI, des documents
+              que {{ nomSource }} ne lui montre pas, et les liens vers ces documents ne s'ouvriraient pas pour lui. Vérifiez donc
               que chaque membre des groupes choisis a accès aux dossiers indexés :
-              c'est vous qui pilotez. Une collection Résana ne s'ouvre jamais à tout le monde.
+              c'est vous qui pilotez. Une collection {{ nomSource }} ne s'ouvre jamais à tout le monde.
             </p>
           </div>
         </template>
@@ -265,7 +266,7 @@ async function terminer () {
               <label
                 class="fr-label"
                 for="part-droits-resana"
-              >{{ CONFIRMATION_DROITS_RESANA }}</label>
+              >{{ CONFIRMATION_DROITS_RESANA.replaceAll('Résana', nomSource) }}</label>
             </div>
           </div>
           <div

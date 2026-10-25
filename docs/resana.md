@@ -33,6 +33,9 @@ droits appliqués sont ceux de la personne dans Résana.
 | `GET /espaces/{id}/documents?dossier=&recursif=true` | la liste **complète** du dossier, page par page (`suivant`) ; un curseur expiré (410) relance la lecture une fois ; un grand dossier répond d'abord `202 en_preparation` (voir plus bas) |
 | `GET /documents/{id}/fichier?espace=` | les octets d'origine, lus en flux, 100 Mo au plus |
 
+Le moteur d'import et de mise à jour décrit ici sert aussi la source Fichiers (Drive de La Suite
+numérique), sous un autre profil : voir `docs/fichiers.md`. Pour Résana, rien ne change.
+
 ## Routes de Mes collections
 
 Toutes sont sous `/api/sources/resana` et gardées par la capacité `resana`. Elle est éteinte par défaut :

@@ -48,6 +48,7 @@ from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
 from app.services.connectors.resana import ClientExportResana, DocumentResana, EnPreparation, ErreurResana, nom_unique, reparer_accents
 from app.services.indexeur import qualite_echec
+from app.services.synchro_profil import profil
 
 logger = logging.getLogger("myrag.sources.resana")
 
@@ -79,6 +80,13 @@ PAUSES_FICHIER_VIDE = (5.0, 20.0)
 #: (partielle) plutôt que d'écarter tout le reste du dossier ; « Mettre à jour » la reprend.
 VIDES_DE_SUITE_MAX = 8
 MESSAGE_RESANA_SATURE = "Résana renvoie des fichiers vides : il semble saturé. Les documents reçus sont gardés ; relancez « Mettre à jour » dans quelques minutes."
+
+
+def message_sature() -> str:
+    """Le message d'une source qui renvoie des fichiers vides, au nom de la source de la passe."""
+    return MESSAGE_RESANA_SATURE.replace("Résana", profil().nom, 1)
+
+
 #: L'empreinte d'un contenu vide : un écart noté avec elle (avant #173) était un téléchargement raté.
 SHA256_VIDE = hashlib.sha256(b"").hexdigest()
 
@@ -611,19 +619,20 @@ def relayer_jeton(collection: str, authorization: str | None) -> bool:
 
 
 async def avis_pour(col: dict | None, user: CurrentUser) -> dict | None:
-    """L'invitation à mettre à jour l'index Résana de `col`, pour cette personne, ou None :
+    """L'invitation à mettre à jour l'index Résana (ou Fichiers) de `col`, pour cette personne, ou None :
     capacité éteinte, autre source, autre personne que l'importeur, index récent."""
-    if not col or col.get("source_type") != SOURCE or not user.sub or col.get("created_by") != user.sub:
-        return None
-    from app.services import capacites
+    from app.services import capacites, sources_importees
 
-    if (await capacites.lire_async()).get("resana") is not True:
+    source = sources_importees.source_importee(col)
+    if not source or not user.sub or col.get("created_by") != user.sub:
+        return None
+    if (await capacites.lire_async()).get(source) is not True:
         return None
     cfg = await get_source_config(col["name"])
     travail = dict(cfg.get("travail") or {})
     if travail.get("etat") == "en_cours" and not _occupee(col["name"]):
         travail["etat"] = "interrompu"
-    return resana_perimetre.avis(
+    a = resana_perimetre.avis(
         col["name"],
         {**cfg, "travail": travail},
         est_importeur=True,
@@ -631,6 +640,10 @@ async def avis_pour(col: dict | None, user: CurrentUser) -> dict | None:
         seuil_jours=settings.resana_fraicheur_jours,
         titre=col.get("titre") or "",
     )
+    if a and source != SOURCE:
+        # Fichiers : le même avis, au nom de sa source (`fichiers_ancien`, « L'index Fichiers… »).
+        a = {**a, "code": a["code"].replace("resana_", f"{source}_", 1), "message": a["message"].replace("Résana", sources_importees.nom(source), 1)}
+    return a
 
 
 # --- La tâche de fond ----------------------------------------------------------------------------
@@ -737,7 +750,7 @@ def identifiant_dans_l_index(ident: str, sha256: str) -> str:
     renvoi après une coupure retombe sur le même fichier (OpenRAG répond 409) au lieu d'en créer
     un second ; une nouvelle version a un autre identifiant."""
     propre = re.sub(r"[^A-Za-z0-9_.:-]", "", ident)[:48] or "doc"
-    return f"resana-{propre}-{sha256[:16]}"
+    return f"{profil().prefixe_index}{propre}-{sha256[:16]}"
 
 
 def _ordre(docs: list[DocumentResana], connus: dict[str, dict]) -> list[DocumentResana]:
@@ -777,7 +790,7 @@ async def _pause(secondes: float) -> None:
 
 def _attente(collection: str) -> Path:
     """Le dossier où attendent les fichiers d'une passe (vidé au début et à la fin de chaque passe)."""
-    return Path(settings.data_dir) / "_resana_attente" / collection
+    return Path(settings.data_dir) / profil().dossier_attente / collection
 
 
 def _place_libre(chemin: Path) -> int:
@@ -817,8 +830,8 @@ async def _rapatrier(
                 if e.code == "fichier_vide":
                     etat["vides"] += 1
                     if etat["vides"] >= VIDES_DE_SUITE_MAX:
-                        logger.warning("résana %s : %d fichiers vides d'affilée, passe arrêtée", collection, etat["vides"])
-                        r.erreur = r.erreur or ErreurResana(503, "resana_sature", MESSAGE_RESANA_SATURE, reessayable=True)
+                        logger.warning("%s %s : %d fichiers vides d'affilée, passe arrêtée", profil().source, collection, etat["vides"])
+                        r.erreur = r.erreur or ErreurResana(503, "resana_sature", message_sature(), reessayable=True)
                         return
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
@@ -1173,7 +1186,7 @@ async def _comparer_et_appliquer(
         meta = {
             "title": doc.titre or nom,
             "language": LANGUE_DES_DOCUMENTS,
-            "source": SOURCE,
+            "source": profil().source,
             "espace": nom_espace,
             "dossier": doc.chemin,
             "sensitivity": sensibilite.value,
@@ -1359,5 +1372,10 @@ async def _executer_passe(
         )
         return
     await consigner(
-        "synchronisation", collection, "synchro.terminee", user.sub, collection_name=collection, detail={"source": SOURCE, **{k: v for k, v in bilan.items() if isinstance(v, int)}}
+        "synchronisation",
+        collection,
+        "synchro.terminee",
+        user.sub,
+        collection_name=collection,
+        detail={"source": profil().source, **{k: v for k, v in bilan.items() if isinstance(v, int)}},
     )

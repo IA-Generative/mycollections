@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     # tout hôte absent de sa liste, et redirige en 301 vers son adresse publique tant
     # qu'il croit répondre en clair. Vide = on n'y touche pas (dev, adresse publique).
     drive_public_host: str = Field(default="")
+    #: Les instances de Fichiers (Drive de La Suite numérique) qu'on peut importer : tableau JSON
+    #: `[{"id", "titre", "url", "hote_public", "stockage_url", "sensibilite_max", "zone", "groupes"}]`
+    #: (docs/fichiers.md). Vide ⇒ l'instance implicite `drive` si `drive_url` est posé, sinon aucune.
+    fichiers_instances: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_FICHIERS_INSTANCES", "fichiers_instances"))
+    #: Le niveau de sensibilité le plus haut que chaque destination accepte : objet JSON
+    #: `{"chat": "internal", "recherche": "controlled"}`. Vide ⇒ aucune restriction (docs/fichiers.md).
+    destinations_sensibilite_max: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_DESTINATIONS_SENSIBILITE_MAX", "destinations_sensibilite_max"))
     #: Le service d'export Résana (contrat owuitools-resana docs/export-v1.md) : adresse interne
     #: (préfixe `/export/v1` ajouté par le connecteur) et secret propre à Mes collections
     #: (`X-Internal-Token`). Vides : l'import Résana répond 503. Le drapeau `resana` l'allume.

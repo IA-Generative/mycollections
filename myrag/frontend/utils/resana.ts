@@ -481,7 +481,8 @@ export function estCollectionResana (fiche: { source_type?: string | null } | nu
 
 /** Le titre de la page des documents d'une collection. */
 export function titrePageDocuments (fiche: { source_type?: string | null } | null | undefined): string {
-  return estCollectionResana(fiche) ? 'Gérer les documents' : 'Ajouter des documents'
+  // Une collection importée (Résana, Fichiers) se gère par sa sélection de dossiers.
+  return estCollectionResana(fiche) || fiche?.source_type === 'fichiers' ? 'Gérer les documents' : 'Ajouter des documents'
 }
 
 /**

@@ -8,8 +8,13 @@
 import type { DossierResana, ErreurResana } from '~/utils/resana'
 import { ancetres, arbreDossiers, basculerDossier, dossiersVisibles, erreurResana, inclusParUnParent, preparation } from '~/utils/resana'
 
-const props = defineProps<{ espace: string }>()
+const props = withDefaults(defineProps<{
+  espace: string
+  /** Résana (l'espace), ou Fichiers (l'instance) : mêmes routes sous `/api/sources/<source>`. */
+  source?: 'resana' | 'fichiers'
+}>(), { source: 'resana' })
 const emit = defineEmits<{ dossiers: [{ id: string, chemin: string }[]] }>()
+const base = computed(() => `/api/sources/${props.source}`)
 const choisis = defineModel<string[]>({ default: () => [] })
 const { get } = useApi()
 const champ = useId()
@@ -54,7 +59,7 @@ async function charger () {
   charge.value = true
   erreur.value = null
   try {
-    dossiers.value = (await get(`/api/sources/resana/espaces/${encodeURIComponent(props.espace)}/dossiers`)).dossiers || []
+    dossiers.value = (await get(`${base.value}/espaces/${encodeURIComponent(props.espace)}/dossiers`)).dossiers || []
     // Une sélection existante (« Modifier la sélection ») : ses dossiers sont visibles d'emblée.
     ouverts.value = new Set(choisis.value.flatMap(id => ancetres(id, dossiers.value)))
   }
@@ -69,7 +74,7 @@ async function charger () {
 async function compter (id: string) {
   clearTimeout(rappels.get(id))
   try {
-    const r = await get(`/api/sources/resana/espaces/${encodeURIComponent(props.espace)}/apercu`, { dossier: id })
+    const r = await get(`${base.value}/espaces/${encodeURIComponent(props.espace)}/apercu`, { dossier: id })
     if (!ensemble.value.has(id)) {
       return
     }
@@ -137,7 +142,7 @@ onBeforeUnmount(() => {
       <span class="fr-h6 fr-mb-0">Que faut-il indexer ?</span>
       <span class="fr-hint-text">
         Cochez seulement ce qui sert : un dossier coché emporte ses sous-dossiers. Chaque document de plus allonge l'import
-        et peut mêler aux réponses des textes hors sujet. Seuls les documents que vous pouvez ouvrir dans Résana seront
+        et peut mêler aux réponses des textes hors sujet. Seuls les documents que vous pouvez ouvrir dans {{ source === 'fichiers' ? 'Fichiers' : 'Résana' }} seront
         indexés. La sélection se modifie ensuite depuis la collection.
       </span>
     </legend>

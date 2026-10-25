@@ -14,7 +14,7 @@ onMounted(charger)
 
 function next () {
   // Résana se choisit d'abord dans Résana (espace, dossier, sous-dossiers), la fiche vient après.
-  router.push(selected.value === 'resana' ? '/admin/create/resana' : `/admin/create/step-2?source=${selected.value}`)
+  router.push(selected.value === 'resana' || selected.value === 'fichiers' ? `/admin/create/${selected.value}` : `/admin/create/step-2?source=${selected.value}`)
 }
 </script>
 
