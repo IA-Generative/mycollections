@@ -56,9 +56,11 @@ class Envoi:
 #: - `degrade` : lu, mais une étape d'enrichissement a échoué (description d'images…) ;
 #: - `sans_contexte` : lu, mais une part des passages n'a pas le contexte que le modèle devait
 #:   leur ajouter (quota dépassé…) : ils se retrouvent moins bien ;
+#: - `tronque` : un tableur lu en partie, au-delà de la borne de cellules de l'indexeur (lecteur
+#:   `spreadsheet`, openrag#15). Le renvoyer ne servirait à rien : il serait tronqué de nouveau ;
 #: - `sans_texte` : rien à indexer, le plus souvent un scan sans OCR ;
 #: - `echec` : non lu, pour une autre raison.
-ETATS_QUALITE = ("complet", "degrade", "sans_contexte", "sans_texte", "echec")
+ETATS_QUALITE = ("complet", "degrade", "sans_contexte", "tronque", "sans_texte", "echec")
 #: Ce que l'indexeur dit d'un document sans texte exploitable (OpenRAG : `NoIndexableContentError`).
 _SANS_TEXTE = ("NO_INDEXABLE_CONTENT", "NoIndexableContent")
 
@@ -73,10 +75,13 @@ def qualite_lecture(details: dict[str, Any] | None) -> dict | None:
     etapes = details.get("degraded_stages") or []
     etapes = sorted(etapes) if isinstance(etapes, (list, dict)) else []
     passages, sans_contexte = ctx.get("total"), ctx.get("failed")
+    tableur = details.get("spreadsheet") if isinstance(details.get("spreadsheet"), dict) else {}
     if isinstance(sans_contexte, int) and sans_contexte > 0:
         etat = "sans_contexte"
     elif "contextualize" in etapes:
         etat = "sans_contexte"
+    elif tableur.get("truncated") is True and set(etapes) <= {"parse"}:
+        etat = "tronque"  # l'étape « parse » n'est en échec que par la borne de cellules
     elif etapes:
         etat = "degrade"
     elif "degraded_stages" in details or ctx or "parse_backend" in details:
@@ -95,7 +100,26 @@ def qualite_lecture(details: dict[str, Any] | None) -> dict | None:
         q["ocr"] = True
     if isinstance(details.get("ocr_failed_pages"), int) and details["ocr_failed_pages"] > 0:
         q["pages_perdues"] = details["ocr_failed_pages"]
+    if tableur:
+        q["tableur"] = _tableur(tableur)
     return q
+
+
+def _tableur(info: dict[str, Any]) -> dict:
+    """Ce que le lecteur de tableurs de l'indexeur dit d'un classeur (openrag#15), en noms à nous ;
+    seuls les compteurs présents et entiers sont gardés."""
+    noms = {
+        "sheets": "feuilles",
+        "sheets_indexed": "feuilles_indexees",
+        "hidden_sheets_skipped": "feuilles_masquees_ignorees",
+        "formulas_without_value": "formules_sans_valeur",
+        "rows_kept": "lignes_gardees",
+        "rows_total": "lignes_total",
+        "max_cells": "cellules_max",
+    }
+    rendu: dict = {cle: info[source] for source, cle in noms.items() if isinstance(info.get(source), int) and not isinstance(info.get(source), bool)}
+    rendu["tronque"] = info.get("truncated") is True
+    return rendu
 
 
 def qualite_echec(raison: str) -> dict:

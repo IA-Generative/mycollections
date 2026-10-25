@@ -167,6 +167,11 @@ describe('ce que vaut l\'index (#144)', () => {
   })
 
   it('dit les scans lus par OCR, même quand tout est complet', () => {
+    expect(phrasesQualite({ par_etat: { complet: 3, tronque: 1 }, a_reprendre: 0, formules_sans_valeur: 7, tableurs_formules_vides: 1, feuilles_masquees_ignorees: 2, tableurs_feuilles_masquees: 1 })).toEqual([
+      '1 tableur n\'est indexé qu\'en partie : il dépasse la taille admise. Découpez-le en plusieurs fichiers dans Résana.',
+      '7 cellules à formule sont vides dans 1 tableur, faute de valeur calculée : ouvrez-le et enregistrez-le de nouveau dans Excel ou LibreOffice.',
+      '2 feuilles masquées ne sont pas indexées (1 tableur) : affichez-les dans le fichier si elles doivent servir aux réponses.',
+    ])
     expect(phrasesQualite({ par_etat: { complet: 5 }, a_reprendre: 0, scans: 2, scans_lus: 2 })).toEqual([
       '2 scans ont été lus par reconnaissance de caractères : le texte peut contenir des erreurs, vérifiez les passages importants dans le document d\'origine.',
     ])
