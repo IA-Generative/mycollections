@@ -16,6 +16,12 @@ adresse visitée n'est envoyée au service.
 `MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL` donne son adresse (https seulement), la rubrique « Dans
 le navigateur » propose le lien « Installer MirAI Assistant pour navigateur » ; vide, pas de lien.
 
+**Proposés d'eux-mêmes** : pour une collection Résana, le préfixe commun des documents ; pour un
+document déposé par adresse, l'hôte du document (`app/services/sources_url.py`). Ils s'ajoutent aux
+motifs saisis, sans les écraser, et se retirent comme les autres. La fiche d'une collection porte
+aussi ses **sites d'origine** (`source_url`, une adresse https par ligne, saisie à la création ou
+dans les réglages ; 10 au plus) : c'est la source de la donnée, affichée sur la fiche.
+
 **Déclarer** : `GET|PUT /api/collections/{name}/sites` et `GET|PUT /api/assistants/{id}/sites`,
 corps `{"motifs": ["https://www.fake-domain.name/guides/*"]}`. Lecture par qui lit la fiche,
 écriture par qui la gère ; le `PUT` remplace la liste. Motif refusé : 422

@@ -850,6 +850,21 @@ async def ecartes(collection: str, format: str = Query("csv", pattern="^(json|cs
     return Response(resana_ecarts.vers_csv(liste), media_type="text/csv; charset=utf-8", headers=entete)
 
 
+async def _proposer_le_site(collection: str, gardes: dict[str, dict]) -> None:
+    """L'adresse commune des documents Résana devient la source de la collection et un site déclaré
+    pour MirAI Assistant pour navigateur (sans écraser ce qui a été saisi à la main)."""
+    from app.services import sources_url
+
+    motif = sources_url.prefixe_commun([str(v.get("url") or "") for v in gardes.values()])
+    if not motif:
+        return
+    try:
+        await update_collection(collection, {"source_url": motif.removesuffix("*")})
+        await sources_url.ajouter_sites(collection, [motif])
+    except Exception as e:  # noqa: BLE001 — une proposition de site ne doit pas faire échouer l'import
+        logger.warning("résana %s : site non proposé (%s)", collection, type(e).__name__)
+
+
 def _irrecevable(nom: str, contenu: bytes) -> str | None:
     """Pourquoi ce fichier ne s'indexerait pas, ou None."""
     nature = formats.nature(nom, contenu)
@@ -1142,6 +1157,7 @@ async def _comparer_et_appliquer(
     for ident in [i for i, (file_id, _, _) in envois.items() if not file_id]:
         gardes.pop(ident, None)
     await _noter_sources(collection, gardes)
+    await _proposer_le_site(collection, gardes)
 
     bilan = {
         "ajoutes": ajoutes,

@@ -133,6 +133,8 @@ async function abonner (oui: boolean) {
 
 // ─── La fiche ────────────────────────────────────────────────────────────────
 const collection = ref<any>(null)
+// Les sites d'où viennent les documents (source_url, une adresse par ligne).
+const sitesSource = computed<string[]>(() => String(collection.value?.source_url || '').split('\n').map((s: string) => s.trim()).filter((s: string) => s.startsWith('https://')))
 const { titre, retenir } = useTitreCollection(id, { charger: false })
 const libelleCategorie = ref('')
 const loadError = ref<string>('')
@@ -476,6 +478,26 @@ onMounted(async () => {
             >
               Piloter la qualité →
             </NuxtLink>
+          </div>
+        </div>
+        <div
+          v-if="sitesSource.length"
+          class="fr-col-12"
+        >
+          <div class="fiche-ligne">
+            <span class="fr-text--sm"><strong>Source des documents :</strong>
+              <template
+                v-for="(s, i) in sitesSource"
+                :key="s"
+              >
+                <a
+                  :href="s"
+                  class="fr-link fr-text--sm"
+                  target="_blank"
+                  rel="noopener"
+                >{{ s }}<span class="fr-sr-only"> (nouvelle fenêtre)</span></a><template v-if="i < sitesSource.length - 1">, </template>
+              </template>
+            </span>
           </div>
         </div>
         <!-- Où l'interroger : le bloc détaillé ne s'ouvre qu'à la demande. -->

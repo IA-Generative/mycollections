@@ -37,6 +37,7 @@ const form = ref({
   titre: '',
   name: '',
   description: '',
+  source_url: '',
   categorie: '',
   strategy: profilInitial.strategy,
   sensitivity: defaut.sensitivity,
@@ -359,6 +360,23 @@ onMounted(async () => {
           class="fr-input"
           rows="3"
           placeholder="Ex. : à utiliser pour retrouver la qualification d'une infraction et la peine encourue."
+        />
+      </div>
+
+      <div class="fr-input-group">
+        <label
+          class="fr-label"
+          for="sites-source"
+        >
+          Site(s) d'origine des documents (facultatif)
+          <span class="fr-hint-text">D'où viennent vos documents : une adresse https par ligne. Elle s'affiche sur la fiche, et MirAI Assistant pour navigateur pourra proposer la collection sur ces pages.</span>
+        </label>
+        <textarea
+          id="sites-source"
+          v-model="form.source_url"
+          class="fr-input"
+          rows="2"
+          placeholder="https://www.fake-domain.name/guides/"
         />
       </div>
 

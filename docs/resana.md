@@ -294,6 +294,11 @@ Le service d'export donne, quand il les a, `description`, `objet`, `cree_le` et 
 - **une description par défaut**, posée si la personne n'en écrit pas : « Espace Résana « nom »
   (n° 206379), entité. ».
 
+À la fin d'un import ou d'une mise à jour, **l'adresse commune des documents** (préfixe de leurs
+`url_consultation`, `sources_url.prefixe_commun`) devient la **source de la collection**
+(`source_url`, affichée sur la fiche, verrouillée dans les réglages) et un **site déclaré** pour MirAI
+Assistant pour navigateur (`docs/clients.md`), ajouté sans toucher aux motifs saisis à la main.
+
 Chaque document envoyé à l'indexeur porte aussi son origine : `source: resana`, l'espace, le
 chemin de son dossier et l'adresse de consultation, ainsi que la sensibilité de la collection
 (`sensitivity`).
