@@ -92,8 +92,9 @@ les bons droits dans Résana : c'est elle qui pilote.
 - **Une trace** : la confirmation est gardée dans l'historique de la publication et dans le journal
   de la collection (`publication.publiee`, avec les groupes).
 - **Choisir les groupes** (`components/ChoixGroupes.vue`, à l'étape 5 et dans « Partager ») : ses
-  propres groupes à cocher (claim `groups` du jeton, chemins `/g/…` — `optionsGroupes`), un groupe
-  hors liste à saisir, et le pont vers **Communauté** (`MYCOLLECTIONS_COMMUNAUTE_URL`, lien
+  propres groupes cherchés dans une barre de recherche, comme à l'étape 2 (claim `groups` du jeton,
+  chemins `/g/…` — `optionsGroupes`), le groupe choisi rangé dessous en puce ; un nom hors liste
+  s'ajoute tel quel, et le pont vers **Communauté** (`MYCOLLECTIONS_COMMUNAUTE_URL`, lien
   `/?q=<nom>&creer=1&retour=<page courante>` — keycloak-comu #116 : l'origine de Mes collections doit
   être dans sa liste blanche `ALLOWED_RETURN_ORIGINS`) pour en créer un, puis « Actualiser mes groupes » (renouvellement silencieux du jeton,
   `useAuth().renewToken()`) ou « Se reconnecter ».
