@@ -299,6 +299,8 @@ Le service d'export donne, quand il les a, `description`, `objet`, `cree_le` et 
 `url_consultation`, `sources_url.prefixe_commun`) devient la **source de la collection**
 (`source_url`, affichée sur la fiche, verrouillée dans les réglages) et un **site déclaré** pour MirAI
 Assistant pour navigateur (`docs/clients.md`), ajouté sans toucher aux motifs saisis à la main.
+Les collections importées avant sont rattrapées au démarrage (`migration_sites_resana`), une fois,
+sans écraser une source saisie ni un site déclaré à la main.
 
 Chaque document envoyé à l'indexeur porte aussi son origine : `source: resana`, l'espace, le
 chemin de son dossier et l'adresse de consultation, ainsi que la sensibilité de la collection

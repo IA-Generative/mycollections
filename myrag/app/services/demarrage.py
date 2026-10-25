@@ -9,12 +9,14 @@ from collections.abc import Awaitable, Callable
 
 from app.services.migration_assistants import migrer_collections_publiees
 from app.services.migration_questions import migrer_vers_questions
+from app.services.migration_sites_resana import proposer_les_sites_resana
 
 logger = logging.getLogger("myrag.demarrage")
 
 MIGRATIONS: tuple[Callable[[], Awaitable[dict]], ...] = (
     migrer_vers_questions,  # docs/qualite.md : les anciens magasins versés dans le jeu de questions
     migrer_collections_publiees,  # ADR-0003 : une collection publiée a son assistant à une source
+    proposer_les_sites_resana,  # #169 : l'adresse des documents Résana en source et site déclaré du plug-in
 )
 
 
