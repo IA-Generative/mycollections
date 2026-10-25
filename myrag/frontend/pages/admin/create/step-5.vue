@@ -1,33 +1,74 @@
 <script setup lang="ts">
-import { lignesVersGroupes } from '~/utils/groupes'
+import { messageErreur } from '~/utils/collectif'
+import { libelleSensibilite } from '~/utils/libelles'
 import { CONFIRMATION_DROITS_RESANA, partageResanaPret } from '~/utils/resana'
-import { lienEtape } from '~/utils/wizard'
+import { lienEtape, resumeCreation } from '~/utils/wizard'
 
+/**
+ * Étape 5, la dernière : un récapitulatif (ce qui a été fait, ce qui reste à faire), le choix de
+ * qui peut interroger la collection dans le chat MirAI — ses propres groupes à cocher, un pont vers
+ * Communauté pour en créer un —, et un guide de démarrage à garder (page imprimable).
+ */
 const route = useRoute()
 const collection = route.query.collection as string
 // Une collection Résana s'ouvre à un groupe choisi, jamais à tous, et qui la partage confirme
 // les droits Résana des membres (docs/resana.md, décision du 2026-10-24).
 const source = (route.query.source as string) || ''
 const resana = source === 'resana'
-const { titre } = useTitreCollection(collection)
-const { post } = useApi()
+const { titre, retenir } = useTitreCollection(collection, { charger: false })
+const { get, post } = useApi()
 
 const choix = ref<'plus-tard' | 'groupe'>('plus-tard')
-const groupe = ref('')
+const groupes = ref<string[]>([])
 const nomFiche = ref('')
 const droitsConfirmes = ref(false)
-// Plusieurs groupes : un par ligne.
-const groupes = computed(() => lignesVersGroupes(groupe.value))
 const pret = computed(() => choix.value !== 'groupe' || (resana ? partageResanaPret(groupes.value, droitsConfirmes.value) : groupes.value.length > 0))
 const envoi = ref(false)
 const resultat = ref('')
 const erreur = ref(false)
+const partages = ref<string[]>([])
+
+// ─── Le récapitulatif ────────────────────────────────────────────────────────
+const fiche = ref<any>(null)
+const documents = ref<number | null>(null)
+const statutResana = ref<any>(null)
+const questions = ref({ total: 0, validees: 0 })
+const recapPret = ref(false)
+const recap = computed(() => resumeCreation({
+  titre: titre.value || collection,
+  documents: documents.value,
+  resana: statutResana.value ? { documents: statutResana.value.documents || 0, etat: statutResana.value.travail?.etat || null, total: statutResana.value.travail?.total || null } : null,
+  questions: questions.value,
+  sensibilite: libelleSensibilite(fiche.value?.sensitivity),
+  groupes: partages.value,
+}))
+
+onMounted(async () => {
+  if (!collection) {
+    return
+  }
+  const c = encodeURIComponent(collection)
+  const [f, docs, statut, qualite] = await Promise.all([
+    get(`/api/collections/${c}`).catch(() => null),
+    resana ? Promise.resolve(null) : get(`/api/collections/${c}/documents`, { par_page: '1' }).catch(() => null),
+    resana ? get(`/api/sources/resana/status/${c}`).catch(() => null) : Promise.resolve(null),
+    get(`/api/collections/${c}/qualite`).catch(() => null),
+  ])
+  fiche.value = f
+  if (f) {
+    retenir(f)
+  }
+  documents.value = typeof docs?.total === 'number' ? docs.total : null
+  statutResana.value = statut
+  questions.value = { total: qualite?.questions?.total || 0, validees: qualite?.questions?.par_relecture?.valide || 0 }
+  recapPret.value = true
+})
 
 async function terminer () {
   erreur.value = false
   resultat.value = ''
   if (choix.value === 'plus-tard') {
-    resultat.value = 'Votre collection est prête. Vérifiez ses réponses dans son bac à sable, puis publiez-la depuis sa fiche.'
+    resultat.value = 'Votre collection est prête. Vérifiez ses réponses dans son bac à sable, puis partagez-la depuis sa fiche.'
     return
   }
   envoi.value = true
@@ -42,6 +83,7 @@ async function terminer () {
       visibility_groups: choisis,
       ...(resana ? { droits_resana_confirmes: droitsConfirmes.value } : {}),
     })
+    partages.value = [...choisis]
     resultat.value = r?.owui?.error
       ? `La collection est publiée, mais le chat MirAI ne l'a pas encore reçue : ${r.owui.error}`
       : resana
@@ -62,7 +104,7 @@ async function terminer () {
   <WizardEtape
     :numero="5"
     :titre="`Partager — ${titre || collection}`"
-    :chapeau="resana ? 'Votre collection est créée et ses documents s\'indexent. Dernière étape : choisir qui peut l\'utiliser.' : 'Votre collection est créée. Qui doit pouvoir l\'interroger dès maintenant ?'"
+    chapeau="Votre collection est prête. Voici ce qui a été fait, et qui pourra l'interroger dès maintenant."
   >
     <template #formulaire>
       <div
@@ -80,6 +122,56 @@ async function terminer () {
         v-else
         class="fr-col-12 fr-col-md-8"
       >
+        <!-- Le récapitulatif : fait, à faire, et un guide à garder -->
+        <div class="fr-callout fr-callout--green-emeraude fr-mb-4w recap">
+          <h2 class="fr-callout__title fr-h6">
+            <span
+              class="fr-icon-success-line fr-icon--sm"
+              aria-hidden="true"
+            /> Tout s'est bien passé
+          </h2>
+          <template v-if="recapPret">
+            <p class="fr-callout__text fr-text--sm fr-mb-1v">
+              <strong>Ce qui a été fait</strong>
+            </p>
+            <ul class="fr-text--sm fr-mb-2w">
+              <li
+                v-for="(f, i) in recap.faits"
+                :key="i"
+              >
+                {{ f }}
+              </li>
+            </ul>
+            <p class="fr-callout__text fr-text--sm fr-mb-1v">
+              <strong>Ce qui reste à faire</strong>
+            </p>
+            <ol class="fr-text--sm fr-mb-2w">
+              <li
+                v-for="(a, i) in recap.aFaire"
+                :key="i"
+              >
+                {{ a }}
+              </li>
+            </ol>
+          </template>
+          <p
+            v-else
+            class="fr-callout__text fr-text--sm"
+          >
+            Préparation du récapitulatif…
+          </p>
+          <NuxtLink
+            :to="`/c/${encodeURIComponent(collection)}/guide-de-demarrage`"
+            class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-printer-line fr-btn--icon-left"
+            target="_blank"
+          >
+            Garder le guide de démarrage<span class="fr-sr-only"> (nouvelle fenêtre)</span>
+          </NuxtLink>
+          <p class="fr-text--xs fr-mt-1w fr-mb-0 recap__discret">
+            Une page à imprimer ou à enregistrer en PDF : vos liens, ce qui reste à faire. Vous la retrouverez aussi depuis la fiche.
+          </p>
+        </div>
+
         <template v-if="resana">
           <h2 class="fr-h5">
             Qui peut utiliser cette collection ?
@@ -132,7 +224,7 @@ async function terminer () {
                 for="part-plus-tard"
               >
                 Plus tard — je la vérifie d'abord
-                <span class="fr-hint-text">Elle ne s'interroge que dans son bac à sable, depuis sa fiche. Vous la publierez quand vous voudrez.</span>
+                <span class="fr-hint-text">Elle ne s'interroge que dans son bac à sable, depuis sa fiche. Vous la partagerez quand vous voudrez.</span>
               </label>
             </div>
           </div>
@@ -149,24 +241,16 @@ async function terminer () {
                 for="part-groupe"
               >
                 Un ou plusieurs groupes, pour la tester à plusieurs
-                <span class="fr-hint-text">Seuls les membres des groupes indiqués la verront dans la liste des modèles du chat MirAI.</span>
+                <span class="fr-hint-text">Seuls les membres des groupes choisis la verront dans la liste des modèles du chat MirAI.</span>
               </label>
             </div>
             <div
               v-if="choix === 'groupe'"
-              class="fr-input-group fr-ml-4w fr-mt-1w"
+              class="fr-ml-4w fr-mt-2w"
             >
-              <label
-                class="fr-label"
-                for="part-groupe-nom"
-              >Groupes, un par ligne
-                <span class="fr-hint-text">Chaque nom tel qu'il apparaît dans le chat MirAI. Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
-              </label>
-              <textarea
-                id="part-groupe-nom"
-                v-model="groupe"
-                class="fr-input"
-                rows="3"
+              <ChoixGroupes
+                v-model="groupes"
+                :nom-propose="titre"
               />
             </div>
             <div
@@ -219,13 +303,28 @@ async function terminer () {
           :class="erreur ? 'fr-alert--error' : 'fr-alert--success'"
         >
           <p>{{ resultat }}</p>
-          <NuxtLink
+          <ul
             v-if="!erreur"
-            :to="`/c/${collection}`"
-            class="fr-btn fr-btn--sm fr-mt-1w"
+            class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mt-1w fr-mb-0"
           >
-            Ouvrir la fiche de la collection
-          </NuxtLink>
+            <li>
+              <NuxtLink
+                :to="`/c/${collection}`"
+                class="fr-btn fr-btn--sm"
+              >
+                Ouvrir la fiche de la collection
+              </NuxtLink>
+            </li>
+            <li>
+              <NuxtLink
+                :to="`/c/${encodeURIComponent(collection)}/guide-de-demarrage`"
+                class="fr-btn fr-btn--sm fr-btn--secondary"
+                target="_blank"
+              >
+                Garder le guide de démarrage<span class="fr-sr-only"> (nouvelle fenêtre)</span>
+              </NuxtLink>
+            </li>
+          </ul>
         </div>
       </div>
     </template>
@@ -260,3 +359,8 @@ async function terminer () {
     </template>
   </WizardEtape>
 </template>
+
+<style scoped>
+.recap ul, .recap ol { padding-left: 1.25rem; }
+.recap__discret { color: var(--text-mention-grey); }
+</style>

@@ -72,3 +72,12 @@
 .collectif-guide h2 { font-size: 1.25rem; margin-top: 2rem; }
 .collectif-guide table { border-collapse: collapse; }
 .collectif-guide td, .collectif-guide th { border: 1px solid var(--border-default-grey); padding: 0.4rem 0.6rem; }
+
+/* Impression : le guide de démarrage d'une collection (pages/c/[id]/guide-de-demarrage.vue) se garde
+   sur papier ou en PDF ; l'habillage du site n'y a pas sa place, les liens s'écrivent en clair. */
+@media print {
+  @page { margin: 2cm; }
+  .fr-header, .fr-footer, .fr-breadcrumb, .fr-skiplinks, .no-print, [id^="mirai-menu"] { display: none !important; }
+  body { background: #fff; color: #000; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: #555; word-break: break-all; }
+}

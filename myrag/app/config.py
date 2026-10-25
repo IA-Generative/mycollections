@@ -105,6 +105,9 @@ class Settings(BaseSettings):
     navigateur_installation_url: str = Field(
         default="", validation_alias=AliasChoices("MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL", "MYRAG_NAVIGATEUR_INSTALLATION_URL", "navigateur_installation_url")
     )
+    # L'application Communauté (keycloak-comu), où chacun crée ses groupes : proposée à l'étape 5
+    # de l'assistant et dans « Partager ». Vide, ou pas en https : pas de lien.
+    communaute_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_COMMUNAUTE_URL", "MYRAG_COMMUNAUTE_URL", "communaute_url"))
 
     # Graph
     graphrag_viewer_url: str = Field(default="")

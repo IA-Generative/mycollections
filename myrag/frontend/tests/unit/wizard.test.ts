@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REGLES_PAR_DEFAUT } from '../../utils/collectionName'
-import { bilanVerification, cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, lienEtape, ligneBientot, plierQuestion, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, trouverQuestion, verdictTechnique } from '../../utils/wizard'
+import { bilanVerification, cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, lienEtape, ligneBientot, plierQuestion, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, resumeCreation, SOURCES, trouverQuestion, verdictTechnique } from '../../utils/wizard'
 
 describe('les étapes de l\'assistant', () => {
   it('les cinq libellés, dans l\'ordre', () => {
@@ -179,5 +179,24 @@ describe('étape 4 : bilan et retrouvailles', () => {
     const liste = [{ id: 'a', question: 'Quel est le délai ?' }, { id: 'b', question: 'Autre' }]
     expect(trouverQuestion(liste, 'quel est le delai')?.id).toBe('a')
     expect(trouverQuestion(liste, 'inconnue')).toBeNull()
+  })
+})
+
+describe('resumeCreation', () => {
+  it('une collection de fichiers, sans question ni partage', () => {
+    const r = resumeCreation({ titre: 'Essai', documents: 12, questions: { total: 0, validees: 0 } })
+    expect(r.faits).toEqual(['Collection « Essai » créée.', '12 documents indexés.', 'Aucune question posée pour l\'instant.'])
+    expect(r.aFaire[0]).toContain('Partager')
+    expect(r.aFaire.some(a => a.includes('grille de contrôle'))).toBe(true)
+  })
+
+  it('une collection Résana en cours d\'import, partagée', () => {
+    const r = resumeCreation({ titre: 'Alpha', documents: null, resana: { documents: 50, etat: 'en_cours', total: 783 }, questions: { total: 3, validees: 2 }, sensibilite: 'Interne', groupes: ['/g/equipe'] })
+    expect(r.faits).toContain('Import Résana en cours : 50 documents déjà indexés sur 783.')
+    expect(r.faits).toContain('3 questions posées, 2 réponses validées.')
+    expect(r.faits).toContain('Partagée dans le chat MirAI avec le groupe « /g/equipe ».')
+    expect(r.aFaire.some(a => a.includes('Partager'))).toBe(false)
+    expect(r.aFaire.some(a => a.includes('fin de l\'indexation'))).toBe(true)
+    expect(r.aFaire.some(a => a.includes('grille de contrôle'))).toBe(false)
   })
 })

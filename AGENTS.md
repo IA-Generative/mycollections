@@ -264,6 +264,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `BUS_URL` / `BUS_SECRET` | `` | Relais du fil vers la cloche du menu commun ; vides ⇒ `/api/bus` en 503 |
 | `OWUI_URL` / `OWUI_ADMIN_API_KEY` | `http://openwebui...` / `` | Open WebUI (creation des alias de modeles a la publication) |
 | `OWUI_PUBLIC_URL` | `` | Adresse publique de l'assistant (ouverte par le navigateur) |
+| `MYCOLLECTIONS_COMMUNAUTE_URL` | `` | Adresse de Communauté (keycloak-comu), où créer un groupe, proposée à l'étape 5 et dans « Partager » ; https ; vide ⇒ pas de lien |
 | `MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL` | `` | Page d'installation de « MirAI Assistant pour navigateur » (device management), en https ; vide ⇒ pas de lien |
 | `DRIVE_URL` / `DRIVE_CLIENT_ID` / `DRIVE_CLIENT_SECRET` | `` / `mycollections-drive` / `` | Suite Numerique Drive (connecteur de source) |
 | `MYCOLLECTIONS_RESANA_EXPORT_URL` / `_SECRET` | `` | Service d'export Résana (owuitools-resana, `/export/v1`) et secret propre à Mes collections ; vides ⇒ routes Résana en 503. Capacité `resana` éteinte par défaut (`docs/resana.md`) |

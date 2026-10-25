@@ -102,11 +102,8 @@
                   <span class="fr-hint-text">Seuls les membres des groupes indiqués la verront. Pour tester à plusieurs avant d'ouvrir à tous.</span>
                 </label>
               </div>
-              <div v-if="form.visibility === 'group'" class="fr-input-group fr-ml-4w fr-mt-1w">
-                <label class="fr-label" for="vis-groupe-nom">Groupes, un par ligne
-                  <span class="fr-hint-text">Chaque nom tel qu'il apparaît dans le chat MirAI (Réglages, Groupes). Un nom inconnu du chat MirAI est refusé : la collection ne viserait personne.</span>
-                </label>
-                <textarea id="vis-groupe-nom" class="fr-input" rows="3" v-model="form.visibility_group"></textarea>
+              <div v-if="form.visibility === 'group'" class="fr-ml-4w fr-mt-1w">
+                <ChoixGroupes v-model="form.visibility_groups" :nom-propose="titre" />
               </div>
               <div v-if="resana && form.visibility === 'group'" class="fr-checkbox-group fr-ml-4w fr-mt-2w">
                 <input type="checkbox" id="droits-resana" v-model="form.droits_resana_confirmes" />
@@ -243,7 +240,6 @@
 <script setup lang="ts">
 import { dateCourte, libelleEtat, messageErreur } from '~/utils/collectif'
 import { libelleActionPublication } from '~/utils/libelles'
-import { lignesVersGroupes } from '~/utils/groupes'
 import { CONFIRMATION_DROITS_RESANA, estCollectionResana, partageResanaPret } from '~/utils/resana'
 const route = useRoute()
 const id = route.params.id as string
@@ -272,12 +268,12 @@ const form = ref({
   tool_methods: [...allMethods],
   embed_enabled: false,
   visibility: 'all',
-  visibility_group: '',
+  visibility_groups: [] as string[],
   droits_resana_confirmes: false,
 })
 // Une collection Résana : un groupe choisi, et la confirmation des droits Résana de ses membres.
 const resana = ref(false)
-const resanaPret = computed(() => !resana.value || partageResanaPret(lignesVersGroupes(form.value.visibility_group), form.value.droits_resana_confirmes))
+const resanaPret = computed(() => !resana.value || partageResanaPret(form.value.visibility_groups, form.value.droits_resana_confirmes))
 
 function stateBadge(s: string) {
   return {
@@ -300,9 +296,7 @@ async function publish() {
     erreur.value = ''
     // L'API lit `visibility_groups` (une LISTE). La page envoyait `visibility_group` (une chaîne),
     // que l'API ignorait : publier « à un groupe » publiait pour personne.
-    // Plusieurs groupes : un par ligne.
-    const groupes = lignesVersGroupes(form.value.visibility_group)
-    const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' ? groupes : [] }
+    const corps = { ...form.value, visibility_groups: form.value.visibility === 'group' ? form.value.visibility_groups : [] }
     const data = await post(`/api/collections/${id}/publish`, corps)
     pub.value = await get(`/api/collections/${id}/publication`)
     const base = 'Collection partagée'
@@ -361,7 +355,7 @@ onMounted(async () => {
       form.value.embed_enabled = pub.value.embed_enabled ?? false
       form.value.visibility = resana.value ? 'group' : pub.value.visibility || (etat.value?.mention ? 'group' : 'all')
       if (etat.value?.mention && form.value.visibility === 'all') form.value.visibility = 'group'
-      form.value.visibility_group = (pub.value.visibility_groups || []).join('\n') || pub.value.visibility_group || ''
+      form.value.visibility_groups = pub.value.visibility_groups?.length ? [...pub.value.visibility_groups] : (pub.value.visibility_group ? [pub.value.visibility_group] : [])
     }
   } catch (e) {}
 })

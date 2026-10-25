@@ -91,6 +91,12 @@ les bons droits dans Résana : c'est elle qui pilote.
   pour lui.
 - **Une trace** : la confirmation est gardée dans l'historique de la publication et dans le journal
   de la collection (`publication.publiee`, avec les groupes).
+- **Choisir les groupes** (`components/ChoixGroupes.vue`, à l'étape 5 et dans « Partager ») : ses
+  propres groupes à cocher (claim `groups` du jeton, chemins `/g/…` — `optionsGroupes`), un groupe
+  hors liste à saisir, et le pont vers **Communauté** (`MYCOLLECTIONS_COMMUNAUTE_URL`, lien
+  `/?q=<nom>&creer=1&retour=<page courante>` — keycloak-comu #116 : l'origine de Mes collections doit
+  être dans sa liste blanche `ALLOWED_RETURN_ORIGINS`) pour en créer un, puis « Actualiser mes groupes » (renouvellement silencieux du jeton,
+  `useAuth().renewToken()`) ou « Se reconnecter ».
 - **Ce qui ne change pas** : la fiche et le bac à sable restent privés (portée verrouillée),
   et seule la personne qui a importé synchronise, avec sa session Résana.
 
@@ -357,8 +363,10 @@ dans `frontend/utils/libelles.ts`) :
    privée, import.
 4. **Suivre l'indexation** (étape 3 de l'assistant, `admin/create/resana?collection=<id>`) : la
    carte de la collection et sa sensibilité. L'indexation continue en arrière-plan ; « Étape
-   suivante » mène à la vérification des réponses (étape 4), puis à l'étape 5, qui propose de
-   l'ouvrir à un groupe, avec la confirmation des droits Résana. Les étapes 4 et 5 gardent
+   suivante » mène à la vérification des réponses (étape 4), puis à l'étape 5 : un récapitulatif
+   (ce qui a été fait, ce qui reste à faire — `resumeCreation`), un **guide de démarrage** à garder
+   (`/c/<id>/guide-de-demarrage`, page imprimable), et le partage à un ou plusieurs groupes avec la
+   confirmation des droits Résana. Les étapes 4 et 5 gardent
    `source=resana` dans l'adresse (`lienEtape` dans `frontend/utils/wizard.ts`). L'adresse porte
    la collection : un rechargement ou un retour depuis l'étape 4 rouvre l'étape 3.
 
