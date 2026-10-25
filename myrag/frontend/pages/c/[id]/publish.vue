@@ -81,9 +81,9 @@
                   (<NuxtLink :to="`/c/${id}`" class="fr-link fr-text--sm">fiche de la collection</NuxtLink>).</p>
               </div>
               <div v-if="resana" class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
-                <p>Ses documents viennent de Résana, où chacun ne voit que les espaces où il est invité. Elle s'ouvre donc
+                <p>Ses documents viennent de {{ nomSource }}, où chacun ne voit que ce qui lui est ouvert. Elle s'ouvre donc
                   aux groupes que vous choisissez, jamais à tout le monde. Avant de la partager, vérifiez que chaque membre
-                  de ces groupes a accès, dans Résana, aux dossiers indexés, sans quoi les liens vers les documents cités ne
+                  de ces groupes a accès, dans {{ nomSource }}, aux dossiers indexés, sans quoi les liens vers les documents cités ne
                   s'ouvriront pas pour lui : c'est vous qui pilotez.</p>
               </div>
               <div v-if="!resana" class="fr-radio-group">
@@ -107,7 +107,7 @@
               </div>
               <div v-if="resana && form.visibility === 'group'" class="fr-checkbox-group fr-ml-4w fr-mt-2w">
                 <input type="checkbox" id="droits-resana" v-model="form.droits_resana_confirmes" />
-                <label class="fr-label" for="droits-resana">{{ CONFIRMATION_DROITS_RESANA }}</label>
+                <label class="fr-label" for="droits-resana">{{ CONFIRMATION_DROITS_RESANA.replaceAll('Résana', nomSource) }}</label>
               </div>
             </div>
             <p v-if="resana" class="fr-fieldset__element fr-text--xs fr-mb-0" style="color:var(--text-mention-grey)">
@@ -240,7 +240,8 @@
 <script setup lang="ts">
 import { dateCourte, libelleEtat, messageErreur } from '~/utils/collectif'
 import { libelleActionPublication } from '~/utils/libelles'
-import { CONFIRMATION_DROITS_RESANA, estCollectionResana, partageResanaPret } from '~/utils/resana'
+import { sourceImportee } from '~/utils/fichiers'
+import { CONFIRMATION_DROITS_RESANA, partageResanaPret } from '~/utils/resana'
 const route = useRoute()
 const id = route.params.id as string
 const { titre } = useTitreCollection(id)
@@ -272,7 +273,9 @@ const form = ref({
   droits_resana_confirmes: false,
 })
 // Une collection Résana : un groupe choisi, et la confirmation des droits Résana de ses membres.
+// Une collection importée (Résana, Fichiers) ne s'ouvre qu'à un groupe, avec la confirmation des droits.
 const resana = ref(false)
+const nomSource = ref('Résana')
 const resanaPret = computed(() => !resana.value || partageResanaPret(form.value.visibility_groups, form.value.droits_resana_confirmes))
 
 function stateBadge(s: string) {
@@ -336,7 +339,9 @@ async function archive() {
 
 onMounted(async () => {
   try {
-    resana.value = estCollectionResana(await get(`/api/collections/${id}`))
+    const source = sourceImportee(await get(`/api/collections/${id}`))
+    resana.value = source !== null
+    nomSource.value = source === 'fichiers' ? 'Fichiers' : 'Résana'
     if (resana.value) form.value.visibility = 'group'
   } catch (e) {}
   try {

@@ -5,13 +5,21 @@
  * accompagne chaque document envoyé à l'indexeur.
  * Partagée par « Gérer les documents » et par l'étape 3 de l'assistant Résana.
  */
+import { compatible } from '~/utils/fichiers'
 import { SENSIBILITES } from '~/utils/libelles'
+import { erreurResana } from '~/utils/resana'
 
 const props = defineProps<{
   collection: string
   /** La valeur de la fiche si la page l'a déjà lue ; absente, le composant la lit. */
   valeur?: string
+  /** Le niveau des documents de la source (le plafond d'une instance de Fichiers) : la collection
+   *  ne descend pas en dessous ; les niveaux plus bas sont proposés mais grisés (docs/fichiers.md). */
+  minimum?: string
 }>()
+
+/** Un refus du serveur qui parle du niveau des sources. */
+const REFUS_NIVEAU = /niveau/
 
 const { get, patch } = useApi()
 const champ = useId()
@@ -51,8 +59,10 @@ async function enregistrer () {
     enregistree.value = f?.sensitivity || sensitivity.value
     message.value = 'Sensibilité enregistrée.'
   }
-  catch {
-    erreur.value = 'La sensibilité n\'a pas pu être enregistrée. Réessayez dans un instant.'
+  catch (e) {
+    // Un refus du serveur (sous le niveau de la source) dit pourquoi ; sinon, un message d'attente.
+    const lu = erreurResana(e)
+    erreur.value = lu.code === 'sensibilite_incompatible' || REFUS_NIVEAU.test(lu.message) ? lu.message : 'La sensibilité n\'a pas pu être enregistrée. Réessayez dans un instant.'
     sensitivity.value = enregistree.value
   }
   finally {
@@ -80,8 +90,9 @@ async function enregistrer () {
         v-for="s in SENSIBILITES"
         :key="s.valeur"
         :value="s.valeur"
+        :disabled="!!minimum && !compatible(minimum, s.valeur)"
       >
-        {{ s.libelle }}
+        {{ s.libelle }}{{ minimum && !compatible(minimum, s.valeur) ? ' (sous le niveau des documents)' : '' }}
       </option>
     </select>
     <p

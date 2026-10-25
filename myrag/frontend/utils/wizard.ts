@@ -21,14 +21,15 @@ export function etapesEnPhrase (): string {
 }
 
 /**
- * L'adresse des étapes 3 à 5 pour une collection créée. Une collection Résana a sa propre étape 3
- * (le suivi de l'indexation, dans `admin/create/resana`) et garde `source=resana` jusqu'au bout :
- * l'étape 5 sait ainsi qu'elle ne se partage pas (règle v1, docs/resana.md).
+ * L'adresse des étapes 3 à 5 pour une collection créée. Une collection importée (Résana, Fichiers)
+ * a sa propre étape 3 (le suivi de l'indexation, dans `admin/create/<source>`) et garde
+ * `source=<source>` jusqu'au bout : l'étape 5 sait ainsi qu'elle ne s'ouvre qu'à un groupe
+ * (docs/resana.md, docs/fichiers.md).
  */
 export function lienEtape (numero: 3 | 4 | 5, collection: string, source = ''): string {
   const c = encodeURIComponent(collection)
-  if (source === 'resana') {
-    return numero === 3 ? `/admin/create/resana?collection=${c}` : `/admin/create/step-${numero}?collection=${c}&source=resana`
+  if (source === 'resana' || source === 'fichiers') {
+    return numero === 3 ? `/admin/create/${source}?collection=${c}` : `/admin/create/step-${numero}?collection=${c}&source=${source}`
   }
   return `/admin/create/step-${numero}?collection=${c}`
 }
@@ -52,7 +53,7 @@ export const SOURCES: readonly Source[] = [
   { cle: 'file', nom: 'Un fichier', court: 'un fichier', icone: 'fr-icon-file-line', disponible: true, description: 'PDF, Word, texte… depuis votre poste ou une adresse web.' },
   { cle: 'directory', nom: 'Un dossier de votre poste', court: 'un dossier', icone: 'fr-icon-folder-2-line', disponible: true, description: 'Tout un dossier, sous-dossiers compris.' },
   { cle: 'legifrance', nom: 'Légifrance', court: 'Légifrance', icone: 'fr-icon-scales-3-line', disponible: false, miseAJourAuto: true, description: 'Un code ou une loi, découpé par article.' },
-  { cle: 'drive', nom: 'Un dossier Drive', court: 'Drive', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier de la Suite numérique, réindexé quand son contenu change.' },
+  { cle: 'fichiers', nom: 'Un dossier de Fichiers', court: 'Fichiers', icone: 'fr-icon-cloud-line', disponible: false, drapeau: 'fichiers', description: 'Un dossier de Fichiers (Drive), lu avec vos droits. Reste privée.' },
   { cle: 'nextcloud', nom: 'Nextcloud', court: 'Nextcloud', icone: 'fr-icon-cloud-line', disponible: false, miseAJourAuto: true, description: 'Un dossier Nextcloud, réindexé quand il change.' },
   { cle: 'resana', nom: 'Un dossier Résana', court: 'Résana', icone: 'fr-icon-team-line', disponible: false, drapeau: 'resana', description: 'Un dossier de vos espaces, lu avec vos droits. Reste privée.' },
   { cle: 'website', nom: 'Une page ou un site', court: 'un site web', icone: 'fr-icon-global-line', disponible: false, miseAJourAuto: true, description: 'Une adresse web, relue et découpée page par page.' },
@@ -97,7 +98,7 @@ export const REGLAGES_AVANCES_DEFAUT: ReglagesAvances = {
 }
 
 const TIRETS_FINAUX = /-+$/
-const PROFIL_PAR_SOURCE: Record<string, string> = { directory: 'corpus', drive: 'corpus', nextcloud: 'corpus', resana: 'corpus', legifrance: 'juridique' }
+const PROFIL_PAR_SOURCE: Record<string, string> = { directory: 'corpus', fichiers: 'corpus', nextcloud: 'corpus', resana: 'corpus', legifrance: 'juridique' }
 
 export function reglagesAvancesDefaut (source: string): ReglagesAvances {
   return { ...REGLAGES_AVANCES_DEFAUT, profil: PROFIL_PAR_SOURCE[source] || REGLAGES_AVANCES_DEFAUT.profil }

@@ -12,7 +12,14 @@ const props = withDefaults(defineProps<{
   collection: string
   /** Étape 3 de l'assistant, juste après l'import : seule « Modifier la sélection » a un sens. */
   compact?: boolean
-}>(), { compact: false })
+  /** La source importée : Résana, ou une instance de Fichiers (docs/fichiers.md). Même moteur, mêmes routes. */
+  source?: 'resana' | 'fichiers'
+}>(), { compact: false, source: 'resana' })
+
+/** Les routes de la source, et son nom dans les phrases (les textes partagés parlent de Résana). */
+const base = computed(() => `/api/sources/${props.source}`)
+const nomSource = computed(() => (props.source === 'fichiers' ? 'Fichiers' : 'Résana'))
+const dire = (texte: string) => (props.source === 'fichiers' ? texte.replaceAll('Résana', 'Fichiers') : texte)
 
 type Statut = StatutResana & CouvertureResana & {
   espace_id?: string | null
@@ -31,9 +38,9 @@ const bouton = ref<HTMLButtonElement | null>(null)
 let minuterie: ReturnType<typeof setTimeout> | undefined
 
 const enCours = computed(() => travailEnCours(statut.value?.travail))
-const phrase = computed(() => libelleTravail(statut.value?.travail))
+const phrase = computed(() => dire(libelleTravail(statut.value?.travail)))
 const ecartes = computed(() => statut.value?.travail?.documents_ecartes || [])
-const groupesEcartes = computed(() => grouperEcartes(ecartes.value))
+const groupesEcartes = computed(() => grouperEcartes(ecartes.value).map(g => ({ ...g, libelle: dire(g.libelle), explication: dire(g.explication), quoiFaire: dire(g.quoiFaire) })))
 // Des écarts notés avant que l'adresse Résana ne soit gardée : une mise à jour la retrouvera.
 const sansLien = computed(() => ecartes.value.some(e => !e.url))
 // Le total réel : la carte n'en reçoit que les premiers (ECARTES_MAX côté serveur).
@@ -48,7 +55,7 @@ async function exporterEcartes () {
   exportEnCours.value = true
   erreurExport.value = ''
   try {
-    await telecharger(`/api/sources/resana/ecartes/${encodeURIComponent(props.collection)}?format=csv`, `${props.collection}-documents-ecartes.csv`)
+    await telecharger(`${base.value}/ecartes/${encodeURIComponent(props.collection)}?format=csv`, `${props.collection}-documents-ecartes.csv`)
   }
   catch {
     erreurExport.value = 'L\'export n\'a pas pu être téléchargé. Réessayez dans un instant.'
@@ -57,7 +64,7 @@ async function exporterEcartes () {
     exportEnCours.value = false
   }
 }
-const qualite = computed(() => phrasesQualite(statut.value?.qualite))
+const qualite = computed(() => phrasesQualite(statut.value?.qualite).map(dire))
 const aReprendre = computed(() => statut.value?.qualite?.a_reprendre ?? 0)
 const inconnus = computed(() => statut.value?.qualite?.par_etat?.inconnue ?? 0)
 
@@ -65,7 +72,7 @@ async function relireQualite () {
   envoi.value = true
   erreur.value = null
   try {
-    await post(`/api/sources/resana/qualite/${encodeURIComponent(props.collection)}`)
+    await post(`${base.value}/qualite/${encodeURIComponent(props.collection)}`)
   }
   catch (e) {
     erreur.value = erreurResana(e)
@@ -88,7 +95,7 @@ const dossiersChoisis = ref<{ id: string, chemin: string }[]>([])
 async function charger () {
   clearTimeout(minuterie)
   try {
-    statut.value = await get(`/api/sources/resana/status/${encodeURIComponent(props.collection)}`)
+    statut.value = await get(`${base.value}/status/${encodeURIComponent(props.collection)}`)
   }
   catch (e) {
     erreur.value = erreurResana(e)
@@ -107,7 +114,7 @@ async function synchroniser (dossiers?: { id: string, chemin: string }[], comple
     const corps = dossiers || complet || incomplets
       ? { ...(dossiers ? { dossiers, exclus: [] } : {}), ...(complet ? { complet: true } : {}), ...(incomplets ? { incomplets: true } : {}) }
       : undefined
-    await post(`/api/sources/resana/sync/${encodeURIComponent(props.collection)}`, corps)
+    await post(`${base.value}/sync/${encodeURIComponent(props.collection)}`, corps)
     edition.value = false
   }
   catch (e) {
@@ -153,12 +160,12 @@ onBeforeUnmount(() => {
         id="etat-resana-titre"
         class="fr-h5 fr-mb-0"
       >
-        Espace Résana
+        {{ source === 'fichiers' ? 'Dossier de Fichiers' : 'Espace Résana' }}
       </h2>
       <span
         class="fr-badge fr-badge--sm fr-badge--no-icon"
         :class="statut.couverture === 'totale' ? 'fr-badge--success' : 'fr-badge--info'"
-      >{{ etiquetteResana(statut) }}</span>
+      >{{ dire(etiquetteResana(statut)) }}</span>
     </div>
     <p class="fr-text--sm fr-mt-1w fr-mb-1w">
       <strong>{{ statut.espace_nom }}</strong><template v-if="statut.espace?.entite">
@@ -166,7 +173,7 @@ onBeforeUnmount(() => {
       </template> › {{ statut.dossier_chemin }}{{ derniere ? ` — dernière lecture le ${derniere}` : '' }}.
     </p>
     <p class="fr-text--sm fr-mb-1w">
-      {{ phraseCouverture(statut) }}
+      {{ dire(phraseCouverture(statut)) }}
     </p>
     <p class="fr-text--xs resana-discret">
       Collection privée : seule la personne qui a importé le dossier l'interroge et la met à jour.
@@ -216,21 +223,21 @@ onBeforeUnmount(() => {
         target="_blank"
         rel="noopener"
         @click.prevent="seConnecter(statut.travail!.url_connexion!)"
-      >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+      >Se connecter à {{ nomSource }}<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
     </p>
     <p
       v-if="connexion.enAttente.value"
       class="fr-text--sm"
       role="status"
     >
-      ⏳ Connectez-vous dans la fenêtre Résana : la mise à jour repartira d'elle-même.
+      ⏳ Connectez-vous dans la fenêtre {{ nomSource }} : la mise à jour repartira d'elle-même.
     </p>
     <div
       v-if="connexion.retablie.value"
       class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"
       role="status"
     >
-      <p>Connexion à Résana établie : la mise à jour a repris.</p>
+      <p>Connexion à {{ nomSource }} établie : la mise à jour a repris.</p>
     </div>
     <details
       v-if="ecartes.length"
@@ -240,7 +247,7 @@ onBeforeUnmount(() => {
       <p class="fr-text--xs fr-mt-1w fr-mb-1w">
         Un document écarté n'est pas indexé : le chat ne s'en servira pas. Chaque raison dit ce que vous pouvez faire.
         <span v-if="totalEcartes > ecartes.length">Seuls les {{ ecartes.length }} premiers sont listés ici ; l'export les donne tous.</span>
-        <span v-if="sansLien">Les liens vers Résana apparaîtront après une « Mise à jour ».</span>
+        <span v-if="sansLien">Les liens vers {{ nomSource }} apparaîtront après une « Mise à jour ».</span>
       </p>
       <p class="fr-mb-2w">
         <button
@@ -262,7 +269,9 @@ onBeforeUnmount(() => {
         class="fr-mb-2w"
       >
         <h3 class="fr-text--md fr-text--bold fr-mb-0">
-          {{ g.libelle }}<template v-if="g.code === 'format' && g.extensions.length"> : {{ g.extensions.join(', ') }}</template> ({{ g.documents.length }})
+          {{ g.libelle }}<template v-if="g.code === 'format' && g.extensions.length">
+            : {{ g.extensions.join(', ') }}
+          </template> ({{ g.documents.length }})
         </h3>
         <p class="fr-text--xs fr-mb-1v ecartes__explication">
           {{ g.explication }} <strong>{{ g.quoiFaire }}</strong>
@@ -277,7 +286,7 @@ onBeforeUnmount(() => {
               :href="e.url"
               target="_blank"
               rel="noopener"
-            >{{ e.titre }}<span class="fr-sr-only"> (ouvrir dans Résana, nouvelle fenêtre)</span></a>
+            >{{ e.titre }}<span class="fr-sr-only"> (ouvrir dans {{ nomSource }}, nouvelle fenêtre)</span></a>
             <span v-else>{{ e.titre }}</span>
             <span
               v-if="e.extension"
@@ -305,7 +314,7 @@ onBeforeUnmount(() => {
           target="_blank"
           rel="noopener"
           @click.prevent="seConnecter(erreur.urlConnexion)"
-        >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+        >Se connecter à {{ nomSource }}<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
         <span
           v-if="connexion.enAttente.value"
           class="fr-text--sm fr-ml-2w"
@@ -370,12 +379,14 @@ onBeforeUnmount(() => {
           </li>
         </ul>
         <ul class="fr-text--xs gestes__aide">
-          <li><strong>Mettre à jour</strong> relit les dossiers choisis dans Résana et n'indexe que ce qui a changé : à faire quand des documents ont bougé dans Résana.</li>
+          <li><strong>Mettre à jour</strong> relit les dossiers choisis dans {{ nomSource }} et n'indexe que ce qui a changé : à faire quand des documents ont bougé dans {{ nomSource }}.</li>
           <li v-if="aReprendre">
             <strong>Ré-indexer les documents incomplets</strong> renvoie au moteur les {{ aReprendre }} documents lus sans tout leur contexte ou sans texte.
           </li>
-          <li v-if="inconnus"><strong>Relire le bilan</strong> demande au moteur ce que vaut chaque document déjà indexé, sans rien renvoyer.</li>
-          <li><strong>Tout revérifier</strong> retélécharge chaque document pour comparer son contenu : utile si un document modifié dans Résana n'a pas été repris par la mise à jour.</li>
+          <li v-if="inconnus">
+            <strong>Relire le bilan</strong> demande au moteur ce que vaut chaque document déjà indexé, sans rien renvoyer.
+          </li>
+          <li><strong>Tout revérifier</strong> retélécharge chaque document pour comparer son contenu : utile si un document modifié dans {{ nomSource }} n'a pas été repris par la mise à jour.</li>
         </ul>
       </section>
       <section class="gestes__zone">
@@ -395,7 +406,7 @@ onBeforeUnmount(() => {
           </li>
         </ul>
         <p class="fr-text--xs gestes__aide">
-          Ajouter ou retirer des dossiers de l'espace : un dossier ajouté s'indexe, un dossier retiré sort de l'index.
+          Ajouter ou retirer des dossiers{{ source === 'fichiers' ? '' : ' de l\'espace' }} : un dossier ajouté s'indexe, un dossier retiré sort de l'index.
         </p>
       </section>
     </div>
@@ -407,6 +418,7 @@ onBeforeUnmount(() => {
       <DepotDossiersResana
         v-if="statut.espace_id"
         v-model="choisis"
+        :source="source"
         :espace="statut.espace_id"
         @dossiers="dossiersChoisis = $event"
       />

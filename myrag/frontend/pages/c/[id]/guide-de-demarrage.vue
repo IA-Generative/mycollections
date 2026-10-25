@@ -5,7 +5,7 @@
  * pour l'impression (Ctrl+P → PDF) : l'habillage du site disparaît (`@media print`, assets/main.css).
  */
 import { libelleSensibilite } from '~/utils/libelles'
-import { estCollectionResana } from '~/utils/resana'
+import { sourceImportee } from '~/utils/fichiers'
 import { resumeCreation } from '~/utils/wizard'
 
 const route = useRoute()
@@ -22,7 +22,7 @@ const base = computed(() => `${origine.value}/c/${encodeURIComponent(id)}`)
 const liens = computed(() => [
   { libelle: 'La fiche de la collection', vers: base.value, aide: 'Tout part de là : poser une question, partager, régler.' },
   { libelle: 'Poser une question', vers: `${base.value}/playground`, aide: 'Le bac à sable : la collection répond, en citant ses passages.' },
-  { libelle: estCollectionResana(fiche.value) ? 'Gérer les documents' : 'Ajouter des documents', vers: `${base.value}/upload`, aide: estCollectionResana(fiche.value) ? 'Mettre à jour depuis Résana, changer les dossiers indexés.' : 'Déposer, remplacer ou retirer des documents.' },
+  { libelle: sourceImportee(fiche.value) ? 'Gérer les documents' : 'Ajouter des documents', vers: `${base.value}/upload`, aide: sourceImportee(fiche.value) ? `Mettre à jour depuis ${sourceImportee(fiche.value) === 'fichiers' ? 'Fichiers' : 'Résana'}, changer les dossiers indexés.` : 'Déposer, remplacer ou retirer des documents.' },
   { libelle: 'Partager', vers: `${base.value}/publish`, aide: 'Choisir qui voit la collection dans le chat MirAI.' },
   { libelle: 'Qualité', vers: `${base.value}/qualite`, aide: 'Le jeu de questions, les réponses validées, la mesure.' },
 ])
@@ -34,10 +34,11 @@ onMounted(async () => {
     retenir(fiche.value)
   }
   catch { /* fiche illisible : le guide reste utile pour ses liens */ }
-  const resana = estCollectionResana(fiche.value)
+  const importee = sourceImportee(fiche.value)
+  const resana = importee !== null
   const [docs, statut, qualite, publication] = await Promise.all([
     resana ? Promise.resolve(null) : get(`/api/collections/${encodeURIComponent(id)}/documents`, { par_page: '1' }).catch(() => null),
-    resana ? get(`/api/sources/resana/status/${encodeURIComponent(id)}`).catch(() => null) : Promise.resolve(null),
+    resana ? get(`/api/sources/${importee}/status/${encodeURIComponent(id)}`).catch(() => null) : Promise.resolve(null),
     get(`/api/collections/${encodeURIComponent(id)}/qualite`).catch(() => null),
     get(`/api/collections/${encodeURIComponent(id)}/publication`).catch(() => null),
   ])

@@ -21,14 +21,14 @@ describe('les sources', () => {
     expect(cartesDeSource().every(s => s.disponible)).toBe(true)
   })
   it('la ligne « Bientôt » liste toutes les autres, et seulement elles', () => {
-    expect(ligneBientot()).toBe('Bientôt : Légifrance, Drive, Nextcloud, Résana, un site web, un outil MCP.')
+    expect(ligneBientot()).toBe('Bientôt : Légifrance, Fichiers, Nextcloud, Résana, un site web, un outil MCP.')
     const autres = SOURCES.filter(s => !s.disponible).length
     expect(cartesDeSource().length + autres).toBe(SOURCES.length)
   })
   it('une source branchée quitte la ligne et devient une carte', () => {
-    const branchee = SOURCES.map(s => (s.cle === 'drive' ? { ...s, disponible: true } : s))
-    expect(cartesDeSource(branchee).map(s => s.cle)).toContain('drive')
-    expect(ligneBientot(branchee)).not.toContain('Drive')
+    const branchee = SOURCES.map(s => (s.cle === 'nextcloud' ? { ...s, disponible: true } : s))
+    expect(cartesDeSource(branchee).map(s => s.cle)).toContain('nextcloud')
+    expect(ligneBientot(branchee)).not.toContain('Nextcloud')
   })
   it('rien à annoncer : pas de ligne', () => {
     expect(ligneBientot(SOURCES.map(s => ({ ...s, disponible: true })))).toBe('')
@@ -139,6 +139,11 @@ describe('lienEtape', () => {
   it('une collection ordinaire suit les étapes 3 à 5 de l\'assistant', () => {
     expect(lienEtape(3, 'ma-collection')).toBe('/admin/create/step-3?collection=ma-collection')
     expect(lienEtape(5, 'ma-collection', 'drive')).toBe('/admin/create/step-5?collection=ma-collection')
+  })
+
+  it('une collection Fichiers suit son indexation à l\'étape 3 et garde sa source jusqu\'au partage', () => {
+    expect(lienEtape(3, 'fichiers-beta-d1', 'fichiers')).toBe('/admin/create/fichiers?collection=fichiers-beta-d1')
+    expect(lienEtape(5, 'fichiers-beta-d1', 'fichiers')).toBe('/admin/create/step-5?collection=fichiers-beta-d1&source=fichiers')
   })
 
   it('une collection Résana suit son indexation à l\'étape 3 et garde sa source jusqu\'au partage', () => {

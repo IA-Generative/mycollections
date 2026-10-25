@@ -51,7 +51,7 @@ const form = ref({
 })
 // La source est déduite pour Résana, Drive et Légifrance : on la montre, on ne la modifie pas ici.
 const sourceType = ref('')
-const sourceVerrouillee = computed(() => ['resana', 'drive', 'legifrance'].includes(sourceType.value))
+const sourceVerrouillee = computed(() => ['resana', 'fichiers', 'drive', 'legifrance'].includes(sourceType.value))
 
 const needsReindex = computed(() => {
   if (!initialStrategy.value) {
