@@ -146,7 +146,7 @@ export interface TravailResana {
 }
 
 /**
- * Le compte des documents par qualité d'indexation (#144) : `complet`, `sans_contexte`, `degrade`,
+ * Le compte des documents par qualité d'indexation (#144) : `complet`, `sans_contexte`, `degrade`, `tronque`,
  * `sans_texte` (des scans, le plus souvent), `echec`, `inconnue` (indexés avant le suivi).
  */
 export interface QualiteResana {
@@ -158,6 +158,11 @@ export interface QualiteResana {
   /** Les scans repérés par Mes collections (PDF sans texte), et ceux que l'indexeur a lus par OCR. */
   scans?: number
   scans_lus?: number
+  /** Les tableurs lus par l'indexeur (openrag#15) : cellules à formule restées vides, feuilles masquées ignorées. */
+  tableurs_formules_vides?: number
+  formules_sans_valeur?: number
+  tableurs_feuilles_masquees?: number
+  feuilles_masquees_ignorees?: number
 }
 
 export interface StatutResana {
@@ -497,7 +502,7 @@ export function partageResanaPret (groupes: readonly string[], confirme: boolean
  */
 export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   const n = (etat: string) => q?.par_etat?.[etat] ?? 0
-  if (!q || (!Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0) && !q.scans_lus)) {
+  if (!q || (!Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0) && !q.scans_lus && !q.formules_sans_valeur && !q.feuilles_masquees_ignorees)) {
     return []
   }
   const phrases: string[] = []
@@ -510,6 +515,15 @@ export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   }
   if (n('degrade')) {
     phrases.push(`${compte(n('degrade'), 'document a', 'documents ont')} une étape d'indexation en échec (description des images…).`)
+  }
+  if (n('tronque')) {
+    phrases.push(`${compte(n('tronque'), 'tableur n\'est indexé', 'tableurs ne sont indexés')} qu'en partie : ${n('tronque') > 1 ? 'ils dépassent' : 'il dépasse'} la taille admise. Découpez-${n('tronque') > 1 ? 'les' : 'le'} en plusieurs fichiers dans Résana.`)
+  }
+  if (q.formules_sans_valeur) {
+    phrases.push(`${compte(q.formules_sans_valeur, 'cellule à formule est vide', 'cellules à formule sont vides')} dans ${compte(q.tableurs_formules_vides || 1, 'tableur', 'tableurs')}, faute de valeur calculée : ouvrez-${(q.tableurs_formules_vides || 1) > 1 ? 'les' : 'le'} et enregistrez-${(q.tableurs_formules_vides || 1) > 1 ? 'les' : 'le'} de nouveau dans Excel ou LibreOffice.`)
+  }
+  if (q.feuilles_masquees_ignorees) {
+    phrases.push(`${compte(q.feuilles_masquees_ignorees, 'feuille masquée n\'est', 'feuilles masquées ne sont')} pas indexée${q.feuilles_masquees_ignorees > 1 ? 's' : ''} (${compte(q.tableurs_feuilles_masquees || 1, 'tableur', 'tableurs')}) : affichez-${q.feuilles_masquees_ignorees > 1 ? 'les' : 'la'} dans le fichier si ${q.feuilles_masquees_ignorees > 1 ? 'elles doivent' : 'elle doit'} servir aux réponses.`)
   }
   if (n('echec')) {
     phrases.push(`${compte(n('echec'), 'document n\'a', 'documents n\'ont')} pas pu être lu${n('echec') > 1 ? 's' : ''} (format ou fichier refusé).`)

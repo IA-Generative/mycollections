@@ -87,6 +87,18 @@ fait partir `.xlsx`, `.xlsm`, `.xls` et `.ods` tels quels (`formats.formats_docu
 conversion. Les tableurs écartés auparavant pour leur format sont retentés à la mise à jour suivante,
 même sans service de conversion. Les `.odt`, `.odp`, `.ppt` et `.rtf` restent convertis.
 
+**Ce que la qualité dit d'un tableur lu par l'indexeur.** Le lecteur rend ses comptes dans
+`details.spreadsheet` (statut de tâche et fiche du fichier). `qualite_lecture` en tire `qualite.tableur`
+(feuilles, lignes gardées sur le total, formules sans valeur, feuilles masquées ignorées) et un état :
+
+- **`tronque`** : le classeur dépasse la borne de cellules (`SPREADSHEET_MAX_CELLS`, 50 000). OpenRAG
+  marque alors l'étape `parse` en échec, mais ce n'est pas un échec : le document n'est pas « dégradé »,
+  et « Ré-indexer les documents incomplets » ne le renvoie pas, car il serait tronqué de nouveau. L'avis
+  dit combien de lignes sont indexées et conseille de découper le fichier ;
+- les **formules sans valeur calculée** (un fichier jamais recalculé) et les **feuilles masquées** ignorées
+  ne changent pas l'état. Elles sont dites dans l'avis du dépôt et comptées dans le bilan d'une collection
+  Résana (`formules_sans_valeur`, `feuilles_masquees_ignorees`).
+
 ## Ce que Mes collections garde de son côté
 
 Pour que le moteur soit remplaçable, la référence de ce qui est indexé est chez Mes collections, pas

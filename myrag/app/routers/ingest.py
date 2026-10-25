@@ -186,6 +186,22 @@ def avis_qualite(filename: str, qualite: dict | None) -> str | None:
         return f"« {filename} » est indexé, mais {manque} : ils se retrouveront moins bien. Ré-indexez-le plus tard."
     if etat == "degrade":
         return f"« {filename} » est indexé, mais une étape a échoué ({', '.join(qualite.get('etapes') or [])})."
+    tableur = (qualite or {}).get("tableur") or {}
+    manques = []
+    if etat == "tronque":
+        gardees, total = tableur.get("lignes_gardees"), tableur.get("lignes_total")
+        part = f"{gardees} lignes sur {total}" if isinstance(gardees, int) and isinstance(total, int) else "une partie de ses lignes"
+        manques.append(f"seules {part} sont indexées (le tableur dépasse la taille admise) : découpez-le en plusieurs fichiers")
+    if tableur.get("formules_sans_valeur"):
+        n = tableur["formules_sans_valeur"]
+        manques.append(
+            f"{n} cellule{'s' if n > 1 else ''} à formule {'sont' if n > 1 else 'est'} vide{'s' if n > 1 else ''} faute de valeur calculée : ouvrez-le et enregistrez-le de nouveau dans Excel ou LibreOffice"
+        )
+    if tableur.get("feuilles_masquees_ignorees"):
+        n = tableur["feuilles_masquees_ignorees"]
+        manques.append(f"{n} feuille{'s' if n > 1 else ''} masquée{'s' if n > 1 else ''} n'{'ont' if n > 1 else 'a'} pas été indexée{'s' if n > 1 else ''}")
+    if manques:
+        return f"« {filename} » est indexé, mais " + " ; ".join(manques) + "."
     return None
 
 
