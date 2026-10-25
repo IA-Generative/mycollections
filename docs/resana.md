@@ -94,7 +94,8 @@ les bons droits dans Résana : c'est elle qui pilote.
 - **Choisir les groupes** (`components/ChoixGroupes.vue`, à l'étape 5 et dans « Partager ») : ses
   propres groupes à cocher (claim `groups` du jeton, chemins `/g/…` — `optionsGroupes`), un groupe
   hors liste à saisir, et le pont vers **Communauté** (`MYCOLLECTIONS_COMMUNAUTE_URL`, lien
-  `/?q=<nom>`) pour en créer un, puis « Actualiser mes groupes » (renouvellement silencieux du jeton,
+  `/?q=<nom>&creer=1&retour=<page courante>` — keycloak-comu #116 : l'origine de Mes collections doit
+  être dans sa liste blanche `ALLOWED_RETURN_ORIGINS`) pour en créer un, puis « Actualiser mes groupes » (renouvellement silencieux du jeton,
   `useAuth().renewToken()`) ou « Se reconnecter ».
 - **Ce qui ne change pas** : la fiche et le bac à sable restent privés (portée verrouillée),
   et seule la personne qui a importé synchronise, avec sa session Résana.

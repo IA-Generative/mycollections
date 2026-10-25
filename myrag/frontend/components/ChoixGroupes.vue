@@ -51,7 +51,18 @@ const communauteUrl = ref('')
 const nomGroupe = ref('')
 const actualisation = ref(false)
 const messageActualisation = ref('')
-const lienCreation = computed(() => (communauteUrl.value ? `${communauteUrl.value}/?q=${encodeURIComponent(nomGroupe.value.trim() || props.nomPropose)}` : ''))
+// `creer=1` et `retour=` : Communauté accueille la personne pour créer, puis lui propose de revenir ici
+// (keycloak-comu #116 ; l'origine de Mes collections doit être dans sa liste blanche).
+const lienCreation = computed(() => {
+  if (!communauteUrl.value) {
+    return ''
+  }
+  const p = new URLSearchParams({ q: nomGroupe.value.trim() || props.nomPropose, creer: '1' })
+  if (typeof window !== 'undefined') {
+    p.set('retour', window.location.href)
+  }
+  return `${communauteUrl.value}/?${p.toString()}`
+})
 
 onMounted(async () => {
   try {
