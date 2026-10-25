@@ -164,7 +164,8 @@ du groupe `<racine>/<nom>-admin` la lisent.
      2026-10-25 : par à-coups au-delà de ~6 téléchargements par seconde, puis deux minutes où tout
      arrivait vide, d'où 341 documents écartés à tort sur 783). Le fichier est redemandé après 5 puis
      20 s (`PAUSES_FICHIER_VIDE`) ; toujours vide, il est signalé (`fichier_vide`) sans être mémorisé,
-     donc redemandé à la passe suivante. Huit vides d'affilée (`VIDES_DE_SUITE_MAX`) : Résana est
+     donc redemandé à la passe suivante ; s'il était déjà indexé, il **garde sa version** (le
+     2026-10-25, une mise à jour complète pendant la saturation en a retiré 328 de l'index). Huit vides d'affilée (`VIDES_DE_SUITE_MAX`) : Résana est
      saturé, la passe s'arrête en « partiel » (`resana_sature`) au lieu d'écarter tout le reste du
      dossier, et « Mettre à jour » la reprend ;
    - un document refusé par Résana (`hors_droits`, `introuvable`, `trop_volumineux`) est écarté, et
