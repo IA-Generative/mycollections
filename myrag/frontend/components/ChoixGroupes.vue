@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { fusionnerGroupes, optionsGroupes } from '~/utils/groupes'
 /**
- * Choisir les groupes avec qui partager une collection (étape 5 de l'assistant, page Partager) :
- * ses propres groupes à cocher (le claim `groups` du jeton, en chemins complets), un groupe hors
- * liste à saisir, et le pont vers Communauté pour en créer un — puis « Actualiser mes groupes »,
- * qui renouvelle le jeton pour y lire le nouveau groupe (docs/resana.md, « Partager »).
+ * Choisir les groupes avec qui partager une collection (étape 5 de l'assistant, page Partager),
+ * comme à l'étape 2 : une barre de recherche parmi ses propres groupes (le claim `groups` du
+ * jeton, en chemins complets), le groupe choisi se range dessous en puce ; un nom hors liste
+ * s'ajoute tel quel. Puis le pont vers Communauté pour créer un groupe, et « Actualiser mes
+ * groupes », qui renouvelle le jeton pour y lire le nouveau (docs/resana.md, « Partager »).
  */
+import { fusionnerGroupes, optionsGroupes } from '~/utils/groupes'
 import { filtrerOptions } from '~/utils/listeRiche'
 
 const props = withDefaults(defineProps<{
@@ -21,29 +22,38 @@ const champ = useId()
 
 const options = computed(() => optionsGroupes(user.value?.profile?.groups))
 const recherche = ref('')
-const visibles = computed(() => (recherche.value.trim() ? filtrerOptions(options.value, recherche.value) : options.value))
-const avecFiltre = computed(() => options.value.length > 8)
+const texte = computed(() => recherche.value.trim())
+/** Mes groupes qui correspondent à la saisie, pas encore choisis. */
+const resultats = computed(() => (texte.value ? filtrerOptions(options.value, texte.value) : options.value).filter(o => !props.modelValue.includes(o.value)))
+/** La saisie ne correspond à aucun de mes groupes : on peut l'ajouter telle quelle (un groupe du chat MirAI dont on n'est pas membre). */
+const horsListe = computed(() => !!texte.value && !options.value.some(o => o.value === texte.value || o.label.toLowerCase() === texte.value.toLowerCase()))
+const ouvert = ref(false)
 
-const coches = computed(() => props.modelValue.filter(g => options.value.some(o => o.value === g)))
-const libres = computed(() => props.modelValue.filter(g => !options.value.some(o => o.value === g)))
-const saisie = ref('')
-
-function poser (nouveauxCoches: readonly string[], nouveauxLibres: readonly string[]) {
-  emit('update:modelValue', fusionnerGroupes(nouveauxCoches, nouveauxLibres))
-}
-function basculer (valeur: string, coche: boolean) {
-  poser(coche ? [...coches.value, valeur] : coches.value.filter(g => g !== valeur), libres.value)
-}
-function ajouterLibre () {
-  const g = saisie.value.trim()
-  if (!g) {
+function ajouter (valeur: string) {
+  const v = valeur.trim()
+  if (!v) {
     return
   }
-  poser(coches.value, [...libres.value, g])
-  saisie.value = ''
+  emit('update:modelValue', fusionnerGroupes(props.modelValue, [v]))
+  recherche.value = ''
+  ouvert.value = false
 }
 function retirer (valeur: string) {
-  poser(coches.value.filter(g => g !== valeur), libres.value.filter(g => g !== valeur))
+  emit('update:modelValue', props.modelValue.filter(g => g !== valeur))
+}
+function surEntree () {
+  if (resultats.value.length === 1 || (resultats.value.length && !horsListe.value)) {
+    ajouter(resultats.value[0]!.value)
+  }
+  else if (horsListe.value) {
+    ajouter(texte.value)
+  }
+}
+function fermerPlusTard () {
+  // Laisser le clic sur un résultat arriver avant de replier la liste.
+  setTimeout(() => {
+    ouvert.value = false
+  }, 150)
 }
 
 // ─── Communauté : créer un groupe, puis relire ses groupes ──────────────────
@@ -81,7 +91,7 @@ async function actualiserMesGroupes () {
     messageActualisation.value = !ok
       ? 'Vos groupes n\'ont pas pu être relus.'
       : apres > avant
-        ? `${apres - avant} nouveau${apres - avant > 1 ? 'x' : ''} groupe${apres - avant > 1 ? 's' : ''} : cochez-le ci-dessus.`
+        ? `${apres - avant} nouveau${apres - avant > 1 ? 'x' : ''} groupe${apres - avant > 1 ? 's' : ''} : cherchez-le ci-dessus.`
         : 'Vos groupes n\'ont pas changé. S\'il manque encore, reconnectez-vous : votre session sera reprise ici.'
   }
   finally {
@@ -92,95 +102,61 @@ async function actualiserMesGroupes () {
 
 <template>
   <div class="choix-groupes">
-    <fieldset
-      class="fr-fieldset fr-mb-2w"
-      :aria-labelledby="`${champ}-legende`"
-    >
-      <legend
-        :id="`${champ}-legende`"
-        class="fr-fieldset__legend fr-text--regular fr-pb-0"
-      >
-        Mes groupes
-        <span class="fr-hint-text">Les groupes dont vous êtes membre. Seuls leurs membres verront la collection dans le chat MirAI.</span>
-      </legend>
-      <div
-        v-if="avecFiltre"
-        class="fr-fieldset__element"
-      >
-        <div class="fr-input-group fr-mb-0">
-          <label
-            class="fr-label fr-sr-only"
-            :for="`${champ}-filtre`"
-          >Filtrer mes groupes</label>
-          <input
-            :id="`${champ}-filtre`"
-            v-model="recherche"
-            class="fr-input"
-            type="search"
-            placeholder="Filtrer mes groupes…"
-          >
-        </div>
-      </div>
-      <p
-        v-if="!options.length"
-        class="fr-fieldset__element fr-text--sm choix-groupes__discret"
-      >
-        Vos groupes ne sont pas lisibles depuis votre connexion : saisissez-les ci-dessous.
-      </p>
-      <div
-        v-for="o in visibles"
-        :key="o.value"
-        class="fr-fieldset__element fr-fieldset__element--inline"
-      >
-        <div class="fr-checkbox-group fr-checkbox-group--sm">
-          <input
-            :id="`${champ}-${o.value}`"
-            type="checkbox"
-            :checked="coches.includes(o.value)"
-            @change="basculer(o.value, ($event.target as HTMLInputElement).checked)"
-          >
-          <label
-            class="fr-label"
-            :for="`${champ}-${o.value}`"
-          >{{ o.label }}
-            <span class="fr-hint-text">{{ o.hint }}</span>
-          </label>
-        </div>
-      </div>
-    </fieldset>
-
-    <div class="fr-input-group fr-mb-2w">
+    <div class="fr-input-group fr-mb-1w">
       <label
         class="fr-label"
-        :for="`${champ}-libre`"
-      >Un groupe hors de cette liste
-        <span class="fr-hint-text">Son nom tel qu'il apparaît dans le chat MirAI. Un nom inconnu du chat MirAI est refusé au partage : la collection ne viserait personne.</span>
+        :for="champ"
+      >Groupes
+        <span class="fr-hint-text">
+          {{ options.length ? 'Cherchez parmi vos groupes, puis choisissez : le groupe se range dessous.' : 'Vos groupes ne sont pas lisibles depuis votre connexion : tapez le nom du groupe tel qu\'il apparaît dans le chat MirAI.' }}
+          Seuls les membres des groupes choisis verront la collection dans le chat MirAI.
+        </span>
       </label>
-      <div class="choix-groupes__ligne">
-        <input
-          :id="`${champ}-libre`"
-          v-model="saisie"
-          class="fr-input"
-          type="text"
-          @keydown.enter.prevent="ajouterLibre"
+      <input
+        :id="champ"
+        v-model="recherche"
+        class="fr-input"
+        type="text"
+        placeholder="Rechercher un groupe…"
+        autocomplete="off"
+        role="combobox"
+        :aria-expanded="ouvert && (resultats.length > 0 || horsListe) ? 'true' : 'false'"
+        :aria-controls="`${champ}-liste`"
+        @focus="ouvert = true"
+        @input="ouvert = true"
+        @blur="fermerPlusTard"
+        @keydown.enter.prevent="surEntree"
+        @keydown.esc="ouvert = false"
+      >
+      <ul
+        v-if="ouvert && (resultats.length || horsListe)"
+        :id="`${champ}-liste`"
+        class="choix-groupes__resultats"
+      >
+        <li
+          v-for="o in resultats"
+          :key="o.value"
         >
-        <button
-          type="button"
-          class="fr-btn fr-btn--sm fr-btn--secondary"
-          :disabled="!saisie.trim()"
-          @click="ajouterLibre"
-        >
-          Ajouter
-        </button>
-      </div>
+          <button
+            type="button"
+            class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm"
+            @mousedown.prevent="ajouter(o.value)"
+          >
+            {{ o.label }} <span class="choix-groupes__discret">{{ o.hint }}</span>
+          </button>
+        </li>
+        <li v-if="horsListe">
+          <button
+            type="button"
+            class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-add-line fr-btn--icon-left"
+            @mousedown.prevent="ajouter(texte)"
+          >
+            Ajouter « {{ texte }} » (un groupe hors de ma liste)
+          </button>
+        </li>
+      </ul>
     </div>
 
-    <p
-      v-if="modelValue.length"
-      class="fr-text--sm fr-mb-1v"
-    >
-      Partagée avec :
-    </p>
     <ul
       v-if="modelValue.length"
       class="fr-tags-group fr-mb-2w"
@@ -199,6 +175,12 @@ async function actualiserMesGroupes () {
         </button>
       </li>
     </ul>
+    <p
+      v-else
+      class="fr-text--sm fr-mb-2w choix-groupes__discret"
+    >
+      Aucun groupe choisi.
+    </p>
 
     <div
       v-if="communauteUrl"
@@ -265,7 +247,8 @@ async function actualiserMesGroupes () {
 </template>
 
 <style scoped>
-.choix-groupes__ligne { display: flex; gap: .5rem; align-items: flex-start; }
-.choix-groupes__ligne .fr-input { flex: 1 1 auto; }
-.choix-groupes__discret { color: var(--text-mention-grey); }
+.choix-groupes__resultats { list-style: none; margin: .25rem 0 0; padding: .25rem 0; border: 1px solid var(--border-default-grey); background: #fff; max-height: 14rem; overflow-y: auto; }
+.choix-groupes__resultats li { margin: 0; }
+.choix-groupes__resultats .fr-btn { width: 100%; justify-content: flex-start; text-align: left; }
+.choix-groupes__discret { color: var(--text-mention-grey); font-size: .8rem; margin-left: .35rem; }
 </style>
