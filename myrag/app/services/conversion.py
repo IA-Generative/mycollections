@@ -39,7 +39,9 @@ def active() -> bool:
 
 
 def convertible(nom: str) -> bool:
-    return formats.extension(nom) in FORMATS_CONVERTIBLES
+    """Un format à convertir en PDF avant l'envoi : pas un tableur quand l'indexeur les lit lui-même."""
+    ext = formats.extension(nom)
+    return ext in FORMATS_CONVERTIBLES and ext not in formats.formats_document()
 
 
 def nom_pdf(nom: str) -> str:

@@ -18,6 +18,8 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import PurePosixPath
 
+from app.config import settings
+
 FORMATS_TEXTE = (".txt", ".md", ".markdown", ".csv")
 
 
@@ -40,6 +42,21 @@ FORMATS_DOCUMENT = {
     ".jpeg": "image/jpeg",
 }
 
+#: Les tableurs, que l'indexeur ne lit qu'avec son lecteur `spreadsheet` (openrag#15) : documents
+#: seulement si `indexeur_lit_tableurs`, sinon convertis en PDF (ou écartés).
+FORMATS_TABLEUR = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+    ".xls": "application/vnd.ms-excel",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+}
+
+
+def formats_document() -> dict[str, str]:
+    """Extension → type MIME de ce que l'indexeur lit, tableurs compris s'il sait les lire."""
+    return {**FORMATS_DOCUMENT, **FORMATS_TABLEUR} if settings.indexeur_lit_tableurs else FORMATS_DOCUMENT
+
+
 #: Les premiers octets attendus de chaque document (un .docx/.pptx est une archive zip).
 _SIGNATURES = {
     ".pdf": (b"%PDF",),
@@ -49,6 +66,10 @@ _SIGNATURES = {
     ".png": (b"\x89PNG",),
     ".jpg": (b"\xff\xd8\xff",),
     ".jpeg": (b"\xff\xd8\xff",),
+    ".xlsx": (b"PK\x03\x04",),
+    ".xlsm": (b"PK\x03\x04",),
+    ".ods": (b"PK\x03\x04",),
+    ".xls": (b"\xd0\xcf\x11\xe0",),
 }
 
 _BINAIRES = (b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0", b"\x89PNG", b"\xff\xd8\xff", b"GIF8")
@@ -68,7 +89,7 @@ def nature(nom: str, contenu: bytes) -> Nature | None:
     """La nature du fichier, ou None (format refusé)."""
     ext = extension(nom)
     tete = contenu[:4096]
-    if ext in FORMATS_DOCUMENT:
+    if ext in formats_document():
         signatures = _SIGNATURES.get(ext)
         if signatures and not tete.startswith(signatures):
             return None  # l'extension ment : on ne confie pas à OpenRAG un fichier qu'il lirait mal
@@ -79,7 +100,7 @@ def nature(nom: str, contenu: bytes) -> Nature | None:
 
 
 def type_mime(nom: str) -> str:
-    return FORMATS_DOCUMENT.get(extension(nom), "application/octet-stream")
+    return formats_document().get(extension(nom), "application/octet-stream")
 
 
 #: En dessous de ce nombre moyen de caractères par page, un PDF est tenu pour un scan : une image de
