@@ -21,6 +21,8 @@ export interface EcartResana {
   url?: string
   /** Le dossier Résana du document. */
   chemin?: string
+  /** L'extension du fichier (« .msg ») : dit quel format n'est pas pris en charge. */
+  extension?: string
 }
 
 /** code d'écart → ce que l'écran en dit : libellé, explication, quoi faire. Même ordre que le serveur. */
@@ -42,8 +44,8 @@ export const EXPLICATIONS_ECART: Record<string, { libelle: string, explication: 
   },
   format: {
     libelle: 'Format non pris en charge',
-    explication: 'Le moteur de recherche ne sait pas lire ce type de fichier (archive, message, exécutable…).',
-    quoiFaire: 'Déposez dans Résana une version en PDF, Word, LibreOffice ou texte.',
+    explication: 'Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats sont écartés.',
+    quoiFaire: 'Déposez dans Résana une version en PDF, Word ou texte.',
   },
   conversion: {
     libelle: 'Conversion en PDF impossible',
@@ -96,7 +98,7 @@ export function codeEcart (e: Pick<EcartResana, 'code' | 'raison'>): string {
  * Les écartés regroupés par raison, dans l'ordre des explications, chaque groupe avec son explication
  * et ses documents (ordre d'arrivée conservé). L'adresse n'est gardée que si elle est en https.
  */
-export function grouperEcartes (liste: readonly EcartResana[]): { code: string, libelle: string, explication: string, quoiFaire: string, documents: EcartResana[] }[] {
+export function grouperEcartes (liste: readonly EcartResana[]): { code: string, libelle: string, explication: string, quoiFaire: string, documents: EcartResana[], extensions: string[] }[] {
   const parCode = new Map<string, EcartResana[]>()
   for (const e of liste) {
     const code = codeEcart(e)
@@ -105,7 +107,12 @@ export function grouperEcartes (liste: readonly EcartResana[]): { code: string, 
   }
   return Object.keys(EXPLICATIONS_ECART)
     .filter(code => parCode.has(code))
-    .map(code => ({ code, ...EXPLICATIONS_ECART[code]!, documents: parCode.get(code)! }))
+    .map(code => ({ code, ...EXPLICATIONS_ECART[code]!, documents: parCode.get(code)!, extensions: extensionsDe(parCode.get(code)!) }))
+}
+
+/** Les extensions présentes dans un groupe d'écartés, triées, sans doublon (« .msg, .zip »). */
+export function extensionsDe (liste: readonly EcartResana[]): string[] {
+  return [...new Set(liste.map(e => (e.extension || '').toLowerCase()).filter(Boolean))].sort()
 }
 
 export interface TravailResana {

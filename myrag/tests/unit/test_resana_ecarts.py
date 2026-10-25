@@ -38,4 +38,4 @@ def test_le_csv_a_un_bom_un_point_virgule_et_neutralise_les_formules():
     )
     lignes = csv.split("\r\n")
     assert lignes[0].startswith("﻿") and lignes[0].lstrip("﻿") == ";".join(m.COLONNES_CSV)
-    assert lignes[1].startswith("'=HYPERLINK(1);Notes;même contenu que « A »;") and lignes[1].endswith(";A;https://resana.fake-domain.name/e/ged/1")
+    assert lignes[1].startswith("'=HYPERLINK(1);Notes;;même contenu que « A »;") and lignes[1].endswith(";A;https://resana.fake-domain.name/e/ged/1")

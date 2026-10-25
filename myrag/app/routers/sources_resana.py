@@ -560,6 +560,8 @@ async def statut(collection: str, authorization: str | None = Header(default=Non
     if travail.get("etat") == "en_cours" and not _occupee(collection):
         # Le service a redémarré pendant la tâche : on le dit, une synchronisation reprend.
         travail["etat"] = "interrompu"
+    if travail.get("documents_ecartes"):
+        travail["documents_ecartes"] = _ecartes_du_travail(cfg)
     est_importeur = col.get("source_type") == SOURCE and bool(user.sub) and col.get("created_by") == user.sub
     return {
         "collection": collection,
@@ -783,7 +785,17 @@ async def _rapatrier(
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
                     return
-                r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message, "code": resana_ecarts.code_erreur_resana(e.code), "url": _url(doc), "chemin": doc.chemin})
+                r.ecartes.append(
+                    {
+                        "id": doc.id,
+                        "titre": doc.titre,
+                        "raison": e.message,
+                        "code": resana_ecarts.code_erreur_resana(e.code),
+                        "url": _url(doc),
+                        "chemin": doc.chemin,
+                        "extension": formats.extension(doc.nom_fichier),
+                    }
+                )
                 continue
             ancien = connus.get(doc.id) or {}
             if ancien.get("sha256") == f.sha256 and ancien.get("file_id") and not erreur_passagere(ancien.get("erreur")) and doc.id not in reprendre:
@@ -815,7 +827,21 @@ def _ecart_affiche(ident: str, e: dict) -> dict:
         "url": e.get("url") or "",
         "chemin": e.get("chemin") or "",
         "doublon_de": e.get("doublon_de"),
+        # L'extension dit QUEL format n'est pas pris en charge (« .msg », « .zip »).
+        "extension": e.get("extension") or "",
     }
+
+
+def _ecartes_du_travail(cfg: dict) -> list[dict]:
+    """Les écartés que la carte affiche : ceux du dernier travail, complétés par ce que la mémoire
+    des écartés sait d'eux (adresse Résana, dossier, extension) — des écarts notés avant #165 n'avaient
+    que le titre et la raison."""
+    memoire = cfg.get("ecartes") or {}
+    rendu = []
+    for e in (cfg.get("travail") or {}).get("documents_ecartes") or []:
+        connu = memoire.get(e.get("id") or "") or {}
+        rendu.append(_ecart_affiche(e.get("id", ""), {**connu, **{k: v for k, v in e.items() if v}}))
+    return rendu
 
 
 def _ecartes_complets(cfg: dict) -> list[dict]:
@@ -869,7 +895,8 @@ def _irrecevable(nom: str, contenu: bytes) -> str | None:
     """Pourquoi ce fichier ne s'indexerait pas, ou None."""
     nature = formats.nature(nom, contenu)
     if nature is None:
-        return "format non pris en charge"
+        ext = formats.extension(nom)
+        return f"format non pris en charge ({ext})" if ext else "format non pris en charge (sans extension)"
     if len(contenu) > depot.DOCUMENT_MAX_OCTETS:
         return "trop volumineux pour l'indexation"
     if nature is formats.Nature.DOCUMENT:

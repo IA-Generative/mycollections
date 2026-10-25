@@ -343,7 +343,7 @@ def test_la_liste_des_ecartes_s_exporte_en_entier(client, en_tant_que, faux, pri
     assert par_code["hors_droits"]["url"].startswith("https://") and par_code["hors_droits"]["explication"]
     csv = client.get(f"/api/sources/resana/ecartes/{privee}")
     assert csv.status_code == 200 and csv.headers["content-type"].startswith("text/csv") and "attachment" in csv.headers["content-disposition"]
-    assert csv.text.startswith("\ufefftitre;dossier;raison") and "Note fictive c" in csv.text
+    assert csv.text.startswith("\ufefftitre;dossier;format;raison") and "Note fictive c" in csv.text
     # Un tiers sans droit sur la collection ne la voit pas.
     en_tant_que(personne("tiers"))
     assert client.get(f"/api/sources/resana/ecartes/{privee}").status_code == 404

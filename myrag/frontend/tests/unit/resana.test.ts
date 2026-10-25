@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, codeEcart, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, grouperEcartes, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, codeEcart, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, extensionsDe, filtrerEspaces, grouperEcartes, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -196,5 +196,12 @@ describe('les documents écartés', () => {
     expect(groupes[1]!.documents.map(d => d.titre)).toEqual(['C', 'D'])
     expect(groupes[0]!.documents[0]!.url).toBe('')
     expect(groupes[0]!.quoiFaire).toContain('Mettre à jour')
+  })
+})
+
+describe('les formats des écartés', () => {
+  it('dit quels formats sont écartés, sans doublon', () => {
+    expect(extensionsDe([{ titre: 'a', raison: 'format non pris en charge (.ZIP)', extension: '.ZIP' }, { titre: 'b', raison: '', extension: '.msg' }, { titre: 'c', raison: '', extension: '.zip' }, { titre: 'd', raison: '' }])).toEqual(['.msg', '.zip'])
+    expect(grouperEcartes([{ titre: 'a', raison: 'format non pris en charge (.zip)', extension: '.zip' }])[0]!.extensions).toEqual(['.zip'])
   })
 })
