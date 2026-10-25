@@ -541,3 +541,7 @@ async def sync_drive_source(
 from app.routers.sources_resana import router as _resana_router  # noqa: E402
 
 router.include_router(_resana_router)
+
+from app.routers.sources_fichiers import router as _fichiers_router  # noqa: E402
+
+router.include_router(_fichiers_router)

@@ -335,7 +335,7 @@ async def creer_collection(req: CreateCollectionRequest, user: CurrentUser, *, s
     motif = nommage.motif_de_refus(req.name, source=source)
     # En preview, jamais d'adoption hors préfixe : ce serait rattacher une partition de la bêta.
     # « resana » : jamais d'adoption non plus — le préfixe réservé ne s'obtient que par l'import Résana.
-    if motif and (motif in ("preview", "resana") or not await _partition_existe(demande)):
+    if motif and (motif in ("preview", "resana", "fichiers") or not await _partition_existe(demande)):
         raise HTTPException(status_code=422, detail={"reason": motif, "message": nommage.MOTIFS[motif]})
     if motif:
         req.name = demande  # adoption : le nom de la partition, tel quel
@@ -461,14 +461,21 @@ CHAMPS_VERROUILLES_RESANA = ("scope", "scope_groups", "source_type", "source_url
 
 
 def _garder_resana(existing: dict, updates: dict) -> None:
-    if existing.get("source_type") != "resana":
-        if updates.get("source_type") == "resana":
-            raise HTTPException(status_code=409, detail="Une collection se relie à Résana par l'import d'un dossier, pas par sa fiche.")
+    """Les collections importées (Résana, Fichiers) : portée et source verrouillées."""
+    from app.services import sources_importees
+
+    importee = sources_importees.source_importee(existing)
+    nom_source = sources_importees.nom(importee or updates.get("source_type"))
+    if not importee:
+        if updates.get("source_type") in sources_importees.SOURCES_IMPORTEES:
+            raise HTTPException(status_code=409, detail=f"Une collection se relie à {nom_source} par l'import d'un dossier, pas par sa fiche.")
         return
     # Renvoyer la même valeur (un formulaire qui renvoie toute la fiche) n'est pas un changement.
     changes = [k for k in CHAMPS_VERROUILLES_RESANA if k in updates and updates[k] != existing.get(k)]
     if changes:
-        raise HTTPException(status_code=409, detail="Une collection Résana reste privée à la personne qui a importé le dossier : sa portée et sa source ne se modifient pas.")
+        raise HTTPException(
+            status_code=409, detail=f"Une collection {nom_source} reste privée à la personne qui a importé le dossier : sa portée et sa source ne se modifient pas."
+        )
 
 
 def _sources_url(valeur) -> str:
@@ -504,6 +511,13 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
     _garder_resana(existing, updates)
     if "sensitivity" in updates:
         updates["sensitivity"] = _sensibilite(updates["sensitivity"])
+        if existing.get("source_type") == "fichiers" and updates["sensitivity"] != existing.get("sensitivity"):
+            # Une collection ne descend pas sous le niveau de ses sources (docs/fichiers.md).
+            from app.routers.sources_fichiers import refus_sensibilite
+
+            refus = await refus_sensibilite(name, updates["sensitivity"])
+            if refus:
+                raise HTTPException(status_code=409, detail={"reason": "sensibilite_incompatible", "message": refus})
     if "source_url" in updates:
         updates["source_url"] = _sources_url(updates["source_url"])
     if "categorie" in updates:

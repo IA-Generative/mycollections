@@ -182,11 +182,16 @@ def _droit(fiche: dict, user: CurrentUser) -> tuple[str, str]:
 async def _collections_lisibles(user: CurrentUser) -> list[dict]:
     """Les fiches (hors archivées) que la personne peut lire — la règle de `access.can_read`,
     celle de la liste des collections. Une partition sans fiche n'est pas proposée."""
+    from app.services import sensibilite
+
     fiches = await list_collections(include_archived=False)
+    # Le plafond de sensibilité de la recherche (MYCOLLECTIONS_DESTINATIONS_SENSIBILITE_MAX) : une
+    # collection au-dessus n'y est pas proposée (docs/fichiers.md).
     return [
         f
         for f in fiches
-        if access.can_read(name=f["name"], scope=f.get("scope"), scope_groups=f.get("scope_groups"), created_by=f.get("created_by"), user_groups=user.groups, user_sub=user.sub)
+        if sensibilite.admise(f.get("sensitivity"), "recherche")
+        and access.can_read(name=f["name"], scope=f.get("scope"), scope_groups=f.get("scope_groups"), created_by=f.get("created_by"), user_groups=user.groups, user_sub=user.sub)
     ]
 
 

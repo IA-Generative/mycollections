@@ -106,12 +106,21 @@ async def publish_collection(name: str, req: PublishRequest, user: CurrentUser =
     # Une collection Résana a été lue avec les droits Résana de qui l'a importée. Qui la gère peut
     # l'ouvrir à un groupe de son choix, jamais à tous, et confirme avoir vérifié que les membres
     # ont ces droits dans Résana : c'est elle qui pilote (docs/resana.md, décision du 2026-10-24).
-    resana = (fiche or {}).get("source_type") == "resana"
+    from app.services import sensibilite, sources_importees
+
+    importee = sources_importees.source_importee(fiche)
+    resana = importee is not None
     if resana and req.state != "draft":
+        nom_source = sources_importees.nom(importee)
         if req.visibility != "group" or not [g for g in req.visibility_groups if g.strip()]:
-            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_GROUPE)
+            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_GROUPE.replace("Résana", nom_source))
         if not req.droits_resana_confirmes:
-            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_CONFIRMATION)
+            raise HTTPException(status_code=409, detail=MESSAGE_RESANA_CONFIRMATION.replace("Résana", nom_source))
+    # Le plafond de sensibilité du chat (MYCOLLECTIONS_DESTINATIONS_SENSIBILITE_MAX, docs/fichiers.md).
+    if req.state != "draft":
+        refus = sensibilite.refus_destination((fiche or {}).get("sensitivity"), "chat")
+        if refus:
+            raise HTTPException(status_code=409, detail=refus)
     # Auto-create collection config if it doesn't exist
     await get_or_create_collection(name)
 

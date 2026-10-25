@@ -522,12 +522,16 @@ async def reindex_collection(collection: str, strategy: Strategy = Strategy.AUTO
     await _exiger_gestion(collection, user)
     from app.database import async_session as db_session
     from app.models.db import SourceFile
+
+    # Une collection importée (Résana, Fichiers) ne garde pas de copie de ses documents
+    # (docs/resana.md) : on la réindexe en relisant sa source, par sa page (« Tout revérifier »).
+    from app.services import sources_importees
     from app.services.collection_store import get_collection
 
-    # Une collection Résana ne garde pas de copie de ses documents (docs/resana.md) : on la
-    # réindexe en relisant Résana, par sa page (« Vérification complète »).
-    if ((await get_collection(collection)) or {}).get("source_type") == "resana":
-        raise HTTPException(status_code=409, detail="Une collection Résana se réindexe depuis Résana : « Vérification complète » sur sa page.")
+    importee = sources_importees.source_importee(await get_collection(collection))
+    if importee:
+        nom_source = sources_importees.nom(importee)
+        raise HTTPException(status_code=409, detail=f"Une collection {nom_source} se réindexe depuis {nom_source} : « Tout revérifier » sur sa page.")
 
     # Get all source files for this collection
     async with db_session() as session:
