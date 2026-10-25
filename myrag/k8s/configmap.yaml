@@ -33,6 +33,8 @@ data:
   # Page d'installation de « MirAI Assistant pour navigateur », servie par le device management
   # (https seulement ; vide = pas de lien à l'écran).
   MYCOLLECTIONS_NAVIGATEUR_INSTALLATION_URL: ""
+  # Communauté (keycloak-comu), où chacun crée ses groupes (https seulement ; vide = pas de lien).
+  MYCOLLECTIONS_COMMUNAUTE_URL: ""
   # Génération de questions par persona (docs/generation.md). La passerelle MirAI, OpenAI-compatible.
   # Le jeton (MYCOLLECTIONS_GENERATION_LLM_CLE) est dans myrag-secrets ; il doit être PROPRE à Mes
   # collections : la passerelle compte son quota par jeton. Vides ⇒ les routes répondent 503.

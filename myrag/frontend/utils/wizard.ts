@@ -237,3 +237,62 @@ export function bilanVerification (essais: readonly { verdict: VerdictTechnique 
   const parts = [`${oui} réponse${s(oui)} jugée${s(oui)} bonne${s(oui)}`, `${non} insuffisante${s(non)}`, `${sansAvis} sans avis`]
   return { posees: n, repondent, oui, non, sansAvis, phrase: `${n} question${s(n)} posée${s(n)} : ${parts.join(', ')}. Tout est dans le jeu de questions de la collection.` }
 }
+
+export interface EntreeResume {
+  titre: string
+  /** Le nombre de documents indexés ; null si le corpus n'a pas pu être lu. */
+  documents: number | null
+  resana?: { documents: number, etat?: string | null, total?: number | null } | null
+  questions: { total: number, validees: number }
+  sensibilite?: string
+  /** Le partage choisi à l'étape 5 : aucun (plus tard), ou des groupes. */
+  groupes?: readonly string[]
+}
+
+/**
+ * Le récapitulatif de fin d'assistant : ce qui a été fait, ce qui reste à faire. Phrases prêtes à
+ * afficher, dans l'ordre des étapes ; servent aussi au guide de démarrage imprimable.
+ */
+export function resumeCreation (e: EntreeResume): { faits: string[], aFaire: string[] } {
+  const s = (k: number) => (k > 1 ? 's' : '')
+  const faits: string[] = [`Collection « ${e.titre} » créée.`]
+  if (e.resana) {
+    const enCours = e.resana.etat === 'en_cours'
+    faits.push(enCours
+      ? `Import Résana en cours : ${e.resana.documents} document${s(e.resana.documents)} déjà indexé${s(e.resana.documents)}${e.resana.total ? ` sur ${e.resana.total}` : ''}.`
+      : `${e.resana.documents} document${s(e.resana.documents)} Résana indexé${s(e.resana.documents)}${e.resana.etat === 'partiel' ? ' (import partiel : « Mettre à jour » reprendra le reste)' : ''}.`)
+  }
+  else if (e.documents === null) {
+    faits.push('Documents en cours d\'indexation.')
+  }
+  else {
+    faits.push(`${e.documents} document${s(e.documents)} indexé${s(e.documents)}.`)
+  }
+  if (e.sensibilite) {
+    faits.push(`Sensibilité par défaut : ${e.sensibilite}.`)
+  }
+  faits.push(e.questions.total
+    ? `${e.questions.total} question${s(e.questions.total)} posée${s(e.questions.total)}, ${e.questions.validees} réponse${s(e.questions.validees)} validée${s(e.questions.validees)}.`
+    : 'Aucune question posée pour l\'instant.')
+  if (e.groupes?.length) {
+    faits.push(`Partagée dans le chat MirAI avec ${e.groupes.length > 1 ? 'les groupes' : 'le groupe'} ${e.groupes.map(g => `« ${g} »`).join(', ')}.`)
+  }
+
+  const aFaire: string[] = []
+  if (!e.groupes?.length) {
+    aFaire.push('Partager la collection avec un groupe, depuis sa fiche (bouton « Partager »), pour que vos collègues l\'interrogent dans le chat MirAI.')
+  }
+  if (e.resana?.etat === 'en_cours' || e.resana?.etat === 'partiel' || e.documents === null) {
+    aFaire.push('Attendre la fin de l\'indexation, puis vérifier la couverture sur « Gérer les documents ».')
+  }
+  aFaire.push(e.questions.total
+    ? 'Poser et valider d\'autres questions depuis la page Qualité : chaque réponse validée sert de référence.'
+    : 'Poser quelques questions à la collection et valider les bonnes réponses, depuis la page Qualité.')
+  if (!e.resana) {
+    aFaire.push('Compléter la grille de contrôle pour ouvrir la collection à tous.')
+  }
+  aFaire.push(e.resana
+    ? 'Tenir l\'index à jour quand des documents changent dans Résana (« Gérer les documents », puis « Mettre à jour »).'
+    : 'Ajouter ou remplacer des documents à tout moment depuis la fiche.')
+  return { faits, aFaire }
+}
