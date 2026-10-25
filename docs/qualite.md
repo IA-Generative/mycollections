@@ -4,21 +4,34 @@ Une collection répond-elle juste ? La page **Qualité** (`/c/{collection}/quali
 gère la collection) répond à cette question et donne de quoi agir. Elle n'est plus le début de
 l'assistant de création : l'étape 4 n'y fait qu'un test technique (ci-dessous).
 
-## L'étape 4 de l'assistant de création : un test technique
+## L'étape 4 de l'assistant de création : vérifier en conversation
 
 « Vérifier les réponses » ne mesure pas la qualité : elle dit si les documents sont lus,
-découpés et retrouvés. Trois questions sont proposées (`GET /api/playground/{c}/suggestions`) :
-d'abord celles du jeu de la collection — jamais une question posée par un usager (origine
-« avis ») —, puis, à défaut, une par document d'après son titre ; la personne peut les réécrire.
-Chacune est posée au bac à sable (`POST /api/playground/{c}/chat`) et reçoit un verdict simple :
-**la collection répond** (un texte, appuyé sur au moins un passage, qui n'est pas un refus) ou
-**ne répond pas** (avec la raison probable : aucun passage — l'indexation est peut-être en cours —,
-ou une question hors du contenu). Pas de juge ni de note : c'est le rôle de la mesure.
+découpés et retrouvés, et recueille l'avis de la personne. L'écran reprend l'esprit du bac à sable
+(`pages/admin/create/step-4.vue`) : à gauche la conversation (`PlaygroundChatMessage`, puces de
+source), à droite des **questions à essayer** (`GET /api/playground/{c}/suggestions` : d'abord
+celles du jeu de la collection — jamais une question posée par un usager (origine « avis ») —,
+puis, à défaut, une par document d'après son titre ; « Proposer d'autres questions » en redemande).
+Une question choisie s'écrit dans le champ avant de partir (`useFrappe`), puis est posée au bac à
+sable (`POST /api/playground/{c}/chat`). Rien ne fait sortir de l'assistant.
 
-Chaque question posée **entre au jeu de questions « à relire »** (`relecture: brut`), sans
-réponse de référence : celle de la collection n'en est pas une. On la retrouve dans la page
-Qualité, où elle se relit, se valide puis se mesure. Le jeu, la mesure et le volet d'une question
-ont quitté l'étape 4 ; ils restent dans la page Qualité, sur la fiche de la collection.
+Sous chaque réponse :
+- le **verdict technique** : **la collection répond** (un texte, appuyé sur au moins un passage,
+  qui n'est pas un refus) ou **ne répond pas** (avec la raison probable : aucun passage —
+  l'indexation est peut-être en cours —, ou une question hors du contenu) ;
+- **l'avis de la personne**, « Oui, ça répond » / « Non », donné une fois.
+
+Chaque question posée **entre au jeu de questions « à relire »** (`relecture: brut`). « Oui »
+la passe **validée avec la réponse de la collection** (`PATCH …/questions/{id}`,
+`relecture: valide`, `reponse`), comme le 👍 du gestionnaire au bac à sable ; « Non » laisse la
+question à relire et note un commentaire (« Jugée insuffisante à la création (étape 4) »). Un
+bilan en bas compte les questions posées, jugées bonnes, insuffisantes et sans avis
+(`bilanVerification`) ; « Étape suivante » n'est jamais bloqué.
+
+La **mention « en cours de vérification »**, que le serveur met en tête de chaque réponse pour le
+chat, n'est pas affichée dans les réponses de l'étape 4 (`useChat(…, { sansMention: true })`,
+d'après le champ `mention` renvoyé à part) : une phrase l'explique une fois, sous le bilan. Le jeu,
+la mesure et le volet d'une question restent dans la page Qualité, sur la fiche de la collection.
 
 ## Le jeu de questions de référence
 

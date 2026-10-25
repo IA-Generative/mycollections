@@ -65,3 +65,14 @@ export function etapesDeFrappe(longueur: number, etapes = 40): number[] {
   rendu.push(longueur)
   return rendu
 }
+
+/**
+ * La réponse sans la mention que le serveur met en tête (« ⚠ en cours de vérification »), quand
+ * l'écran la montre à part : seul ce préfixe exact est retiré, et rien si elle n'y est pas.
+ */
+export function sansMention(content: string, mention?: string | null): string {
+  if (!content || !mention) return content || ''
+  const prefixe = `⚠ ${mention}`
+  if (!content.startsWith(prefixe)) return content
+  return content.slice(prefixe.length).replace(/^\s+/, '')
+}
