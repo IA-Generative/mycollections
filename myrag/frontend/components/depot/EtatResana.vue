@@ -34,6 +34,8 @@ const enCours = computed(() => travailEnCours(statut.value?.travail))
 const phrase = computed(() => libelleTravail(statut.value?.travail))
 const ecartes = computed(() => statut.value?.travail?.documents_ecartes || [])
 const groupesEcartes = computed(() => grouperEcartes(ecartes.value))
+// Des écarts notés avant que l'adresse Résana ne soit gardée : une mise à jour la retrouvera.
+const sansLien = computed(() => ecartes.value.some(e => !e.url))
 // Le total réel : la carte n'en reçoit que les premiers (ECARTES_MAX côté serveur).
 const totalEcartes = computed(() => Math.max(statut.value?.travail?.ecartes || 0, ecartes.value.length))
 const { telecharger } = useTelechargement()
@@ -220,6 +222,7 @@ onBeforeUnmount(() => {
       <p class="fr-text--xs fr-mt-1w fr-mb-1w">
         Un document écarté n'est pas indexé : le chat ne s'en servira pas. Chaque raison dit ce que vous pouvez faire.
         <span v-if="totalEcartes > ecartes.length">Seuls les {{ ecartes.length }} premiers sont listés ici ; l'export les donne tous.</span>
+        <span v-if="sansLien">Les liens vers Résana apparaîtront après une « Mise à jour ».</span>
       </p>
       <p class="fr-mb-2w">
         <button
@@ -241,7 +244,7 @@ onBeforeUnmount(() => {
         class="fr-mb-2w"
       >
         <h3 class="fr-text--md fr-text--bold fr-mb-0">
-          {{ g.libelle }} ({{ g.documents.length }})
+          {{ g.libelle }}<template v-if="g.code === 'format' && g.extensions.length"> : {{ g.extensions.join(', ') }}</template> ({{ g.documents.length }})
         </h3>
         <p class="fr-text--xs fr-mb-1v ecartes__explication">
           {{ g.explication }} <strong>{{ g.quoiFaire }}</strong>
@@ -258,6 +261,10 @@ onBeforeUnmount(() => {
               rel="noopener"
             >{{ e.titre }}<span class="fr-sr-only"> (ouvrir dans Résana, nouvelle fenêtre)</span></a>
             <span v-else>{{ e.titre }}</span>
+            <span
+              v-if="e.extension"
+              class="ecartes__dossier"
+            > ({{ e.extension }})</span>
             <span
               v-if="e.chemin"
               class="ecartes__dossier"

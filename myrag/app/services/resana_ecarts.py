@@ -30,8 +30,8 @@ EXPLICATIONS: dict[str, tuple[str, str, str]] = {
     ),
     "format": (
         "Format non pris en charge",
-        "Le moteur de recherche ne sait pas lire ce type de fichier (archive, message, exécutable…).",
-        "Déposez dans Résana une version en PDF, Word, LibreOffice ou texte.",
+        "Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats (archives .zip, messages .msg, tableurs, exécutables…) sont écartés.",
+        "Déposez dans Résana une version en PDF, Word ou texte.",
     ),
     "conversion": (
         "Conversion en PDF impossible",
@@ -103,7 +103,7 @@ def cellule(v) -> str:
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
-COLONNES_CSV = ("titre", "dossier", "raison", "explication", "quoi_faire", "meme_contenu_que", "adresse_resana")
+COLONNES_CSV = ("titre", "dossier", "format", "raison", "explication", "quoi_faire", "meme_contenu_que", "adresse_resana")
 
 
 def vers_csv(ecartes: list[dict]) -> str:
@@ -117,6 +117,7 @@ def vers_csv(ecartes: list[dict]) -> str:
             [
                 cellule(e.get("titre")),
                 cellule(e.get("chemin")),
+                cellule(e.get("extension")),
                 cellule(e.get("raison") or ex["libelle"]),
                 cellule(ex["explication"]),
                 cellule(ex["quoi_faire"]),
