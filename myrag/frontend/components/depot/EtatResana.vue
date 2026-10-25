@@ -8,7 +8,11 @@
 import type { AvisResana, CouvertureResana, ErreurResana, StatutResana } from '~/utils/resana'
 import { erreurResana, etiquetteResana, grouperEcartes, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
 
-const props = defineProps<{ collection: string }>()
+const props = withDefaults(defineProps<{
+  collection: string
+  /** Étape 3 de l'assistant, juste après l'import : seule « Modifier la sélection » a un sens. */
+  compact?: boolean
+}>(), { compact: false })
 
 type Statut = StatutResana & CouvertureResana & {
   espace_id?: string | null
@@ -279,66 +283,92 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <ul
+    <div
       v-if="statut.est_importeur && !edition"
-      class="fr-btns-group fr-btns-group--inline fr-btns-group--sm"
+      class="gestes"
     >
-      <li>
-        <button
-          ref="bouton"
-          type="button"
-          class="fr-btn fr-btn--sm"
-          :class="statut.avis ? '' : 'fr-btn--secondary'"
-          :disabled="enCours || envoi"
-          @click="synchroniser()"
-        >
-          {{ enCours || envoi ? 'Mise à jour en cours…' : (statut.avis?.action.libelle || 'Mettre à jour') }}
-        </button>
-      </li>
-      <li v-if="inconnus">
-        <button
-          type="button"
-          class="fr-btn fr-btn--sm fr-btn--tertiary"
-          :disabled="enCours || envoi"
-          title="Demande au moteur de recherche ce que vaut chaque document déjà indexé, sans rien renvoyer"
-          @click="relireQualite"
-        >
-          Relire le bilan auprès du moteur
-        </button>
-      </li>
-      <li v-if="aReprendre">
-        <button
-          type="button"
-          class="fr-btn fr-btn--sm fr-btn--secondary"
-          :disabled="enCours || envoi"
-          title="Renvoie au moteur de recherche les documents indexés sans tout leur contexte, ou sans texte lisible, même s'ils n'ont pas changé dans Résana"
-          @click="synchroniser(undefined, false, true)"
-        >
-          Ré-indexer les documents incomplets ({{ aReprendre }})
-        </button>
-      </li>
-      <li>
-        <button
-          type="button"
-          class="fr-btn fr-btn--sm fr-btn--tertiary"
-          :disabled="enCours || envoi"
-          @click="ouvrirEdition"
-        >
-          Modifier la sélection
-        </button>
-      </li>
-      <li>
-        <button
-          type="button"
-          class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline"
-          :disabled="enCours || envoi"
-          title="Retélécharge chaque document pour comparer son empreinte, même si Résana annonce la même version"
-          @click="synchroniser(undefined, true)"
-        >
-          Vérification complète
-        </button>
-      </li>
-    </ul>
+      <!-- Deux intentions, séparées : tenir l'index à jour / changer ce qui est indexé. -->
+      <section
+        v-if="!compact"
+        class="gestes__zone"
+      >
+        <h3 class="fr-text--md fr-text--bold fr-mb-1v">
+          Tenir l'index à jour
+        </h3>
+        <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mb-0">
+          <li>
+            <button
+              ref="bouton"
+              type="button"
+              class="fr-btn fr-btn--sm"
+              :class="statut.avis ? '' : 'fr-btn--secondary'"
+              :disabled="enCours || envoi"
+              @click="synchroniser()"
+            >
+              {{ enCours || envoi ? 'Mise à jour en cours…' : (statut.avis?.action.libelle || 'Mettre à jour') }}
+            </button>
+          </li>
+          <li v-if="aReprendre">
+            <button
+              type="button"
+              class="fr-btn fr-btn--sm fr-btn--secondary"
+              :disabled="enCours || envoi"
+              @click="synchroniser(undefined, false, true)"
+            >
+              Ré-indexer les documents incomplets ({{ aReprendre }})
+            </button>
+          </li>
+          <li v-if="inconnus">
+            <button
+              type="button"
+              class="fr-btn fr-btn--sm fr-btn--tertiary"
+              :disabled="enCours || envoi"
+              @click="relireQualite"
+            >
+              Relire le bilan auprès du moteur
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline"
+              :disabled="enCours || envoi"
+              @click="synchroniser(undefined, true)"
+            >
+              Tout revérifier
+            </button>
+          </li>
+        </ul>
+        <ul class="fr-text--xs gestes__aide">
+          <li><strong>Mettre à jour</strong> relit les dossiers choisis dans Résana et n'indexe que ce qui a changé : à faire quand des documents ont bougé dans Résana.</li>
+          <li v-if="aReprendre">
+            <strong>Ré-indexer les documents incomplets</strong> renvoie au moteur les {{ aReprendre }} documents lus sans tout leur contexte ou sans texte.
+          </li>
+          <li v-if="inconnus"><strong>Relire le bilan</strong> demande au moteur ce que vaut chaque document déjà indexé, sans rien renvoyer.</li>
+          <li><strong>Tout revérifier</strong> retélécharge chaque document pour comparer son contenu : utile si un document modifié dans Résana n'a pas été repris par la mise à jour.</li>
+        </ul>
+      </section>
+      <section class="gestes__zone">
+        <h3 class="fr-text--md fr-text--bold fr-mb-1v">
+          Changer ce qui est indexé
+        </h3>
+        <ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-mb-0">
+          <li>
+            <button
+              type="button"
+              class="fr-btn fr-btn--sm fr-btn--secondary"
+              :disabled="enCours || envoi"
+              @click="ouvrirEdition"
+            >
+              Modifier la sélection
+            </button>
+          </li>
+        </ul>
+        <p class="fr-text--xs gestes__aide">
+          Ajouter ou retirer des dossiers de l'espace : un dossier ajouté s'indexe, un dossier retiré sort de l'index.
+        </p>
+      </section>
+    </div>
 
     <div
       v-if="edition"
@@ -380,5 +410,8 @@ onBeforeUnmount(() => {
 .resana-carte__tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .resana-discret { color: var(--text-mention-grey); }
 .ecartes__explication, .ecartes__dossier { color: var(--text-mention-grey); }
+.gestes { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+.gestes__zone + .gestes__zone { border-top: 1px solid var(--border-default-grey); padding-top: 1rem; }
+.gestes__aide { color: var(--text-mention-grey); margin: .25rem 0 0; }
 @media (max-width: 36em) { .resana-carte { padding: 1rem; } }
 </style>
