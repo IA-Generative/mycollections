@@ -57,6 +57,12 @@ quand la session est absente. Deux exceptions :
 - un 401 du service (jeton refusé, ou Mes collections inconnu du service) devient un **502** ; l'écran ne
   déconnecte pas la personne pour une affaire entre deux services ;
 - le lien de connexion n'est transmis que s'il est en `https://`.
+- **« Se connecter à Résana »** (`composables/useConnexionResana.ts`) : la page de connexion s'ouvre
+  dans une fenêtre que Mes collections garde en main ; toutes les 4 s, et dès qu'on revient sur
+  l'onglet, la session est testée (`GET /espaces`) ; quand elle répond, la fenêtre est refermée,
+  « Connexion à Résana établie » s'affiche, et ce que la personne voulait faire repart tout seul
+  (recharger les espaces à l'étape 1, relancer la mise à jour sur la carte). Résana lui-même ne sait
+  ni refermer sa fenêtre ni prévenir ; dix minutes sans session et l'attente s'arrête.
 
 ## Privée à qui importe, partageable à un groupe
 

@@ -39,6 +39,9 @@ const sansLien = computed(() => ecartes.value.some(e => !e.url))
 // Le total réel : la carte n'en reçoit que les premiers (ECARTES_MAX côté serveur).
 const totalEcartes = computed(() => Math.max(statut.value?.travail?.ecartes || 0, ecartes.value.length))
 const { telecharger } = useTelechargement()
+// « Se connecter à Résana » : la fenêtre s'ouvre, on guette la session, puis la mise à jour repart.
+const connexion = useConnexionResana()
+const seConnecter = (url: string) => connexion.ouvrir(url, () => synchroniser())
 const exportEnCours = ref(false)
 const erreurExport = ref('')
 async function exporterEcartes () {
@@ -212,8 +215,23 @@ onBeforeUnmount(() => {
         class="fr-link"
         target="_blank"
         rel="noopener"
+        @click.prevent="seConnecter(statut.travail!.url_connexion!)"
       >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
     </p>
+    <p
+      v-if="connexion.enAttente.value"
+      class="fr-text--sm"
+      role="status"
+    >
+      ⏳ Connectez-vous dans la fenêtre Résana : la mise à jour repartira d'elle-même.
+    </p>
+    <div
+      v-if="connexion.retablie.value"
+      class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"
+      role="status"
+    >
+      <p>Connexion à Résana établie : la mise à jour a repris.</p>
+    </div>
     <details
       v-if="ecartes.length"
       class="fr-text--sm fr-mb-2w ecartes"
@@ -286,7 +304,12 @@ onBeforeUnmount(() => {
           class="fr-link"
           target="_blank"
           rel="noopener"
+          @click.prevent="seConnecter(erreur.urlConnexion)"
         >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+        <span
+          v-if="connexion.enAttente.value"
+          class="fr-text--sm fr-ml-2w"
+        >⏳ cette page reprendra d'elle-même.</span>
       </p>
     </div>
 

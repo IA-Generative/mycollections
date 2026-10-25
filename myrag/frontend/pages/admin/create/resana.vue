@@ -25,6 +25,8 @@ const champ = useId()
 const creee = computed(() => (route.query.collection as string) || '')
 const phase = ref<'choisir' | 'fiche' | 'documents'>(creee.value ? 'documents' : 'choisir')
 const { capacites, charger: chargerCapacites } = useCapacites()
+// « Se connecter à Résana » : la fenêtre s'ouvre, on guette la session, puis on reprend tout seul.
+const connexion = useConnexionResana()
 const erreur = ref<ErreurResana | null>(null)
 
 // ─── Les dossiers cochés (2), déclarés d'abord : choisir un autre espace les vide ─────────────
@@ -201,6 +203,13 @@ onBeforeUnmount(() => clearTimeout(minuterie))
       </div>
 
       <div
+        v-if="connexion.retablie.value"
+        class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"
+        role="status"
+      >
+        <p>Connexion à Résana établie : vos espaces sont chargés.</p>
+      </div>
+      <div
         v-if="erreur"
         class="fr-alert fr-alert--sm fr-mb-2w"
         :class="erreur.code === 'session_absente' ? 'fr-alert--warning' : 'fr-alert--error'"
@@ -214,7 +223,13 @@ onBeforeUnmount(() => clearTimeout(minuterie))
             class="fr-link fr-mr-2w"
             target="_blank"
             rel="noopener"
+            @click.prevent="connexion.ouvrir(erreur.urlConnexion, chargerEspaces)"
           >Se connecter à Résana<span class="fr-sr-only"> (nouvelle fenêtre)</span></a>
+          <span
+            v-if="connexion.enAttente.value"
+            class="fr-text--sm fr-mr-2w"
+            role="status"
+          >⏳ Connectez-vous dans la fenêtre Résana : cette page reprendra d'elle-même.</span>
           <button
             v-if="phase === 'choisir' && !espaces.length"
             type="button"
