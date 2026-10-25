@@ -11,7 +11,7 @@
  */
 import type { InstanceFichiers } from '~/utils/fichiers'
 import type { ErreurResana } from '~/utils/resana'
-import { couleurPlafond, libelleInstance, niveauxPermis } from '~/utils/fichiers'
+import { couleurPlafond, niveauxPermis } from '~/utils/fichiers'
 import { erreurResana, etiquetteResana } from '~/utils/resana'
 import { lienEtape } from '~/utils/wizard'
 
@@ -261,7 +261,7 @@ onBeforeUnmount(() => clearTimeout(minuterie))
                 :for="`${champ}-${i.id}`"
               >
                 {{ i.titre }}
-                <span class="fr-hint-text">{{ libelleInstance(i) }}<template v-if="i.description"> — {{ i.description }}</template></span>
+                <span class="fr-hint-text">{{ i.zone || i.hote }}<template v-if="i.description"> — {{ i.description }}</template></span>
                 <span class="fr-mt-1v">
                   <span
                     class="fr-badge fr-badge--sm fr-badge--no-icon"

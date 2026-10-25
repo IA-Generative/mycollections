@@ -201,7 +201,9 @@ du groupe `<racine>/<nom>-admin` la lisent.
    - **Fin du doublon** : un doublon qui change redevient un document à part entière.
    - **Erreurs de lecture d'OpenRAG** :
      - passagères (délai dépassé, service indisponible) : le document est renvoyé à la passe
-       suivante, l'essai raté étant retiré d'abord ;
+       suivante, l'essai raté étant retiré d'abord — sauf si l'indexeur l'a lu entre-temps (une
+       file longue le lit après les 30 minutes de suivi) : la passe suivante le lui demande
+       d'abord (`qualites`) et le garde tel quel, sans le remettre au bout de la file ;
      - définitives (« n'a pas pu lire » : PDF sans texte) : le document n'est retenté que s'il
        change.
 6. **OpenRAG, document par document** (par l'interface de l'indexeur, `docs/indexeur.md`). La partition n'est jamais vidée, et la recherche continue
