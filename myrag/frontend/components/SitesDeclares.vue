@@ -74,7 +74,8 @@ onMounted(async () => {
     <p class="fr-text--sm fr-mb-2w">
       Sur les pages qui correspondent à ces adresses, MirAI Assistant pour navigateur propose une bulle
       « + IA » qui interroge {{ objet }}. Il compare lui-même l'adresse de la page :
-      aucune page visitée n'est envoyée au service.
+      aucune page visitée n'est envoyée au service. Pour une collection Résana ou un document déposé par adresse, le site
+      des documents est proposé ici de lui-même ; vous pouvez le retirer.
     </p>
     <p
       v-if="installation"

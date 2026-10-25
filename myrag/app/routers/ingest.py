@@ -467,7 +467,7 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
 
     filename = req.url.rstrip("/").split("/")[-1] or "remote-file"
 
-    return await _ingest_content(
+    resultat = await _ingest_content(
         collection=collection,
         filename=filename,
         content=content,
@@ -475,6 +475,26 @@ async def ingest_from_url(collection: str, req: IngestFromUrlRequest, user: Curr
         sensitivity=req.sensitivity,
         source_path=req.url,
     )
+    await _proposer_le_site(collection, req.url)
+    return resultat
+
+
+async def _proposer_le_site(collection: str, url: str) -> None:
+    """Le site d'un document déposé par adresse devient un site déclaré pour MirAI Assistant pour
+    navigateur, et la source de la collection si elle n'en a pas encore."""
+    from app.services import sources_url
+    from app.services.collection_store import get_collection, update_collection
+
+    motif = sources_url.motif_de(url)
+    if not motif:
+        return
+    try:
+        await sources_url.ajouter_sites(collection, [motif])
+        fiche = await get_collection(collection)
+        if fiche is not None and not (fiche.get("source_url") or "").strip():
+            await update_collection(collection, {"source_url": motif.removesuffix("*")})
+    except Exception as e:  # noqa: BLE001 — une proposition de site ne doit pas faire échouer le dépôt
+        logger.warning("%s : site non proposé (%s)", collection, type(e).__name__)
 
 
 @router.post("/{collection}/reindex")

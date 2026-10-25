@@ -247,6 +247,9 @@ def test_creer_depuis_un_espace_pose_l_identifiant_et_la_fiche(client, en_tant_q
 
     cfg = asyncio.run(get_source_config("resana-e1"))
     assert cfg["espace"] | {} == cfg["espace"] and cfg["espace"]["objet"] == "Essais" and cfg["espace"]["parent_id"] == "123" and cfg["espace"]["cree_le"].startswith("2019")
+    # L'adresse commune des documents devient la source de la collection et un site du plug-in.
+    assert fiche["source_url"] == "https://resana.fake-domain.name/espace-fictif/ged/"
+    assert client.get("/api/collections/resana-e1/sites").json()["motifs"] == ["https://resana.fake-domain.name/espace-fictif/ged/*"]
     # Chaque document part avec son origine.
     meta = faux.envois.await_args_list[0].kwargs["metadata"]
     assert meta["source"] == "resana" and meta["espace"] == "Alpha fictif" and meta["dossier"] and meta["sensitivity"] == "internal"

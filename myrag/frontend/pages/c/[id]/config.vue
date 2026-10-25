@@ -47,7 +47,11 @@ const form = ref({
   ai_summary_threshold: 1000,
   contact_name: '',
   contact_email: '',
+  source_url: '',
 })
+// La source est déduite pour Résana, Drive et Légifrance : on la montre, on ne la modifie pas ici.
+const sourceType = ref('')
+const sourceVerrouillee = computed(() => ['resana', 'drive', 'legifrance'].includes(sourceType.value))
 
 const needsReindex = computed(() => {
   if (!initialStrategy.value) {
@@ -102,6 +106,7 @@ onMounted(async () => {
     droits.value = config.mes_droits || {}
     archivee.value = !!config.archived_at
     retenir(config)
+    sourceType.value = config.source_type || ''
     form.value = {
       titre: config.titre || '',
       description: config.description || '',
@@ -114,6 +119,7 @@ onMounted(async () => {
       ai_summary_threshold: config.ai_summary_threshold || 1000,
       contact_name: config.contact_name || '',
       contact_email: config.contact_email || '',
+      source_url: config.source_url || '',
     }
     initialStrategy.value = form.value.strategy
     initialPrompt.value = form.value.prompt_template
@@ -524,6 +530,22 @@ async function save () {
 
       <!-- Contact -->
       <div class="fr-input-group fr-mt-3w">
+        <label
+          class="fr-label"
+          for="sites-source"
+        >Site(s) d'origine des documents
+          <span class="fr-hint-text">
+            {{ sourceVerrouillee ? 'Déduit de la source de la collection (Résana, Drive, Légifrance) : ne se modifie pas ici.' : 'D\'où viennent vos documents : une adresse https par ligne. Affiché sur la fiche ; MirAI Assistant pour navigateur peut proposer la collection sur ces pages (rubrique « Dans le navigateur » de Partager).' }}
+          </span>
+        </label>
+        <textarea
+          id="sites-source"
+          v-model="form.source_url"
+          class="fr-input fr-mb-2w"
+          rows="2"
+          :readonly="sourceVerrouillee"
+          placeholder="https://www.fake-domain.name/guides/"
+        />
         <label class="fr-label">Responsable / contact</label>
         <input
           v-model="form.contact_name"

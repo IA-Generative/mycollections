@@ -101,6 +101,8 @@ class CreateCollectionRequest(BaseModel):
     scope_groups: list[str] = []
     contact_name: str = ""
     contact_email: str = ""
+    #: Le ou les sites d'où viennent les documents (facultatif), une adresse https par ligne.
+    source_url: str = ""
     #: Clé d'une catégorie existante (étape 2 de l'assistant de création) ; absente = « Non classées ».
     categorie: str | None = None
 
@@ -341,6 +343,7 @@ async def creer_collection(req: CreateCollectionRequest, user: CurrentUser, *, s
     if existing:
         raise HTTPException(status_code=409, detail=f"Collection '{req.name}' already exists")
     await _exiger_categorie(req.categorie)
+    req.source_url = _sources_url(req.source_url)
 
     system_prompt = req.system_prompt
     if not system_prompt:
@@ -468,6 +471,16 @@ def _garder_resana(existing: dict, updates: dict) -> None:
         raise HTTPException(status_code=409, detail="Une collection Résana reste privée à la personne qui a importé le dossier : sa portée et sa source ne se modifient pas.")
 
 
+def _sources_url(valeur) -> str:
+    """Les sites d'origine, une adresse https par ligne ; une adresse invalide donne 422."""
+    from app.services import sources_url
+
+    try:
+        return sources_url.valider_urls(valeur if isinstance(valeur, (str, list)) else "")
+    except sources_url.URLInvalide as e:
+        raise HTTPException(status_code=422, detail={"reason": "source_url", "message": str(e)}) from None
+
+
 def _sensibilite(valeur) -> str:
     """Un niveau de la liste (une ancienne valeur donne sa nouvelle), sinon 422."""
     try:
@@ -491,6 +504,8 @@ async def update_collection_endpoint(name: str, updates: dict, user: CurrentUser
     _garder_resana(existing, updates)
     if "sensitivity" in updates:
         updates["sensitivity"] = _sensibilite(updates["sensitivity"])
+    if "source_url" in updates:
+        updates["source_url"] = _sources_url(updates["source_url"])
     if "categorie" in updates:
         # Qui gère la collection la range lui-même parmi les catégories existantes ; le changement
         # s'écrit au journal comme un reclassement de l'administration.
