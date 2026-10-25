@@ -49,8 +49,8 @@ export const EXPLICATIONS_ECART: Record<string, { libelle: string, explication: 
   },
   format: {
     libelle: 'Format non pris en charge',
-    explication: 'Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats sont écartés.',
-    quoiFaire: 'Déposez dans Résana une version en PDF, Word ou texte.',
+    explication: 'Le moteur de recherche lit PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv). Les tableurs et documents LibreOffice ne sont lus qu\'une fois convertis en PDF, quand le service de conversion est en place. Les autres formats sont écartés.',
+    quoiFaire: 'Déposez dans Résana une version en PDF, Word ou texte. Pour un tableur, « Mettre à jour » le reprendra dès que la conversion sera en place.',
   },
   conversion: {
     libelle: 'Conversion en PDF impossible',

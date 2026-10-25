@@ -35,8 +35,8 @@ EXPLICATIONS: dict[str, tuple[str, str, str]] = {
     ),
     "format": (
         "Format non pris en charge",
-        "Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats (archives .zip, messages .msg, tableurs, exécutables…) sont écartés.",
-        "Déposez dans Résana une version en PDF, Word ou texte.",
+        "Le moteur de recherche lit PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv). Les tableurs et documents LibreOffice ne sont lus qu'une fois convertis en PDF, quand le service de conversion est en place. Les autres formats (archives .zip, messages .msg, exécutables…) sont écartés.",
+        "Déposez dans Résana une version en PDF, Word ou texte. Pour un tableur, « Mettre à jour » le reprendra dès que la conversion sera en place.",
     ),
     "conversion": (
         "Conversion en PDF impossible",
