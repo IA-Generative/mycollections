@@ -125,6 +125,12 @@ class Indexeur(Protocol):
 
     async def vider(self, collection: str) -> None: ...
 
+    async def qualites(self, collection: str) -> dict[str, dict]:
+        """La qualité de chaque document indexé de la collection, par identifiant, telle que
+        l'indexeur la garde (sans relire les tâches, parties depuis longtemps). Un document dont
+        l'indexeur ne dit rien est absent."""
+        ...
+
 
 class IndexeurOpenRAG:
     """L'indexeur OpenRAG : une partition par collection, un fichier par document."""
@@ -161,3 +167,13 @@ class IndexeurOpenRAG:
 
     async def vider(self, collection: str) -> None:
         await self.client.delete_partition(collection)
+
+    async def qualites(self, collection: str) -> dict[str, dict]:
+        # La liste de la partition porte, par fichier, les mêmes marques que le statut de tâche
+        # (`degraded_stages`, `contextualization`, `ocr`…) : une seule requête pour toute la collection.
+        rendu: dict[str, dict] = {}
+        for f in await self.client.list_files(collection):
+            q = qualite_lecture(f.model_dump())
+            if f.file_id and q:
+                rendu[f.file_id] = q
+        return rendu

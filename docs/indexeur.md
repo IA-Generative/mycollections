@@ -15,6 +15,7 @@ pas réécrire les sources.
 | `suivre(tache)` | où en est la lecture : `en_cours`, `lu`, ou `echec` avec sa raison ; une fois lu, `qualite` dit ce que vaut l'indexation (voir plus bas) |
 | `retirer(collection, identifiant)` | le document sort de l'index ; un document absent n'est pas une erreur |
 | `vider(collection)` | toute la collection sort de l'index |
+| `qualites(collection)` | la qualité que l'indexeur garde pour chaque document, par identifiant, en une requête : de quoi refaire le bilan sans relire les tâches |
 
 Deux exceptions :
 

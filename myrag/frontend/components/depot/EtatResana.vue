@@ -31,6 +31,22 @@ const phrase = computed(() => libelleTravail(statut.value?.travail))
 const ecartes = computed(() => statut.value?.travail?.documents_ecartes || [])
 const qualite = computed(() => phrasesQualite(statut.value?.qualite))
 const aReprendre = computed(() => statut.value?.qualite?.a_reprendre ?? 0)
+const inconnus = computed(() => statut.value?.qualite?.par_etat?.inconnue ?? 0)
+
+async function relireQualite () {
+  envoi.value = true
+  erreur.value = null
+  try {
+    await post(`/api/sources/resana/qualite/${encodeURIComponent(props.collection)}`)
+  }
+  catch (e) {
+    erreur.value = erreurResana(e)
+  }
+  finally {
+    envoi.value = false
+  }
+  await charger()
+}
 const derniere = computed(() => {
   const d = statut.value?.last_sync_at
   return d ? new Date(d.endsWith('Z') || d.includes('+') ? d : `${d}Z`).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : ''
@@ -218,6 +234,17 @@ onBeforeUnmount(() => {
           @click="synchroniser()"
         >
           {{ enCours || envoi ? 'Mise à jour en cours…' : (statut.avis?.action.libelle || 'Mettre à jour') }}
+        </button>
+      </li>
+      <li v-if="inconnus">
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary"
+          :disabled="enCours || envoi"
+          title="Demande au moteur de recherche ce que vaut chaque document déjà indexé, sans rien renvoyer"
+          @click="relireQualite"
+        >
+          Relire le bilan auprès du moteur
         </button>
       </li>
       <li v-if="aReprendre">

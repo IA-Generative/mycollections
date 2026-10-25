@@ -119,3 +119,17 @@ def test_un_autre_indexeur_remplace_openrag_pour_resana(client, en_tant_que, fau
     client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     assert [v["nom"] for v in memoire.documents.values()] == ["note-b.md"] and len(memoire.documents) == 1
     assert not faux.openrag.upload_document.await_count, "OpenRAG n'a rien reçu"
+
+
+@pytest.mark.asyncio
+async def test_openrag_rend_la_qualite_gardee_de_chaque_fichier():
+    from app.services.openrag_client import FichierOpenRAG
+
+    client = MagicMock()
+    client.list_files = AsyncMock(
+        return_value=[
+            FichierOpenRAG(file_id="f1", degraded_stages=[], contextualization={"total": 3, "failed": 0}),
+            FichierOpenRAG(file_id="f2", original_filename="ancien.pdf"),  # indexé avant le suivi : rien à dire
+        ]
+    )
+    assert await IndexeurOpenRAG(client).qualites("c") == {"f1": {"etat": "complet", "passages": 3, "sans_contexte": 0}}
