@@ -101,3 +101,24 @@ def test_un_ecart_note_vide_avant_le_correctif_est_retelecharge(client, en_tant_
     client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
     assert any(q.url.path.endswith("/documents/a/fichier") for q in faux.requetes)
     assert "a" in _cfg(privee)["documents"] and not _cfg(privee).get("ecartes")
+
+
+def test_un_document_indexe_rendu_vide_reste_dans_l_index(client, en_tant_que, faux, privee):
+    """Le 2026-10-25, une mise à jour complète pendant que Résana saturait a retiré 328 documents
+    indexés. Un fichier rendu vide n'est pas un document disparu : l'ancienne version reste."""
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    faux.documents[0].vides = -1
+    faux.openrag.delete_file.reset_mock()
+    client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE, json={"complet": True})
+    travail = _travail(client, privee)
+    assert travail["etat"] in ("termine", "a_jour") and travail.get("retires", 0) == 0
+    assert _sources(privee) == ["note-a.md", "note-b.md"] and not faux.openrag.delete_file.await_args_list
+    assert [e["code"] for e in travail["documents_ecartes"]] == ["fichier_vide"]
+    # Résana répond de nouveau : la passe suivante le relit (sa version notée est restée l'ancienne).
+    faux.documents[0].vides = 0
+    faux.documents[0].contenu = b"# A\n\nTexte fictif revu."
+    faux.requetes.clear()
+    client.post(f"/api/sources/resana/sync/{privee}", headers=ENTETE)
+    assert any(q.url.path.endswith("/documents/a/fichier") for q in faux.requetes)
+    assert _travail(client, privee)["modifies"] == 1

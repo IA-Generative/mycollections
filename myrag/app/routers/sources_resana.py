@@ -755,12 +755,13 @@ class Recu:
 @dataclass
 class Rapatriement:
     """Ce que le téléchargement a rapporté. `recus` : contenus nouveaux ou changés, en attente sur
-    le disque ; `identiques` : documents relus sans changement de contenu ; `erreur` : ce qui l'a
-    arrêté en route."""
+    le disque ; `identiques` : documents relus sans changement de contenu ; `non_relus` : documents
+    que Résana a rendus vides (raté passager) ; `erreur` : ce qui l'a arrêté en route."""
 
     recus: list[Recu] = field(default_factory=list)
     identiques: list[DocumentResana] = field(default_factory=list)
     ecartes: list[dict] = field(default_factory=list)
+    non_relus: list[DocumentResana] = field(default_factory=list)
     erreur: ErreurResana | None = None
 
 
@@ -816,6 +817,8 @@ async def _rapatrier(
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
                     return
+                if e.code == "fichier_vide":
+                    r.non_relus.append(doc)
                 r.ecartes.append(
                     {
                         "id": doc.id,
@@ -1084,6 +1087,12 @@ async def _comparer_et_appliquer(
             "version_fichier": doc.version_fichier,
             "modifie_le": doc.modifie_le,
         }
+    # Rendu vide par Résana saturé : un document déjà indexé garde sa version (le 2026-10-25, une
+    # mise à jour complète en a retiré 328 de l'index). Sa version notée reste l'ancienne : la
+    # passe suivante le redemande.
+    for doc in r.non_relus:
+        if doc.id in connus:
+            gardes[doc.id] = {**connus[doc.id], "url": _url(doc) or connus[doc.id].get("url", ""), "titre": doc.titre}
     pris = {str(v.get("fichier", "")).lower() for v in connus.values()}
     # Empreinte → (titre, identifiant) des documents gardés : un contenu identique n'est indexé
     # qu'une fois ; le premier gardé porte le contenu, les autres sont écartés (sans rien bloquer).
