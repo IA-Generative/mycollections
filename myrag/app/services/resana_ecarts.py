@@ -28,6 +28,11 @@ EXPLICATIONS: dict[str, tuple[str, str, str]] = {
         "Le document dépasse la taille que Résana ou l'indexation admettent.",
         "Déposez dans Résana une version plus légère (sans images lourdes, ou découpée).",
     ),
+    "fichier_vide": (
+        "Reçu vide de Résana",
+        "Résana a renvoyé le fichier sans son contenu, même après plusieurs essais : un raté du téléchargement (Résana surchargé), pas un défaut du document.",
+        "« Mettre à jour » le redemandera. Si l'écart persiste, ouvrez-le dans Résana : s'il s'ouvre, signalez-le.",
+    ),
     "format": (
         "Format non pris en charge",
         "Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats (archives .zip, messages .msg, tableurs, exécutables…) sont écartés.",
@@ -67,6 +72,7 @@ _PAR_TEXTE: tuple[tuple[str, str], ...] = (
     ("introuvable", "introuvable"),
     ("trop volumineux", "trop_volumineux"),
     ("dépasse la taille", "trop_volumineux"),
+    ("renvoyé ce fichier vide", "fichier_vide"),
     ("format non pris en charge", "format"),
     ("conversion en PDF impossible", "conversion"),
     ("texte illisible", "illisible"),

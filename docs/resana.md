@@ -154,6 +154,13 @@ du groupe `<racine>/<nom>-admin` la lisent.
    - Pas de plafond par passe. Seule garde : laisser au moins 1 Go libre sur le volume.
 5. **Le tri** :
    - un format non pris en charge est écarté ;
+   - **un fichier reçu vide n'est pas un document** : Résana saturé répond 200 sans corps (mesuré le
+     2026-10-25 : par à-coups au-delà de ~6 téléchargements par seconde, puis deux minutes où tout
+     arrivait vide, d'où 341 documents écartés à tort sur 783). Le fichier est redemandé après 5 puis
+     20 s (`PAUSES_FICHIER_VIDE`) ; toujours vide, il est signalé (`fichier_vide`) sans être mémorisé,
+     donc redemandé à la passe suivante. Huit vides d'affilée (`VIDES_DE_SUITE_MAX`) : Résana est
+     saturé, la passe s'arrête en « partiel » (`resana_sature`) au lieu d'écarter tout le reste du
+     dossier, et « Mettre à jour » la reprend ;
    - un document refusé par Résana (`hors_droits`, `introuvable`, `trop_volumineux`) est écarté, et
      retiré s'il avait été importé ;
    - **les doublons** : voir ci-dessous.
@@ -169,8 +176,10 @@ du groupe `<racine>/<nom>-admin` la lisent.
      avec la version annoncée par Résana, et n'est **pas retéléchargé** tant qu'elle ne change pas.
      Un refus de Résana (`hors_droits`, `introuvable`, `trop_volumineux`) n'est pas mémorisé : il est
      retenté à chaque passe (un refus coûte une requête, et des droits accordés sont repris d'eux-mêmes).
+     Un écart noté avec l'empreinte d'un contenu vide (avant ce correctif, il passait pour un « format
+     non pris en charge » ou un « document vide ») est retéléchargé : c'était un téléchargement raté.
    - **Ce qu'un écart dit** : un `code` stable (`hors_droits`, `introuvable`, `trop_volumineux`,
-     `format`, `conversion`, `illisible`, `vide`, `doublon`, `autre` — `app/services/resana_ecarts.py`,
+     `fichier_vide`, `format`, `conversion`, `illisible`, `vide`, `doublon`, `autre` — `app/services/resana_ecarts.py`,
      miroir dans `frontend/utils/resana.ts`), la raison en texte, le dossier Résana et l'adresse de
      consultation. La carte regroupe les écartés par code, avec l'explication et « quoi faire », et chaque
      titre ouvre le document dans Résana. Elle n'en reçoit que les `ECARTES_MAX` (50) premiers ;

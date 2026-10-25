@@ -72,6 +72,16 @@ def envois_paralleles() -> int:
     return max(1, min(16, int(settings.resana_envois_paralleles or ENVOIS_PARALLELES)))
 
 
+#: Un fichier reçu vide est redemandé après ces pauses (secondes) : Résana saturé répond 200 sans
+#: corps, par à-coups ou pendant quelques minutes (mesuré le 2026-10-25).
+PAUSES_FICHIER_VIDE = (5.0, 20.0)
+#: Autant de fichiers vides d'affilée (après leurs reprises) : Résana est saturé. La passe s'arrête
+#: (partielle) plutôt que d'écarter tout le reste du dossier ; « Mettre à jour » la reprend.
+VIDES_DE_SUITE_MAX = 8
+MESSAGE_RESANA_SATURE = "Résana renvoie des fichiers vides : il semble saturé. Les documents reçus sont gardés ; relancez « Mettre à jour » dans quelques minutes."
+#: L'empreinte d'un contenu vide : un écart noté avec elle (avant #173) était un téléchargement raté.
+SHA256_VIDE = hashlib.sha256(b"").hexdigest()
+
 #: Les erreurs qui arrêtent tout ; les autres (droits, taille d'un document) n'écartent que lui.
 ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "disque_plein"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
@@ -754,6 +764,10 @@ class Rapatriement:
     erreur: ErreurResana | None = None
 
 
+async def _pause(secondes: float) -> None:
+    await asyncio.sleep(secondes)
+
+
 def _attente(collection: str) -> Path:
     """Le dossier où attendent les fichiers d'une passe (vidé au début et à la fin de chaque passe)."""
     return Path(settings.data_dir) / "_resana_attente" / collection
@@ -772,16 +786,33 @@ async def _rapatrier(
     reste utilisable."""
     r = Rapatriement()
     file = _ordre(docs, connus)
-    etat = {"faits": 0}
+    etat = {"faits": 0, "vides": 0}
     attente = _attente(collection)
     attente.mkdir(parents=True, exist_ok=True)
+
+    async def telecharger(doc: DocumentResana):
+        """Le fichier, redemandé s'il arrive vide (Résana saturé)."""
+        for pause in (*PAUSES_FICHIER_VIDE, None):
+            try:
+                return await client.fichier(doc, espace)
+            except ErreurResana as e:
+                if e.code != "fichier_vide" or pause is None or r.erreur is not None:
+                    raise
+            await _pause(pause)
 
     async def ouvrier() -> None:
         while file and r.erreur is None:
             doc = file.pop(0)
             try:
-                f = await client.fichier(doc, espace)
+                f = await telecharger(doc)
+                etat["vides"] = 0
             except ErreurResana as e:
+                if e.code == "fichier_vide":
+                    etat["vides"] += 1
+                    if etat["vides"] >= VIDES_DE_SUITE_MAX:
+                        logger.warning("résana %s : %d fichiers vides d'affilée, passe arrêtée", collection, etat["vides"])
+                        r.erreur = r.erreur or ErreurResana(503, "resana_sature", MESSAGE_RESANA_SATURE, reessayable=True)
+                        return
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
                     return
@@ -1027,6 +1058,8 @@ async def _comparer_et_appliquer(
             continue
         if ec.get("doublon_de") and ec["doublon_de"] not in stables_ids:
             continue  # l'original change ou disparaît : on relit le doublon
+        if ec.get("sha256") == SHA256_VIDE:
+            continue  # reçu vide : un téléchargement raté (Résana saturé), pas un document
         if conversion.active() and _convertible_desormais(ec):
             continue  # écarté faute de savoir le lire : le service de conversion est là
         toujours_ecartes[d.id] = {**ec, "titre": d.titre, "url": _url(d) or ec.get("url", ""), "chemin": d.chemin or ec.get("chemin", "")}

@@ -26,6 +26,9 @@ class DocFaux:
     chemin: str = "Dossier fictif"
     mime: str = "text/markdown"
     refus: tuple[int, str] | None = None  # (statut, code) rendu par /fichier
+    #: Téléchargements rendus vides (200 sans corps, comme Résana saturé) avant le vrai contenu ;
+    #: -1 = toujours vide.
+    vides: int = 0
 
     def ligne(self) -> dict:
         return {
@@ -125,6 +128,9 @@ class FauxResana:
                 return self._erreur(404, "introuvable")
             if doc.refus:
                 return self._erreur(*doc.refus)
+            if doc.vides:
+                doc.vides -= 1 if doc.vides > 0 else 0
+                return httpx.Response(200, content=b"", headers={"content-type": doc.mime, "content-disposition": f"attachment; filename*=UTF-8''{quote(doc.nom_fichier)}"})
             return httpx.Response(
                 200,
                 content=doc.contenu,
