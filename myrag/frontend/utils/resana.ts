@@ -159,6 +159,8 @@ export interface QualiteResana {
   scans?: number
   scans_lus?: number
   /** Les tableurs lus par l'indexeur (openrag#15) : cellules à formule restées vides, feuilles masquées ignorées. */
+  /** Les tableurs coupés à la borne de l'indexeur, quel que soit leur état de qualité. */
+  tableurs_tronques?: number
   tableurs_formules_vides?: number
   formules_sans_valeur?: number
   tableurs_feuilles_masquees?: number
@@ -503,7 +505,7 @@ export function partageResanaPret (groupes: readonly string[], confirme: boolean
  */
 export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   const n = (etat: string) => q?.par_etat?.[etat] ?? 0
-  if (!q || (!Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0) && !q.scans_lus && !q.formules_sans_valeur && !q.feuilles_masquees_ignorees)) {
+  if (!q || (!Object.keys(q.par_etat || {}).some(e => e !== 'complet' && n(e) > 0) && !q.scans_lus && !q.tableurs_tronques && !q.formules_sans_valeur && !q.feuilles_masquees_ignorees)) {
     return []
   }
   const phrases: string[] = []
@@ -517,8 +519,9 @@ export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   if (n('degrade')) {
     phrases.push(`${compte(n('degrade'), 'document a', 'documents ont')} une étape d'indexation en échec (description des images…).`)
   }
-  if (n('tronque')) {
-    phrases.push(`${compte(n('tronque'), 'tableur n\'est indexé', 'tableurs ne sont indexés')} qu'en partie : ${n('tronque') > 1 ? 'ils dépassent' : 'il dépasse'} la taille admise. Découpez-${n('tronque') > 1 ? 'les' : 'le'} en plusieurs fichiers dans Résana.`)
+  const tronques = q.tableurs_tronques ?? n('tronque')
+  if (tronques) {
+    phrases.push(`${compte(tronques, 'tableur n\'est indexé', 'tableurs ne sont indexés')} qu'en partie : ${tronques > 1 ? 'ils dépassent' : 'il dépasse'} la taille admise. Découpez-${tronques > 1 ? 'les' : 'le'} en plusieurs fichiers dans Résana.`)
   }
   if (q.formules_sans_valeur) {
     phrases.push(`${compte(q.formules_sans_valeur, 'cellule à formule est vide', 'cellules à formule sont vides')} dans ${compte(q.tableurs_formules_vides || 1, 'tableur', 'tableurs')}, faute de valeur calculée : ouvrez-${(q.tableurs_formules_vides || 1) > 1 ? 'les' : 'le'} et enregistrez-${(q.tableurs_formules_vides || 1) > 1 ? 'les' : 'le'} de nouveau dans Excel ou LibreOffice.`)

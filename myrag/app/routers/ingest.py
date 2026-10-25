@@ -175,23 +175,26 @@ async def _indexer_document_background(
 
 def avis_qualite(filename: str, qualite: dict | None) -> str | None:
     """La phrase qui dit ce qui manque à un document lu, ou None s'il est complet (ou si l'indexeur
-    ne le dit pas)."""
-    etat = (qualite or {}).get("etat")
+    ne le dit pas). Ce qu'un tableur a perdu (lignes au-delà de la borne, formules sans valeur,
+    feuilles masquées) est dit quel que soit l'état : un tableur tronqué dont deux passages ont aussi
+    perdu leur contexte est « sans contexte », mais sa troncature compte davantage."""
+    qualite = qualite or {}
+    etat = qualite.get("etat")
+    manques: list[str] = []
+    tableur = qualite.get("tableur") or {}
+    if tableur.get("tronque"):
+        gardees, total = tableur.get("lignes_gardees"), tableur.get("lignes_total")
+        part = f"{gardees} lignes sur {total}" if isinstance(gardees, int) and isinstance(total, int) else "une partie de ses lignes"
+        manques.append(f"seules {part} sont indexées (le tableur dépasse la taille admise) : découpez-le en plusieurs fichiers")
     if etat == "sans_contexte":
         n, total = qualite.get("sans_contexte"), qualite.get("passages")
         if isinstance(n, int) and isinstance(total, int):
             manque = f"{n} de ses {total} passages n'a pas son contexte" if n == 1 else f"{n} de ses {total} passages n'ont pas leur contexte"
         else:
             manque = "une part de ses passages n'a pas son contexte"
-        return f"« {filename} » est indexé, mais {manque} : ils se retrouveront moins bien. Ré-indexez-le plus tard."
-    if etat == "degrade":
-        return f"« {filename} » est indexé, mais une étape a échoué ({', '.join(qualite.get('etapes') or [])})."
-    tableur = (qualite or {}).get("tableur") or {}
-    manques = []
-    if etat == "tronque":
-        gardees, total = tableur.get("lignes_gardees"), tableur.get("lignes_total")
-        part = f"{gardees} lignes sur {total}" if isinstance(gardees, int) and isinstance(total, int) else "une partie de ses lignes"
-        manques.append(f"seules {part} sont indexées (le tableur dépasse la taille admise) : découpez-le en plusieurs fichiers")
+        manques.append(f"{manque} : ils se retrouveront moins bien. Ré-indexez-le plus tard")
+    elif etat == "degrade":
+        manques.append(f"une étape a échoué ({', '.join(qualite.get('etapes') or [])})")
     if tableur.get("formules_sans_valeur"):
         n = tableur["formules_sans_valeur"]
         manques.append(

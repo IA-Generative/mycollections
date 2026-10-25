@@ -72,3 +72,22 @@ def test_un_tableur_tronque_n_est_pas_a_reprendre_et_le_bilan_compte_les_cellule
     assert bilan["par_etat"] == {"tronque": 1, "complet": 1, "degrade": 1} and bilan["a_reprendre"] == 1
     assert (bilan["tableurs_formules_vides"], bilan["formules_sans_valeur"]) == (1, 7)
     assert (bilan["tableurs_feuilles_masquees"], bilan["feuilles_masquees_ignorees"]) == (1, 1)
+
+
+def test_un_tableur_tronque_qui_perd_aussi_du_contexte_dit_les_deux():
+    """Mesuré le 2026-10-25 sur OpenRAG 2.3.2-5 : 6 001 lignes, 5 000 gardées, 2 passages sur 811 sans
+    contexte. L'état est « sans contexte » (à reprendre), mais la troncature ne doit pas se taire."""
+    details = {
+        **_details(rows_kept=5000, rows_total=6001, hidden_sheets_skipped=0),
+        "degraded_stages": ["contextualize", "parse"],
+        "contextualization": {"total": 811, "failed": 2},
+    }
+    q = qualite_lecture(details)
+    assert q["etat"] == "sans_contexte" and q["tableur"]["tronque"] is True
+    avis = avis_qualite("gros.xlsx", q)
+    assert (
+        avis
+        == "« gros.xlsx » est indexé, mais seules 5000 lignes sur 6001 sont indexées (le tableur dépasse la taille admise) : découpez-le en plusieurs fichiers ; 2 de ses 811 passages n'ont pas leur contexte : ils se retrouveront moins bien. Ré-indexez-le plus tard."
+    )
+    bilan = sources_resana.bilan_qualite({"documents": {"g": {"qualite": q}}})
+    assert bilan["par_etat"] == {"sans_contexte": 1} and bilan["tableurs_tronques"] == 1

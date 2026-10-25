@@ -715,6 +715,7 @@ def bilan_qualite(cfg: dict) -> dict:
     scans = [d for d in (cfg.get("documents") or {}).values() if d.get("scan")]
     # Les tableurs lus par l'indexeur (openrag#15) : cellules vides faute de calcul, feuilles masquées.
     tableurs = [d["qualite"]["tableur"] for d in documents if isinstance(d.get("qualite"), dict) and isinstance(d["qualite"].get("tableur"), dict)]
+    tronques = sum(1 for t in tableurs if t.get("tronque"))
     formules = sum(int(t.get("formules_sans_valeur") or 0) for t in tableurs)
     masquees = sum(int(t.get("feuilles_masquees_ignorees") or 0) for t in tableurs)
     return {
@@ -723,6 +724,8 @@ def bilan_qualite(cfg: dict) -> dict:
         **({"passages": passages, "passages_sans_contexte": sans_contexte} if passages else {}),
         # Les scans repérés par Mes collections, et ceux que l'indexeur a pu lire (par OCR).
         **({"scans": len(scans), "scans_lus": sum(1 for d in scans if qualite_de(d) in ("complet", "sans_contexte", "degrade"))} if scans else {}),
+        # Tronqués quel que soit leur état : un tableur coupé peut aussi avoir des passages sans contexte.
+        **({"tableurs_tronques": tronques} if tronques else {}),
         **({"tableurs_formules_vides": sum(1 for t in tableurs if t.get("formules_sans_valeur")), "formules_sans_valeur": formules} if formules else {}),
         **({"tableurs_feuilles_masquees": sum(1 for t in tableurs if t.get("feuilles_masquees_ignorees")), "feuilles_masquees_ignorees": masquees} if masquees else {}),
     }
