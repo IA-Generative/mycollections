@@ -29,9 +29,9 @@ PREFIXE = "/export/v1"
 #: `/espaces` peut lancer la connexion automatique (coffre + navigateur, 20 à 40 s) : 90 s au moins.
 DELAI_ESPACES_S = 90.0
 DELAI_S = 60.0
-#: Plafonds du contrat : 100 Mo par fichier, 5 000 documents par dossier.
+#: Plafonds du contrat : 100 Mo par fichier, 20 000 documents par dossier (owuitools-resana#5).
 OCTETS_MAX_FICHIER = 100 * 1024 * 1024
-DOCUMENTS_MAX = 5000
+DOCUMENTS_MAX = 20000
 LIMITE_PAGE = 200
 #: Une liste en cache expirée (`410 curseur_perime`) se relit une fois depuis le début.
 RELECTURES_CURSEUR = 1
@@ -45,7 +45,7 @@ MESSAGES = {
     "appelant_inconnu": "Mes collections n'est pas autorisé par le service Résana : la configuration est à vérifier.",
     "hors_droits": "Résana vous refuse ce document.",
     "introuvable": "Cet espace, ce dossier ou ce document est introuvable dans votre Résana.",
-    "trop_de_documents": "Ce dossier contient trop de documents (5 000 au plus) : choisissez un sous-dossier.",
+    "trop_de_documents": "Ce dossier contient trop de documents (20 000 au plus) : choisissez un sous-dossier.",
     "trop_volumineux": "Un document dépasse la taille admise (100 Mo).",
     "resana_indisponible": "Résana ne répond pas pour le moment. Réessayez dans un instant.",
     "curseur_perime": "La liste des documents a expiré : relancez l'import.",
