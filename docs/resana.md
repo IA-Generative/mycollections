@@ -160,6 +160,16 @@ du groupe `<racine>/<nom>-admin` la lisent.
      Résana rend la liste dans un autre ordre. Rien n'est retiré puis renvoyé pour rien.
    - **Mémoire des écartés** (`source_config_json.ecartes`) : un doublon ou un format refusé est noté
      avec la version annoncée par Résana, et n'est **pas retéléchargé** tant qu'elle ne change pas.
+     Un refus de Résana (`hors_droits`, `introuvable`, `trop_volumineux`) n'est pas mémorisé : il est
+     retenté à chaque passe (un refus coûte une requête, et des droits accordés sont repris d'eux-mêmes).
+   - **Ce qu'un écart dit** : un `code` stable (`hors_droits`, `introuvable`, `trop_volumineux`,
+     `format`, `conversion`, `illisible`, `vide`, `doublon`, `autre` — `app/services/resana_ecarts.py`,
+     miroir dans `frontend/utils/resana.ts`), la raison en texte, le dossier Résana et l'adresse de
+     consultation. La carte regroupe les écartés par code, avec l'explication et « quoi faire », et chaque
+     titre ouvre le document dans Résana. Elle n'en reçoit que les `ECARTES_MAX` (50) premiers ;
+     `GET /api/sources/resana/ecartes/{c}?format=csv|json` (lecture de la collection) donne la liste
+     entière : les écarts mémorisés plus les refus de la dernière passe, avec, pour un doublon, le titre de
+     l'original. Le CSV est fait pour un tableur (UTF-8 avec BOM, `;`, cellules neutralisées).
    - **Relais** : si l'original change ou disparaît, son doublon est relu, et il porte alors le
      contenu : rien ne sort de l'index.
    - **Fin du doublon** : un doublon qui change redevient un document à part entière.
@@ -334,6 +344,8 @@ dans `frontend/utils/libelles.ts`) :
    - Sous l'arbre, les dossiers choisis, chacun avec son nombre de documents, ou « préparation
      chez Résana… » pour un grand dossier ; puis le total.
    - Un texte rappelle de n'indexer que ce qui sert.
+   - Une alerte, dès l'étape 1, rappelle que Mes collections lit Résana avec les droits de la personne :
+     seuls les documents qu'elle peut ouvrir sont indexés, les autres sont écartés et listés.
 3. **La fiche** :
    - le titre (le nom de l'espace, modifiable) ;
    - l'entité administrative ;
@@ -357,6 +369,8 @@ Résana sans source ni mise à jour.
 
 **Page de la collection** (`DepotEtatResana`) :
 - l'espace, son entité et les dossiers inclus ;
+- les documents écartés, groupés par raison, avec « quoi faire », un lien vers chaque document dans
+  Résana et « Exporter la liste (CSV) » ;
 - la couverture, l'avancement et l'invitation à mettre à jour ;
 - **« Modifier la sélection »**, qui rouvre l'arbre avec les dossiers déjà choisis dépliés.
   L'enregistrer remplace la liste des dossiers (`POST /sync/{c}` avec `dossiers`) : un dossier

@@ -189,6 +189,15 @@ onBeforeUnmount(() => clearTimeout(minuterie))
           ? 'Un espace, puis les dossiers à indexer. La collection reste privée : vous seul l\'interrogez, avec vos droits Résana.'
           : 'Tout est prérempli d\'après l\'espace : relisez, puis créez. L\'indexation se fait en arrière-plan.' }}
       </p>
+      <div
+        v-if="phase === 'choisir'"
+        class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w"
+      >
+        <p>
+          Mes collections lit Résana avec <strong>vos</strong> droits : seuls les documents que vous pouvez ouvrir dans
+          Résana sont indexés. Un document qui vous est refusé est écarté, et listé après l'import avec la raison.
+        </p>
+      </div>
 
       <div
         v-if="erreur"

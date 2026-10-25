@@ -6,7 +6,7 @@
  * sélection » (ajouter ou retirer des sous-dossiers, pour poursuivre l'indexation).
  */
 import type { AvisResana, CouvertureResana, ErreurResana, StatutResana } from '~/utils/resana'
-import { erreurResana, etiquetteResana, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
+import { erreurResana, etiquetteResana, grouperEcartes, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
 
 const props = defineProps<{ collection: string }>()
 
@@ -29,6 +29,25 @@ let minuterie: ReturnType<typeof setTimeout> | undefined
 const enCours = computed(() => travailEnCours(statut.value?.travail))
 const phrase = computed(() => libelleTravail(statut.value?.travail))
 const ecartes = computed(() => statut.value?.travail?.documents_ecartes || [])
+const groupesEcartes = computed(() => grouperEcartes(ecartes.value))
+// Le total réel : la carte n'en reçoit que les premiers (ECARTES_MAX côté serveur).
+const totalEcartes = computed(() => Math.max(statut.value?.travail?.ecartes || 0, ecartes.value.length))
+const { telecharger } = useTelechargement()
+const exportEnCours = ref(false)
+const erreurExport = ref('')
+async function exporterEcartes () {
+  exportEnCours.value = true
+  erreurExport.value = ''
+  try {
+    await telecharger(`/api/sources/resana/ecartes/${encodeURIComponent(props.collection)}?format=csv`, `${props.collection}-documents-ecartes.csv`)
+  }
+  catch {
+    erreurExport.value = 'L\'export n\'a pas pu être téléchargé. Réessayez dans un instant.'
+  }
+  finally {
+    exportEnCours.value = false
+  }
+}
 const qualite = computed(() => phrasesQualite(statut.value?.qualite))
 const aReprendre = computed(() => statut.value?.qualite?.a_reprendre ?? 0)
 const inconnus = computed(() => statut.value?.qualite?.par_etat?.inconnue ?? 0)
@@ -191,17 +210,57 @@ onBeforeUnmount(() => {
     </p>
     <details
       v-if="ecartes.length"
-      class="fr-text--xs fr-mb-2w"
+      class="fr-text--sm fr-mb-2w ecartes"
     >
-      <summary>Documents écartés ({{ ecartes.length }})</summary>
-      <ul>
-        <li
-          v-for="(e, i) in ecartes"
-          :key="i"
+      <summary>Documents écartés ({{ totalEcartes }})</summary>
+      <p class="fr-text--xs fr-mt-1w fr-mb-1w">
+        Un document écarté n'est pas indexé : le chat ne s'en servira pas. Chaque raison dit ce que vous pouvez faire.
+        <span v-if="totalEcartes > ecartes.length">Seuls les {{ ecartes.length }} premiers sont listés ici ; l'export les donne tous.</span>
+      </p>
+      <p class="fr-mb-2w">
+        <button
+          type="button"
+          class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-download-line fr-btn--icon-left"
+          :disabled="exportEnCours"
+          @click="exporterEcartes"
         >
-          {{ e.titre }} — {{ e.raison }}
-        </li>
-      </ul>
+          {{ exportEnCours ? 'Export en cours…' : 'Exporter la liste (CSV)' }}
+        </button>
+        <span
+          v-if="erreurExport"
+          class="fr-error-text"
+        >{{ erreurExport }}</span>
+      </p>
+      <section
+        v-for="g in groupesEcartes"
+        :key="g.code"
+        class="fr-mb-2w"
+      >
+        <h3 class="fr-text--md fr-text--bold fr-mb-0">
+          {{ g.libelle }} ({{ g.documents.length }})
+        </h3>
+        <p class="fr-text--xs fr-mb-1v ecartes__explication">
+          {{ g.explication }} <strong>{{ g.quoiFaire }}</strong>
+        </p>
+        <ul class="fr-text--xs fr-mb-0">
+          <li
+            v-for="(e, i) in g.documents"
+            :key="e.id || i"
+          >
+            <a
+              v-if="e.url"
+              :href="e.url"
+              target="_blank"
+              rel="noopener"
+            >{{ e.titre }}<span class="fr-sr-only"> (ouvrir dans Résana, nouvelle fenêtre)</span></a>
+            <span v-else>{{ e.titre }}</span>
+            <span
+              v-if="e.chemin"
+              class="ecartes__dossier"
+            > — {{ e.chemin }}</span>
+          </li>
+        </ul>
+      </section>
     </details>
     <div
       v-if="erreur"
@@ -320,5 +379,6 @@ onBeforeUnmount(() => {
 .resana-carte { padding: 1.5rem 2rem; border: 1px solid var(--border-default-grey); }
 .resana-carte__tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .resana-discret { color: var(--text-mention-grey); }
+.ecartes__explication, .ecartes__dossier { color: var(--text-mention-grey); }
 @media (max-width: 36em) { .resana-carte { padding: 1rem; } }
 </style>
