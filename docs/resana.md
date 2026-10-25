@@ -372,6 +372,11 @@ Résana sans source ni mise à jour.
 - les documents écartés, groupés par raison, avec « quoi faire », un lien vers chaque document dans
   Résana et « Exporter la liste (CSV) » ;
 - la couverture, l'avancement et l'invitation à mettre à jour ;
+- les gestes, en deux zones titrées, chacune avec une aide visible : **« Tenir l'index à jour »**
+  (« Mettre à jour », « Ré-indexer les documents incomplets (N) », « Relire le bilan auprès du
+  moteur », « Tout revérifier » — l'ancienne « Vérification complète ») et **« Changer ce qui est
+  indexé »** (« Modifier la sélection »). À l'étape 3 de l'assistant (`compact`), juste après
+  l'import, seule la seconde zone s'affiche ;
 - **« Modifier la sélection »**, qui rouvre l'arbre avec les dossiers déjà choisis dépliés.
   L'enregistrer remplace la liste des dossiers (`POST /sync/{c}` avec `dossiers`) : un dossier
   ajouté s'indexe, un dossier retiré sort de l'index. Le journal de la collection garde le

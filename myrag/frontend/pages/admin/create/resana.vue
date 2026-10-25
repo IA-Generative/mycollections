@@ -150,6 +150,7 @@ onBeforeUnmount(() => clearTimeout(minuterie))
       <DepotEtatResana
         v-if="capacites.resana"
         :collection="creee"
+        compact
       />
       <DepotSensibiliteResana
         class="fr-mt-4w"
