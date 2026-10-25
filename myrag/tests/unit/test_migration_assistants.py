@@ -115,7 +115,7 @@ def test_la_purge_emporte_le_miroir(client, en_tant_que, creer_collection, nom, 
 
 
 def test_le_demarrage_joue_les_migrations_dans_l_ordre(client):
-    assert [m.__name__ for m in MIGRATIONS] == ["migrer_vers_questions", "migrer_collections_publiees"]
+    assert [m.__name__ for m in MIGRATIONS] == ["migrer_vers_questions", "migrer_collections_publiees", "proposer_les_sites_resana"]
     bilan = asyncio.run(migrations_au_demarrage())
-    assert set(bilan) == {"migrer_vers_questions", "migrer_collections_publiees"}
+    assert set(bilan) == {"migrer_vers_questions", "migrer_collections_publiees", "proposer_les_sites_resana"}
     assert isinstance(bilan["migrer_collections_publiees"], dict)

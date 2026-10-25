@@ -295,3 +295,31 @@ def test_changer_les_dossiers_met_a_jour_l_index_et_le_journal(client, en_tant_q
     finally:
         con.close()
     assert json.loads(detail)["retires"] == ["Notes / Procédures"]
+
+
+def test_une_collection_resana_d_avant_recoit_sa_source_et_son_site_au_demarrage(client, en_tant_que, faux, espace_libre):
+    """Importée avant #169 : ni source ni site. Le démarrage les pose d'après ses documents, une fois,
+    sans écraser une source saisie ni un site déclaré à la main."""
+    import asyncio
+
+    from app.services import sites
+    from app.services.collection_store import update_collection
+    from app.services.migration_sites_resana import proposer_les_sites_resana
+
+    _arborer(faux)
+    en_tant_que(CREATEUR)
+    assert _creer(client).status_code == 200
+    # On efface ce que l'import vient de poser, comme pour une collection d'avant.
+    asyncio.run(update_collection("resana-e1", {"source_url": ""}))
+    asyncio.run(sites.remplacer("collection", "resana-e1", ["https://saisi.fake-domain.name/*"]))
+
+    bilan = asyncio.run(proposer_les_sites_resana())
+    assert bilan["sources"] >= 1 and bilan["sites"] >= 1
+    assert client.get("/api/collections/resana-e1").json()["source_url"] == "https://resana.fake-domain.name/espace-fictif/ged/"
+    assert client.get("/api/collections/resana-e1/sites").json()["motifs"] == ["https://saisi.fake-domain.name/*", "https://resana.fake-domain.name/espace-fictif/ged/*"]
+
+    # Rejoué : rien ne bouge ; une source saisie à la main reste.
+    asyncio.run(update_collection("resana-e1", {"source_url": "https://choisi.fake-domain.name/"}))
+    bilan = asyncio.run(proposer_les_sites_resana())
+    assert client.get("/api/collections/resana-e1").json()["source_url"] == "https://choisi.fake-domain.name/"
+    assert len(client.get("/api/collections/resana-e1/sites").json()["motifs"]) == 2
