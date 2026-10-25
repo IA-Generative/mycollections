@@ -182,6 +182,7 @@ describe('les documents écartés', () => {
     expect(codeEcart({ raison: 'même contenu que « A »' })).toBe('doublon')
     expect(codeEcart({ raison: 'Résana vous refuse ce document.' })).toBe('hors_droits')
     expect(codeEcart({ raison: 'format non pris en charge' })).toBe('format')
+    expect(codeEcart({ raison: 'Résana a renvoyé ce fichier vide : le téléchargement n\'a rien rapporté.' })).toBe('fichier_vide')
     expect(codeEcart({ raison: '???' })).toBe('autre')
     expect(codeEcart({ code: 'vide', raison: 'peu importe' })).toBe('vide')
   })

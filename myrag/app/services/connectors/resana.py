@@ -48,6 +48,7 @@ MESSAGES = {
     "trop_de_documents": "Ce dossier contient trop de documents (20 000 au plus) : choisissez un sous-dossier.",
     "trop_volumineux": "Un document dépasse la taille admise (100 Mo).",
     "resana_indisponible": "Résana ne répond pas pour le moment. Réessayez dans un instant.",
+    "fichier_vide": "Résana a renvoyé ce fichier vide : le téléchargement n'a rien rapporté.",
     "curseur_perime": "La liste des documents a expiré : relancez l'import.",
     "dossier_requis": "Choisissez un dossier : un espace entier ne s'importe pas.",
     "espace_requis": "L'espace du document est requis.",
@@ -348,6 +349,10 @@ class ClientExportResana:
                 attendu = r.headers.get("content-length")
                 if attendu and attendu.isdigit() and int(attendu) != total:
                     raise ErreurResana(502, "resana_indisponible", reessayable=True)
+                if total == 0:
+                    # Résana saturé répond 200 sans corps (mesuré le 2026-10-25 : deux minutes de
+                    # fichiers vides au milieu d'un import) : un échec à retenter, pas un document.
+                    raise ErreurResana(503, "fichier_vide", reessayable=True)
                 nom = nom_depuis_disposition(r.headers.get("content-disposition"), repli)
                 mime = (r.headers.get("content-type") or "").split(";")[0].strip()
                 return Fichier(contenu=b"".join(morceaux), nom=nom, mime=mime)

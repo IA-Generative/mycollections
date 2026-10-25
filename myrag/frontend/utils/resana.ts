@@ -42,6 +42,11 @@ export const EXPLICATIONS_ECART: Record<string, { libelle: string, explication: 
     explication: 'Ils dépassent la taille que Résana ou l\'indexation admettent.',
     quoiFaire: 'Déposez dans Résana une version plus légère (sans images lourdes, ou découpée).',
   },
+  fichier_vide: {
+    libelle: 'Reçus vides de Résana',
+    explication: 'Résana a renvoyé ces fichiers sans leur contenu, même après plusieurs essais : un raté du téléchargement (Résana surchargé), pas un défaut des documents.',
+    quoiFaire: '« Mettre à jour » les redemandera. Si l\'écart persiste, ouvrez-les dans Résana : s\'ils s\'ouvrent, signalez-le.',
+  },
   format: {
     libelle: 'Format non pris en charge',
     explication: 'Le moteur de recherche ne lit que PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv) ; les autres formats sont écartés.',
@@ -85,6 +90,7 @@ export function codeEcart (e: Pick<EcartResana, 'code' | 'raison'>): string {
     ['introuvable', 'introuvable'],
     ['trop volumineux', 'trop_volumineux'],
     ['dépasse la taille', 'trop_volumineux'],
+    ['renvoyé ce fichier vide', 'fichier_vide'],
     ['format non pris en charge', 'format'],
     ['conversion en pdf', 'conversion'],
     ['texte illisible', 'illisible'],

@@ -11,6 +11,7 @@ def test_un_code_connu_est_garde_sinon_il_vient_du_texte():
     assert m.coder("conversion en PDF impossible (x)") == "conversion"
     assert m.coder("texte illisible") == "illisible"
     assert m.coder("document vide") == "vide"
+    assert m.coder("Résana a renvoyé ce fichier vide : le téléchargement n'a rien rapporté.") == "fichier_vide"
     assert m.coder("trop volumineux pour l'indexation") == "trop_volumineux"
     assert m.coder("Un document dépasse la taille admise (100 Mo).") == "trop_volumineux"
     assert m.coder("") == "autre" and m.coder(None, "inconnu") == "autre"

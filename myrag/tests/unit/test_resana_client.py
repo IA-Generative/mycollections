@@ -117,6 +117,14 @@ async def test_un_flux_tronque_est_jete():
     assert e.value.code == "resana_indisponible"
 
 
+async def test_un_fichier_recu_vide_est_un_echec_a_retenter():
+    """Résana saturé répond 200 sans corps : ce n'est pas un document vide."""
+    doc = DocFaux(id="i1", titre="Note", nom_fichier="note.pdf", contenu=b"%PDF-1.7", vides=1)
+    with pytest.raises(ErreurResana) as e:
+        await _client(FauxResana(documents=[doc])).fichier("i1", "e-1")
+    assert (e.value.code, e.value.reessayable) == ("fichier_vide", True) and "vide" in e.value.message
+
+
 def test_noms():
     assert nom_depuis_disposition("attachment; filename*=UTF-8''note%20%C3%A9t%C3%A9.pdf", "repli") == "note été.pdf"
     assert nom_depuis_disposition('attachment; filename="../../etc/passwd"', "repli") == ".._.._etc_passwd"
