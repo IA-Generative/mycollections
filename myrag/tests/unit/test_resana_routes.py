@@ -325,6 +325,28 @@ def test_un_document_refuse_est_ecarte_les_autres_passent(client, en_tant_que, f
     _importer(client, privee)
     statut = client.get(f"/api/sources/resana/status/{privee}").json()
     assert sorted(_envoyes(faux)) == ["note-b.md"] and statut["travail"]["ecartes"] == 1
+    # L'écart dit pourquoi (code stable), où (dossier) et s'ouvre dans Résana.
+    (e,) = statut["travail"]["documents_ecartes"]
+    assert e["code"] == "hors_droits" and e["url"] == "https://resana.fake-domain.name/espace-fictif/ged/a" and e["chemin"] == "Dossier fictif"
+
+
+def test_la_liste_des_ecartes_s_exporte_en_entier(client, en_tant_que, faux, privee):
+    faux.documents[0].refus = (403, "hors_droits")
+    faux.documents += [_doc("c", "# B\n\nDeuxième texte fictif.")]  # même contenu que « b »
+    en_tant_que(CREATEUR)
+    _importer(client, privee)
+    r = client.get(f"/api/sources/resana/ecartes/{privee}?format=json")
+    assert r.status_code == 200
+    par_code = {e["code"]: e for e in r.json()["ecartes"]}
+    assert set(par_code) == {"hors_droits", "doublon"} and r.json()["total"] == 2
+    assert par_code["doublon"]["doublon_de_titre"] == "Note fictive b" and par_code["doublon"]["quoi_faire"]
+    assert par_code["hors_droits"]["url"].startswith("https://") and par_code["hors_droits"]["explication"]
+    csv = client.get(f"/api/sources/resana/ecartes/{privee}")
+    assert csv.status_code == 200 and csv.headers["content-type"].startswith("text/csv") and "attachment" in csv.headers["content-disposition"]
+    assert csv.text.startswith("\ufefftitre;dossier;raison") and "Note fictive c" in csv.text
+    # Un tiers sans droit sur la collection ne la voit pas.
+    en_tant_que(personne("tiers"))
+    assert client.get(f"/api/sources/resana/ecartes/{privee}").status_code == 404
 
 
 # --- Synchroniser -------------------------------------------------------------------------------

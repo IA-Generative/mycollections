@@ -11,6 +11,103 @@ export interface ErreurResana {
   reessayable?: boolean
 }
 
+/** Un document écarté : le code dit pourquoi (miroir de `app/services/resana_ecarts.py`). */
+export interface EcartResana {
+  id?: string
+  titre: string
+  raison: string
+  code?: string
+  /** L'adresse de consultation dans Résana (https), pour ouvrir le document. */
+  url?: string
+  /** Le dossier Résana du document. */
+  chemin?: string
+}
+
+/** code d'écart → ce que l'écran en dit : libellé, explication, quoi faire. Même ordre que le serveur. */
+export const EXPLICATIONS_ECART: Record<string, { libelle: string, explication: string, quoiFaire: string }> = {
+  hors_droits: {
+    libelle: 'Résana vous refuse ces documents',
+    explication: 'Mes collections lit Résana avec vos droits : ces documents ne vous sont pas ouverts dans Résana.',
+    quoiFaire: 'Demandez l\'accès à l\'administrateur de l\'espace, puis « Mettre à jour » : ils seront repris.',
+  },
+  introuvable: {
+    libelle: 'Introuvables dans Résana',
+    explication: 'Ils figuraient dans la liste du dossier, mais Résana ne les sert plus (déplacés ou supprimés entre-temps).',
+    quoiFaire: 'Rien à faire : « Mettre à jour » relira la liste.',
+  },
+  trop_volumineux: {
+    libelle: 'Trop volumineux',
+    explication: 'Ils dépassent la taille que Résana ou l\'indexation admettent.',
+    quoiFaire: 'Déposez dans Résana une version plus légère (sans images lourdes, ou découpée).',
+  },
+  format: {
+    libelle: 'Format non pris en charge',
+    explication: 'Le moteur de recherche ne sait pas lire ce type de fichier (archive, message, exécutable…).',
+    quoiFaire: 'Déposez dans Résana une version en PDF, Word, LibreOffice ou texte.',
+  },
+  conversion: {
+    libelle: 'Conversion en PDF impossible',
+    explication: 'Ces fichiers bureautiques n\'ont pas pu être convertis pour l\'indexation (fichier abîmé ou protégé).',
+    quoiFaire: 'Rouvrez-les, enregistrez-les de nouveau (ou exportez-les en PDF) dans Résana.',
+  },
+  illisible: {
+    libelle: 'Texte illisible',
+    explication: 'Ces fichiers n\'ont pas de texte exploitable : encodage inconnu ou contenu binaire.',
+    quoiFaire: 'Déposez dans Résana une version électronique lisible (pas une image du texte).',
+  },
+  vide: {
+    libelle: 'Documents vides',
+    explication: 'Ces fichiers ne contiennent aucun texte.',
+    quoiFaire: 'Vérifiez-les dans Résana ; s\'ils sont vides, retirez-les du dossier.',
+  },
+  doublon: {
+    libelle: 'Même contenu qu\'un autre document',
+    explication: 'Leur contenu est identique à un document déjà indexé : une seule copie suffit aux réponses.',
+    quoiFaire: 'Rien à faire. Si deux documents doivent être cités séparément, gardez une version qui diffère.',
+  },
+  autre: {
+    libelle: 'Écartés',
+    explication: 'Le service Résana a refusé ces documents pour une raison inattendue.',
+    quoiFaire: 'Réessayez avec « Mettre à jour » ; si l\'écart persiste, signalez-le.',
+  },
+}
+
+/** Le code d'un écart : celui qu'il porte, sinon deviné d'après le texte (écarts notés avant le code). */
+export function codeEcart (e: Pick<EcartResana, 'code' | 'raison'>): string {
+  if (e.code && EXPLICATIONS_ECART[e.code]) {
+    return e.code
+  }
+  const t = (e.raison || '').toLowerCase()
+  const regles: [string, string][] = [
+    ['résana vous refuse', 'hors_droits'],
+    ['introuvable', 'introuvable'],
+    ['trop volumineux', 'trop_volumineux'],
+    ['dépasse la taille', 'trop_volumineux'],
+    ['format non pris en charge', 'format'],
+    ['conversion en pdf', 'conversion'],
+    ['texte illisible', 'illisible'],
+    ['document vide', 'vide'],
+    ['même contenu', 'doublon'],
+  ]
+  return regles.find(([debut]) => t.includes(debut))?.[1] || 'autre'
+}
+
+/**
+ * Les écartés regroupés par raison, dans l'ordre des explications, chaque groupe avec son explication
+ * et ses documents (ordre d'arrivée conservé). L'adresse n'est gardée que si elle est en https.
+ */
+export function grouperEcartes (liste: readonly EcartResana[]): { code: string, libelle: string, explication: string, quoiFaire: string, documents: EcartResana[] }[] {
+  const parCode = new Map<string, EcartResana[]>()
+  for (const e of liste) {
+    const code = codeEcart(e)
+    const url = e.url && e.url.startsWith('https://') ? e.url : ''
+    parCode.set(code, [...(parCode.get(code) || []), { ...e, code, url }])
+  }
+  return Object.keys(EXPLICATIONS_ECART)
+    .filter(code => parCode.has(code))
+    .map(code => ({ code, ...EXPLICATIONS_ECART[code]!, documents: parCode.get(code)! }))
+}
+
 export interface TravailResana {
   etat?: 'en_cours' | 'termine' | 'a_jour' | 'partiel' | 'echec' | 'interrompu' | string
   action?: 'import' | 'synchronisation' | 'reindexation' | string
@@ -32,7 +129,7 @@ export interface TravailResana {
   message?: string
   code?: string
   url_connexion?: string
-  documents_ecartes?: { titre: string, raison: string }[]
+  documents_ecartes?: EcartResana[]
 }
 
 /**

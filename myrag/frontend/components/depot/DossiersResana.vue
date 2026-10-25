@@ -137,7 +137,8 @@ onBeforeUnmount(() => {
       <span class="fr-h6 fr-mb-0">Que faut-il indexer ?</span>
       <span class="fr-hint-text">
         Cochez seulement ce qui sert : un dossier coché emporte ses sous-dossiers. Chaque document de plus allonge l'import
-        et peut mêler aux réponses des textes hors sujet. La sélection se modifie ensuite depuis la collection.
+        et peut mêler aux réponses des textes hors sujet. Seuls les documents que vous pouvez ouvrir dans Résana seront
+        indexés. La sélection se modifie ensuite depuis la collection.
       </span>
     </legend>
 

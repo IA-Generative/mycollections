@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -42,7 +42,7 @@ from app.models.db import Publication, SourceFile, utcnow
 from app.routers import ingest as depot
 from app.routers._commun import capacite
 from app.routers._droits import gerer_la_collection, lire_la_collection
-from app.services import conversion, formats, nommage, resana_perimetre
+from app.services import conversion, formats, nommage, resana_ecarts, resana_perimetre
 from app.services.chunker import Sensitivity, Strategy
 from app.services.collectif_store import consigner
 from app.services.collection_store import get_collection, get_source_config, update_collection
@@ -783,7 +783,7 @@ async def _rapatrier(
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
                     return
-                r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message})
+                r.ecartes.append({"id": doc.id, "titre": doc.titre, "raison": e.message, "code": resana_ecarts.code_erreur_resana(e.code), "url": _url(doc), "chemin": doc.chemin})
                 continue
             ancien = connus.get(doc.id) or {}
             if ancien.get("sha256") == f.sha256 and ancien.get("file_id") and not erreur_passagere(ancien.get("erreur")) and doc.id not in reprendre:
@@ -803,6 +803,51 @@ async def _rapatrier(
     rang = {d.id: i for i, d in enumerate(docs)}
     r.recus.sort(key=lambda x: rang[x.doc.id])
     return r
+
+
+def _ecart_affiche(ident: str, e: dict) -> dict:
+    """Ce que l'écran et l'export voient d'un écart : titre, raison, code, adresse Résana, dossier."""
+    return {
+        "id": ident,
+        "titre": e.get("titre", ""),
+        "raison": e.get("raison", ""),
+        "code": resana_ecarts.coder(e.get("raison"), e.get("code")),
+        "url": e.get("url") or "",
+        "chemin": e.get("chemin") or "",
+        "doublon_de": e.get("doublon_de"),
+    }
+
+
+def _ecartes_complets(cfg: dict) -> list[dict]:
+    """Tous les écartés connus, sans plafond : ceux mémorisés (format, doublon, conversion…) puis ceux
+    de la dernière passe qui ne le sont pas (refus de Résana : retentés à chaque passe). Le titre de
+    l'original d'un doublon est joint quand on l'a."""
+    documents = cfg.get("documents") or {}
+    memorises = {k: _ecart_affiche(k, v) for k, v in (cfg.get("ecartes") or {}).items()}
+    rendu = list(memorises.values())
+    for e in (cfg.get("travail") or {}).get("documents_ecartes") or []:
+        if e.get("id") and e["id"] in memorises:
+            continue
+        rendu.append(_ecart_affiche(e.get("id", ""), e))
+    for e in rendu:
+        original = documents.get(e.get("doublon_de") or "") or (cfg.get("ecartes") or {}).get(e.get("doublon_de") or "")
+        e["doublon_de_titre"] = (original or {}).get("titre", "")
+    return sorted(rendu, key=lambda e: (e["code"], e["chemin"], e["titre"]))
+
+
+@router.get("/ecartes/{collection}", dependencies=[Depends(lire_la_collection)])
+async def ecartes(collection: str, format: str = Query("csv", pattern="^(json|csv)$")):
+    """La liste complète des documents écartés, avec la raison expliquée : pour un tableur (CSV,
+    UTF-8 avec BOM) ou en JSON. La carte n'en montre que les `ECARTES_MAX` premiers."""
+    col = await get_collection(collection)
+    if not col or col.get("source_type") != SOURCE:
+        raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
+    liste = _ecartes_complets(await get_source_config(collection))
+    nom = f"{collection}-documents-ecartes.{format}"
+    entete = {"Content-Disposition": f'attachment; filename="{nom}"'}
+    if format == "json":
+        return JSONResponse({"collection": collection, "total": len(liste), "ecartes": [{**e, **resana_ecarts.expliquer(e["code"])} for e in liste]}, headers=entete)
+    return Response(resana_ecarts.vers_csv(liste), media_type="text/csv; charset=utf-8", headers=entete)
 
 
 def _irrecevable(nom: str, contenu: bytes) -> str | None:
@@ -942,7 +987,7 @@ async def _comparer_et_appliquer(
             continue  # l'original change ou disparaît : on relit le doublon
         if conversion.active() and _convertible_desormais(ec):
             continue  # écarté faute de savoir le lire : le service de conversion est là
-        toujours_ecartes[d.id] = {**ec, "titre": d.titre}
+        toujours_ecartes[d.id] = {**ec, "titre": d.titre, "url": _url(d) or ec.get("url", ""), "chemin": d.chemin or ec.get("chemin", "")}
     a_relire_ = [d for d in docs if d.id not in stables_ids and d.id not in toujours_ecartes]
     stables = [d for d in docs if d.id in stables_ids]
     await _suivre(collection, phase="telechargement", total=len(a_relire_), faits=0, inchanges_annonces=len(stables))
@@ -968,7 +1013,7 @@ async def _comparer_et_appliquer(
     # Empreinte → (titre, identifiant) des documents gardés : un contenu identique n'est indexé
     # qu'une fois ; le premier gardé porte le contenu, les autres sont écartés (sans rien bloquer).
     condensats = {v["sha256"]: (v.get("titre", ""), k) for k, v in gardes.items() if v.get("sha256")}
-    ecartes = list(r.ecartes) + [{"id": k, "titre": v.get("titre", ""), "raison": v.get("raison", "")} for k, v in toujours_ecartes.items()]
+    ecartes = list(r.ecartes) + [_ecart_affiche(k, v) for k, v in toujours_ecartes.items()]
     nouveaux_ecartes: dict[str, dict] = dict(toujours_ecartes)
     # Les documents déjà indexés passent d'abord : face à un nouveau doublon, l'existant garde sa place.
     rang = {d.id: i for i, d in enumerate(docs)}
@@ -1004,17 +1049,21 @@ async def _comparer_et_appliquer(
             titre_original, doublon_de = condensats[recu.sha256]
             raison = f"même contenu que « {titre_original} »"
         if raison:
-            ecartes.append({"id": doc.id, "titre": doc.titre, "raison": raison})
             nouveaux_ecartes[doc.id] = {
                 "sha256": recu.sha256,
                 "version_fichier": doc.version_fichier,
                 "modifie_le": doc.modifie_le,
                 "titre": doc.titre,
                 "raison": raison,
+                "code": resana_ecarts.coder(raison),
                 "doublon_de": doublon_de,
                 # L'extension dit, après coup, quels formats manquent (« 12 tableurs… »).
                 "extension": formats.extension(nom_origine),
+                # De quoi ouvrir le document dans Résana depuis la liste des écartés, et l'exporter.
+                "url": _url(doc),
+                "chemin": doc.chemin,
             }
+            ecartes.append(_ecart_affiche(doc.id, nouveaux_ecartes[doc.id]))
             if ancien and ancien.get("file_id"):
                 a_retirer.append(ancien["file_id"])  # son ancienne version ne doit pas rester seule
             continue
@@ -1117,7 +1166,7 @@ async def _comparer_et_appliquer(
         "faits": len(docs),
         **bilan,
         **mesure,
-        "documents_ecartes": [{"titre": e["titre"], "raison": e["raison"]} for e in ecartes[:ECARTES_MAX]],
+        "documents_ecartes": [_ecart_affiche(e.get("id", ""), e) for e in ecartes[:ECARTES_MAX]],
     }
     presents = {d.id for d in docs}
     champs: dict = {"documents": gardes, "ecartes": {k: v for k, v in nouveaux_ecartes.items() if k in presents or partiel}, "travail": travail}

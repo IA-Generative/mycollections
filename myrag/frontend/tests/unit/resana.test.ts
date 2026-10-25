@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, codeEcart, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, filtrerEspaces, grouperEcartes, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -174,5 +174,27 @@ describe('ce que vaut l\'index (#144)', () => {
 
   it('nomme la ré-indexation', () => {
     expect(libelleTravail({ etat: 'termine', action: 'reindexation', ajoutes: 0, modifies: 2, retires: 0 })).toBe('Ré-indexation terminée : 0 ajouté, 2 modifiés, 0 retiré.')
+  })
+})
+
+describe('les documents écartés', () => {
+  it('retrouve le code d\'un écart noté avant le code, d\'après le texte', () => {
+    expect(codeEcart({ raison: 'même contenu que « A »' })).toBe('doublon')
+    expect(codeEcart({ raison: 'Résana vous refuse ce document.' })).toBe('hors_droits')
+    expect(codeEcart({ raison: 'format non pris en charge' })).toBe('format')
+    expect(codeEcart({ raison: '???' })).toBe('autre')
+    expect(codeEcart({ code: 'vide', raison: 'peu importe' })).toBe('vide')
+  })
+
+  it('regroupe par raison, dans l\'ordre des explications, et ne garde que les adresses https', () => {
+    const groupes = grouperEcartes([
+      { titre: 'C', raison: 'même contenu que « A »', code: 'doublon', url: 'https://resana.fake-domain.name/e/ged/c' },
+      { titre: 'X', raison: 'Résana vous refuse ce document.', code: 'hors_droits', url: 'http://pas-sur.fake-domain.name/x' },
+      { titre: 'D', raison: 'même contenu que « B »' },
+    ])
+    expect(groupes.map(g => g.code)).toEqual(['hors_droits', 'doublon'])
+    expect(groupes[1]!.documents.map(d => d.titre)).toEqual(['C', 'D'])
+    expect(groupes[0]!.documents[0]!.url).toBe('')
+    expect(groupes[0]!.quoiFaire).toContain('Mettre à jour')
   })
 })
