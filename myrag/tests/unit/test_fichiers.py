@@ -368,3 +368,30 @@ def test_le_client_presente_le_nom_public_au_service_interne_et_suit_l_adresse_p
     docs = asyncio.run(c.documents("beta", "d2"))
     f = asyncio.run(c.fichier(docs[0], "beta"))
     assert f.contenu.startswith(b"# Avis") and any(u.startswith(f"https://{HOTE}/media/") for u in faux.requetes)
+
+
+def test_un_document_lu_apres_le_delai_de_suivi_n_est_ni_retire_ni_renvoye(client, en_tant_que, drive, monkeypatch):
+    """Mesuré en bêta le 2026-10-25 : la file de l'indexeur était si longue que les documents ont été
+    lus après les 30 minutes de suivi. La mise à jour suivante le demande à l'indexeur au lieu de les
+    retirer puis de les renvoyer au bout de la file."""
+    from app.routers import ingest
+    from app.services.openrag_client import EnvoiDocument, EtatTache, FichierOpenRAG
+
+    monkeypatch.setattr(ingest, "SUIVI_DOCUMENT_MAX_S", -1)  # « pas fini de lire » aussitôt
+    # Une tâche à suivre, qui reste en file.
+    drive.openrag.upload_document.side_effect = lambda partition, nom, contenu, mime, metadata=None, file_id=None: EnvoiDocument(file_id=file_id or nom, task_id="t")
+    drive.openrag.task_state = AsyncMock(return_value=EtatTache(task_state="QUEUED"))
+    en_tant_que(IMPORTEUR)
+    assert _creer(client).status_code == 200
+    cfg = _cfg()
+    assert cfg["travail"]["en_erreur"] == 4 and all("pas fini de lire" in d["erreur"] for d in cfg["documents"].values())
+    # L'indexeur a fini depuis : sa partition les porte, avec leur qualité.
+    lus = [FichierOpenRAG(file_id=d["file_id"], degraded_stages=[]) for d in cfg["documents"].values()]
+    drive.openrag.list_files = AsyncMock(return_value=lus)
+    drive.envois.reset_mock()
+    drive.openrag.delete_file.reset_mock()
+    assert client.post(f"/api/sources/fichiers/sync/{COLLECTION}", headers=ENTETE).status_code == 200
+    t = _cfg()["travail"]
+    assert drive.envois.await_count == 0 and drive.openrag.delete_file.await_count == 0
+    assert t["etat"] == "a_jour" and t["en_erreur"] == 0 and t["inchanges"] == 4
+    assert all(d.get("qualite", {}).get("etat") == "complet" and not d.get("erreur") for d in _cfg()["documents"].values())

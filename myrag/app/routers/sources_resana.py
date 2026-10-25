@@ -1071,6 +1071,12 @@ async def _comparer_et_appliquer(
     _, sensibilite = _strategie(col)
     nom_espace = str(_espace_de(cfg).get("nom") or "")
 
+    # Un document laissé « pas fini de lire » à la passe précédente a souvent été indexé depuis : la
+    # file de l'indexeur était longue (mesuré le 2026-10-25 : plus de mille tâches en attente). On
+    # le lui demande avant tout : lu entre-temps, il n'est ni retiré ni renvoyé — le renvoyer le
+    # remettrait au bout de la file.
+    await _rattraper_les_lectures_tardives(collection, connus)
+
     # Les documents écartés à une passe précédente (doublon, format) : notés avec leur version, ils
     # ne sont pas retéléchargés tant qu'elle ne change pas — sauf le doublon dont l'original ne
     # sera plus là pour porter le contenu.
@@ -1285,6 +1291,23 @@ async def _comparer_et_appliquer(
         champs["last_sync_at"] = utcnow().isoformat()
     await _ecrire_config(collection, **champs)
     return bilan
+
+
+async def _rattraper_les_lectures_tardives(collection: str, connus: dict[str, dict]) -> int:
+    """Pose la qualité que l'indexeur garde sur les documents notés en erreur passagère, s'il les a
+    lus depuis (leur erreur s'efface). Rend le nombre de documents rattrapés ; un indexeur
+    injoignable n'empêche rien : ils seront renvoyés comme avant."""
+    en_attente = {k: v for k, v in connus.items() if v.get("file_id") and erreur_passagere(v.get("erreur"))}
+    if not en_attente:
+        return 0
+    try:
+        lues = await depot._indexeur().qualites(collection)
+    except Exception:  # noqa: BLE001 — sans réponse, on renvoie comme avant
+        return 0
+    n = appliquer_qualites(en_attente, lues)
+    if n:
+        logger.info("%s %s : %d document(s) lu(s) par l'indexeur après le délai de suivi", profil().source, collection, n)
+    return n
 
 
 async def _filtrer(collection: str, client: ClientExportResana, espace: str, docs: list[DocumentResana]) -> list[DocumentResana]:
