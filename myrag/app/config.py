@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     #: Service de conversion des formats bureautiques en PDF (Gotenberg, route LibreOffice : #146) ;
     #: vide ⇒ ces formats restent écartés.
     conversion_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CONVERSION_URL", "conversion_url"))
+    #: L'indexeur lit lui-même les tableurs (.xlsx, .xlsm, .xls, .ods : lecteur `spreadsheet`,
+    #: IA-Generative/openrag#15) : ils partent tels quels au lieu d'être convertis en PDF, où
+    #: LibreOffice coupe le texte des cellules à la largeur de la colonne. À n'allumer qu'une fois ce
+    #: lecteur en service, sinon l'indexeur les refuse.
+    indexeur_lit_tableurs: bool = Field(default=False, validation_alias=AliasChoices("MYCOLLECTIONS_INDEXEUR_LIT_TABLEURS", "indexeur_lit_tableurs"))
     #: Délai accordé à une conversion (un gros tableur peut demander une minute).
     conversion_delai_s: float = Field(default=120.0, validation_alias=AliasChoices("MYCOLLECTIONS_CONVERSION_DELAI_S", "conversion_delai_s"))
 

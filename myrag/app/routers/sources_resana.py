@@ -942,12 +942,17 @@ def _irrecevable(nom: str, contenu: bytes) -> str | None:
     return None if texte.strip() else "document vide"
 
 
-def _convertible_desormais(ecart: dict) -> bool:
-    """Un document écarté pour son format, que le service de conversion saurait lire. Sans extension
-    notée (écarts d'avant #146), tout écart de format est retenté une fois."""
+def _lisible_desormais(ecart: dict) -> bool:
+    """Un document écarté pour son format, que l'indexeur lit maintenant (un tableur, quand il les
+    lit lui-même) ou que le service de conversion saurait convertir. Sans extension notée (écarts
+    d'avant #146), tout écart de format est retenté une fois, si l'une des deux voies existe."""
     if not str(ecart.get("raison", "")).startswith("format non pris en charge"):
         return False
     ext = ecart.get("extension")
+    if ext and ext in formats.formats_document():
+        return True
+    if not conversion.active():
+        return False
     return conversion.convertible(f"x{ext}") if ext else True
 
 
@@ -1063,8 +1068,8 @@ async def _comparer_et_appliquer(
             continue  # l'original change ou disparaît : on relit le doublon
         if ec.get("sha256") == SHA256_VIDE:
             continue  # reçu vide : un téléchargement raté (Résana saturé), pas un document
-        if conversion.active() and _convertible_desormais(ec):
-            continue  # écarté faute de savoir le lire : le service de conversion est là
+        if _lisible_desormais(ec):
+            continue  # écarté faute de savoir le lire : l'indexeur ou le service de conversion le lit
         toujours_ecartes[d.id] = {**ec, "titre": d.titre, "url": _url(d) or ec.get("url", ""), "chemin": d.chemin or ec.get("chemin", "")}
     a_relire_ = [d for d in docs if d.id not in stables_ids and d.id not in toujours_ecartes]
     stables = [d for d in docs if d.id in stables_ids]

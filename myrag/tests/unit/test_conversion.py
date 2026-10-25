@@ -85,7 +85,7 @@ def test_une_conversion_impossible_ecarte_le_document_avec_la_raison(client, en_
     _importer(client, privee)
     raisons = {e["titre"]: e["raison"] for e in client.get(f"/api/sources/resana/status/{privee}").json()["travail"]["documents_ecartes"]}
     assert raisons["Tableau fictif"] == "conversion en PDF impossible (le service a répondu 503)"
-    assert sources_resana._convertible_desormais({"raison": "format non pris en charge", "extension": ".exe"}) is False
+    assert sources_resana._lisible_desormais({"raison": "format non pris en charge", "extension": ".exe"}) is False
 
 
 def test_un_depot_bureautique_part_converti(client, en_tant_que, creer_collection, nom, monkeypatch):

@@ -78,6 +78,15 @@ convertit en PDF avant l'envoi (`app/services/conversion.py`) :
 
 Sans service, rien ne change : ces formats restent écartés.
 
+**Limite mesurée pour les tableurs** (2026-10-25) : LibreOffice coupe le texte d'une cellule à la
+largeur de sa colonne quand la cellule voisine est remplie (« Essai conversion » devient « Essai
+conv » dans le PDF). Pour eux, la bonne voie est un lecteur de l'indexeur : le lecteur `spreadsheet`
+d'OpenRAG (IA-Generative/openrag#15 : une feuille par section, en-tête répété dans chaque passage,
+borne de 50 000 cellules signalée). Une fois ce lecteur en service, `MYCOLLECTIONS_INDEXEUR_LIT_TABLEURS=true`
+fait partir `.xlsx`, `.xlsm`, `.xls` et `.ods` tels quels (`formats.formats_document()`), sans
+conversion. Les tableurs écartés auparavant pour leur format sont retentés à la mise à jour suivante,
+même sans service de conversion. Les `.odt`, `.odp`, `.ppt` et `.rtf` restent convertis.
+
 ## Ce que Mes collections garde de son côté
 
 Pour que le moteur soit remplaçable, la référence de ce qui est indexé est chez Mes collections, pas
