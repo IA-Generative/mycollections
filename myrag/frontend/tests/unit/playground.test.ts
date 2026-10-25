@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { etapesDeFrappe, proxiedSourceUrl } from '../../utils/playground'
+import { etapesDeFrappe, proxiedSourceUrl, sansMention } from '../../utils/playground'
 
 describe('proxiedSourceUrl', () => {
   it('ramène une adresse OpenRAG sur le proxy', () => {
@@ -30,5 +30,17 @@ describe('etapesDeFrappe', () => {
 
   it('ne frappe rien pour un texte vide', () => {
     expect(etapesDeFrappe(0)).toEqual([])
+  })
+})
+
+describe('sansMention', () => {
+  it('retire exactement la mention mise en tête par le serveur', () => {
+    expect(sansMention('⚠ en cours de vérification\n\nLa réponse.', 'en cours de vérification')).toBe('La réponse.')
+  })
+
+  it('ne touche à rien sans mention, ou si elle n\'est pas en tête', () => {
+    expect(sansMention('La réponse.', null)).toBe('La réponse.')
+    expect(sansMention('La réponse. ⚠ en cours de vérification', 'en cours de vérification')).toBe('La réponse. ⚠ en cours de vérification')
+    expect(sansMention('', 'x')).toBe('')
   })
 })

@@ -200,3 +200,40 @@ export function chargeAuJeu (question: string): { question: string, relecture: '
   const q = (question || '').trim()
   return q.length >= 3 ? { question: q, relecture: 'brut' } : null
 }
+
+const DIACRITIQUES = /[\u0300-\u036F]/g
+const NON_MOT = /[^\p{L}\p{N}_]+/gu
+const ESPACES = /\s+/g
+
+/** Une question comparable (même règle que `questions_store.plier` côté serveur). */
+export function plierQuestion (texte: string): string {
+  return (texte || '').normalize('NFD').replace(DIACRITIQUES, '').toLowerCase().replace(NON_MOT, ' ').trim().replace(ESPACES, ' ')
+}
+
+/** La fiche du jeu qui porte cette question (accents, casse et ponctuation ignorés), ou null. */
+export function trouverQuestion<T extends { question: string }> (liste: readonly T[], texte: string): T | null {
+  const voulu = plierQuestion(texte)
+  return liste.find(q => plierQuestion(q.question) === voulu) || null
+}
+
+export type Validation = 'oui' | 'non' | null
+
+/**
+ * Le bilan de l'étape 4 : combien de questions posées, combien de réponses jugées bonnes ou
+ * insuffisantes par la personne, combien sans avis — en une phrase. « Étape suivante » ne dépend
+ * pas du bilan : il informe, il ne bloque pas.
+ */
+export function bilanVerification (essais: readonly { verdict: VerdictTechnique | null, validation: Validation }[]): { posees: number, repondent: number, oui: number, non: number, sansAvis: number, phrase: string } {
+  const posees = essais.filter(e => e.verdict)
+  const repondent = posees.filter(e => e.verdict?.cle === 'repond').length
+  const oui = posees.filter(e => e.validation === 'oui').length
+  const non = posees.filter(e => e.validation === 'non').length
+  const sansAvis = posees.length - oui - non
+  const n = posees.length
+  if (!n) {
+    return { posees: 0, repondent: 0, oui: 0, non: 0, sansAvis: 0, phrase: 'Vous n\'avez posé aucune question. Vous pourrez le faire à tout moment depuis la fiche de la collection.' }
+  }
+  const s = (k: number) => (k > 1 ? 's' : '')
+  const parts = [`${oui} réponse${s(oui)} jugée${s(oui)} bonne${s(oui)}`, `${non} insuffisante${s(non)}`, `${sansAvis} sans avis`]
+  return { posees: n, repondent, oui, non, sansAvis, phrase: `${n} question${s(n)} posée${s(n)} : ${parts.join(', ')}. Tout est dans le jeu de questions de la collection.` }
+}

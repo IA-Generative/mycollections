@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REGLES_PAR_DEFAUT } from '../../utils/collectionName'
-import { cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, lienEtape, ligneBientot, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, verdictTechnique } from '../../utils/wizard'
+import { bilanVerification, cartesDeSource, chargeAuJeu, completerQuestions, ETAPES_ASSISTANT, etapesEnPhrase, etapeSuivante, identifiantPropose, lienEtape, ligneBientot, plierQuestion, questionsSuggerees, REGLAGES_AVANCES_DEFAUT, reglagesAvancesDefaut, replierReglagesAvances, SOURCES, trouverQuestion, verdictTechnique } from '../../utils/wizard'
 
 describe('les étapes de l\'assistant', () => {
   it('les cinq libellés, dans l\'ordre', () => {
@@ -145,5 +145,39 @@ describe('lienEtape', () => {
     expect(lienEtape(3, 'resana-206', 'resana')).toBe('/admin/create/resana?collection=resana-206')
     expect(lienEtape(4, 'resana-206', 'resana')).toBe('/admin/create/step-4?collection=resana-206&source=resana')
     expect(lienEtape(5, 'resana-206', 'resana')).toBe('/admin/create/step-5?collection=resana-206&source=resana')
+  })
+})
+
+describe('étape 4 : bilan et retrouvailles', () => {
+  const repond = { cle: 'repond' as const, libelle: 'La collection répond' }
+  const non = { cle: 'ne_repond_pas' as const, libelle: 'La collection ne répond pas' }
+
+  it('sans question posée, le bilan invite sans bloquer', () => {
+    const b = bilanVerification([])
+    expect(b.posees).toBe(0)
+    expect(b.phrase).toContain('aucune question')
+  })
+
+  it('compte les avis et les sans-avis', () => {
+    const b = bilanVerification([
+      { verdict: repond, validation: 'oui' },
+      { verdict: repond, validation: 'non' },
+      { verdict: non, validation: null },
+      { verdict: null, validation: null },
+    ])
+    expect([b.posees, b.repondent, b.oui, b.non, b.sansAvis]).toEqual([3, 2, 1, 1, 1])
+    expect(b.phrase).toBe('3 questions posées : 1 réponse jugée bonne, 1 insuffisante, 1 sans avis. Tout est dans le jeu de questions de la collection.')
+  })
+
+  it('accorde au pluriel quand toutes sont validées', () => {
+    expect(bilanVerification([{ verdict: repond, validation: 'oui' }, { verdict: repond, validation: 'oui' }]).phrase)
+      .toContain('2 réponses jugées bonnes, 0 insuffisante, 0 sans avis')
+  })
+
+  it('retrouve une question sans tenir compte des accents, de la casse ni de la ponctuation', () => {
+    expect(plierQuestion('  Quel est le DÉLAI, exactement ?! ')).toBe('quel est le delai exactement')
+    const liste = [{ id: 'a', question: 'Quel est le délai ?' }, { id: 'b', question: 'Autre' }]
+    expect(trouverQuestion(liste, 'quel est le delai')?.id).toBe('a')
+    expect(trouverQuestion(liste, 'inconnue')).toBeNull()
   })
 })

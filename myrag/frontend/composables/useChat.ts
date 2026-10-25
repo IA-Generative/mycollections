@@ -18,6 +18,7 @@
  */
 import type { AvisResana } from '~/utils/resana'
 import { ref } from 'vue'
+import { sansMention } from '~/utils/playground'
 import { avisDeReponse } from '~/utils/resana'
 
 export interface ChatSource {
@@ -42,9 +43,16 @@ export interface ChatMessage {
   turnId?: string
   /** Invitations glissées dans la réponse (index Résana ancien ou incomplet). */
   avis?: AvisResana[]
+  /** La mention que le serveur met en tête d'une réponse (« en cours de vérification »), à part. */
+  mention?: string | null
 }
 
-export function useChat(collection: string) {
+export interface OptionsChat {
+  /** Retirer la mention du texte de la réponse : l'écran l'explique ailleurs (étape 4 de l'assistant). */
+  sansMention?: boolean
+}
+
+export function useChat(collection: string, options: OptionsChat = {}) {
   const { post } = useApi()
 
   const messages = ref<ChatMessage[]>([])
@@ -63,7 +71,8 @@ export function useChat(collection: string) {
       const data = await post(`/api/playground/${collection}/chat`, { question: q })
       const assistant: ChatMessage = {
         role: 'assistant',
-        content: data.response || 'Pas de réponse générée.',
+        content: (options.sansMention ? sansMention(data.response || '', data.mention) : data.response) || 'Pas de réponse générée.',
+        mention: data.mention || null,
         sources: data.sources || [],
         sourceNames: data.source_names || [],
         model: data.model,
