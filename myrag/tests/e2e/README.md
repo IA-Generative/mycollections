@@ -43,6 +43,7 @@ gestionnaire de secrets de votre plateforme.
 | `E2E_ASSISTANT_URL` | adresse publique du chat MirAI (Open WebUI) | la preuve dans l'assistant est ignorée |
 | `E2E_CAPTURES` | dossier de sortie des captures | pas de captures (sauf à l'échec, dans le dossier temporaire) |
 | `E2E_HEADED` | `1` pour voir le navigateur | sans écran |
+| `E2E_FICHIERS_EICAR` | `1` : dépose aussi le fichier de test antivirus EICAR (parcours 16), avec l'accord de l'exploitant de l'instance | pas de test antivirus |
 
 ## Ce que chaque parcours prouve
 
@@ -59,6 +60,7 @@ gestionnaire de secrets de votre plateforme.
 | `test_09_captures` | une image de chaque écran, à 1280 px et 390 px, avec son texte visible (`E2E_CAPTURES` seulement) |
 | `test_11_recherche_portail` | la recherche de Mon portail (`/api/v1/search`) : périmètres lisibles seulement, résultats limités aux collections lisibles, périmètre inconnu ignoré, requête invalide en 400, 401 sans jeton |
 | `test_12_navigation` | le menu est celui que les capacités du serveur annoncent (drapeaux faux : celui d'avant le chantier des assistants) ; une page sous drapeau faux est une 404 en français ; drapeau vrai, les rubriques d'un assistant |
+| `test_16_sources_fichiers` | la source Fichiers (Drive) : un corpus déposé dans le Drive du testeur est vu, compté, importé ; le lisible est indexé, le vide, l'archive et la copie sont écartés avec leur raison ; la collection naît privée ; une sensibilité sous le plafond est refusée ; une question retrouve le témoin du corpus ; une mise à jour suit un ajout et une suppression dans Drive ; un fichier tout juste déposé est lu ou attend, sans erreur. Corpus et collection effacés à la fin |
 
 Le témoin est une phrase qu'aucun modèle ne peut connaître (`QUETZAL-9031`, dans
 `fixtures/note-de-controle.md`) : la retrouver dans une réponse prouve que la chaîne
