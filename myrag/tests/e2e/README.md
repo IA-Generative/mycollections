@@ -61,6 +61,7 @@ gestionnaire de secrets de votre plateforme.
 | `test_11_recherche_portail` | la recherche de Mon portail (`/api/v1/search`) : périmètres lisibles seulement, résultats limités aux collections lisibles, périmètre inconnu ignoré, requête invalide en 400, 401 sans jeton |
 | `test_12_navigation` | le menu est celui que les capacités du serveur annoncent (drapeaux faux : celui d'avant le chantier des assistants) ; une page sous drapeau faux est une 404 en français ; drapeau vrai, les rubriques d'un assistant |
 | `test_16_sources_fichiers` | la source Fichiers (Drive) : un corpus déposé dans le Drive du testeur est vu, compté, importé ; le lisible est indexé, le vide, l'archive et la copie sont écartés avec leur raison ; la collection naît privée ; une sensibilité sous le plafond est refusée ; une question retrouve le témoin du corpus ; une mise à jour suit un ajout et une suppression dans Drive ; un fichier tout juste déposé est lu ou attend, sans erreur. Corpus et collection effacés à la fin |
+| `test_17_formats` | un fichier par format (`fixtures/formats/`, chacun avec son témoin `FMT-<EXT>-<n>`) déposé dans Drive et importé : chaque format lisible est dans l'index **avec son texte lu** (conversion LibreOffice, tableurs, OCR d'un scan, images, courriel compris), chaque format illisible est écarté avec sa raison ; un format que Drive refuse est signalé et ignoré |
 
 Le témoin est une phrase qu'aucun modèle ne peut connaître (`QUETZAL-9031`, dans
 `fixtures/note-de-controle.md`) : la retrouver dans une réponse prouve que la chaîne
