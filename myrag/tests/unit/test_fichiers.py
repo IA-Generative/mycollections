@@ -395,3 +395,61 @@ def test_un_document_lu_apres_le_delai_de_suivi_n_est_ni_retire_ni_renvoye(clien
     assert drive.envois.await_count == 0 and drive.openrag.delete_file.await_count == 0
     assert t["etat"] == "a_jour" and t["en_erreur"] == 0 and t["inchanges"] == 4
     assert all(d.get("qualite", {}).get("etat") == "complet" and not d.get("erreur") for d in _cfg()["documents"].values())
+
+
+def test_un_fichier_en_analyse_attend_et_un_fichier_suspect_n_est_pas_indexe(client, en_tant_que, drive):
+    """Les états de Drive relevés dans drive-migrator : `analyzing` (antivirus en cours) se reprend à la
+    mise à jour suivante, `suspicious` sort de la liste (Drive le cache aux membres) et donc de
+    l'index, `file_too_large_to_analyze` se lit."""
+    drive.ajouter(
+        Element("f8", "en-analyse.md", parent="d2", contenu=b"# En analyse\n\nTexte fictif.", etat="analyzing"),
+        Element("f9", "suspect.md", parent="d2", contenu=b"# Suspect\n\nTexte fictif.", etat="suspicious"),
+        Element("f10", "gros.md", parent="d2", contenu=b"# Gros\n\nTexte fictif.", etat="file_too_large_to_analyze"),
+    )
+    en_tant_que(IMPORTEUR)
+    assert _creer(client).status_code == 200
+    cfg = _cfg()
+    assert set(cfg["documents"]) == {"f1", "f2", "f3", "f4", "f10"}
+    codes = {e["id"]: e["code"] for e in cfg["travail"]["documents_ecartes"]}
+    assert codes == {"f8": "en_cours_d_analyse"}
+    # Ni l'un ni l'autre n'est téléchargé.
+    assert not [u for u in drive.telechargements() if "/f8/" in u or "/f9/" in u]
+
+    # L'analyse finie, la mise à jour le prend ; le suspect reste écarté.
+    drive.elements["f8"].etat = "ready"
+    assert client.post(f"/api/sources/fichiers/sync/{COLLECTION}", headers=ENTETE).status_code == 200
+    cfg = _cfg()
+    assert "f8" in cfg["documents"] and "f9" not in cfg["documents"]
+
+    # Un document indexé, revu et de nouveau en analyse, garde sa version ; un document devenu
+    # suspect sort de l'index.
+    sha_f1 = cfg["documents"]["f1"]["sha256"]
+    fichier_f2 = cfg["documents"]["f2"]["file_id"]
+    drive.elements["f1"].contenu, drive.elements["f1"].modifie_le, drive.elements["f1"].etat = b"# Avis A\n\nRevu.", "2026-10-21T10:00:00Z", "analyzing"
+    drive.elements["f2"].etat = "suspicious"
+    drive.openrag.delete_file.reset_mock()
+    assert client.post(f"/api/sources/fichiers/sync/{COLLECTION}", headers=ENTETE).status_code == 200
+    cfg = _cfg()
+    assert cfg["documents"]["f1"]["sha256"] == sha_f1, "la version déjà indexée reste"
+    assert "f2" not in cfg["documents"]
+    retires = [c.args for c in drive.openrag.delete_file.await_args_list]
+    assert any(fichier_f2 in a for a in retires) and not any(cfg["documents"]["f1"]["file_id"] in a for a in retires)
+    # La passe suivante, l'analyse finie, prend la nouvelle version.
+    drive.elements["f1"].etat = "ready"
+    client.post(f"/api/sources/fichiers/sync/{COLLECTION}", headers=ENTETE)
+    assert _cfg()["documents"]["f1"]["sha256"] != sha_f1
+
+
+def test_le_client_relit_l_etat_d_un_fichier_demande_hors_liste():
+    """Un fichier demandé sans être passé par la liste : son état est relu dans Drive avant tout téléchargement."""
+    from app.services.connectors.resana import ErreurResana
+
+    faux = _arbre().ajouter(Element("s1", "suspect.md", parent="d2", contenu=b"x", etat="suspicious"), Element("a1", "analyse.md", parent="d2", contenu=b"x", etat="analyzing"))
+    c = ClientFichiers(fichiers_instances.Instance.model_validate(INSTANCES[1]), JETON, transport=faux.transport())
+    with pytest.raises(ErreurResana) as e:
+        asyncio.run(c.fichier("s1", "beta"))
+    assert (e.value.statut, e.value.code, e.value.reessayable) == (422, "fichier_suspect", False)
+    with pytest.raises(ErreurResana) as e:
+        asyncio.run(c.fichier("a1", "beta"))
+    assert (e.value.code, e.value.reessayable) == ("en_cours_d_analyse", True)
+    assert not faux.telechargements()

@@ -47,6 +47,21 @@ export const EXPLICATIONS_ECART: Record<string, { libelle: string, explication: 
     explication: 'Résana a renvoyé ces fichiers sans leur contenu, même après plusieurs essais : un raté du téléchargement (Résana surchargé), pas un défaut des documents.',
     quoiFaire: '« Mettre à jour » les redemandera. Si l\'écart persiste, ouvrez-les dans Résana : s\'ils s\'ouvrent, signalez-le.',
   },
+  en_cours_d_envoi: {
+    libelle: 'Pas encore reçus par Fichiers',
+    explication: 'L\'envoi de ces documents dans Fichiers n\'était pas terminé au moment de la lecture.',
+    quoiFaire: 'Rien à faire : « Mettre à jour » les reprendra une fois l\'envoi fini.',
+  },
+  en_cours_d_analyse: {
+    libelle: 'En cours d\'analyse antivirus',
+    explication: 'Fichiers analyse chaque document reçu avant de le servir ; l\'analyse de ceux-ci n\'était pas finie.',
+    quoiFaire: 'Rien à faire : « Mettre à jour » les reprendra. S\'ils étaient déjà indexés, leur version précédente reste en place.',
+  },
+  fichier_suspect: {
+    libelle: 'Signalés suspects par l\'antivirus',
+    explication: 'L\'antivirus de Fichiers a signalé ces documents : Fichiers les cache aux autres membres, et Mes collections ne les indexe pas.',
+    quoiFaire: 'Vérifiez-les avec la personne qui les a déposés, puis remplacez-les par une version saine.',
+  },
   format: {
     libelle: 'Format non pris en charge',
     explication: 'Le moteur de recherche lit PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv). Les tableurs et documents LibreOffice ne sont lus qu\'une fois convertis en PDF, quand le service de conversion est en place. Les autres formats sont écartés.',

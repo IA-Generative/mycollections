@@ -92,6 +92,10 @@ SHA256_VIDE = hashlib.sha256(b"").hexdigest()
 
 #: Les erreurs qui arrêtent tout ; les autres (droits, taille d'un document) n'écartent que lui.
 ERREURS_BLOQUANTES = {"session_absente", "jeton_invalide", "appelant_inconnu", "resana_indisponible", "service_injoignable", "reponse_illisible", "disque_plein"}
+#: Les documents que la source ne peut pas servir POUR L'INSTANT (reçu vide, encore en cours d'envoi
+#: ou d'analyse antivirus dans Fichiers) : déjà indexés, ils gardent leur version ; la passe suivante
+#: les redemande. Un fichier jugé suspect, lui, sort de l'index.
+NON_RELUS = {"fichier_vide", "en_cours_d_envoi", "en_cours_d_analyse"}
 #: Ce que l'écran garde des documents écartés (le reste se compte).
 ECARTES_MAX = 50
 
@@ -839,7 +843,7 @@ async def _rapatrier(
                 if e.code in ERREURS_BLOQUANTES:
                     r.erreur = r.erreur or e
                     return
-                if e.code == "fichier_vide":
+                if e.code in NON_RELUS:
                     r.non_relus.append(doc)
                 r.ecartes.append(
                     {
@@ -1120,9 +1124,9 @@ async def _comparer_et_appliquer(
             "version_fichier": doc.version_fichier,
             "modifie_le": doc.modifie_le,
         }
-    # Rendu vide par Résana saturé : un document déjà indexé garde sa version (le 2026-10-25, une
-    # mise à jour complète en a retiré 328 de l'index). Sa version notée reste l'ancienne : la
-    # passe suivante le redemande.
+    # Rendu vide par Résana saturé, ou pas encore servi par Fichiers (`NON_RELUS`) : un document déjà
+    # indexé garde sa version (le 2026-10-25, une mise à jour complète en a retiré 328 de l'index). Sa
+    # version notée reste l'ancienne : la passe suivante le redemande.
     for doc in r.non_relus:
         if doc.id in connus:
             gardes[doc.id] = {**connus[doc.id], "url": _url(doc) or connus[doc.id].get("url", ""), "titre": doc.titre}

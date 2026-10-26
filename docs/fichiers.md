@@ -142,7 +142,14 @@ Particularités de Drive :
   téléchargé ;
 - un fichier annoncé non vide mais reçu vide est redemandé, puis signalé « reçu vide » et repris à
   la mise à jour suivante ;
-- un fichier encore en cours d'envoi dans Drive est écarté pour cette passe.
+- un fichier encore en cours d'envoi (`upload_state` `pending`) ou d'analyse antivirus (`analyzing`)
+  est écarté pour cette passe et repris à la suivante ; déjà indexé, il garde sa version d'avant ;
+- un fichier que l'antivirus a signalé (`suspicious`) sort de la liste, comme Drive le cache aux
+  membres : il n'est jamais indexé, et retiré s'il l'était ;
+- un fichier trop gros pour l'antivirus (`file_too_large_to_analyze`) est servi par Drive : il est lu.
+
+Ces états viennent de drive-migrator, l'outil de migration Résana → Fichiers de La Suite, qui les
+traite pour vérifier ses migrations.
 
 ## Destinations
 

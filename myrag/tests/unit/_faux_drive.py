@@ -28,9 +28,11 @@ class Element:
     taille: int | None = None
     #: Le stockage rend ce contenu à la place (un fichier annoncé non vide, reçu vide…).
     recu: bytes | None = None
+    #: `upload_state` de Drive : pending, analyzing, ready, suspicious, file_too_large_to_analyze.
+    etat: str = "ready"
 
     def vers_json(self, faux: FauxDrive) -> dict:
-        d = {"id": self.id, "title": self.titre, "type": self.type, "updated_at": self.modifie_le, "upload_state": "ready"}
+        d = {"id": self.id, "title": self.titre, "type": self.type, "updated_at": self.modifie_le, "upload_state": self.etat}
         if self.type == "folder":
             enfants = [e for e in faux.elements.values() if e.parent == self.id]
             d.update(numchild=len(enfants), numchild_folder=sum(1 for e in enfants if e.type == "folder"))
