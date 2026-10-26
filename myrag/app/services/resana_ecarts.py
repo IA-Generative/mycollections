@@ -33,6 +33,21 @@ EXPLICATIONS: dict[str, tuple[str, str, str]] = {
         "Résana a renvoyé le fichier sans son contenu, même après plusieurs essais : un raté du téléchargement (Résana surchargé), pas un défaut du document.",
         "« Mettre à jour » le redemandera. Si l'écart persiste, ouvrez-le dans Résana : s'il s'ouvre, signalez-le.",
     ),
+    "en_cours_d_envoi": (
+        "Pas encore reçu par Fichiers",
+        "L'envoi de ce document dans Fichiers n'était pas terminé au moment de la lecture.",
+        "Rien à faire : « Mettre à jour » le reprendra une fois l'envoi fini.",
+    ),
+    "en_cours_d_analyse": (
+        "En cours d'analyse antivirus",
+        "Fichiers analyse chaque document reçu avant de le servir ; l'analyse de celui-ci n'était pas finie.",
+        "Rien à faire : « Mettre à jour » le reprendra. S'il était déjà indexé, sa version précédente reste en place.",
+    ),
+    "fichier_suspect": (
+        "Signalé suspect par l'antivirus",
+        "L'antivirus de Fichiers a signalé ce document : Fichiers le cache aux autres membres, et Mes collections ne l'indexe pas.",
+        "Vérifiez le document avec la personne qui l'a déposé, puis remplacez-le par une version saine.",
+    ),
     "format": (
         "Format non pris en charge",
         "Le moteur de recherche lit PDF, Word (.doc, .docx), PowerPoint (.pptx), courriel (.eml), images (.png, .jpg) et texte (.txt, .md, .csv). Les tableurs et documents LibreOffice ne sont lus qu'une fois convertis en PDF, quand le service de conversion est en place. Les autres formats (archives .zip, messages .msg, exécutables…) sont écartés.",

@@ -13,7 +13,13 @@ Ce que l'on sait de Drive (mesuré sur la bêta le 2026-10-25) :
 - les octets ne sont pas servis par Drive : `/media/<clé>` passe par l'ingress, qui demande à Drive
   une signature (`/api/v1.0/items/media-auth/`) puis lit le stockage objet. Depuis le cluster, on
   rejoue ces deux pas (`stockage_url`) ; sinon on suit l'adresse publique du fichier ;
-- joint par son service interne, Drive veut `Host` (son nom public) et `X-Forwarded-Proto: https`.
+- joint par son service interne, Drive veut `Host` (son nom public) et `X-Forwarded-Proto: https` ;
+- chaque fichier porte un `upload_state` (relevé dans drive-migrator, l'outil de migration de La
+  Suite) : `pending` (envoi pas fini), `analyzing` (antivirus en cours), `ready`, `suspicious`
+  (l'antivirus l'a signalé : Drive le cache aux autres membres) et `file_too_large_to_analyze`
+  (trop gros pour l'antivirus, mais servi). On n'indexe ni un fichier suspect, ni un fichier
+  dont l'analyse n'est pas finie ; ce dernier est repris à la mise à jour suivante. Un fichier
+  suspect sort de la liste, comme Drive le fait pour les membres : déjà indexé, il est retiré.
 
 Le jeton n'est ni écrit ni journalisé ; la page ouverte le renouvelle (`renouveler_jeton`).
 """
@@ -49,6 +55,15 @@ MESSAGES = {
     "fichier_vide": "Fichiers a renvoyé ce fichier vide : le téléchargement n'a rien rapporté.",
     "document_vide": "Ce document est vide dans Fichiers.",
     "en_cours_d_envoi": "Ce document est encore en cours d'envoi dans Fichiers.",
+    "en_cours_d_analyse": "Fichiers analyse encore ce document (antivirus) : il sera repris à la prochaine mise à jour.",
+    "fichier_suspect": "Fichiers a signalé ce document comme suspect (antivirus) : il n'est pas indexé.",
+}
+
+#: `upload_state` de Drive → l'erreur qui empêche de lire le fichier. Absent ou inconnu : on lit.
+ETATS_BLOQUANTS: dict[str, tuple[int, str, bool]] = {
+    "pending": (409, "en_cours_d_envoi", True),
+    "analyzing": (409, "en_cours_d_analyse", True),
+    "suspicious": (422, "fichier_suspect", False),
 }
 
 
@@ -74,6 +89,7 @@ class ClientFichiers:
         self._dossiers: dict[str, Dossier] = {}
         self._medias: dict[str, str] = {}
         self._tailles: dict[str, int] = {}
+        self._etats: dict[str, str] = {}
 
     # --- Le jeton -------------------------------------------------------------------------
 
@@ -195,6 +211,8 @@ class ClientFichiers:
                         self._dossiers[sous.id] = sous
                         file.append(sous)
                         continue
+                    if e.get("upload_state") == "suspicious":
+                        continue  # caché aux membres par Drive : hors de la liste, donc hors de l'index
                     rendu.append(self._document(e, d))
                     if len(rendu) > DOCUMENTS_MAX:
                         raise erreur(413, "trop_de_documents")
@@ -206,6 +224,7 @@ class ClientFichiers:
             self._medias[ident] = str(e["url"])
         taille = e.get("size")
         self._tailles[ident] = int(taille) if isinstance(taille, int) else -1
+        self._etats[ident] = str(e.get("upload_state") or "")
         return DocumentResana(
             id=ident,
             titre=str(e.get("title") or e.get("filename") or ident),
@@ -224,16 +243,16 @@ class ClientFichiers:
     async def fichier(self, document: DocumentResana | str, espace: str = "") -> Fichier:
         ident = document.id if isinstance(document, DocumentResana) else str(document)
         repli = document.nom_fichier if isinstance(document, DocumentResana) else f"document-{ident}"
+        media = self._medias.get(ident)
+        if not media or ident not in self._etats:
+            brut = await self.element(ident)
+            self._etats[ident] = str(brut.get("upload_state") or "")
+            media = str(brut.get("url") or "")
+        _controler_etat(self._etats[ident])
         if self._tailles.get(ident) == 0:
             raise erreur(422, "document_vide")
-        media = self._medias.get(ident)
         if not media:
-            brut = await self.element(ident)
-            if brut.get("upload_state") == "pending":
-                raise erreur(409, "en_cours_d_envoi")
-            media = str(brut.get("url") or "")
-            if not media:
-                raise erreur(404, "introuvable")
+            raise erreur(404, "introuvable")
         chemin = urlparse(media).path
         if self.instance.stockage_url and chemin.startswith("/media/"):
             entetes = await self._signature(chemin)
@@ -287,6 +306,14 @@ class ClientFichiers:
             raise erreur(504, "service_injoignable", reessayable=True) from None
         except httpx.HTTPError:
             raise erreur(502, "service_injoignable", reessayable=True) from None
+
+
+def _controler_etat(etat: str) -> None:
+    """Refuse un fichier que Drive n'a pas fini de recevoir ou d'analyser, ou qu'il juge suspect."""
+    bloquant = ETATS_BLOQUANTS.get(etat)
+    if bloquant:
+        statut, code, reessayable = bloquant
+        raise erreur(statut, code, reessayable=reessayable)
 
 
 async def _rien() -> list:
