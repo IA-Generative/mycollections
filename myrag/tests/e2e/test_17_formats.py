@@ -146,8 +146,8 @@ def textes_indexes(session_testeur, import_formats) -> dict[str, str]:
 
 #: Constats (`xfail(strict=True)`) : ce qui échoue aujourd'hui, et casse le jour où c'est corrigé.
 CONSTATS = {
-    "format.csv": "un .csv part vers l'indexeur sous son nom, qui le refuse : correctif « textes en .txt »",
-    "format.json": "un .json part vers l'indexeur sous son nom, qui le refuse : correctif « textes en .txt »",
+    "format.csv": "un .csv part vers l'indexeur sous son nom, qui le refuse : correctif #186",
+    "format.json": "un .json part vers l'indexeur sous son nom, qui le refuse : correctif #186",
 }
 
 
