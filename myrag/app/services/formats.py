@@ -99,6 +99,21 @@ def nature(nom: str, contenu: bytes) -> Nature | None:
     return Nature.TEXTE
 
 
+#: Les fichiers texte que l'indexeur lit sous leur propre nom. Les autres (.csv, .json, .xml…) partent
+#: sous un nom en `.txt` : l'indexeur choisit son lecteur à l'extension et les refusait (parcours e2e
+#: des formats, 2026-10-26).
+TEXTE_LU_PAR_L_INDEXEUR = (".txt", ".md", ".markdown")
+
+
+def nom_pour_l_indexeur(nom: str) -> str:
+    """Le nom sous lequel un fichier part vers l'indexeur : le sien, sauf un texte qu'il ne lirait pas
+    sous ce nom (`format.csv` → `format.csv.txt`). Un document (PDF, Word…) garde son nom."""
+    ext = extension(nom)
+    if ext in formats_document() or ext in TEXTE_LU_PAR_L_INDEXEUR:
+        return nom
+    return f"{nom}.txt"
+
+
 def type_mime(nom: str) -> str:
     return formats_document().get(extension(nom), "application/octet-stream")
 

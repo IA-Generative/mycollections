@@ -1056,7 +1056,7 @@ async def _envoyer(collection: str, a_envoyer: list[tuple[str, Recu, dict]], sen
             contenu = await asyncio.to_thread(recu.chemin.read_bytes)
             recu.chemin.unlink(missing_ok=True)
             rendu[recu.doc.id] = await depot._indexer_document_background(
-                job["job_id"], collection, nom, contenu, metadata=meta, file_id=identifiant_dans_l_index(recu.doc.id, recu.sha256)
+                job["job_id"], collection, formats.nom_pour_l_indexeur(nom), contenu, metadata=meta, file_id=identifiant_dans_l_index(recu.doc.id, recu.sha256)
             )
             del contenu
             faits["n"] += 1
