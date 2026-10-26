@@ -10,10 +10,26 @@ elle qui pilote (voir « Partager une collection Résana »).
 
 ## Comment Mes collections lit Résana
 
-Résana n'a pas d'API publique. Le service `owuitools-resana` sert quatre routes en lecture sous `/export/v1`
+Le service `owuitools-resana` sert quatre routes en lecture sous `/export/v1`
 (contrat : `docs/export-v1.md` de ce dépôt-là, qui fait foi). Il les sert **avec la session Résana de la
 personne** : il l'ouvre lui-même à partir des identifiants qu'elle a rangés dans son coffre, double facteur
 compris.
+
+Résana a deux portes, et le service passe par les deux avec la même session :
+
+- **les routes du site** (celles qu'appelle la page web) : la liste des espaces, l'arborescence et la
+  liste des documents d'un dossier. Elles donnent les numéros (espace, dossier, document) qui
+  nomment nos collections et ouvrent les liens « consulter » cités comme sources ;
+- **l'API documentaire** d'Interstis, l'éditeur de Résana. Elle n'est pas publique, mais accepte le
+  jeton de la session web, et Interstis a accepté que nous l'utilisions. Les **téléchargements**
+  passent par elle quand le service connaît l'identifiant du document dans l'API (relevé avec la
+  liste) ; sinon, ou si elle ne répond pas, par le site. Le site, saturé, rendait des fichiers vides
+  (voir plus bas) ; l'API, mesurée le 2026-10-26, non. Les octets sont les mêmes (vérifié).
+
+Ce que nous savons de cette API vient de [drive-migrator](https://github.com/suitenumerique/drive-migrator),
+l'outil de migration Résana → Fichiers de La Suite, et d'un test avec une vraie session le
+2026-10-26. Côté service, une veille hebdomadaire signale les changements de drive-migrator
+(`resana_client/amont/` d'owuitools-resana).
 
 Mes collections s'y présente avec deux en-têtes, tous deux obligatoires :
 
@@ -285,6 +301,19 @@ arrive pour les scans. Les autres documents restent en place. Le travail s'appel
 collection) **relit la qualité auprès de l'indexeur**, sans rien renvoyer ni passer par Résana :
 après une ré-indexation faite côté indexeur, ou pour une collection importée avant ce suivi. Un
 scan noté sans texte le reste tant que l'indexeur ne dit pas l'avoir lu par OCR.
+
+### Ce que Résana dit, et ce qu'il ne faut pas en conclure
+
+- **La taille** d'un document n'est connue qu'arrondie : en Mo à deux décimales sur le site
+  (`taille_approx_mo`), au centième de Mio dans l'API. Un fichier de moins de 5 Ko environ est
+  annoncé à 0. Elle ne sert jamais à juger un fichier vide ni un téléchargement complet : c'est le
+  contenu reçu (et son sha256) qui décide.
+- **Les espaces figés** (archivés) manquent à la liste habituelle des espaces. Le service les
+  ajoute, marqués `archive: true`, et ils s'importent comme les autres.
+- **Les dossiers à accès restreint** existent : l'API donne, pour chaque dossier, s'il est ouvert à
+  tous les membres ou réservé à une liste de personnes ou de groupes (`lockStatus`). Une collection
+  qui inclut de tels dossiers contient des documents que tous les membres de l'espace ne voient pas.
+  C'est à garder en tête au moment de la partager à un groupe ; l'écran ne le signale pas encore.
 
 ## Une collection ancrée sur un espace
 
