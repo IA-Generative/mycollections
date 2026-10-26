@@ -286,6 +286,8 @@ def test_un_document_vide_est_ecarte_et_un_fichier_recu_vide_est_redemande(clien
     assert set(cfg["documents"]) == {"f1", "f2", "f3", "f4"}
     raisons = {e["id"]: e["raison"] for e in cfg["travail"]["documents_ecartes"]}
     assert "vide dans Fichiers" in raisons["f6"] and "renvoyé ce fichier vide" in raisons["f7"]
+    codes = {e["id"]: e["code"] for e in cfg["travail"]["documents_ecartes"]}
+    assert codes["f6"] == "vide" and codes["f7"] == "fichier_vide"
     # Reçu vide : redemandé (deux reprises) ; vide pour de bon : jamais téléchargé.
     assert len([u for u in drive.requetes if u.startswith(STOCKAGE) and "/f7/" in u]) == 3
     assert not [u for u in drive.requetes if u.startswith(STOCKAGE) and "/f6/" in u]

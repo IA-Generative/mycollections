@@ -107,8 +107,14 @@ def coder(raison: str | None, code: str | None = None) -> str:
     return "autre"
 
 
+#: Codes d'erreur d'une source qui disent la même chose qu'un code d'écart existant.
+_ALIAS = {"document_vide": "vide"}
+
+
 def code_erreur_resana(code_service: str) -> str:
-    """Le code d'écart d'une erreur du service d'export (403 hors_droits, 404 introuvable…)."""
+    """Le code d'écart d'une erreur du service d'export (403 hors_droits, 404 introuvable…), ou
+    d'une source qui parle comme lui (Fichiers : `document_vide` est un document vide)."""
+    code_service = _ALIAS.get(code_service, code_service)
     return code_service if code_service in EXPLICATIONS else "autre"
 
 
