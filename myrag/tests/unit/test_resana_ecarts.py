@@ -40,3 +40,10 @@ def test_le_csv_a_un_bom_un_point_virgule_et_neutralise_les_formules():
     lignes = csv.split("\r\n")
     assert lignes[0].startswith("﻿") and lignes[0].lstrip("﻿") == ";".join(m.COLONNES_CSV)
     assert lignes[1].startswith("'=HYPERLINK(1);Notes;;même contenu que « A »;") and lignes[1].endswith(";A;https://resana.fake-domain.name/e/ged/1")
+
+
+def test_un_code_d_erreur_de_source_trouve_son_ecart():
+    assert m.code_erreur_resana("hors_droits") == "hors_droits"
+    assert m.code_erreur_resana("document_vide") == "vide"  # Fichiers : un fichier vide dans Drive
+    assert m.code_erreur_resana("fichier_suspect") == "fichier_suspect"
+    assert m.code_erreur_resana("inconnu") == "autre"
