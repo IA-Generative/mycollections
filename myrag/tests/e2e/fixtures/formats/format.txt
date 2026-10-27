@@ -1,0 +1,3 @@
+Note de contrôle des formats
+
+Le code de contrôle du format TXT est FMT-TXT-1101.
