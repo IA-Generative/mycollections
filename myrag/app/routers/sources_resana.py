@@ -692,7 +692,7 @@ def meme_version(doc: DocumentResana, fiche: dict) -> bool:
 
 
 #: Les documents que « Ré-indexer les documents incomplets » renvoie : lus sans tout leur contexte,
-#: avec une étape en échec, ou sans texte (des scans : ils seront lus quand l'OCR sera là). Un
+#: avec une étape en échec, ou sans texte (des scans : renvoyés, le repli OCR de l'indexeur les relit). Un
 #: format refusé (`echec`) échouerait de nouveau à l'identique.
 QUALITES_A_REPRENDRE = ("sans_contexte", "degrade", "sans_texte")
 
