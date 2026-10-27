@@ -246,8 +246,10 @@ class ClientExportResana:
             raise ErreurResana(502, "reponse_illisible")
         return corps
 
-    async def espaces(self) -> list[Espace]:
-        corps = await self._json("/espaces", delai=DELAI_ESPACES_S)
+    async def espaces(self, *, connexion: bool = True) -> list[Espace]:
+        """Les espaces de la personne. `connexion=False` vérifie seulement la session : le service ne
+        lance pas sa connexion automatique (un navigateur par appel) et répond 409 sans session."""
+        corps = await self._json("/espaces", {"connexion": None if connexion else "non"}, delai=DELAI_ESPACES_S)
         return [
             Espace(
                 id=_ident(e.get("id")),

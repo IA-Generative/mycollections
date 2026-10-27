@@ -587,3 +587,12 @@ def test_seul_l_importeur_relaie_son_jeton(client, en_tant_que, faux, privee):
         assert tache._entetes["Authorization"] == "Bearer JETON-FRAIS"
     finally:
         sources_resana._CLIENTS.pop(privee, None)
+
+
+def test_l_attente_de_connexion_verifie_la_session_sans_la_lancer(client, en_tant_que, faux):
+    """`connexion=false` passe au service : il ne lance pas de navigateur pour une simple vérification."""
+    en_tant_que(CREATEUR)
+    assert client.get("/api/sources/resana/espaces?connexion=false", headers=ENTETE).status_code == 200
+    assert client.get("/api/sources/resana/espaces", headers=ENTETE).status_code == 200
+    appels = [r for r in faux.requetes if r.url.path.endswith("/export/v1/espaces")]
+    assert [r.url.params.get("connexion") for r in appels[-2:]] == ["non", None]

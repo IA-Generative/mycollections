@@ -16,10 +16,17 @@ export function useConnexionResana () {
   let fin: ReturnType<typeof setTimeout> | undefined
   let apres: (() => void | Promise<void>) | undefined
 
-  /** La session Résana répond-elle ? (la liste des espaces, l'appel le moins coûteux) */
+  /** Une vérification est en cours : on n'en lance pas une autre par-dessus. */
+  let verification = false
+
+  /**
+   * La session Résana répond-elle ? La liste des espaces SANS connexion automatique : avec elle,
+   * chaque vérification (toutes les 4 s) ouvrait un navigateur côté Résana, et ces navigateurs
+   * étouffaient celui de la personne qui se connectait (bêta, 2026-10-27).
+   */
   async function sessionOuverte (): Promise<boolean> {
     try {
-      await get('/api/sources/resana/espaces')
+      await get('/api/sources/resana/espaces?connexion=false')
       return true
     }
     catch {
@@ -28,7 +35,18 @@ export function useConnexionResana () {
   }
 
   async function verifier () {
-    if (!enAttente.value || !(await sessionOuverte())) {
+    if (!enAttente.value || verification) {
+      return
+    }
+    verification = true
+    let ouverte = false
+    try {
+      ouverte = await sessionOuverte()
+    }
+    finally {
+      verification = false
+    }
+    if (!ouverte || !enAttente.value) {
       return
     }
     arreter()
