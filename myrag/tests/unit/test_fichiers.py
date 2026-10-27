@@ -455,3 +455,17 @@ def test_le_client_relit_l_etat_d_un_fichier_demande_hors_liste():
         asyncio.run(c.fichier("a1", "beta"))
     assert (e.value.code, e.value.reessayable) == ("en_cours_d_analyse", True)
     assert not faux.telechargements()
+
+
+def test_un_csv_et_un_json_partent_vers_l_indexeur_sous_un_nom_qu_il_lit(client, en_tant_que, drive):
+    """L'indexeur choisit son lecteur à l'extension : un .csv ou un .json envoyé sous son nom était
+    refusé (parcours e2e des formats, 2026-10-26). Ils partent en `.txt` ; un Markdown garde son nom."""
+    drive.ajouter(
+        Element("f8", "donnees.csv", parent="d2", contenu="rubrique;valeur\ncontrôle;texte fictif\n".encode()),
+        Element("f9", "note.json", parent="d2", contenu=b'{"note": "texte fictif"}'),
+    )
+    en_tant_que(IMPORTEUR)
+    assert _creer(client).status_code == 200
+    noms = {c.args[1] for c in drive.envois.await_args_list}
+    assert {"donnees.csv.txt", "note.json.txt", "avis-a.md"} <= noms
+    assert {"f8", "f9"} <= set(_cfg()["documents"])
