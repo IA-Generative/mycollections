@@ -144,11 +144,9 @@ def textes_indexes(session_testeur, import_formats) -> dict[str, str]:
     return dict(dernier)
 
 
-#: Constats (`xfail(strict=True)`) : ce qui échoue aujourd'hui, et casse le jour où c'est corrigé.
-CONSTATS = {
-    "format.csv": "un .csv part vers l'indexeur sous son nom, qui le refuse : correctif #186",
-    "format.json": "un .json part vers l'indexeur sous son nom, qui le refuse : correctif #186",
-}
+#: Constats (`xfail(strict=True)`) : ce qui échoue aujourd'hui, et casse le jour où c'est corrigé. Les
+#: .csv et .json (refusés par l'indexeur) l'ont été jusqu'à #186.
+CONSTATS: dict[str, str] = {}
 
 
 @pytest.mark.parametrize("fichier", [pytest.param(f, marks=pytest.mark.xfail(strict=True, reason=CONSTATS[f])) if f in CONSTATS else f for f in ATTENDU])
