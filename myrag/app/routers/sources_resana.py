@@ -158,10 +158,15 @@ async def _demarrer(collection: str, travail: Awaitable[None]) -> None:
 
 
 @router.get("/espaces")
-async def espaces(authorization: str | None = Header(default=None), user: CurrentUser = Depends(current_user)):
-    """Les espaces Résana de la personne. Peut ouvrir sa session (jusqu'à 90 s)."""
+async def espaces(
+    connexion: bool = Query(True, description="false : vérifier la session sans lancer la connexion automatique"),
+    authorization: str | None = Header(default=None),
+    user: CurrentUser = Depends(current_user),
+):
+    """Les espaces Résana de la personne. Peut ouvrir sa session (jusqu'à 90 s), sauf
+    `connexion=false` : la vérification que fait l'écran en attendant que la personne se connecte."""
     try:
-        rendu = await _client(authorization).espaces()
+        rendu = await _client(authorization).espaces(connexion=connexion)
     except ErreurResana as e:
         raise _http(e) from None
     # La fiche d'identité (objet, description) aide à distinguer des espaces de même nom.
