@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CAPACITES_DEFAUT, normaliserCapacites } from '../../utils/capacites'
-import { arbreDossiers, avisDeReponse, basculerDossier, codeEcart, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, extensionsDe, filtrerEspaces, grouperEcartes, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
+import { arbreDossiers, avisDeReponse, basculerDossier, codeEcart, demandeApresConnexion, descriptionParDefaut, dossiersVisibles, erreurResana, estCollectionResana, etiquetteResana, extensionsDe, filtrerEspaces, grouperEcartes, inclusParUnParent, libelleTravail, partageResanaPret, phraseCouverture, phrasesQualite, preparation, resumeApercu, titreDepuisEspace, titrePageDocuments, travailEnCours } from '../../utils/resana'
 import { cartesDeSource, ligneBientot, SOURCES, sourcesSelon } from '../../utils/wizard'
 
 describe('les erreurs du service Résana', () => {
@@ -156,6 +156,8 @@ describe('ce que vaut l\'index (#144)', () => {
     expect(p).toHaveLength(2)
     expect(p[0]).toMatch(/^3 documents n'ont aucun texte lisible/)
     expect(p[0]).toContain('de préférence non signée')
+    expect(p[0]).toContain('« Ré-indexer les documents incomplets » les fait relire par la reconnaissance de caractères')
+    expect(p[0]).not.toContain('sera en place')
     expect(p[1]).toBe('2 documents sont indexés sans tout le contexte qui aide à les retrouver (6 passages sur 40).')
   })
 
@@ -210,5 +212,18 @@ describe('les formats des écartés', () => {
   it('dit quels formats sont écartés, sans doublon', () => {
     expect(extensionsDe([{ titre: 'a', raison: 'format non pris en charge (.ZIP)', extension: '.ZIP' }, { titre: 'b', raison: '', extension: '.msg' }, { titre: 'c', raison: '', extension: '.zip' }, { titre: 'd', raison: '' }])).toEqual(['.msg', '.zip'])
     expect(grouperEcartes([{ titre: 'a', raison: 'format non pris en charge (.zip)', extension: '.zip' }])[0]!.extensions).toEqual(['.zip'])
+  })
+})
+
+describe('après « Se connecter à Résana »', () => {
+  it('relance la demande interrompue, pas une simple mise à jour', () => {
+    expect(demandeApresConnexion({ incomplets: true }, { action: 'synchronisation' })).toEqual({ incomplets: true })
+    const dossiers = [{ id: '7', chemin: 'Notes' }]
+    expect(demandeApresConnexion({ dossiers, complet: false, incomplets: false }, null)).toEqual({ dossiers, complet: false, incomplets: false })
+  })
+  it('page rechargée : le travail interrompu dit s\'il ré-indexait', () => {
+    expect(demandeApresConnexion(null, { etat: 'echec', action: 'reindexation' })).toEqual({ incomplets: true })
+    expect(demandeApresConnexion(null, { etat: 'echec', action: 'synchronisation' })).toEqual({})
+    expect(demandeApresConnexion(null, null)).toEqual({})
   })
 })

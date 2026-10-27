@@ -277,6 +277,26 @@ export function libelleTravail (t: TravailResana | null | undefined): string {
   }
 }
 
+/** Une demande de mise à jour : dossiers choisis, vérification complète, documents incomplets. */
+export interface DemandeSync {
+  dossiers?: { id: string, chemin: string }[]
+  complet?: boolean
+  incomplets?: boolean
+}
+
+/**
+ * Ce que relance « Se connecter à Résana » une fois la session ouverte : la demande que la
+ * connexion a interrompue, pas une simple mise à jour (bêta, 2026-10-27 : « Ré-indexer les
+ * documents incomplets » repartait en mise à jour, qui saute les documents inchangés). Sans
+ * demande gardée (page rechargée), le travail interrompu dit au moins s'il ré-indexait.
+ */
+export function demandeApresConnexion (derniere: DemandeSync | null, travail: TravailResana | null | undefined): DemandeSync {
+  if (derniere) {
+    return derniere
+  }
+  return travail?.action === 'reindexation' ? { incomplets: true } : {}
+}
+
 export function travailEnCours (t: TravailResana | null | undefined): boolean {
   // « partiel » est fini : la personne relance quand sa session est rouverte.
   return t?.etat === 'en_cours'
@@ -525,7 +545,7 @@ export function phrasesQualite (q: QualiteResana | null | undefined): string[] {
   }
   const phrases: string[] = []
   if (n('sans_texte')) {
-    phrases.push(`${compte(n('sans_texte'), 'document n\'a', 'documents n\'ont')} aucun texte lisible : ce sont le plus souvent des scans. Ils seront lus quand la reconnaissance de caractères sera en place ; si vous avez leur version électronique (Word, LibreOffice, PDF exporté), de préférence non signée, déposez-la plutôt dans Résana.`)
+    phrases.push(`${compte(n('sans_texte'), 'document n\'a', 'documents n\'ont')} aucun texte lisible : ce sont le plus souvent des scans. « Ré-indexer les documents incomplets » les fait relire par la reconnaissance de caractères ; s'ils restent illisibles (images, cartes, scans trop pâles), déposez dans Résana leur version électronique (Word, LibreOffice, PDF exporté), de préférence non signée.`)
   }
   if (n('sans_contexte')) {
     const detail = q.passages && q.passages_sans_contexte ? ` (${q.passages_sans_contexte} passages sur ${q.passages})` : ''

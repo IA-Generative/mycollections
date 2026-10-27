@@ -80,7 +80,8 @@ quand la session est absente. Deux exceptions :
   dans une fenêtre que Mes collections garde en main ; toutes les 4 s, et dès qu'on revient sur
   l'onglet, la session est testée (`GET /espaces`) ; quand elle répond, la fenêtre est refermée,
   « Connexion à Résana établie » s'affiche, et ce que la personne voulait faire repart tout seul
-  (recharger les espaces à l'étape 1, relancer la mise à jour sur la carte). Résana lui-même ne sait
+  (recharger les espaces à l'étape 1, relancer sur la carte la demande interrompue : mise à jour,
+  vérification complète ou ré-indexation des documents incomplets). Résana lui-même ne sait
   ni refermer sa fenêtre ni prévenir ; dix minutes sans session et l'attente s'arrête.
 
 ## Privée à qui importe, partageable à un groupe

@@ -5,8 +5,8 @@
  * jour un index ancien, et — pour la personne qui a importé — « Mettre à jour » et « Modifier la
  * sélection » (ajouter ou retirer des sous-dossiers, pour poursuivre l'indexation).
  */
-import type { AvisResana, CouvertureResana, ErreurResana, StatutResana } from '~/utils/resana'
-import { erreurResana, etiquetteResana, grouperEcartes, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
+import type { AvisResana, CouvertureResana, DemandeSync, ErreurResana, StatutResana } from '~/utils/resana'
+import { demandeApresConnexion, erreurResana, etiquetteResana, grouperEcartes, libelleTravail, phraseCouverture, phrasesQualite, travailEnCours } from '~/utils/resana'
 
 const props = withDefaults(defineProps<{
   collection: string
@@ -48,7 +48,14 @@ const totalEcartes = computed(() => Math.max(statut.value?.travail?.ecartes || 0
 const { telecharger } = useTelechargement()
 // « Se connecter à Résana » : la fenêtre s'ouvre, on guette la session, puis la mise à jour repart.
 const connexion = useConnexionResana()
-const seConnecter = (url: string) => connexion.ouvrir(url, () => synchroniser())
+// La demande interrompue repart telle quelle (ré-indexation, vérification complète, dossiers).
+let derniereDemande: DemandeSync | null = null
+function seConnecter (url: string) {
+  connexion.ouvrir(url, () => {
+    const d = demandeApresConnexion(derniereDemande, statut.value?.travail)
+    return synchroniser(d.dossiers, d.complet, d.incomplets)
+  })
+}
 const exportEnCours = ref(false)
 const erreurExport = ref('')
 async function exporterEcartes () {
@@ -107,6 +114,7 @@ async function charger () {
 }
 
 async function synchroniser (dossiers?: { id: string, chemin: string }[], complet = false, incomplets = false) {
+  derniereDemande = { dossiers, complet, incomplets }
   envoi.value = true
   erreur.value = null
   try {
