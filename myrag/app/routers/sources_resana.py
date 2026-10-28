@@ -519,16 +519,17 @@ async def synchroniser(collection: str, corps: SynchroResana | None = None, auth
     if corps is not None and corps.exclus is not None:
         perimetre["exclus"] = sorted({e for e in corps.exclus if e and e not in {d["id"] for d in dossiers}})
     cfg["perimetre"] = perimetre
-    cfg["travail"] = _travail("synchronisation", docs)
+    complet = bool(corps and corps.complet)
+    reprendre = a_reprendre(cfg) if corps is not None and corps.incomplets else set()
+    # Dite dès le départ : l'écran l'affiche, et une reprise après connexion ou redémarrage s'y fie.
+    action = "reindexation" if reprendre else "synchronisation"
+    cfg["travail"] = _travail(action, docs)
     await update_collection(collection, {"source_config_json": json.dumps(cfg)})
     ajoutes = [d["chemin"] for d in dossiers if d["id"] not in {x["id"] for x in avant}]
     retires = [d["chemin"] for d in avant if d["id"] not in {x["id"] for x in dossiers}]
     if ajoutes or retires:
         # Le périmètre a changé : le journal de la collection le garde (quels dossiers, quand, qui).
         await consigner("synchronisation", collection, "perimetre.modifie", user.sub, collection_name=collection, detail={"source": SOURCE, "ajoutes": ajoutes, "retires": retires})
-    complet = bool(corps and corps.complet)
-    reprendre = a_reprendre(cfg) if corps is not None and corps.incomplets else set()
-    action = "reindexation" if reprendre else "synchronisation"
     await _demarrer(collection, _executer(collection, client, espace, dossiers, docs, action, user, complet=complet, reprendre=reprendre))
     return {"status": "synchro_lancee", "collection": collection, "total": len(docs) if docs is not None else None, "a_reprendre": len(reprendre)}
 

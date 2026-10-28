@@ -55,6 +55,23 @@ def test_la_qualite_est_notee_comptee_et_les_incomplets_se_reindexent(client, en
     assert statut["travail"]["action"] == "reindexation"
 
 
+def test_la_reindexation_est_dite_des_le_depart(client, en_tant_que, faux, privee, monkeypatch):
+    """Pendant le travail, l'état dit « reindexation », pas « synchronisation » (bêta, 2026-10-27) :
+    l'écran l'affiche, et la reprise après « Se connecter à Résana » ou un redémarrage s'y fie."""
+    faux.documents = [_doc("a", "# A\n\nTexte fictif a."), _doc("c", "# C\n\nTexte fictif c.")]
+    monkeypatch.setattr(sources_resana.depot, "_indexer_document_background", _indexeur_qui_note([], QUALITES))
+    en_tant_que(CREATEUR)
+    assert _importer(client, privee).status_code == 200
+
+    async def sans_executer(_collection, travail):
+        travail.close()  # le travail reste « en cours », tel que l'écran le lit au départ
+
+    monkeypatch.setattr(sources_resana, "_demarrer", sans_executer)
+    assert client.post(f"/api/sources/resana/sync/{privee}", json={"incomplets": True}, headers=ENTETE).json()["a_reprendre"] == 1
+    travail = client.get(f"/api/sources/resana/status/{privee}").json()["travail"]
+    assert (travail["action"], travail["total"]) == ("reindexation", 2)
+
+
 def test_une_erreur_notee_avant_la_qualite_compte_quand_meme():
     # Les collections importées avant #144 : l'erreur de lecture gardée dit « sans texte ».
     cfg = {
