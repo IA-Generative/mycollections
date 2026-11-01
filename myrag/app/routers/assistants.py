@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, Field, ValidationError
 
 from app.auth import CurrentUser, current_user
 from app.config import settings
-from app.harnais.contrat import CAPACITES_CLIENT, FicheAssistant, Plan, Resultat
+from app.harnais import fiche_yaml
+from app.harnais.contrat import CAPACITES_CLIENT, Canaux, FicheAssistant, Plan, ReferenceResume, Resultat, canonique, empreinte
 from app.models.db import RELECTURES_PAIRE
 from app.routers._commun import Identite, capacite, identite
 from app.services import assistant_droits as droits_service
@@ -126,6 +127,11 @@ async def enregistrer(ident: str, fiche: FicheAssistant, moi: Identite = Depends
     """Crée l'assistant ou remplace son brouillon. Publier en fait une version (POST …/publier)."""
     if fiche.assistant != ident:
         raise HTTPException(status_code=422, detail="L'identifiant de la fiche diffère de celui de l'adresse")
+    return await _enregistrer(ident, fiche, moi)
+
+
+async def _enregistrer(ident: str, fiche: FicheAssistant, moi: Identite) -> dict:
+    """Les droits et les règles d'un enregistrement de brouillon, communs au JSON et au YAML."""
     existante = await store.lire(ident)
     if existante is not None and existante.get("archive_le"):
         raise HTTPException(status_code=409, detail="Cet assistant est archivé : désarchivez-le avant de le modifier")
@@ -144,6 +150,65 @@ async def enregistrer(ident: str, fiche: FicheAssistant, moi: Identite = Depends
     await store.enregistrer_brouillon(fiche, auteur_hash=moi.hash)
     ligne, fiche_lue, modifier, cols = await _charger(ident, moi)
     return _reponse(ligne, fiche_lue, cols, moi, modifier)
+
+
+# ─── Le fichier YAML de la fiche (docs/assistants.md, « Le fichier YAML ») ─────────────────────
+
+
+async def _reference(fiche: FicheAssistant) -> ReferenceResume:
+    """Le résumé dérivé des jeux de questions des collections de la fiche (déjà ramenée à ce que la personne lit)."""
+    noms = [s.id for s in fiche.sources if s.type == "collection"]
+    par_source = {n: (await questions_store.lister_questions(n, par_page=1)).total for n in noms}
+    fiables = await questions_store.compter_fiables(noms)
+    return ReferenceResume(questions=sum(par_source.values()), fiables=sum(n for n, _ in fiables.values()), par_source=par_source)
+
+
+@router.get("/{ident}/fiche.yaml")
+async def exporter_yaml(ident: str, moi: Identite = Depends(identite)):
+    """Le brouillon en YAML, à relire ou à versionner. Qui ne gère pas l'assistant reçoit la fiche
+    qu'il lit (sans les collections qu'il ne lit pas), et le fichier le dit en tête."""
+    _, fiche, modifier, cols = await _charger(ident, moi)
+    vue, masquees = _vue(fiche, cols, moi, modifier)
+    entete = []
+    if masquees:
+        for c in vue["consignes"]:
+            if c["chercher"]:
+                c["chercher"][0]["avec"] = None  # l'étape qui la précédait est masquée
+        entete.append(f"{masquees} source(s) que vous ne lisez pas sont absentes : ce fichier ne décrit pas tout l'assistant.")
+    try:
+        lue = FicheAssistant.model_validate(vue)
+    except ValidationError:
+        raise HTTPException(status_code=409, detail="La partie de cet assistant que vous lisez ne forme pas une fiche complète : l'exporter demande de le gérer.")
+    lue = lue.model_copy(update={"reference": await _reference(lue)})
+    return Response(
+        content=fiche_yaml.ecrire(lue, entete=entete),
+        media_type="text/yaml; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{lue.assistant}.yaml"'},
+    )
+
+
+@router.put("/{ident}/fiche.yaml")
+async def importer_yaml(ident: str, request: Request, moi: Identite = Depends(identite)):
+    """Remplace le brouillon par la fiche d'un fichier YAML (corps de la requête), avec les droits
+    et les règles de `PUT /api/assistants/{id}`. Les canaux de publication du brouillon restent.
+    Rend la fiche enregistrée, les avertissements et l'empreinte (celle que prendra la version)."""
+    corps = bytearray()
+    async for morceau in request.stream():
+        corps += morceau
+        if len(corps) > fiche_yaml.TAILLE_MAX:
+            raise HTTPException(status_code=413, detail=f"Le fichier dépasse {fiche_yaml.TAILLE_MAX // 1024} Kio.")
+    try:
+        lecture = fiche_yaml.lire(bytes(corps))
+    except fiche_yaml.FicheYamlInvalide as e:
+        erreurs = [{"champ": x.champ, "message": x.message} for x in e.erreurs]
+        raise HTTPException(status_code=422, detail={"message": "Le fichier n'est pas une fiche d'assistant valide.", "erreurs": erreurs})
+    if lecture.fiche.assistant != ident:
+        raise HTTPException(status_code=400, detail=f"Ce fichier décrit l'assistant « {lecture.fiche.assistant} », pas « {ident} » : vérifiez la ligne « assistant: ».")
+    existante = await store.lire(ident)
+    publication = Canaux.model_validate(existante["fiche"]["publication"]) if existante else Canaux()
+    fiche = lecture.fiche.model_copy(update={"publication": publication})
+    reponse = await _enregistrer(ident, fiche, moi)
+    return {**reponse, "avertissements": lecture.avertissements, "empreinte": empreinte(canonique(fiche))}
 
 
 @router.post("/{ident}/publier")

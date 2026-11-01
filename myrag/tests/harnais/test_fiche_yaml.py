@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 
 from app.harnais import fiche_yaml
-from app.harnais.contrat import FicheAssistant, ReferenceResume, canonique, empreinte
+from app.harnais.contrat import Canaux, FicheAssistant, ReferenceResume, canonique, empreinte
 from app.harnais.fiche_yaml import FicheYamlInvalide, charger, ecrire, lire
-from tests.harnais.conftest import fiche_d_essai
+from tests.conftest import SUPERADMIN
+from tests.harnais.conftest import ALICE, DEHORS, fiche_d_essai
 
 EXEMPLE = Path(__file__).resolve().parents[3] / "docs" / "exemples" / "assistants" / "sejour-des-etrangers.yaml"
 JEU = {"mienne": "t-mienne", "partagee": "t-partagee", "ouverte": "t-ouverte", "secrete": "t-secrete"}
@@ -152,4 +153,92 @@ def test_taille_et_encodage():
     assert "trop gros" in _erreurs(trop)[0]
     with pytest.raises(FicheYamlInvalide, match="UTF-8"):
         charger(b"assistant: \xff\xfe\n")
-    assert charger(("﻿" + BASE).encode()).assistant == "essai", "la marque d'ordre des octets est tolérée"
+    assert charger(b"\xef\xbb\xbf" + BASE.encode()).assistant == "essai", "la marque d'ordre des octets est tolérée"
+
+
+# ─── Les routes ──────────────────────────────────────────────────────────────────────────────
+
+
+def _url(ident: str) -> str:
+    return f"/api/assistants/{ident}/fiche.yaml"
+
+
+def _put(client, ident: str, texte: str):
+    return client.put(_url(ident), content=texte.encode("utf-8"), headers={"Content-Type": "text/yaml"})
+
+
+@pytest.fixture
+def enregistre(client, en_tant_que, jeu, ident_assistant):
+    """L'assistant d'essai (trois sources), enregistré par l'administration, servi sur l'API."""
+    en_tant_que(SUPERADMIN)
+    fiche = fiche_d_essai(jeu, ident_assistant, publication={"api": True})
+    assert client.put(f"/api/assistants/{ident_assistant}", json=fiche.model_dump(mode="json")).status_code == 200
+    return fiche
+
+
+def test_exporter_puis_reimporter_puis_publier_garde_l_empreinte(client, enregistre):
+    ident = enregistre.assistant
+    r = client.get(_url(ident))
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "text/yaml; charset=utf-8"
+    assert r.headers["content-disposition"] == f'attachment; filename="{ident}.yaml"'
+    assert charger(r.text) == enregistre.model_copy(update={"publication": Canaux()})
+    assert "# reference (calculée, ignorée à l'import) : 0 questions, 0 fiables" in r.text
+    i = _put(client, ident, r.text)
+    assert i.status_code == 200, i.text
+    assert i.json()["empreinte"] == _emp(enregistre) and i.json()["avertissements"] == []
+    assert i.json()["fiche"]["publication"]["api"] is True, "les canaux du brouillon restent"
+    p = client.post(f"/api/assistants/{ident}/publier").json()
+    assert f"empreinte: sha256:{p['empreinte']}" in r.text, "l'en-tête du fichier annonce l'empreinte de la version"
+
+
+def test_importer_remplace_le_brouillon_et_avertit(client, enregistre):
+    ident = enregistre.assistant
+    texte = ecrire(enregistre).replace("titre: Assistant d'essai", "titre: Repris par fichier")
+    texte += "publication: {api: false, portail: true}\nreference: {questions: 7}\n"
+    r = _put(client, ident, texte)
+    assert r.status_code == 200, r.text
+    corps = r.json()
+    assert corps["fiche"]["titre"] == "Repris par fichier"
+    assert corps["fiche"]["publication"] == {"socle": False, "portail": False, "fenetre_js": False, "api": True}
+    assert len(corps["avertissements"]) == 2
+    assert corps["empreinte"] == _emp(charger(texte))
+
+
+def test_import_refuse_lisiblement(client, enregistre):
+    ident = enregistre.assistant
+    autre = _put(client, ident, ecrire(enregistre.model_copy(update={"assistant": "un-autre"})))
+    assert autre.status_code == 400 and "un-autre" in autre.json()["detail"]
+    double = _put(client, ident, ecrire(enregistre) + "seuil_fiable: 3\n")
+    assert double.status_code == 422
+    assert double.json()["detail"]["erreurs"][0]["message"] == "la clef « seuil_fiable » apparaît deux fois"
+    hors = _put(client, ident, ecrire(enregistre).replace("seuil_fiable: 0.9", "seuil_fiable: 3"))
+    assert hors.status_code == 422
+    assert hors.json()["detail"] == {
+        "message": "Le fichier n'est pas une fiche d'assistant valide.",
+        "erreurs": [{"champ": "seuil_fiable", "message": "doit être inférieur ou égal à 1.0"}],
+    }
+    assert _put(client, ident, "#" * (fiche_yaml.TAILLE_MAX + 1)).status_code == 413
+
+
+def test_un_lecteur_exporte_ce_qu_il_lit_sans_pouvoir_importer(client, en_tant_que, jeu, enregistre):
+    ident = enregistre.assistant
+    texte = client.get(_url(ident)).text
+    en_tant_que(ALICE)
+    r = client.get(_url(ident))
+    assert r.status_code == 200
+    assert jeu["secrete"] not in r.text and "# 1 source(s) que vous ne lisez pas sont absentes" in r.text
+    assert _put(client, ident, texte).status_code == 403, "Alice ne gère ni `partagee` ni `secrete`"
+    en_tant_que(DEHORS)
+    assert client.get(_url(ident)).status_code == 404
+    assert _put(client, ident, texte).status_code == 404
+
+
+def test_importer_cree_un_assistant_comme_le_put_json(client, en_tant_que, jeu, ident_assistant):
+    fiche = FicheAssistant.model_validate({"assistant": ident_assistant, "titre": "Neuf", "sources": [{"id": jeu["mienne"], "type": "collection"}]})
+    en_tant_que(ALICE)
+    r = _put(client, ident_assistant, ecrire(fiche))
+    assert r.status_code == 200, r.text
+    assert r.json()["mes_droits"] == {"ecrire": True} and r.json()["fiche"]["publication"]["api"] is False
+    inconnue = fiche.model_copy(update={"sources": [*fiche.sources, fiche.sources[0].model_copy(update={"id": "t-n-existe-pas"})]})
+    assert _put(client, ident_assistant, ecrire(inconnue)).status_code == 422
