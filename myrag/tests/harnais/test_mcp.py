@@ -138,19 +138,23 @@ def test_l_identite_du_jeton_est_relayee_aux_outils(client, assistant_publie, je
     assert vus == [(IDENTITES["bob"].sub, tuple(IDENTITES["bob"].groups))]
 
 
-def test_une_personne_sans_droit_ne_recoit_aucun_passage_de_la_collection_secrete(client, en_tant_que, jeu, ident_assistant, theatre_branche, jetons, monkeypatch):
-    # Ici `secrete` est une source ordinaire (`selon_question`) : le plan de Bob la vise bel et bien.
+def _publier_avec_secrete(client, en_tant_que, jeu, ident: str, monkeypatch) -> str:
+    """Un assistant où `secrete` est une source ordinaire (`selon_question`) : le plan de Bob la vise bel et bien."""
     monkeypatch.setattr(app.config.settings, "auth_enabled", False)
     en_tant_que(SUPERADMIN)
     sources = [
         {"id": jeu[k], "type": "collection", "regime": r, "rang": i}
         for i, (k, r) in enumerate([("mienne", "toujours"), ("partagee", "selon_question"), ("secrete", "selon_question")], start=1)
     ]
-    assistant_publie = ident_assistant
-    assert client.put(f"/api/assistants/{assistant_publie}", json=fiche_d_essai(jeu, assistant_publie, sources=sources).model_dump(mode="json")).status_code == 200
-    assert client.post(f"/api/assistants/{assistant_publie}/publier").status_code == 200
+    assert client.put(f"/api/assistants/{ident}", json=fiche_d_essai(jeu, ident, sources=sources).model_dump(mode="json")).status_code == 200
+    assert client.post(f"/api/assistants/{ident}/publier").status_code == 200
     monkeypatch.setattr(app.config.settings, "auth_enabled", True)
     client.app.dependency_overrides.clear()
+    return ident
+
+
+def test_une_personne_sans_droit_ne_recoit_aucun_passage_de_la_collection_secrete(client, en_tant_que, jeu, ident_assistant, theatre_branche, jetons, monkeypatch):
+    assistant_publie = _publier_avec_secrete(client, en_tant_que, jeu, ident_assistant, monkeypatch)
     # Bob lit `secrete` : les passages y sont (témoin positif : le théâtre les rend bien)…
     erreur, bob = appeler(client, jetons("bob"), "rechercher", question="budget", assistant=assistant_publie)
     assert not erreur
@@ -176,6 +180,88 @@ def test_rechercher_rend_titre_texte_url_signee_collection_et_plan(client, assis
     assert premier["collection"]["id"] in {jeu["mienne"], jeu["partagee"]}
     assert {s["id"] for s in contenu["plan"]["sources"]} <= {jeu["mienne"], jeu["partagee"]}
     assert contenu["reponse"] is None
+
+
+# ─── Ce que `rechercher` rend : peu, court, citable (essai d'un agent sur la bêta) ──────
+
+
+#: Un passage de la taille de ceux d'OpenRAG sur la bêta (1,4 à 2,2 Ko) : 20 d'entre eux faisaient 28 à 45 Ko.
+LONG = " ".join(["Le budget de la commune est voté avant le 15 avril de l'exercice auquel il s'applique."] * 18)
+
+
+@pytest.fixture
+def passages_longs(theatre_branche, jeu):
+    """Vingt-cinq passages longs par collection : le moteur en fusionne 20, plus que la limite par défaut."""
+    from tests.harnais.conftest import passage
+
+    theatre_branche.passages = {nom: [passage(nom, f"{cle}-doc", r, score=1 - r / 100, texte=f"{cle} {r} : {LONG}") for r in range(1, 26)] for cle, nom in jeu.items()}
+    return theatre_branche
+
+
+def test_rechercher_rend_huit_passages_par_defaut_et_vingt_au_plus(client, assistant_publie, passages_longs, jetons):
+    entetes = jetons("alice")
+    erreur, contenu = appeler(client, entetes, "rechercher", question="budget", assistant=assistant_publie)
+    assert not erreur and len(contenu["passages"]) == 8
+    assert len(appeler(client, entetes, "rechercher", question="budget", assistant=assistant_publie, limite=3)[1]["passages"]) == 3
+    assert len(appeler(client, entetes, "rechercher", question="budget", assistant=assistant_publie, limite=20)[1]["passages"]) == 20
+    # Au-delà de 20, 20 ; en deçà de 1, 1 : la borne ne fait pas une erreur que le modèle devrait comprendre.
+    assert len(appeler(client, entetes, "rechercher", question="budget", assistant=assistant_publie, limite=500)[1]["passages"]) == 20
+    assert len(appeler(client, entetes, "rechercher", question="budget", assistant=assistant_publie, limite=0)[1]["passages"]) == 1
+
+
+def test_la_limite_ne_coupe_pas_le_moteur(client, assistant_publie, passages_longs, jetons):
+    """Le moteur cherche et fusionne comme avant ; seuls les premiers passages fusionnés sont rendus."""
+    erreur, huit = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
+    _, vingt = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie, limite=20)
+    assert [p["url"].split("?")[0] for p in huit["passages"]] == [p["url"].split("?")[0] for p in vingt["passages"][:8]]
+
+
+def test_le_texte_est_tronque_proprement_et_le_lien_reste_intact(client, assistant_publie, passages_longs, jetons):
+    from app.mcp import serveur
+
+    originaux = [p.texte for ps in passages_longs.passages.values() for p in ps]
+    erreur, contenu = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
+    assert not erreur
+    for p in contenu["passages"]:
+        assert len(p["texte"]) <= serveur.TEXTE_MAX + 1 and p["texte"].endswith("…")
+        debut = p["texte"][:-1]
+        assert len(debut) > serveur.TEXTE_MAX - 100
+        assert any(o.startswith(debut) and o[len(debut)] == " " for o in originaux)  # coupé entre deux mots
+        assert p["url"].startswith("https://mycollections.fake-domain.name/api/openrag/extract/") and "sig=" in p["url"] and "…" not in p["url"]
+    # Un texte court n'est pas touché.
+    assert serveur._extrait("Court.", serveur.TEXTE_MAX) == "Court."
+
+
+def test_la_consigne_de_citation_est_dans_la_description_et_dans_la_sortie(client, assistant_publie, theatre_branche, jetons):
+    outils = {o["name"]: o for o in rpc(client, "tools/list", entetes=jetons()).json()["result"]["tools"]}
+    description = outils["rechercher"]["description"]
+    assert "cite chaque passage" in description and "`url`" in description and "[titre](url)" in description
+    assert "si aucun passage ne répond, dis-le" in description
+    assert outils["rechercher"]["inputSchema"]["properties"]["limite"]["type"] == "integer"
+    assert "en premier" in outils["lister_sources"]["description"] and outils["proposer_sources"]["description"].startswith("Facultatif")
+    erreur, contenu = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
+    assert not erreur and "[titre](url)" in contenu["consigne_de_citation"]
+
+
+def test_aucun_passage_hors_droits_meme_avec_la_limite_maximale(client, en_tant_que, jeu, ident_assistant, passages_longs, jetons, monkeypatch):
+    assistant = _publier_avec_secrete(client, en_tant_que, jeu, ident_assistant, monkeypatch)
+    erreur, bob = appeler(client, jetons("bob"), "rechercher", question="budget", assistant=assistant, limite=20)
+    assert not erreur and any(p["collection"]["id"] == jeu["secrete"] for p in bob["passages"])  # témoin positif
+    erreur, alice = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant, limite=20)
+    assert not erreur and len(alice["passages"]) == 20
+    assert jeu["secrete"] not in json.dumps(alice)
+
+
+def test_taille_d_une_reponse_avant_apres(client, assistant_publie, passages_longs, jetons, monkeypatch):
+    """La taille d'une réponse de `rechercher` : avant (20 passages en texte intégral), après (8, extraits)."""
+    from app.mcp import serveur
+
+    _, apres = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
+    monkeypatch.setattr(serveur, "TEXTE_MAX", 10**6)
+    _, avant = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie, limite=20)
+    octets_avant, octets_apres = (len(json.dumps(c, ensure_ascii=False, indent=2).encode()) for c in (avant, apres))
+    print(f"\nrechercher : avant {octets_avant} octets (20 passages), après {octets_apres} octets (8 passages)")
+    assert octets_avant > 25_000 and octets_apres < octets_avant / 3
 
 
 def test_sources_restreint_la_recherche(client, assistant_publie, jeu, theatre_branche, jetons):

@@ -108,9 +108,14 @@ sans modèle de langage côté Mes collections : le client choisit l'assistant, 
 
 | Outil | Rôle |
 |-------|------|
-| `lister_sources()` | Les assistants publiés que la personne lit, et leurs collections lisibles (id, titre, description). |
-| `proposer_sources(question, assistant)` | Le plan (sources retenues, poids, consigne) sans lancer la recherche. |
-| `rechercher(question, assistant, sources?)` | Les passages (titre, texte, lien signé, collection) et le plan. `sources` impose les collections ; une réponse de référence fiable est rendue telle quelle dans `reponse`. |
+| `lister_sources()` | À appeler en premier : les assistants publiés que la personne lit, et leurs collections lisibles (id, titre, description). |
+| `proposer_sources(question, assistant)` | Facultatif : le plan (sources retenues, poids, consigne) sans lancer la recherche. |
+| `rechercher(question, assistant, sources?, limite?)` | Les passages (titre, début du texte, lien signé `url`, collection), le plan et `consigne_de_citation`. `limite` : passages rendus, 8 par défaut, 20 au plus (coupe la liste rendue, après fusion et droits ; le moteur cherche comme avant). Le texte d'un passage est tronqué à 1 200 caractères environ, sur un espace, suivi de « … » : la suite se lit par l'`url`. `sources` impose les collections ; une réponse de référence fiable est rendue telle quelle dans `reponse`. |
+
+La description de `rechercher` et `consigne_de_citation` demandent au modèle de répondre uniquement à partir des
+passages, de citer chaque passage utilisé par son `url` (`[titre](url)`), et de dire quand aucun ne répond. Sur la
+bêta, 20 passages en texte intégral pesaient 28 à 45 Ko par appel ; sur des passages de cette taille, le test
+`test_taille_d_une_reponse_avant_apres` mesure 39 Ko avant, 13 Ko après.
 
 Exemple de configuration d'un client (adresse d'exemple) :
 

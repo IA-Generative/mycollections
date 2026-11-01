@@ -39,22 +39,32 @@ def _json(valeur: Any) -> list[types.TextContent]:
     return [types.TextContent(type="text", text=json.dumps(valeur, ensure_ascii=False, indent=2, default=str))]
 
 
+#: Passages rendus par défaut, et au plus : le moteur en fusionne jusqu'à 20, mais 20 passages en texte
+#: intégral (28 à 45 Ko) remplissent la fenêtre d'un agent conversationnel. On ne coupe que la liste rendue.
+LIMITE_DEFAUT = 8
+LIMITE_MAX = 20
+#: Longueur rendue du texte d'un passage ; la suite se lit par son lien signé.
+TEXTE_MAX = 1200
+CONSIGNE_DE_CITATION = (
+    "Réponds uniquement à partir des passages ; cite chaque passage utilisé par son lien `url` (format Markdown [titre](url)) ; si aucun passage ne répond, dis-le."
+)
+
 OUTILS: list[types.Tool] = [
     types.Tool(
         name="lister_sources",
         description=(
-            "Liste les assistants de recherche publiés que la personne connectée peut lire, avec pour chacun ses "
-            "collections lisibles (identifiant, titre, description). À appeler en premier pour choisir l'assistant "
-            "à interroger. Ne cherche rien et ne coûte aucune recherche."
+            "À appeler en premier, pour savoir où chercher. Rend les assistants de recherche que la personne connectée "
+            "peut interroger, et pour chacun ses collections de documents (identifiant, titre, description). "
+            "Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
         ),
         inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
     ),
     types.Tool(
         name="proposer_sources",
         description=(
-            "Dit dans quelles collections un assistant chercherait pour cette question, sans lancer la recherche : "
-            "le plan (sources retenues et leur poids, consigne reconnue). Utile pour vérifier ou corriger le choix "
-            "des sources avant d'appeler `rechercher`. Une réponse de référence fiable est signalée si elle existe."
+            "Facultatif. Dit dans quelles collections un assistant chercherait pour cette question, sans chercher : "
+            "les collections retenues et leur poids, la consigne reconnue, et une réponse de référence fiable si elle "
+            "existe. Sert à vérifier le choix avant `rechercher` ; on peut aussi appeler `rechercher` directement."
         ),
         inputSchema={
             "type": "object",
@@ -69,11 +79,11 @@ OUTILS: list[types.Tool] = [
     types.Tool(
         name="rechercher",
         description=(
-            "Cherche dans les collections d'un assistant et rend les passages les plus pertinents (titre, texte, "
-            "lien de lecture signé, collection) avec le plan suivi. Les passages sont des extraits de documents : "
-            "citez-les, ne les inventez pas. Si une réponse de référence fiable existe pour la question, elle est rendue "
-            "telle quelle dans `reponse`, sans passage. `sources` restreint la recherche à certaines collections "
-            "(identifiants de `lister_sources`), à poids égaux ; sinon l'assistant choisit."
+            "Cherche dans les collections d'un assistant et rend les passages les plus pertinents : titre, début du "
+            "texte, lien de lecture `url` (le texte complet s'y lit), collection. " + CONSIGNE_DE_CITATION + " "
+            "Si une réponse de référence fiable existe, elle est rendue telle quelle dans `reponse`, sans passage. "
+            "`sources` restreint la recherche à certaines collections (identifiants de `lister_sources`), à poids "
+            f"égaux ; sinon l'assistant choisit. `limite` : nombre de passages rendus ({LIMITE_DEFAUT} par défaut, {LIMITE_MAX} au plus)."
         ),
         inputSchema={
             "type": "object",
@@ -81,12 +91,28 @@ OUTILS: list[types.Tool] = [
                 "question": {"type": "string", "description": "La question de la personne, en français, telle qu'elle la pose.", "minLength": 1, "maxLength": 1000},
                 "assistant": {"type": "string", "description": "L'identifiant de l'assistant, tel que rendu par `lister_sources`."},
                 "sources": {"type": "array", "items": {"type": "string"}, "description": "Facultatif : identifiants des collections où chercher."},
+                "limite": {
+                    "type": "integer",
+                    "default": LIMITE_DEFAUT,
+                    "description": f"Facultatif : nombre de passages rendus, de 1 à {LIMITE_MAX} ({LIMITE_DEFAUT} par défaut ; au-delà de {LIMITE_MAX}, {LIMITE_MAX}).",
+                },
             },
             "required": ["question", "assistant"],
             "additionalProperties": False,
         },
     ),
 ]
+
+
+def _extrait(texte: str, longueur: int) -> str:
+    """Le début du texte, coupé sur un espace et suivi de « … » quand il a été coupé."""
+    if len(texte) <= longueur:
+        return texte
+    coupe = texte[:longueur]
+    espace = coupe.rfind(" ")
+    if espace > longueur // 2:  # sinon un mot démesuré (une adresse) : on coupe dedans plutôt que de tout perdre
+        coupe = coupe[:espace]
+    return coupe.rstrip() + "…"
 
 
 def _limiter(user: CurrentUser) -> None:
@@ -144,8 +170,9 @@ async def proposer_sources(user: CurrentUser, question: str, assistant: str) -> 
     return _vue_plan(charge, plan)
 
 
-async def rechercher(user: CurrentUser, question: str, assistant: str, sources: list[str] | None = None) -> dict:
+async def rechercher(user: CurrentUser, question: str, assistant: str, sources: list[str] | None = None, limite: int = LIMITE_DEFAUT) -> dict:
     _limiter(user)
+    limite = max(1, min(LIMITE_MAX, limite))
     charge = await _charger(assistant, user)
     ctx = moteur.contexte(charge, "api")
     if sources:
@@ -163,13 +190,15 @@ async def rechercher(user: CurrentUser, question: str, assistant: str, sources: 
         raise ErreurOutil("La réponse de référence citée n'est pas disponible pour vous.")
     if execution.toutes_en_panne:
         raise ErreurOutil("Le moteur de recherche ne répond pas pour le moment. Réessayez dans un instant.")
-    resultat = routes_assistants.avec_liens(resultat)
+    # Après la fusion et le filtre de droits : on ne coupe que la liste rendue au client, jamais le moteur.
+    resultat = routes_assistants.avec_liens(resultat.model_copy(update={"passages": resultat.passages[:limite]}))
     return {
         "reponse": resultat.reponse,
+        "consigne_de_citation": CONSIGNE_DE_CITATION,
         "passages": [
             {
                 "titre": p.titre,
-                "texte": p.texte,
+                "texte": _extrait(p.texte, TEXTE_MAX),
                 "url": p.url,
                 "collection": {"id": p.source, "titre": _titre_source(charge, p.source)},
                 "score": p.score,
