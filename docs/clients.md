@@ -53,7 +53,8 @@ collections. Les questions (`/api/v1/search`, `/api/v1/assistants/{id}/executer`
 toujours un jeton.
 
 **Questions** : un assistant par `POST /api/v1/assistants/{id}/executer`, des collections par
-`GET /api/v1/search?q=…&scope=a,b`. Liens cités signés, valables 12 h. Avec `?assistant=`, un résultat peut venir d'un référentiel
+`GET /api/v1/search?q=…&scope=a,b`. Liens cités signés, valables 12 h. `GET /api/v1/search?assistant=<id>` planifie
+comme `executer` (consignes, régimes des sources), sans réponse fiable (le contrat v1 n'a pas de champ réponse). Avec `?assistant=`, un résultat peut venir d'un référentiel
 (source `connecteur`, `docs/assistants.md`) : `context.collection` porte l'identifiant et le titre du connecteur,
 `context.right` vaut `reader`, `url` et `hits[].url` sont `null` (aucun lien à signer). 429 porte `Retry-After`
 (recherche v1).
