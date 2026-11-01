@@ -132,6 +132,11 @@ def test_liens_cites_et_chemin():
     assert juges.chemin(liens[0]) == "/api/openrag/extract/m1"
 
 
+def test_le_crochet_de_citation_d_un_modele_ne_fait_pas_partie_du_lien():
+    texte = "Selon 【https://mycollections.fake-domain.name/api/openrag/extract/m3?exp=1&sig=c】."
+    assert juges.liens_cites(texte) == ["https://mycollections.fake-domain.name/api/openrag/extract/m3?exp=1&sig=c"]
+
+
 class _FausseCible:
     def __init__(self, statuts):
         self.statuts, self.vus = statuts, []

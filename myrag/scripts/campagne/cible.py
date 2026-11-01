@@ -182,6 +182,10 @@ class Seau:
         return round(60.0 / self.intervalle, 2) if self.intervalle else 0.0
 
 
+#: La route de vérification des liens cités : comptée, mais hors de la règle des 5xx.
+ROUTE_LIENS = "liens"
+
+
 class Garde:
     """Les règles d'arrêt d'une nuit (docs/campagne-recherche.md, « Règles d'arrêt »)."""
 
@@ -203,6 +207,8 @@ class Garde:
                 seau.ralentir()
             return
         self.suite_429[route] = 0
+        if route == ROUTE_LIENS:
+            return  # un lien cité qui casse est une mesure (rapport), pas une cible qui flanche
         self.derniers.append(statut == 0 or statut >= 500)
         if len(self.derniers) == FENETRE_5XX and sum(self.derniers) > PART_5XX_MAX * FENETRE_5XX:
             raise Arret("5xx", f"{sum(self.derniers)} erreurs serveur sur les {FENETRE_5XX} derniers appels")
@@ -311,7 +317,7 @@ class Cible:
         except (Arret, Usage):
             raise
         except Exception as e:  # noqa: BLE001 — le navigateur peut échouer de mille façons
-            raise SessionPerdue(f"la connexion a échoué ({type(e).__name__})") from e
+            raise SessionPerdue(f"la connexion a échoué ({type(e).__name__} : {str(e).splitlines()[0][:200] if str(e) else '—'})") from e
 
     def oublier_jeton(self) -> None:
         """Force le renouvellement au prochain appel (après un 401)."""
@@ -380,7 +386,7 @@ class Cible:
         if f"{u.scheme}://{u.netloc}" not in self.origines_liens:
             return None
         try:
-            return self.appel("GET", url, route="liens", authentifie=False, follow_redirects=False).status_code
+            return self.appel("GET", url, route=ROUTE_LIENS, authentifie=False, follow_redirects=False).status_code
         except httpx.TransportError:
             return 0
 

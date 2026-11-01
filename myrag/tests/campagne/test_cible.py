@@ -144,6 +144,15 @@ def test_plus_de_20_pourcent_de_5xx_sur_50_arrete_la_nuit():
     assert e.value.motif == "5xx"
 
 
+def test_les_liens_cites_qui_cassent_n_arretent_pas_la_nuit():
+    """Un lien cité en 500 se mesure (rapport) ; la règle des 5xx protège la cible, pas les liens."""
+    seau = c.Seau(0, lambda: 0.0, lambda s: None)
+    garde = c.Garde()
+    for _ in range(60):
+        garde.noter(c.ROUTE_LIENS, 500, seau)
+    assert sum(garde.derniers) == 0
+
+
 def test_un_incident_de_droits_arrete_tout_immediatement():
     with pytest.raises(c.Arret) as e:
         c.Garde().incident("un passage de essai-secrete")

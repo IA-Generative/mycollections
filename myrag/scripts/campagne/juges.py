@@ -115,8 +115,9 @@ def decisions_citees(texte: str) -> bool:
 
 CONTROLES = {"accord_avant_code": accord_avant_code, "pieces_listees": pieces_listees, "decisions_citees": decisions_citees}
 
-_LIEN_MD = re.compile(r"\]\((https?://[^\s)]+)\)")
-_LIEN_NU = re.compile(r"https?://[^\s<>()\[\]\"'`]+")
+# Les crochets de citation des modèles (« 【4†L1】 ») ne font jamais partie d'une adresse.
+_LIEN_MD = re.compile(r"\]\((https?://[^\s)【】]+)\)")
+_LIEN_NU = re.compile(r"https?://[^\s<>()\[\]\"'`【】]+")
 
 
 def liens_cites(texte: str | None) -> list[str]:

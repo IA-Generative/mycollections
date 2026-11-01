@@ -78,7 +78,7 @@ jouer qu'une.
 | Évènement | Effet |
 |---|---|
 | un passage d'une source que le compte ne lit pas (incident de droits) | arrêt immédiat, alerte en tête du rapport |
-| plus de 20 % de 5xx sur les 50 derniers appels | arrêt de la nuit |
+| plus de 20 % de 5xx sur les 50 derniers appels (hors vérification des liens cités, qui se mesure seulement) | arrêt de la nuit |
 | trois 429 de suite sur une route | cadence de la route divisée par deux ; une seconde rafale arrête la nuit |
 | cinq échecs de suite de la passerelle | arrêt de la nuit |
 | le même arrêt trois nuits de suite | la nuit suivante ne démarre pas (`--forcer` après correction) |
