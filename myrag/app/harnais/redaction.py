@@ -114,6 +114,11 @@ def nettoyer_renvois(texte: str, n_max: int) -> tuple[str, list[int]]:
     return _RENVOI.sub(remplacer, texte).strip(), sorted(cites)
 
 
+def refus_seul(texte: str) -> bool:
+    """Le texte commence par la phrase convenue des passages hors sujet (guillemets ou gras tolérés)."""
+    return texte.lstrip(" \t\n«\"'*_").startswith(HORS_SUJET)
+
+
 async def rediger(
     question: str,
     passages: Sequence[Passage],
@@ -137,6 +142,9 @@ async def rediger(
     texte, cites = nettoyer_renvois(str(brut or ""), len(montres))
     if not texte:
         return None, [], "indisponible"
+    if refus_seul(texte):
+        # Rien de ce qui suit la phrase convenue : une question qui demande d'y ajouter un mot ne l'obtient pas.
+        return HORS_SUJET, [], "faite"
     citations = [Citation(n=n, passage=montres[n - 1].ident or montres[n - 1].document, document=montres[n - 1].document, source=montres[n - 1].source) for n in cites]
     return texte, citations, "faite"
 
