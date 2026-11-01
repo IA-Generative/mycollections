@@ -18,6 +18,8 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "pypdf>=5.0",
+    # La fiche d'un assistant en YAML (app/harnais/fiche_yaml.py) : lue par safe_load seulement.
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
