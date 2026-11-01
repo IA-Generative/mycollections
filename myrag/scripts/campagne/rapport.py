@@ -74,6 +74,13 @@ def p95(valeurs: list[Any]) -> int | None:
     return int(v[max(0, math.ceil(0.95 * len(v)) - 1)]) if v else None
 
 
+def _arret_de_la_nuit(executions: list[dict]) -> dict | None:
+    """L'arrêt qui vaut pour la nuit : un arrêt immédiat (incident de droits) ne s'efface jamais ;
+    sinon celui de la dernière exécution — une reprise menée à terme lève l'arrêt d'avant."""
+    immediat = next((e["arret"] for e in executions if (e.get("arret") or {}).get("immediat")), None)
+    return immediat or ((executions[-1].get("arret") if executions else None) or None)
+
+
 def _juge(lignes: list[dict]) -> dict:
     verdicts = [(d.get("juge") or {}).get("verdict") for d in lignes]
     juges = [v for v in verdicts if v in POINTS]
@@ -190,7 +197,7 @@ def mesures(lignes: list[dict], etat: dict | None = None) -> dict:
     m = {
         "nuit": (etat or {}).get("nuit") or (lignes[0].get("nuit") if lignes else None),
         "genere": datetime.now().isoformat(timespec="seconds"),
-        "arret": next((e.get("arret") for e in reversed(executions) if e.get("arret")), None),
+        "arret": _arret_de_la_nuit(executions),
         "executions": len(executions),
         "reglages": (etat or {}).get("reglages"),
         "variantes": (etat or {}).get("variantes"),
