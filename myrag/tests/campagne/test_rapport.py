@@ -139,3 +139,14 @@ def test_les_mesures_mcp():
     assert agent["bon_choix_pct"] == 50.0 and agent["rechercher_appele_pct"] == 100.0 and agent["hors_catalogue_pct"] == 100.0
     assert agent["lister_jetons_estimes"] == 2000 and agent["appels_modele"] == 9
     assert m["mcp"]["rappel5_pct"] == 50.0
+
+
+def test_une_reprise_menee_a_terme_leve_l_arret_d_avant_sauf_un_incident_de_droits():
+    from scripts.campagne.rapport import _arret_de_la_nuit
+
+    cinq = {"motif": "5xx", "detail": "11 erreurs serveur", "immediat": False}
+    droits = {"motif": "incident-droits", "detail": "un passage hors droits", "immediat": True}
+    assert _arret_de_la_nuit([{"arret": cinq}, {"arret": None}]) is None
+    assert _arret_de_la_nuit([{"arret": None}, {"arret": cinq}]) == cinq
+    assert _arret_de_la_nuit([{"arret": droits}, {"arret": None}]) == droits
+    assert _arret_de_la_nuit([]) is None
