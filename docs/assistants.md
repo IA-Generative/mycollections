@@ -12,6 +12,64 @@ Contrat : `myrag/app/harnais/contrat.py`. Drapeau : `assistants` (capacites.json
 collection publiée a son assistant miroir à une source.
 
 
+## Le fichier YAML
+
+Une fiche s'écrit aussi en YAML, un fichier par assistant : une équipe l'écrit, le relit et le
+versionne dans git ; un testeur l'exporte et l'importe depuis l'écran **Consignes** (« Le fichier
+de la fiche »). Le YAML n'est qu'une écriture du contrat (`myrag/app/harnais/fiche_yaml.py`) : ce
+qui fait foi reste la fiche validée, son texte canonique et son empreinte. Exemple complet,
+données inventées : [`exemples/assistants/sejour-des-etrangers.yaml`](exemples/assistants/sejour-des-etrangers.yaml).
+
+| Clef YAML | Champ du contrat | Note |
+|-----------|------------------|------|
+| `assistant`, `titre`, `rubrique`, `description` | idem | `assistant` : 3 à 64 caractères, minuscules, chiffres, `.` `_` `-` ; c'est l'`{id}` de l'adresse |
+| `seuil_fiable` | idem (0 à 1, défaut 0.9) | au-dessus, une réponse fiable est servie sans recherche |
+| `validation_requise` | idem (défaut `false`) | |
+| `sources: [{id, type, regime, rang}]` | `Source` | `type` : `collection` ou `connecteur` ; `regime` : `toujours`, `selon_question` (défaut), `sur_consigne` ; `rang` facultatif, 1 = en premier |
+| `consignes: [{id, quand, exemples, chercher, repondre, gabarit}]` | `Consigne` | `quand: toujours` vaut pour toute question (une seule consigne) ; `exemples` : 10 au plus |
+| `chercher: [{source, avec}]` | `EtapeConsigne` | `source` : une des `sources` ; les étapes s'enchaînent dans l'ordre |
+| `contrat` | idem | facultatif : seule la version 1 existe ; l'en-tête la rappelle en commentaire |
+| `publication`, `reference` | — | ignorées à l'import, avec un avertissement : les canaux se règlent dans l'écran Publication (ceux du brouillon restent), `reference` est calculée |
+
+`avec` nomme un **relais** (`article_trouve`, `reference`… : minuscules, chiffres et `_`) : l'étape
+reçoit ce que les étapes précédentes ont trouvé, et l'effet dépend de la source qui le reçoit.
+Une collection : la question est précisée par le meilleur passage amont. Un référentiel
+(connecteur) : on y cherche la référence courte de ce passage (l'article, le titre). Jamais sur la
+première étape, où rien n'a encore été trouvé.
+
+L'export écrit, en commentaires, `# contrat: 1 · empreinte: sha256:<…>` — l'empreinte que prendra
+la version publiée de ce contenu (`GET /api/assistants/{id}/versions` permet de comparer) — et le
+résumé de `reference` (questions, fiables). L'ordre des clefs est fixe (identité et réglages, puis
+sources et consignes ; dans un objet, l'ordre du contrat), une source ou une étape tient sur une
+ligne, les valeurs par défaut des champs facultatifs ne s'écrivent pas : réexporter une fiche
+inchangée rend le même fichier, et le diff d'une revue ne montre que ce qui change.
+
+La lecture est sûre : `yaml.safe_load` seulement (une balise `!!python/…` est refusée), ni alias
+(`*nom`), ni clef en double, 64 Kio au plus. Une erreur dit le champ et la règle, en français :
+`consignes[2] (accord-bilateral) › chercher[1] › source : …` (rangs comptés à partir de 1).
+
+- `GET /api/assistants/{id}/fiche.yaml` : le brouillon (`text/yaml`, `<id>.yaml`), mêmes droits
+  que `GET /api/assistants/{id}`. Qui ne gère pas l'assistant reçoit ce qu'il lit : les
+  collections qu'il ne lit pas sont absentes, et l'en-tête le dit.
+- `PUT /api/assistants/{id}/fiche.yaml` (corps : le fichier) : remplace le brouillon, avec les
+  droits et les règles de `PUT /api/assistants/{id}` ; 400 si `assistant:` diffère de `{id}`,
+  422 `{detail: {message, erreurs: [{champ, message}]}}` si le fichier est invalide, 413 au-delà
+  de 64 Kio. Rend la fiche enregistrée, `avertissements` et `empreinte`. Publier reste un geste à
+  part (`POST …/publier`).
+
+En ligne de commande (depuis `myrag/`, hors de l'image) :
+
+    uv run python -m scripts.fiche verifier ../docs/exemples/assistants/sejour-des-etrangers.yaml
+    uv run python -m scripts.fiche exporter <id> --cible https://mycollections.fake-domain.name --jeton-env JETON --sortie <id>.yaml
+    uv run python -m scripts.fiche appliquer <id>.yaml --cible https://mycollections.fake-domain.name --jeton-env JETON [--publier]
+
+`verifier` ne touche pas le réseau : il valide le fichier et affiche son empreinte (de quoi le
+contrôler en CI). `exporter` et `appliquer` agissent avec les droits de la personne dont le jeton
+d'accès est lu dans la variable nommée par `--jeton-env` — jamais passé en argument ; `--cible`
+en https (http seulement vers `localhost`). Codes de sortie : 0 réussi, 1 refusé, 2 usage ou
+service injoignable.
+
+
 ## Le harnais (lot A)
 
 `myrag/app/harnais/` (sans FastAPI ni base, sauf `journal.py`) : un planificateur produit un plan, `execution.py`
