@@ -8,7 +8,20 @@ import pytest
 
 from app.harnais import perimetre
 from app.harnais.contrat import Etape, Plan
-from tests.harnais.conftest import IDENTITES, LISIBLES, SOURCES_FICHE, passage
+from tests.conftest import SUPERADMIN
+from tests.harnais.conftest import IDENTITES, LISIBLES, SOURCES_FICHE, fiche_d_essai, passage
+
+
+@pytest.fixture
+def assistant_publie(client, en_tant_que, jeu, ident_assistant):
+    """La fiche d'essai, mais ses trois sources `toujours` : le planificateur par règles les vise
+    toutes, ce qui ne reste à écarter est l'affaire du seul périmètre de la personne."""
+    en_tant_que(SUPERADMIN)
+    fiche = fiche_d_essai(jeu, ident_assistant)
+    fiche = fiche.model_copy(update={"sources": [s.model_copy(update={"regime": "toujours"}) for s in fiche.sources]})
+    assert client.put(f"/api/assistants/{ident_assistant}", json=fiche.model_dump(mode="json")).status_code == 200
+    assert client.post(f"/api/assistants/{ident_assistant}/publier").status_code == 200
+    return ident_assistant
 
 
 def _collections_vues(corps: dict) -> set[str]:

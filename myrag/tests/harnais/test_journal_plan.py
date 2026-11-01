@@ -59,16 +59,17 @@ def test_le_temoin_de_la_question_n_apparait_ni_en_base_ni_dans_les_journaux(cli
 
 def test_la_ligne_porte_les_compteurs_et_l_auteur_condense(client, en_tant_que, jeu, assistant_publie, theatre_branche):
     en_tant_que(IDENTITES["alice"])
-    client.get("/api/v1/search", params={"q": "budget", "assistant": assistant_publie})
+    # Ressemble à la fiche de `partagee` (selon_question) : retenue avec `mienne` (toujours).
+    client.get("/api/v1/search", params={"q": "Les méthodes de l'équipe pour le budget", "assistant": assistant_publie})
     con = sqlite3.connect(os.environ["DATABASE_URL"].split("///")[-1])
     con.row_factory = sqlite3.Row
     try:
         ligne = con.execute("SELECT * FROM plans_journal WHERE assistant_id = ?", (assistant_publie,)).fetchone()
     finally:
         con.close()
-    assert ligne["canal"] == "portail" and ligne["planificateur"] == "toutes_les_sources"
+    assert ligne["canal"] == "portail" and ligne["planificateur"] == "regles"
     assert ligne["nb_etapes"] == 2 and ligne["nb_passages"] == 4  # mienne + partagee, deux passages chacune
-    assert ligne["sources_ignorees"] == 1  # `secrete` : un compte, jamais un nom
+    assert ligne["sources_ignorees"] == 0  # `secrete` (sur_consigne) n'était pas visée
     assert ligne["robot"] is None and len(ligne["auteur_hash"]) == 64 and "alice" not in ligne["auteur_hash"]
     assert len(ligne["empreinte"]) == 64 and ligne["version"] == 1
     assert jeu["secrete"] not in ligne["etapes_json"]

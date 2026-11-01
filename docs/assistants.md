@@ -17,8 +17,10 @@ collection publiée a son assistant miroir à une source.
 `myrag/app/harnais/` (sans FastAPI ni base, sauf `journal.py`) : un planificateur produit un plan, `execution.py`
 l'exécute (étapes en parallèle, relais `avec`, source en panne ignorée et comptée), `fusion.py` fusionne (RRF, k = 60,
 poids par étape, quota des sources `toujours`), `perimetre.py` ne garde que ce que la personne lit. Planificateurs :
-`toutes_les_sources` (recherche `GET /api/v1/search?assistant=<id>`) et `regles` (consigne reconnue par ressemblance au
-« quand » et aux exemples ; sinon régimes des sources, jamais `sur_consigne`). Routes `POST /api/v1/assistants/{id}/plan`
+`toutes_les_sources` (banc de comparaison) et `regles` (consigne reconnue par ressemblance au
+« quand » et aux exemples ; sinon régimes des sources, jamais `sur_consigne`). La recherche
+`GET /api/v1/search?assistant=<id>` suit la fiche comme les routes ci-dessous et le serveur MCP (`regles`), mais sans
+réponse fiable : le contrat v1 n'a pas de champ pour la rendre. Routes `POST /api/v1/assistants/{id}/plan`
 et `/executer` : la version enregistrée pour qui peut modifier, la publiée pour les autres. Le journal (`plans_journal`)
 ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure répond (en-tête `X-Mycollections-Doublure: 1`).
 

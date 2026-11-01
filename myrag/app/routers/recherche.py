@@ -587,6 +587,9 @@ async def _notices(noms: list[str], lisibles: dict[str, dict], user: CurrentUser
 async def _rechercher_par_assistant(ident: str, texte: str, limite: int, depuis, jusqu, demandees: list[str] | None, user: CurrentUser) -> dict:
     """`?assistant=<id>` : les résultats viennent de l'exécution du plan de l'assistant (sa
     version publiée), dans le périmètre de la personne ; la réponse porte en plus la clé `plan`.
+    Le plan suit la fiche comme `plan`/`executer` et le serveur MCP (planificateur par règles :
+    consignes, régimes des sources, jamais une `sur_consigne` qu'aucune consigne ne cite), mais
+    sans réponse fiable : le contrat v1 n'a pas de champ pour la rendre, elle se perdrait.
     Assistant inconnu, jamais publié ou hors de portée, ou drapeau éteint : 404."""
     await capacite("assistants")()  # 404 si le drapeau « assistants » n'est pas allumé
     try:
@@ -601,7 +604,7 @@ async def _rechercher_par_assistant(ident: str, texte: str, limite: int, depuis,
         charge.lisibles = [n for n in charge.lisibles if n in demandees]
     top_k = min(200, max(20, limite * 3))
     ctx = assistant_recherche.contexte(charge, "portail", top_k=top_k)
-    plan = await assistant_recherche.planifier(charge, texte, ctx)
+    plan = await assistant_recherche.planifier(charge, texte, ctx, assistant_recherche.planificateur_regles(charge), avec_fiables=False)
     resultat, execution = await assistant_recherche.executer(charge, plan, user, hash_, "portail", top_k=top_k)
     if execution.toutes_en_panne:
         logger.warning("Recherche par assistant : moteur indisponible (%d étape(s))", len(execution.sorties))

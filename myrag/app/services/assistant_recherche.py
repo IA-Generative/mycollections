@@ -92,9 +92,10 @@ async def reponse_fiable(charge: Charge, question: str, app: Apparieur | None = 
 
 
 async def planifier(charge: Charge, question: str, ctx: Contexte, planificateur: Planificateur | None = None, *, avec_fiables: bool = False, app: Apparieur | None = None) -> Plan:
-    """Le plan de la recherche v1 (`?assistant=`) : toutes les sources lisibles. Les routes `plan` /
-    `executer` passent `planificateur_regles(charge)` et `avec_fiables=True` : une réponse fiable
-    reconnue donne un plan sans étape, qui dispense de toute recherche."""
+    """Le plan d'une question. Sans planificateur : toutes les sources lisibles. Les routes `plan` /
+    `executer`, le serveur MCP et la recherche v1 (`?assistant=`) passent `planificateur_regles(charge)` ;
+    seuls les trois premiers passent `avec_fiables=True` : une réponse fiable reconnue donne un plan
+    sans étape, qui dispense de toute recherche (la recherche v1 n'a pas de champ pour la rendre)."""
     if avec_fiables:
         app = app or apparieur()
         retenue = await reponse_fiable(charge, question, app)
