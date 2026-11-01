@@ -211,7 +211,7 @@ def test_le_catalogue_tire_un_passage_et_fait_ecrire_la_question(tmp_path, varia
 )
 def test_lire_fenetre(texte, attendu):
     f = run.lire_fenetre(texte)
-    assert (f.debut, f.fin) == attendu
+    assert f is not None and (f.debut, f.fin) == attendu
     assert run.lire_fenetre("maintenant") is None
     with pytest.raises(Usage):
         run.lire_fenetre("ce soir")

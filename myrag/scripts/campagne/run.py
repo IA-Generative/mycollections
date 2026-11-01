@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import time as heure
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -389,6 +390,7 @@ class Campagne:
 
 def ecrire_etat(r: Reglages, execution: dict) -> None:
     chemin = r.dossier / "etat.json"
+    etat: dict[str, Any]
     try:
         etat = json.loads(chemin.read_text(encoding="utf-8"))
     except (OSError, ValueError):

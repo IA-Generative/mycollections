@@ -69,7 +69,7 @@ def _part(valeurs: list[Any]) -> float | None:
     return pct(sum(1 for v in mesurees if v), len(mesurees))
 
 
-def p95(valeurs: list[int]) -> int | None:
+def p95(valeurs: list[Any]) -> int | None:
     v = sorted(x for x in valeurs if isinstance(x, (int, float)))
     return int(v[max(0, math.ceil(0.95 * len(v)) - 1)]) if v else None
 
@@ -123,7 +123,12 @@ def _ecart_score(par_variante: dict[str, list[dict]], base: str, essai: str) -> 
     """Score (juge) de `essai` moins celui de `base`, sur les questions jugées dans les deux."""
 
     def scores(nom: str) -> dict[str, float]:
-        return {d["question"]: POINTS[(d.get("juge") or {}).get("verdict")] for d in par_variante.get(nom, []) if (d.get("juge") or {}).get("verdict") in POINTS}
+        sortie: dict[str, float] = {}
+        for d in par_variante.get(nom, []):
+            verdict = (d.get("juge") or {}).get("verdict")
+            if isinstance(verdict, str) and verdict in POINTS:
+                sortie[d["question"]] = POINTS[verdict]
+        return sortie
 
     a, b = scores(essai), scores(base)
     communes = set(a) & set(b)
