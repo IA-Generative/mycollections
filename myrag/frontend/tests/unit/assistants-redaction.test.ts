@@ -1,6 +1,6 @@
 import type { PassageAssistant } from '../../utils/assistants'
 import { describe, expect, it } from 'vitest'
-import { lierCitations, numeroCitation, reponseAffichee, texteSansReponse } from '../../utils/assistants'
+import { lierCitations, numeroCitation, passagesCites, reponseAffichee, texteSansReponse } from '../../utils/assistants'
 
 function passage (n: number, extra: Partial<PassageAssistant> = {}): PassageAssistant {
   return {
@@ -57,5 +57,17 @@ describe('numeroCitation', () => {
     expect(numeroCitation({ target: cible('2'), ctrlKey: true })).toBeNull()
     expect(numeroCitation({ target: cible('2'), metaKey: true })).toBeNull()
     expect(numeroCitation({ target: cible('2'), button: 1 })).toBeNull()
+  })
+})
+
+describe('passagesCites', () => {
+  const cite = (n: number) => ({ n, passage: `p${n}`, source: 'methodes' })
+  it('numéros croissants, sans doublon ni renvoi hors des passages', () => {
+    expect(passagesCites({ passages: PASSAGES, redaction: 'faite', citations: [cite(3), cite(1), cite(3), cite(7)] })).toEqual([1, 3])
+  })
+  it('réponse rédigée sans citation : liste vide ; sans rédaction : rien à trier', () => {
+    expect(passagesCites({ passages: PASSAGES, redaction: 'faite', citations: [] })).toEqual([])
+    expect(passagesCites({ passages: PASSAGES, redaction: 'indisponible' })).toBeUndefined()
+    expect(passagesCites({ passages: PASSAGES })).toBeUndefined()
   })
 })

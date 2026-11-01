@@ -536,6 +536,18 @@ export function reponseAffichee (r: Pick<ResultatAssistant, 'reponse' | 'passage
   return texte && r.redaction === 'faite' ? lierCitations(texte, r.passages) : texte
 }
 
+/**
+ * Les numéros des passages cités par une réponse rédigée (le renvoi [n] désigne `passages[n - 1]`),
+ * croissants et sans doublon ; `undefined` sans réponse rédigée : les puces ne se trient pas.
+ */
+export function passagesCites (r: Pick<ResultatAssistant, 'passages' | 'citations' | 'redaction'>): number[] | undefined {
+  if (r.redaction !== 'faite') {
+    return undefined
+  }
+  const n = r.passages.length
+  return [...new Set((r.citations || []).map(c => c.n))].filter(i => Number.isInteger(i) && i >= 1 && i <= n).sort((a, b) => a - b)
+}
+
 /** Ce que dit l'assistant quand il n'a pas de réponse à montrer. */
 export function texteSansReponse (r: Pick<ResultatAssistant, 'passages' | 'redaction'>): string {
   const n = r.passages.length

@@ -13,7 +13,7 @@ import { transformWithEsbuild } from 'vite'
  * Le serveur aplatit les sources d'OpenRAG 2.3 (métadonnées sous `chunk`) avant de les rendre :
  * le front reçoit toujours des sources à plat.
  */
-async function puces(sources: any[]): Promise<any[]> {
+async function liaisons(sources: any[], cites?: number[]): Promise<any> {
   const fichier = fileURLToPath(new URL('../../components/playground/ChatMessage.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(fichier, 'utf8'), { filename: fichier })
   const script = compileScript(descriptor, { id: 'chat-message', inlineTemplate: false })
@@ -26,8 +26,10 @@ async function puces(sources: any[]): Promise<any[]> {
   // `computed` et `ref` sont importés automatiquement par Nuxt : on les fournit.
   new Function('require', 'module', 'exports', 'computed', 'ref', code)((n: string) => modules[n] ?? {}, module, module.exports, computed, ref)
   const composant = module.exports.default
-  const liaisons = composant.setup({ message: { role: 'assistant', content: 'Réponse.', sources } }, { expose: () => {}, emit: () => {} })
-  return liaisons.deduped.value
+  return composant.setup({ message: { role: 'assistant', content: 'Réponse.', sources }, cites }, { expose: () => {}, emit: () => {} })
+}
+async function puces(sources: any[]): Promise<any[]> {
+  return (await liaisons(sources)).deduped.value
 }
 
 const docA = { _id: '4567', filename: 'CESEDA_L423_1.md', original_filename: 'CESEDA-L423-1.md', page: 3, chunk_url: '/api/openrag/extract/4567' }
@@ -54,5 +56,19 @@ describe('ChatMessage.vue — une puce par fichier', () => {
   it('sans aplatissement côté serveur, des sources 2.3 (sous `chunk`) fusionneraient en une seule puce', async () => {
     const niche = (s: any) => ({ source_type: 'document', chunk: s, chunk_url: s.chunk_url })
     expect((await puces([niche(docA), niche(docB), niche(docC)])).length).toBe(1)
+  })
+})
+
+describe('ChatMessage.vue — réponse rédigée d\'un assistant (`cites`)', () => {
+  it('les passages cités gardent leur numéro de renvoi ; les autres se replient, un par fichier', async () => {
+    const l = await liaisons([docA, docABis, docB, docC], [2, 4])
+    expect(l.pucesCitees.value.map((p: any) => [p.n, p.source._id])).toEqual([[2, '4568'], [4, '9001']])
+    expect(l.autresPuces.value.map((s: any) => s._id)).toEqual(['4567', '7001'])
+  })
+
+  it('aucun passage cité (« ne répond pas ») : tout se replie', async () => {
+    const l = await liaisons([docA, docB], [])
+    expect(l.pucesCitees.value).toEqual([])
+    expect(l.autresPuces.value.length).toBe(2)
   })
 })
