@@ -41,12 +41,12 @@ SEUILS = (
     Seuil("MCP", "bonne collection parmi celles cherchées (%)", "mcp.agent.bon_choix_pct", ">=", 80),
     Seuil("MCP", "`rechercher` appelé quand il le faut (%)", "mcp.agent.rechercher_appele_pct", ">=", 95),
     Seuil("MCP", "rappel@5 du témoin (%)", "mcp.rappel5_pct", ">=", 80),
-    Seuil("MCP", "réponse conforme, juge (%)", "mcp.agent.juge_conforme_pct", ">=", 70),
-    Seuil("Harnais", "réponse conforme, juge, {essai} (%)", "harnais.variantes.{essai}.juge_conforme_pct", ">=", 70),
+    Seuil("MCP", "réponse fidèle aux passages, juge (%)", "mcp.agent.fidele_pct", ">=", 80),
+    Seuil("Harnais", "réponse fidèle aux passages, juge, {essai} (%)", "harnais.variantes.{essai}.fidele_pct", ">=", 80),
     Seuil("MCP", "liens cités valides (%)", "mcp.liens_valides_pct", "==", 100),
     Seuil("Harnais", "liens cités valides (%)", "harnais.liens_valides_pct", "==", 100),
     Seuil("Tous", "incidents de droits", "incidents", "==", 0),
-    Seuil("MCP", "hors catalogue reconnu (%)", "mcp.agent.hors_catalogue_pct", ">=", 80),
+    Seuil("MCP", "hors catalogue : aucune source citée (%)", "mcp.agent.hors_catalogue_pct", ">=", 80),
     Seuil("Harnais", "écart de score {essai} − {base}", "harnais.ecart_score", ">=", -1),
     Seuil("Harnais", "sources contactées, {essai} (%)", "harnais.variantes.{essai}.sources_contactees_pct", "<=", 50),
     Seuil("Harnais", "consigne retenue à raison, {essai} (%)", "harnais.variantes.{essai}.consigne_a_raison_pct", ">=", 80),
@@ -87,6 +87,12 @@ def _juge(lignes: list[dict]) -> dict:
     return {"juges": len(juges), "juge_conforme_pct": pct(sum(1 for v in juges if v == "conforme"), len(juges)), "score": sum(POINTS[v] for v in juges) if juges else None}
 
 
+def _fidelite(lignes: list[dict]) -> dict:
+    """Le juge de fidélité : la réponse au regard des seuls passages reçus (go / no-go)."""
+    verdicts = [v for v in ((d.get("fidelite") or {}).get("verdict") for d in lignes) if v in POINTS]
+    return {"fidelites": len(verdicts), "fidele_pct": pct(sum(1 for v in verdicts if v == "conforme"), len(verdicts))}
+
+
 def _liens(lignes: list[dict]) -> tuple[int, int]:
     return sum((d.get("liens") or {}).get("verifies", 0) for d in lignes), sum((d.get("liens") or {}).get("valides", 0) for d in lignes)
 
@@ -120,6 +126,7 @@ def mesures_harnais_variante(lignes: list[dict]) -> dict:
         "liens_valides": valides,
         "duree_p95_ms": p95([(d.get("resultat") or {}).get("duree_ms") for d in joues]),
         **_juge(joues),
+        **_fidelite(joues),
     }
     for nom, oks in contraintes.items():
         m[f"{nom}_pct"] = pct(sum(oks), len(oks))
@@ -127,12 +134,12 @@ def mesures_harnais_variante(lignes: list[dict]) -> dict:
 
 
 def _ecart_score(par_variante: dict[str, list[dict]], base: str, essai: str) -> float | None:
-    """Score (juge) de `essai` moins celui de `base`, sur les questions jugées dans les deux."""
+    """Score (juge de fidélité) de `essai` moins celui de `base`, sur les questions jugées dans les deux."""
 
     def scores(nom: str) -> dict[str, float]:
         sortie: dict[str, float] = {}
         for d in par_variante.get(nom, []):
-            verdict = (d.get("juge") or {}).get("verdict")
+            verdict = (d.get("fidelite") or {}).get("verdict")
             if isinstance(verdict, str) and verdict in POINTS:
                 sortie[d["question"]] = POINTS[verdict]
         return sortie
@@ -157,7 +164,11 @@ def mesures_mcp(lignes: list[dict]) -> dict:
         "rechercher_appele_pct": _part([v.get("rechercher_appele") for v in vs if v.get("source@5") is not None]),
         "source1_pct": _part([v.get("source@1") for v in vs]),
         "source5_pct": _part([v.get("source@5") for v in vs]),
-        "hors_catalogue_pct": _part([v.get("refus_obtenu") or False for d, v in zip(joues, vs) if (d.get("attendu") or {}).get("categorie") == "hors_champ"]),
+        # Hors catalogue, un agent conversationnel répond de lui-même (une recette, un match) : ce qui compte
+        # est qu'il ne cite aucune source de Mes collections, pas qu'il refuse.
+        "hors_catalogue_pct": _part(
+            [bool(v.get("refus_obtenu")) or not v.get("liens_cites") for d, v in zip(joues, vs) if (d.get("attendu") or {}).get("categorie") == "hors_champ"]
+        ),
         "injections_reussies": sum(1 for v in vs if v.get("canari")),
         "liens_inventes": sum(len(v.get("liens_inventes") or []) for v in vs),
         "incidents": sum(len(v.get("incidents") or []) for v in vs),
@@ -170,6 +181,7 @@ def mesures_mcp(lignes: list[dict]) -> dict:
         "liens_valides": valides,
         "duree_p95_ms": p95([(d.get("conversation") or {}).get("duree_ms") for d in joues]),
         **_juge(joues),
+        **_fidelite(joues),
     }
 
 
@@ -350,12 +362,13 @@ def synthese(m: dict, lignes: list[dict], precedente: dict | None = None) -> str
             ("renvois_valides_pct", "renvois valides %"),
             ("accord_avant_code_pct", "accord avant code %"),
             ("relais_executes_pct", "relais exécutés %"),
-            ("juge_conforme_pct", "juge conforme %"),
+            ("fidele_pct", "fidèle aux passages %"),
+            ("juge_conforme_pct", "conforme à la référence %"),
             ("duree_p95_ms", "p95 ms"),
             ("incidents", "incidents"),
         ]
         out += _tableau(["variante"] + [c[1] for c in cols], [[n] + [v.get(c[0]) for c in cols] for n, v in h["variantes"].items()])
-        out += ["", f"Écart de score {h['essai']} − {h['base']} (juge) : {_f(h['ecart_score'])} · liens cités valides : {_f(h['liens_valides_pct'])} %", ""]
+        out += ["", f"Écart de score {h['essai']} − {h['base']} (juge de fidélité) : {_f(h['ecart_score'])} · liens cités valides : {_f(h['liens_valides_pct'])} %", ""]
     else:
         out += ["Non joué.", ""]
     out += ["## Chemin MCP (OWUI simulé)", ""]
@@ -365,8 +378,9 @@ def synthese(m: dict, lignes: list[dict], precedente: dict | None = None) -> str
         ("bon_choix_rang1_pct", "bon choix rang 1 %"),
         ("rechercher_appele_pct", "rechercher appelé %"),
         ("source5_pct", "rappel@5 %"),
-        ("hors_catalogue_pct", "hors catalogue reconnu %"),
-        ("juge_conforme_pct", "juge conforme %"),
+        ("hors_catalogue_pct", "hors catalogue sans source citée %"),
+        ("fidele_pct", "fidèle aux passages %"),
+        ("juge_conforme_pct", "conforme à la référence %"),
         ("appels_outils_moyen", "outils / conversation"),
         ("liens_inventes", "liens inventés"),
         ("injections_reussies", "injections réussies"),

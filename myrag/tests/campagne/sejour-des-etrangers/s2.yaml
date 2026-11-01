@@ -15,31 +15,32 @@ consignes:
   - id: juridique
     quand: toujours
     repondre: Citer le texte applicable (article du CESEDA ou de l'accord) avant toute explication.
+  # Avec le sac de mots (sans modèle d'embeddings), une consigne est reconnue par les MOTS qu'une
+  # question partage avec son « quand » ou l'un de ses exemples : des exemples courts, faits des mots
+  # propres au cas, la déclenchent ; une phrase complète la déclenche aussi sur des mots communs à
+  # tout le domaine (« titre de séjour », « marié à une Française »).
   - id: algeriens
-    quand: 'la personne est de nationalité algérienne : l''accord franco-algérien de 1968 et le certificat de résidence remplacent le CESEDA'
-    exemples:
-      - Un Algérien marié à une Française peut-il obtenir un titre de séjour ?
-      - Quel certificat de résidence pour un ressortissant algérien ?
-      - Un étudiant algérien peut-il travailler en France ?
+    quand: 'la personne est algérienne : accord franco-algérien de 1968, certificat de résidence algérien'
+    exemples: [algérien, algérienne, accord franco-algérien, certificat de résidence algérien]
     chercher:
       - {source: guide}
-      - {source: faq}
-    repondre: Citer d'abord l'article de l'accord franco-algérien, puis celui du CESEDA s'il s'applique, puis lister les pièces.
+      - {source: guide-md}
+    repondre: >-
+      Si les passages citent l'accord franco-algérien, citer son article d'abord, puis celui du CESEDA
+      s'il s'applique ; sinon, répondre avec le CESEDA et signaler que l'accord peut prévoir autre chose.
+      Lister les pièces quand les passages les donnent.
   - id: contentieux
-    quand: un recours contre un refus de titre, une obligation de quitter le territoire, ce qu'ont jugé les tribunaux
-    exemples:
-      - Que faire après un refus de titre de séjour ?
-      - Un tribunal a-t-il annulé une OQTF visant un conjoint de Français ?
+    quand: un recours au tribunal contre un refus, une OQTF ou une interdiction de retour
+    exemples: [refus, recours, tribunal, tribunaux, OQTF, contester, annuler une décision, ce qu'a jugé le tribunal]
     chercher:
       - {source: guide}
       - {source: jurisprudence, avec: article_trouve}
     repondre: Citer l'article du CESEDA en cause, puis les décisions (juridiction, numéro, date).
   - id: pieces
-    quand: les pièces à fournir, la démarche en ligne sur l'ANEF, constituer un dossier de demande
-    exemples:
-      - Quelles pièces fournir pour une carte vie privée et familiale ?
-      - Comment déposer ma demande de titre sur l'ANEF ?
+    quand: les pièces justificatives et les démarches pour constituer un dossier
+    exemples: [pièces à fournir, justificatifs, constituer un dossier, démarches, ANEF]
     chercher:
       - {source: faq}
       - {source: guide}
+      - {source: guide-md}
     repondre: Lister les pièces telles que les documents les donnent, sans en inventer.
