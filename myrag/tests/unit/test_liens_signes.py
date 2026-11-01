@@ -100,6 +100,14 @@ def test_un_extrait_signe_s_ouvre_sans_jeton(client, auth, faux_openrag):
     assert client.get(f"/api/openrag/extract/13?exp={q['exp']}&sig={q['sig']}").status_code == 401
 
 
+def test_une_signature_non_ascii_est_refusee_sans_erreur(client, auth, faux_openrag):
+    """Un agent conversationnel colle parfois un « 】 » au bout du lien cité : 401, pas 500."""
+    auth()
+    q = liens.parametres(liens.portee_extrait("12"))
+    assert client.get(f"/api/openrag/extract/12?exp={q['exp']}&sig={q['sig']}%E3%80%91").status_code == 401
+    assert not liens.valide(liens.portee_extrait("12"), q["exp"], q["sig"] + "】")
+
+
 def test_avec_un_jeton_on_lit_ce_qu_on_peut_lire(client, creer_collection, nom, auth, faux_openrag):
     creer_collection(nom)
     auth()

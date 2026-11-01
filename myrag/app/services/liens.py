@@ -62,7 +62,9 @@ def valide(portee: str, exp: str | None, sig: str | None) -> bool:
         return False
     if echeance < time.time():
         return False
-    return hmac.compare_digest(_sig(cle, portee, echeance), sig)
+    # compare_digest refuse une chaîne non ASCII (TypeError, donc 500) : un agent conversationnel
+    # colle parfois un « 】 » de sa propre citation au bout du lien. Ce n'est qu'une signature fausse.
+    return sig.isascii() and hmac.compare_digest(_sig(cle, portee, echeance), sig)
 
 
 def portee_extrait(ident: str) -> str:
