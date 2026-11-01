@@ -84,6 +84,17 @@ def resumer(nom: str, args: dict, corps: Any, erreur: bool, octets: int) -> dict
     return ligne
 
 
+def textes_des_passages(texte: str) -> list[str]:
+    """Les textes des passages rendus par `rechercher` : ce que le modèle a lu (pour le juge de fidélité)."""
+    try:
+        corps = json.loads(texte)
+    except ValueError:
+        return []
+    if not isinstance(corps, dict):
+        return []
+    return [str(p.get("texte") or "") for p in corps.get("passages") or [] if isinstance(p, dict)]
+
+
 class Agent:
     def __init__(self, cible: Cible, passerelle: Passerelle, *, modele: str = MODELE, max_tours: int = MAX_TOURS, horloge: Callable[[], float] = time.monotonic):
         self.cible, self.passerelle, self.modele, self.max_tours, self._horloge = cible, passerelle, modele, max_tours, horloge
@@ -109,6 +120,7 @@ class Agent:
         outils = self.outils()
         messages: list[dict] = [{"role": "system", "content": SYSTEME}, {"role": "user", "content": question}]
         trace: list[dict] = []
+        contexte: list[str] = []
         debut, appels = self._horloge(), 0
         for _ in range(self.max_tours):
             rep = self.passerelle.completer({"model": self.modele, "messages": messages, "tools": outils, "tool_choice": "auto", "temperature": 0})
@@ -116,7 +128,15 @@ class Agent:
             m = (rep.get("choices") or [{}])[0].get("message") or {}
             messages.append({k: v for k, v in m.items() if k in ("role", "content", "tool_calls")})
             if not m.get("tool_calls"):
-                return {"question": question, "trace": trace, "reponse": m.get("content"), "tours": appels, "appels_modele": appels, "duree_ms": self._ms(debut)}
+                return {
+                    "question": question,
+                    "trace": trace,
+                    "contexte": contexte,
+                    "reponse": m.get("content"),
+                    "tours": appels,
+                    "appels_modele": appels,
+                    "duree_ms": self._ms(debut),
+                }
             for tc in m["tool_calls"]:
                 fonction = tc.get("function") or {}
                 try:
@@ -125,8 +145,19 @@ class Agent:
                     args = {}
                 texte, ligne = self._appeler_outil(fonction.get("name", ""), args if isinstance(args, dict) else {})
                 trace.append(ligne)
+                if fonction.get("name") == "rechercher":
+                    contexte += textes_des_passages(texte)
                 messages.append({"role": "tool", "tool_call_id": tc.get("id"), "content": texte[:TRONQUE]})
-        return {"question": question, "trace": trace, "reponse": None, "tours": appels, "appels_modele": appels, "duree_ms": self._ms(debut), "arret": "trop de tours"}
+        return {
+            "question": question,
+            "trace": trace,
+            "contexte": contexte,
+            "reponse": None,
+            "tours": appels,
+            "appels_modele": appels,
+            "duree_ms": self._ms(debut),
+            "arret": "trop de tours",
+        }
 
     def ecrire_question(self, extrait: str) -> str | None:
         """Une question à laquelle ce passage répond (catalogue réel) ; le passage est une DONNÉE encadrée."""

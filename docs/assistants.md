@@ -31,6 +31,14 @@ données inventées : [`exemples/assistants/sejour-des-etrangers.yaml`](exemples
 | `contrat` | idem | facultatif : seule la version 1 existe ; l'en-tête la rappelle en commentaire |
 | `publication`, `reference` | — | ignorées à l'import, avec un avertissement : les canaux se règlent dans l'écran Publication (ceux du brouillon restent), `reference` est calculée |
 
+**Écrire `quand` et `exemples`.** Sans `MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE`, une consigne est reconnue
+par les mots qu'une question partage avec son « quand » ou l'un de ses exemples (cosinus de sacs de mots, seuil 0,3).
+Des exemples **courts, faits des mots propres au cas** (`[algérien, algérienne, accord franco-algérien]`,
+`[recours, tribunal, OQTF]`) la déclenchent à raison. Une phrase complète (« Un Algérien marié à une Française
+peut-il obtenir un titre de séjour ? ») la déclenche aussi à tort, sur des mots communs à tout le domaine (« marié à
+une Française », « titre de séjour ») : sur le jeu de la campagne, 17,5 % de consignes retenues à tort avec des
+phrases, aucune avec des mots propres au cas (`docs/campagne-recherche.md`).
+
 `avec` nomme un **relais** (`article_trouve`, `reference`… : minuscules, chiffres et `_`) : l'étape
 reçoit ce que les étapes précédentes ont trouvé, et l'effet dépend de la source qui le reçoit.
 Une collection : la question est précisée par le meilleur passage amont. Un référentiel

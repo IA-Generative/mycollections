@@ -13,9 +13,12 @@ Déterministes (aucun appel) :
 
 Bornés (appels à la cible, sans jeton) : les liens cités répondent 200.
 
-Juge-modèle (`--juge-modele`) : la consigne et le format de `app/services/mesure/juge.py`
-(conforme / partiel / non_conforme), la règle « répondre » de la consigne en plus, par la
-passerelle avec la clef de la campagne.
+Juge-modèle (`--juge-modele`), par la passerelle avec la clef de la campagne, au format de
+`app/services/mesure/juge.py` (conforme / partiel / non_conforme) :
+- fidélité : la réponse au regard des SEULS passages reçus (rien d'inventé, rien de refusé à tort) ;
+  c'est la mesure de go / no-go, car les réponses de référence du jeu sont écrites à la main et citent
+  des textes que le corpus d'essai n'a pas toujours ;
+- référence : la réponse comparée à celle du jeu, la règle « répondre » de la consigne en plus (indicatif).
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.harnais.redaction import HORS_SUJET
+from app.security_utils import neutralize_for_prompt, wrap_untrusted
 from app.services.mesure.juge import construire_messages, lire_jugement
 from app.services.mesure.verdict import est_un_refus, plier
 
@@ -283,17 +287,39 @@ def juger_mcp(conversation: dict, *, attendus: set[str], sources: Iterable[str] 
 # ─── Le juge-modèle ──────────────────────────────────────────────────────────────────────────
 
 
+#: Les modèles à raisonnement réfléchissent avant d'écrire : à 400 jetons, le JSON sortait parfois coupé.
+MAX_TOKENS_JUGE = 1000
+#: Passages montrés au juge de fidélité (autant que la rédaction en lit), chacun tronqué.
+PASSAGES_JUGE = 20
+TEXTE_PASSAGE_JUGE = 1500
+
+CONSIGNE_FIDELITE = """Tu évalues la réponse d'un assistant documentaire d'un ministère, au regard des SEULS PASSAGES qu'il a reçus.
+- conforme : chaque information de la réponse se trouve dans les passages, et la réponse traite la question avec ce qu'ils contiennent (ou dit à juste titre qu'ils n'y répondent pas) ;
+- partiel : une information de la réponse n'est pas dans les passages, ou la réponse omet ou refuse ce que les passages permettaient de répondre ;
+- non_conforme : la réponse contredit les passages, ou en invente l'essentiel.
+Ne juge pas d'après ce que tu sais par ailleurs : seulement d'après les passages.
+Réponds UNIQUEMENT par un JSON : {"verdict": "conforme" | "partiel" | "non_conforme", "justification": "une phrase en français"}"""
+
+
+def messages_fidelite(question: str, passages: Iterable[str], obtenue: str) -> list[dict]:
+    blocs = [f"[{i}] {neutralize_for_prompt(p, max_len=TEXTE_PASSAGE_JUGE)}" for i, p in enumerate(list(passages)[:PASSAGES_JUGE], start=1)]
+    donnees = (
+        f"QUESTION :\n{neutralize_for_prompt(question, max_len=2000)}\n\n"
+        f"PASSAGES REÇUS :\n{chr(10).join(blocs) or '(aucun)'}\n\n"
+        f"RÉPONSE OBTENUE :\n{neutralize_for_prompt(obtenue, max_len=4000)}"
+    )
+    return [{"role": "system", "content": CONSIGNE_FIDELITE}, {"role": "user", "content": wrap_untrusted(donnees, label="TEXTES À ÉVALUER")}]
+
+
 class JugeModele:
-    """Compare la réponse obtenue à la référence (et à la règle « répondre »), par la passerelle."""
+    """Le juge-modèle de la campagne, par la passerelle : fidélité aux passages, et comparaison à la référence."""
 
     def __init__(self, passerelle, modele: str):
         self.passerelle, self.modele = passerelle, modele
 
-    def juger(self, question: str, reference: str, obtenue: str, regle: str | None = None) -> dict:
-        ref = reference + (f"\n\nRÈGLE DE RÉPONSE ATTENDUE : {regle}" if regle else "")
-        corps = {"model": self.modele, "messages": construire_messages(question, ref, obtenue), "temperature": 0, "max_tokens": 400}
+    def _verdict(self, messages: list[dict]) -> dict:
         try:
-            d = self.passerelle.completer(corps)
+            d = self.passerelle.completer({"model": self.modele, "messages": messages, "temperature": 0, "max_tokens": MAX_TOKENS_JUGE})
         except httpx.HTTPError as e:
             return {"verdict": None, "erreur": type(e).__name__}
         try:
@@ -301,3 +327,10 @@ class JugeModele:
         except (ValueError, KeyError, IndexError, TypeError):
             return {"verdict": None, "erreur": "jugement illisible"}
         return {"verdict": j.verdict, "justification": j.justification}
+
+    def juger(self, question: str, reference: str, obtenue: str, regle: str | None = None) -> dict:
+        ref = reference + (f"\n\nRÈGLE DE RÉPONSE ATTENDUE : {regle}" if regle else "")
+        return self._verdict(construire_messages(question, ref, obtenue))
+
+    def fidelite(self, question: str, passages: Iterable[str], obtenue: str) -> dict:
+        return self._verdict(messages_fidelite(question, passages, obtenue))

@@ -77,6 +77,8 @@ def test_l_agent_enchaine_les_outils_et_repond(horloge):
     assert r["assistant"] == "e2e-camp-sejour-s2" and r["consigne"] == "algeriens"
     assert r["passages"][0]["collection"] == "essai-guide" and "texte" not in r["passages"][0]
     assert conv["reponse"].startswith("Oui") and conv["appels_modele"] == 3 and "arret" not in conv
+    # Ce que le modèle a lu de `rechercher`, pour le juge de fidélité (pas dans la trace).
+    assert conv["contexte"] == ["x" * 50_000]
     # Les outils passent au modèle en outils OpenAI ; un résultat trop long est coupé.
     assert modele.corps[0]["tools"][1]["function"]["parameters"]["properties"]["assistant"] == {"type": "string"}
     assert modele.corps[0]["messages"][0]["content"] == agent_mcp.SYSTEME

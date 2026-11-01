@@ -14,9 +14,19 @@ consignes:
     quand: toujours
     repondre: citer Livre, Titre, Chapitre, article
     gabarit: juridique
+# Des mots propres au cas, pas des phrases : « marié à une Française » déclencherait aussi la consigne
+# pour un Sénégalais (docs/assistants.md, « Écrire quand et exemples »).
   - id: accord-bilateral
     quand: la personne est ressortissante d'un pays lié par un accord bilatéral
-    exemples: ["un Algérien marié à une Française peut-il …"]
+    exemples:
+      - algérien
+      - algérienne
+      - marocain
+      - marocaine
+      - tunisien
+      - tunisienne
+      - accord bilatéral
+      - accord franco-algérien
     chercher:
       - {source: accords-bilateraux}
       - {source: ceseda}

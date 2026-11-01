@@ -51,6 +51,7 @@ def _h(
         },
         "liens": {"verifies": 1, "valides": 1},
         "juge": {"verdict": juge} if juge else None,
+        "fidelite": {"verdict": juge} if juge else None,
     }
 
 
@@ -71,7 +72,7 @@ def test_les_mesures_du_harnais_par_variante():
     s2 = h["variantes"]["s2"]
     assert s2["consigne_a_raison_pct"] == 50.0 and s2["consigne_a_tort_pct"] == 33.3
     assert s2["accord_avant_code_pct"] == 50.0 and s2["refus_a_raison_pct"] == 100.0
-    assert s2["sources_contactees_pct"] == 40.0 and s2["juge_conforme_pct"] == 100.0
+    assert s2["sources_contactees_pct"] == 40.0 and s2["juge_conforme_pct"] == 100.0 and s2["fidele_pct"] == 100.0
     assert h["variantes"]["s0"]["consigne_a_raison_pct"] is None  # une fiche sans consigne ne se mesure pas là-dessus
     assert h["variantes"]["s0"]["source5_pct"] == 50.0
     assert h["ecart_score"] == 1.5  # q1, q2 jugées dans les deux : 2 − 0,5
@@ -111,7 +112,7 @@ def test_le_rapport_s_ecrit_compare_a_la_nuit_precedente_et_alerte_en_tete(tmp_p
 
 
 def test_les_mesures_mcp():
-    def ligne(q, bon, source5, categorie="declenche", refus=None, lister=8000):
+    def ligne(q, bon, source5, categorie="declenche", refus=None, lister=8000, liens=0):
         return {
             "cle": f"mcp|agent|{q}|n",
             "phase": "mcp",
@@ -127,6 +128,7 @@ def test_les_mesures_mcp():
                 "rechercher_appele": source5 is not None,
                 "source@5": source5,
                 "refus_obtenu": refus,
+                "liens_cites": liens,
                 "appels_outils": 2,
                 "lister_octets": lister,
                 "lister_assistants": 12,
@@ -134,10 +136,12 @@ def test_les_mesures_mcp():
             },
         }
 
-    m = rapport.mesures([ligne("a", True, True), ligne("b", False, False), ligne("c", None, None, "hors_champ", True)])
+    hors = [ligne("c", None, None, "hors_champ", True), ligne("d", None, None, "hors_champ", False), ligne("e", None, None, "hors_champ", False, liens=1)]
+    m = rapport.mesures([ligne("a", True, True), ligne("b", False, False), *hors])
     agent = m["mcp"]["agent"]
-    assert agent["bon_choix_pct"] == 50.0 and agent["rechercher_appele_pct"] == 100.0 and agent["hors_catalogue_pct"] == 100.0
-    assert agent["lister_jetons_estimes"] == 2000 and agent["appels_modele"] == 9
+    # Hors catalogue : refuser, ou répondre sans citer de source (d), est juste ; citer une source (e) ne l'est pas.
+    assert agent["bon_choix_pct"] == 50.0 and agent["rechercher_appele_pct"] == 100.0 and agent["hors_catalogue_pct"] == 66.7
+    assert agent["lister_jetons_estimes"] == 2000 and agent["appels_modele"] == 15
     assert m["mcp"]["rappel5_pct"] == 50.0
 
 

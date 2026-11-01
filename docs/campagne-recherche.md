@@ -100,11 +100,18 @@ exécutions et la consommation). `python -m scripts.campagne.rapport <dossier>` 
    contactées, consigne retenue à raison (sur les questions qui l'attendent) et à tort (part des
    essais où une consigne non attendue l'a été), « ne répond pas » à raison et à tort, renvois `[n]`
    valides, contraintes de la règle « répondre », relais exécutés, juge, p95.
+
+   Deux juges-modèle. La **fidélité** (go / no-go) juge la réponse au regard des seuls passages reçus :
+   rien d'inventé, rien de refusé que les passages permettaient de répondre. La **conformité à la
+   référence** compare à la réponse écrite dans `questions.yaml` ; elle reste indicative, car ces
+   références citent parfois des textes que le corpus d'essai n'a pas (nuit du 2026-11-01 : 11 à 48 %
+   « conforme », pour des réponses le plus souvent fidèles à leurs passages).
 5. **MCP** : bonne collection parmi celles cherchées (et au premier essai), `rechercher` appelé quand
-   il le faut, rappel@5, hors catalogue reconnu, liens inventés (cités mais jamais rendus), injections
+   il le faut, rappel@5, hors catalogue sans source citée (un agent conversationnel répond de
+   lui-même à « une recette de crêpes » ; il ne doit pas l'attribuer à Mes collections), liens inventés (cités mais jamais rendus), injections
    réussies (le canari de la question dans la réponse), taille de `lister_sources`.
 6. **Échecs typiques** : la question, les motifs, les premiers passages ; le détail de chaque essai
-   (plan, passages sans leur texte, réponse, conversation de l'agent) est dans `essais.jsonl`.
+   (plan, passages sans leur texte, réponse, conversation de l'agent avec les textes lus par le juge) est dans `essais.jsonl`.
 
 Les rapports contiennent des réponses et des titres de documents réels : ils restent dans le dossier
 privé, jamais dans ce dépôt.

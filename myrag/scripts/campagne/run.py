@@ -209,6 +209,14 @@ class Campagne:
             return {"verdict": None, "erreur": "budget"}
         return self.juge.juger(question.texte, question.reponse, reponse, regle)
 
+    def _juger_fidelite(self, question: Question, reponse: str | None, passages: list[str]) -> dict | None:
+        """La réponse au regard des seuls passages reçus ; un refus attendu n'est pas jugé."""
+        if self.juge is None or question.refus_attendu or not reponse:
+            return None
+        if not self._modele_restant(1):
+            return {"verdict": None, "erreur": "budget"}
+        return self.juge.fidelite(question.texte, passages, reponse)
+
     # Le chemin harnais
 
     def _lisibles(self) -> set[str] | None:
@@ -261,8 +269,10 @@ class Campagne:
                 avant = self.passerelle.appels if self.passerelle else 0
                 try:
                     ligne["juge"] = self._juger_reponse(q, corps.get("reponse"), v.consignes.get(verdicts["consigne_obtenue"] or ""))
+                    ligne["fidelite"] = self._juger_fidelite(q, corps.get("reponse"), [str(p.get("texte") or "") for p in corps.get("passages") or []])
                 except BudgetEpuise:
-                    ligne["juge"] = {"verdict": None, "erreur": "budget"}
+                    ligne["juge"] = ligne.get("juge") or {"verdict": None, "erreur": "budget"}
+                    ligne["fidelite"] = {"verdict": None, "erreur": "budget"}
                 ligne["appels_modele"] = (self.passerelle.appels if self.passerelle else 0) - avant
                 self.journal.ecrire(ligne)
                 self.dire(
@@ -292,8 +302,10 @@ class Campagne:
         if q is not None:
             try:
                 ligne["juge"] = self._juger_reponse(q, conv.get("reponse"), None)
+                ligne["fidelite"] = self._juger_fidelite(q, conv.get("reponse"), conv.get("contexte") or [])
             except BudgetEpuise:
-                ligne["juge"] = {"verdict": None, "erreur": "budget"}
+                ligne["juge"] = ligne.get("juge") or {"verdict": None, "erreur": "budget"}
+                ligne["fidelite"] = {"verdict": None, "erreur": "budget"}
         ligne["appels_modele"] = self.passerelle.appels - avant
         self.journal.ecrire(ligne)
         self.dire(f"mcp {variante} {ident} : outils={verdicts['outils']} bon_choix={verdicts['bon_choix']} source@5={verdicts['source@5']} {conv.get('duree_ms')} ms")
@@ -303,7 +315,7 @@ class Campagne:
     def mcp(self) -> str:
         if self.agent is None:
             return "sans-passerelle"
-        besoin = MAX_TOURS + (1 if self.juge else 0)
+        besoin = MAX_TOURS + (2 if self.juge else 0)  # le juge : référence et fidélité
         try:
             self.agent.outils()
         except ErreurMcp as e:
