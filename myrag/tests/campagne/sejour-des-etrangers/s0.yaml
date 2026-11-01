@@ -1,0 +1,13 @@
+# Fiche d'essai de la campagne (docs/campagne-recherche.md) : données inventées, publiques.
+# Les sources sont des ALIAS : le fichier privé CAMPAGNE_CORRESPONDANCE donne leur identifiant sur la cible.
+# Variante s0 : toutes les sources selon la question, aucune consigne (la ligne de base).
+assistant: e2e-camp-sejour-s0
+titre: Essai — Séjour des étrangers (sans contrainte)
+rubrique: droit-etrangers
+description: 'Assistant d''essai de la campagne : cinq sources sur le droit des étrangers, aucune consigne.'
+sources:
+  - {id: guide, type: collection, regime: selon_question}
+  - {id: guide-md, type: collection, regime: selon_question}
+  - {id: faq, type: collection, regime: selon_question}
+  - {id: mobilite, type: collection, regime: selon_question}
+  - {id: jurisprudence, type: collection, regime: selon_question}

@@ -1,0 +1,13 @@
+# Fiche d'essai de la campagne (docs/campagne-recherche.md) : données inventées, publiques.
+# Les sources sont des ALIAS : le fichier privé CAMPAGNE_CORRESPONDANCE donne leur identifiant sur la cible.
+# Variante s1 : régimes et rangs des sources, sans consigne.
+assistant: e2e-camp-sejour-s1
+titre: Essai — Séjour des étrangers (régimes)
+rubrique: droit-etrangers
+description: 'Assistant d''essai de la campagne : régimes et rangs des sources, sans consigne.'
+sources:
+  - {id: guide, type: collection, regime: toujours, rang: 1}
+  - {id: faq, type: collection, regime: selon_question, rang: 2}
+  - {id: guide-md, type: collection, regime: selon_question, rang: 3}
+  - {id: mobilite, type: collection, regime: selon_question, rang: 4}
+  - {id: jurisprudence, type: collection, regime: sur_consigne, rang: 5}
