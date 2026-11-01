@@ -132,7 +132,12 @@ class Agent:
         """Une question à laquelle ce passage répond (catalogue réel) ; le passage est une DONNÉE encadrée."""
         donnees = wrap_untrusted(neutralize_for_prompt(extrait, max_len=3000), label="PASSAGE")
         rep = self.passerelle.completer(
-            {"model": self.modele, "messages": [{"role": "system", "content": CONSIGNE_QUESTION}, {"role": "user", "content": donnees}], "temperature": 0, "max_tokens": MAX_TOKENS_QUESTION}
+            {
+                "model": self.modele,
+                "messages": [{"role": "system", "content": CONSIGNE_QUESTION}, {"role": "user", "content": donnees}],
+                "temperature": 0,
+                "max_tokens": MAX_TOKENS_QUESTION,
+            }
         )
         texte = ((rep.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
         ligne = " ".join(texte.split()).strip().strip('"«» ')
