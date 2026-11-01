@@ -65,6 +65,16 @@ async def charger(ident: str, user: CurrentUser, hash_: str, superadmin: bool, *
     return Charge(fiche=fiche, version=version, modifier=modifier, lisibles=lisibles, collections=cols)
 
 
+def charge_collection(col: dict, user: CurrentUser) -> Charge:
+    """Une collection que la personne lit et qu'aucun assistant ne porte (non publiée : une amorce,
+    une collection d'équipe), servie comme le serait son miroir. Rien n'est écrit en base ; le
+    périmètre reste celui de la collection."""
+    fiche = assistant_store.fiche_de_collection(assistant_store.deriver_identifiant(col["name"]), col)
+    cols = {col["name"]: col}
+    lisibles = perimetre.sources_lisibles(fiche, cols, groupes=user.groups, sub=user.sub)
+    return Charge(fiche=fiche, version=1, modifier=False, lisibles=lisibles, collections=cols)
+
+
 def contexte(charge: Charge, canal: Canal, *, capacites_client: set[CapaciteClient] | None = None, top_k: int = 20) -> Contexte:
     return Contexte(canal=canal, capacites_client=capacites_client or set(), sources_lisibles=charge.lisibles, top_k=top_k)
 

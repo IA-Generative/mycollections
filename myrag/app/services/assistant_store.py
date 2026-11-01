@@ -202,7 +202,9 @@ async def _identifiant_libre(session, name: str) -> str:
         candidat = f"{base[: 64 - len(str(n)) - 1]}-{n}"
 
 
-def _fiche_miroir(ident: str, col: dict, pub: Publication) -> FicheAssistant:
+def fiche_de_collection(ident: str, col: dict, publication: Canaux | None = None) -> FicheAssistant:
+    """La fiche à une source d'une collection : celle de son miroir, ou celle sous laquelle le
+    serveur MCP sert une collection lisible qui n'a pas d'assistant (rien n'est écrit en base)."""
     return FicheAssistant(
         assistant=ident,
         titre=titre_de(col)[:255],
@@ -210,7 +212,15 @@ def _fiche_miroir(ident: str, col: dict, pub: Publication) -> FicheAssistant:
         description=(col.get("description") or "")[:2000],
         sources=[Source(id=col["name"], type="collection", regime="toujours", rang=1)],
         consignes=[Consigne(id=CONSIGNE_DEFAUT, quand=QUAND_TOUJOURS, gabarit=col.get("prompt_template") or None, repondre=(col.get("system_prompt") or "")[:4000])],
-        publication=Canaux(
+        publication=publication or Canaux(api=True),
+    )
+
+
+def _fiche_miroir(ident: str, col: dict, pub: Publication) -> FicheAssistant:
+    return fiche_de_collection(
+        ident,
+        col,
+        Canaux(
             socle=bool(pub.alias_enabled or pub.tool_enabled),
             portail=True,
             fenetre_js=bool(pub.embed_enabled or pub.widget_enabled or pub.browser_enabled),
