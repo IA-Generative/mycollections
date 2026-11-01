@@ -38,9 +38,11 @@ RUN npx nuxt generate
 # Runtime stage — tiny nginx serving the static SPA with client-side routing fallback.
 # 1.27 (Alpine 3.21) portait une vulnérabilité critique relevée par le scan de la CI.
 # Pas d'`apk upgrade` ici : il bloque le script d'entrée de l'image (`apk manifest nginx`).
+# On ne met à jour que le paquet signalé : brotli-libs 1.2.0 (CVE-2026-111497, critique).
 FROM nginx:1.29-alpine
 
-RUN rm -rf /usr/share/nginx/html/* \
+RUN apk add --no-cache --upgrade brotli-libs \
+    && rm -rf /usr/share/nginx/html/* \
     && rm /etc/nginx/conf.d/default.conf
 
 COPY --from=builder /app/.output/public /usr/share/nginx/html
