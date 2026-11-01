@@ -26,9 +26,10 @@ AUCUN_PASSAGE = "Les sources de cet assistant ne contiennent rien sur cette ques
 #: La phrase exacte attendue du modèle quand les passages ne couvrent pas la question (il n'y a pas
 #: de seuil de pertinence : une question hors sujet ramène quand même des passages). Rédaction « faite », sans citation.
 HORS_SUJET = "Les documents trouvés ne répondent pas à cette question."
-#: Au plus tant de passages montrés au modèle (les premiers de la fusion), chacun tronqué. Pas moins :
-#: la fusion RRF de deux sources de même poids les alterne, et les bons passages d'une source arrivent loin.
-PASSAGES_MAX = 12
+#: Au plus tant de passages montrés au modèle (les premiers de la fusion), chacun tronqué : autant que
+#: la fusion en rend (`top_k`). La fusion RRF alterne les sources de même poids ; à 12, les bons passages
+#: d'une source arrivaient au-delà de la coupe et le modèle répondait « ne répondent pas » (#198).
+PASSAGES_MAX = 20
 TEXTE_MAX = 1500
 #: L'appel entier (place dans le débit comprise) ; au-delà, la rédaction est indisponible.
 DELAI_S = 60.0

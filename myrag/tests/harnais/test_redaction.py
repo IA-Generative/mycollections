@@ -112,12 +112,13 @@ def test_des_passages_hors_sujet_donnent_la_phrase_convenue_sans_citation():
     assert etat == "faite" and citations == [] and redaction.HORS_SUJET in texte
 
 
-def test_douze_passages_au_plus_sont_montres_au_modele():
-    modele = FauxModele("Réponse [12] [13].")
-    texte, citations, _ = _rediger("budget", _passages(20), _fiche(), None, modele)
+def test_vingt_passages_au_plus_sont_montres_au_modele():
+    """Autant que la fusion en rend (`top_k` = 20) : à 12, les bons passages d'une seconde source restaient hors de la coupe (#198)."""
+    modele = FauxModele("Réponse [20] [21].")
+    texte, citations, _ = _rediger("budget", _passages(25), _fiche(), None, modele)
     utilisateur = modele.appels[0][1]["content"]
-    assert redaction.PASSAGES_MAX == 12 and "[12] Document 12" in utilisateur and "[13] Document 13" not in utilisateur
-    assert texte == "Réponse [12]." and [c.n for c in citations] == [12]
+    assert redaction.PASSAGES_MAX == 20 and "[20] Document 20" in utilisateur and "[21] Document 21" not in utilisateur
+    assert texte == "Réponse [20]." and [c.n for c in citations] == [20]
 
 
 def test_zero_passage_n_appelle_pas_le_modele():
