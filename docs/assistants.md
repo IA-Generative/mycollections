@@ -120,6 +120,8 @@ témoin attendu est rendu, partiel si c'est celui d'une autre source) ; le juge 
     cd myrag && uv run python -m scripts.banc tests/harnais/fixtures/banc/sejour-des-etrangers.json --juge doublure --planificateur regles --rapport json
     cd myrag && uv run pytest tests -q -m banc
 
+Contre une cible réelle, la nuit, par les deux chemins (harnais et MCP) : la campagne,
+[campagne-recherche.md](campagne-recherche.md).
 
 ## L'interface (lot B)
 
