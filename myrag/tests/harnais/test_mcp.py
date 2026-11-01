@@ -115,8 +115,32 @@ def test_tools_list_rend_trois_outils_avec_cinquante_assistants(client, en_tant_
         assert {c["id"] for c in vus[idents[0]]["collections"]} == {jeu["mienne"], jeu["partagee"]}
         assert {"id", "titre", "description"} == set(vus[idents[0]]["collections"][0])
         assert jeu["secrete"] not in json.dumps(contenu)
+        assert vus[idents[0]]["consignes"] == []
     finally:
         _nettoyer(idents)
+
+
+def test_lister_sources_dit_les_cas_que_l_assistant_sait_traiter(client, en_tant_que, jeu, theatre_branche, jetons, monkeypatch):
+    """Les « quand » des consignes, sauf celle qui vaut pour toute question : de quoi préférer un assistant métier à une collection seule."""
+    ident = f"t-mcp-consignes-{os.urandom(3).hex()}"
+    consignes = [
+        {"id": "juridique", "quand": "toujours", "repondre": "Citer l'article."},
+        {"id": "budget", "quand": "une question sur le vote du budget", "exemples": ["Quand le budget est-il voté ?"], "chercher": [{"source": jeu["mienne"]}]},
+    ]
+    try:
+        monkeypatch.setattr(app.config.settings, "auth_enabled", False)
+        en_tant_que(SUPERADMIN)
+        fiche = fiche_d_essai(jeu, ident, consignes=consignes)
+        assert client.put(f"/api/assistants/{ident}", json=fiche.model_dump(mode="json")).status_code == 200
+        assert client.post(f"/api/assistants/{ident}/publier").status_code == 200
+        monkeypatch.setattr(app.config.settings, "auth_enabled", True)
+        client.app.dependency_overrides.clear()
+        erreur, contenu = appeler(client, jetons(), "lister_sources")
+        assert not erreur
+        vu = next(a for a in contenu["assistants"] if a["id"] == ident)
+        assert vu["consignes"] == ["une question sur le vote du budget"]
+    finally:
+        _nettoyer([ident])
 
 
 # ─── L'identité et les droits ────────────────────────────────────────────────────

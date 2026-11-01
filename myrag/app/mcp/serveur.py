@@ -16,7 +16,7 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 
 from app.auth import CurrentUser
-from app.harnais.contrat import Etape, Plan
+from app.harnais.contrat import QUAND_TOUJOURS, Etape, Plan
 from app.routers import assistants as routes_assistants
 from app.services import access, assistant_store
 from app.services import assistant_recherche as moteur
@@ -54,7 +54,9 @@ OUTILS: list[types.Tool] = [
         name="lister_sources",
         description=(
             "À appeler en premier, pour savoir où chercher. Rend les assistants de recherche que la personne connectée "
-            "peut interroger, et pour chacun ses collections de documents (identifiant, titre, description). "
+            "peut interroger, et pour chacun ses collections de documents (identifiant, titre, description) et les cas "
+            "qu'il sait traiter (`consignes`). Quand un assistant a une consigne qui correspond à la question, "
+            "préférez-le à une collection seule : il cherche dans l'ordre prévu et enchaîne ses sources. "
             "Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
         ),
         inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
@@ -147,6 +149,8 @@ async def lister_sources(user: CurrentUser) -> dict:
                 "titre": charge.fiche.titre,
                 "description": charge.fiche.description,
                 "collections": [{"id": s, "titre": _titre_source(charge, s), "description": (charge.collections[s] or {}).get("description") or ""} for s in charge.lisibles],
+                # Les cas prévus par la fiche (« quand ») : ce qui distingue un assistant métier du miroir d'une collection.
+                "consignes": [c.quand for c in charge.fiche.consignes if c.quand != QUAND_TOUJOURS],
             }
         )
     return {"assistants": assistants}
