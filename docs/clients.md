@@ -108,7 +108,7 @@ sans modèle de langage côté Mes collections : le client choisit l'assistant, 
 
 | Outil | Rôle |
 |-------|------|
-| `lister_sources()` | À appeler en premier : les assistants publiés que la personne lit, et leurs collections lisibles (id, titre, description). |
+| `lister_sources()` | À appeler en premier : les assistants publiés que la personne lit, leurs collections lisibles (id, titre, description) et les cas qu'ils savent traiter (`consignes` : les « quand » de la fiche, sauf celle qui vaut toujours). |
 | `proposer_sources(question, assistant)` | Facultatif : le plan (sources retenues, poids, consigne) sans lancer la recherche. |
 | `rechercher(question, assistant, sources?, limite?)` | Les passages (titre, début du texte, lien signé `url`, collection), le plan et `consigne_de_citation`. `limite` : passages rendus, 8 par défaut, 20 au plus (coupe la liste rendue, après fusion et droits ; le moteur cherche comme avant). Le texte d'un passage est tronqué à 1 200 caractères environ, sur un espace, suivi de « … » : la suite se lit par l'`url`. `sources` impose les collections ; une réponse de référence fiable est rendue telle quelle dans `reponse`. |
 
