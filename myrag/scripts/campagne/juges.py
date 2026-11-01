@@ -195,7 +195,9 @@ def juger_harnais(question, variante, corps: dict, lisibles: set[str] | None = N
     if redaction == "aucun_passage":
         refus_obtenu: bool | None = True
     elif reponse:
-        refus_obtenu = refus(reponse)
+        # Le harnais refuse par une phrase exacte ; « ne permettent pas de répondre de manière
+        # exhaustive » suivi d'une réponse est une réponse partielle, pas un refus.
+        refus_obtenu = reponse.strip() == HORS_SUJET
     else:
         refus_obtenu = None  # rédaction indisponible : rien à juger
     contactees = sorted({e.get("source") for e in etapes if e.get("source")})

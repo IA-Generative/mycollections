@@ -81,6 +81,9 @@ def test_ne_repond_pas_attendu_obtenu_ou_a_tort(questions, variantes):
     assert v["refus_obtenu"] is None and v["renvois"] is None
     tort = juges.juger_harnais(_question(questions, "voi-talent"), variantes[2], _corps(None, [_passage("essai-mobilite", 1)], HORS_SUJET))
     assert tort["refus_obtenu"] and not tort["refus_attendu"]
+    partielle = "Les documents fournis ne permettent pas de répondre de manière exhaustive. Ils indiquent toutefois [1]."
+    v = juges.juger_harnais(_question(questions, "voi-talent"), variantes[2], _corps(None, [_passage("essai-mobilite", 1)], partielle))
+    assert v["refus_obtenu"] is False  # une réponse partielle n'est pas un refus du harnais
 
 
 def test_des_renvois_invalides_sont_nommes():
