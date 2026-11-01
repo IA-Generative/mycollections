@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { compileScript, parse } from 'vue/compiler-sfc'
 import { transformWithEsbuild } from 'vite'
 
@@ -23,8 +23,8 @@ async function puces(sources: any[]): Promise<any[]> {
     '~/utils/sanitize': { renderMarkdownSafe: (s: string) => s },
   }
   const module = { exports: {} as any }
-  // `computed` est importé automatiquement par Nuxt : on le fournit.
-  new Function('require', 'module', 'exports', 'computed', code)((n: string) => modules[n] ?? {}, module, module.exports, computed)
+  // `computed` et `ref` sont importés automatiquement par Nuxt : on les fournit.
+  new Function('require', 'module', 'exports', 'computed', 'ref', code)((n: string) => modules[n] ?? {}, module, module.exports, computed, ref)
   const composant = module.exports.default
   const liaisons = composant.setup({ message: { role: 'assistant', content: 'Réponse.', sources } }, { expose: () => {}, emit: () => {} })
   return liaisons.deduped.value

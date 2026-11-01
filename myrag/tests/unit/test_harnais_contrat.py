@@ -19,6 +19,7 @@ from app.harnais import contrat
 from app.harnais.contrat import (
     Appelant,
     Canaux,
+    Citation,
     Contexte,
     Etape,
     FicheAssistant,
@@ -297,6 +298,21 @@ def test_un_resultat_se_serialise_avec_son_plan():
     rendu = r.model_dump(mode="json")
     assert rendu["passages"][0]["date"] == "2024-01-01T00:00:00Z" and rendu["plan"]["consigne"] == "pays-a-accord"
     assert Resultat.model_validate(rendu) == r
+
+
+def test_sans_redaction_le_resultat_garde_sa_forme_d_avant():
+    """`citations` et `redaction` (additifs) n'apparaissent que si une rédaction a été demandée."""
+    plan = Plan.model_validate(PLAN_SEJOUR)
+    p = Passage(source="ceseda", etape=1, rang=1, ident="m1", document="L423-1", texte="Le conjoint…")
+    r = Resultat(plan=plan, passages=[p], duree_ms=3)
+    assert set(r.model_dump(mode="json")) == {"plan", "passages", "reponse", "duree_ms", "par_source"}
+    redige = r.model_copy(update={"reponse": "Oui [1].", "redaction": "faite", "citations": [Citation(n=1, passage="m1", document="L423-1", source="ceseda")]})
+    rendu = redige.model_dump(mode="json")
+    assert rendu["redaction"] == "faite" and rendu["citations"] == [{"n": 1, "passage": "m1", "document": "L423-1", "source": "ceseda"}]
+    assert Resultat.model_validate(rendu) == redige
+    assert Resultat.model_validate(r.model_copy(update={"redaction": "aucun_passage"}).model_dump(mode="json")).redaction == "aucun_passage"
+    with pytest.raises(ValidationError):
+        Resultat.model_validate({**rendu, "redaction": "autre"})
 
 
 def test_fiche_source_et_constantes():

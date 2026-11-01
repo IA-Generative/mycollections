@@ -24,6 +24,19 @@ réponse fiable : le contrat v1 n'a pas de champ pour la rendre. Routes `POST /a
 et `/executer` : la version enregistrée pour qui peut modifier, la publiée pour les autres. Le journal (`plans_journal`)
 ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure répond (en-tête `X-Mycollections-Doublure: 1`).
 
+## La rédaction
+
+`POST /api/v1/assistants/{id}/executer` avec `"rediger": true` (le bac à sable et « Tester » l'envoient) : après la
+fusion et le filtre des droits, `harnais/redaction.py` rédige une réponse à partir des 12 premiers passages (`PASSAGES_MAX` ;
+la fusion alterne les sources, les bons passages arrivent parfois loin), numérotés [1]…[n] et encadrés comme données.
+Prompt système : le gabarit connu des consignes, les règles « répondre » de la consigne `toujours` puis de la retenue, puis
+« uniquement à partir des passages ». Des passages hors sujet font répondre « Les documents trouvés ne répondent pas à cette
+question. » (il n'y a pas de seuil de pertinence). Un renvoi qui ne désigne aucun passage est retiré ; `citations` donne
+`{n, passage, document, source}`, `redaction` vaut `faite`, `aucun_passage` (modèle non appelé) ou `indisponible` (panne,
+délai de 60 s, débit plein, fournisseur non configuré : la route rend quand même 200 et les passages). Le modèle est celui
+de la génération (`MYCOLLECTIONS_GENERATION_LLM_*`, sinon le `/v1` d'OpenRAG), sous le débit partagé avec le juge. Sans
+`rediger` (le MCP, la recherche v1), rien ne change : ni `citations` ni `redaction` dans le JSON.
+
 ## Un référentiel comme source (lot A6)
 
 Une source de type `connecteur` n'est pas une collection : elle interroge un service HTTP interne. Le premier est le

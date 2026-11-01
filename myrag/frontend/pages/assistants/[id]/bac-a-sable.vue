@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ChatMessage } from '~/composables/useChat'
 import type { FicheAssistant, ResultatAssistant } from '~/utils/assistants'
-import { messageErreurMoteur, sourceDuPassage, traceDuPlan } from '~/utils/assistants'
+import { messageErreurMoteur, reponseAffichee, sourceDuPassage, texteSansReponse, traceDuPlan } from '~/utils/assistants'
 
 /**
  * Le bac à sable d'un assistant (B4) : poser des questions comme un collègue et voir, sous chaque
@@ -34,16 +34,12 @@ function defiler () {
   })
 }
 
-/** Le tour de l'assistant : sa réponse, ou, s'il n'en rédige pas, ce qu'il a trouvé. */
+/** Le tour de l'assistant : sa réponse (renvois [n] vers les passages), ou, s'il n'en a pas, ce qu'il a trouvé.
+ *  Les puces suivent l'ordre des passages : le renvoi [n] ouvre la n-ième. */
 function tourDepuis (r: ResultatAssistant): Tour {
-  const n = r.passages.length
-  const contenu = r.reponse?.trim()
-    || (n
-      ? `L'assistant a trouvé ${n} passage${n > 1 ? 's' : ''}, sans rédiger de réponse : ouvrez-les ci-dessous.`
-      : 'L\'assistant n\'a rien trouvé pour cette question.')
   return {
     role: 'assistant',
-    content: contenu,
+    content: reponseAffichee(r) || texteSansReponse(r),
     sources: r.passages.map(p => sourceDuPassage(p, titreSource)),
     turnId: `tour-${Date.now()}`,
     resultat: r,

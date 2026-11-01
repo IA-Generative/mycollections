@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_serializer, model_validator
 
 CONTRAT_VERSION = 1
 #: Identifiant stable d'un assistant, d'une source ou d'une consigne.
@@ -31,6 +31,8 @@ CANAUX_JOURNAL = (*CANAUX, "bac-a-sable", "banc")
 PLANIFICATEURS = ("toutes_les_sources", "regles", "llm")
 CAPACITES_CLIENT = ("valider", "questionner", "panneau")
 ERREURS_ETAPE = ("delai", "refus", "panne", "vide")
+#: Ce qu'est devenue la rédaction demandée : faite, sans passage (le modèle n'est pas appelé), ou en panne.
+REDACTIONS = ("faite", "aucun_passage", "indisponible")
 
 TypeSource = Literal["collection", "connecteur"]
 Regime = Literal["toujours", "selon_question", "sur_consigne"]
@@ -38,6 +40,7 @@ Canal = Literal["socle", "portail", "fenetre_js", "api", "bac-a-sable", "banc"]
 NomPlanificateur = Literal["toutes_les_sources", "regles", "llm"]
 CapaciteClient = Literal["valider", "questionner", "panneau"]
 ErreurEtape = Literal["delai", "refus", "panne", "vide"]
+EtatRedaction = Literal["faite", "aucun_passage", "indisponible"]
 
 
 class _Modele(BaseModel):
@@ -254,13 +257,36 @@ class Passage(_Modele):
     meta: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 
+class Citation(_Modele):
+    """Un renvoi `[n]` de la réponse rédigée : `n` est le rang du passage dans `Resultat.passages` (à partir de 1)."""
+
+    n: int = Field(ge=1)
+    #: L'identifiant du passage (`Passage.ident`, sinon son document).
+    passage: str = Field(min_length=1)
+    document: str | None = None
+    source: str
+
+
 class Resultat(_Modele):
     plan: Plan
     passages: list[Passage] = Field(default_factory=list)
-    #: Rempli seulement par la voie « passages + modèle » (règles « répondre »).
+    #: Une réponse fiable servie telle quelle, ou la réponse rédigée à partir des passages (règles « répondre »).
     reponse: str | None = None
     duree_ms: int = Field(ge=0)
     par_source: dict[str, int] = Field(default_factory=dict)
+    #: Les passages que cite la réponse rédigée, dans l'ordre de leur numéro.
+    citations: list[Citation] = Field(default_factory=list)
+    #: None : aucune rédaction demandée (ou une réponse fiable servie) ; sinon ce qu'elle est devenue.
+    redaction: EtatRedaction | None = None
+
+    @model_serializer(mode="wrap")
+    def _sans_redaction_demandee(self, suite):
+        """Sans rédaction demandée, le JSON reste celui d'avant : ni `citations` ni `redaction`."""
+        d = suite(self)
+        if self.redaction is None and not self.citations and isinstance(d, dict):
+            d.pop("citations", None)
+            d.pop("redaction", None)
+        return d
 
 
 # ─── Le journal ──────────────────────────────────────────────────────────────────────────────

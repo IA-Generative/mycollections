@@ -84,19 +84,24 @@ class Debit:
         self.attente_s = 0.0
 
     def prendre(self) -> None:
-        if not self.par_minute:
-            return
-        while True:
+        while (attente := self.essayer()) > 0:
             with self._verrou:
-                maintenant = self._horloge()
-                while self._appels and maintenant - self._appels[0] >= 60.0:
-                    self._appels.popleft()
-                if len(self._appels) < self.par_minute:
-                    self._appels.append(maintenant)
-                    return
-                attente = 60.0 - (maintenant - self._appels[0]) + 0.05
                 self.attente_s += attente
             self._dormir(attente)
+
+    def essayer(self) -> float:
+        """Prend une place si elle est libre et rend 0 ; sinon rend l'attente avant la prochaine,
+        sans dormir (un appelant asyncio attend à sa façon, ou renonce)."""
+        if not self.par_minute:
+            return 0.0
+        with self._verrou:
+            maintenant = self._horloge()
+            while self._appels and maintenant - self._appels[0] >= 60.0:
+                self._appels.popleft()
+            if len(self._appels) < self.par_minute:
+                self._appels.append(maintenant)
+                return 0.0
+            return 60.0 - (maintenant - self._appels[0]) + 0.05
 
 
 def _usage(resultat) -> tuple[int, int, bool]:
