@@ -1,5 +1,7 @@
 import type { ConnecteurDeclare, FicheAssistant, ReponseMoteur, ResultatAssistant } from '~/utils/assistants'
+import type { ReponseImport } from '~/utils/ficheYaml'
 import { reponseDoublure } from '~/utils/assistants'
+import { nomFichierFiche } from '~/utils/ficheYaml'
 
 /**
  * Les appels de la fiche d'un assistant (`/api/assistants`, lot 0) et de son exécution
@@ -9,6 +11,7 @@ import { reponseDoublure } from '~/utils/assistants'
  */
 export function useAssistants () {
   const { get, put, post, patch, fetchWithAuth, baseUrl } = useApi()
+  const { telecharger } = useTelechargement()
   const ident = (id: string) => encodeURIComponent(id)
   return {
     lister: async () => (await get('/api/assistants')).assistants || [],
@@ -17,6 +20,20 @@ export function useAssistants () {
     lire: (id: string) => get(`/api/assistants/${ident(id)}`),
     enregistrer: (fiche: FicheAssistant) => put(`/api/assistants/${ident(fiche.assistant)}`, fiche),
     publier: (id: string) => post(`/api/assistants/${ident(id)}/publier`),
+    /** Le brouillon en YAML (docs/assistants.md, « Le fichier YAML »), enregistré sous `<id>.yaml`. */
+    exporterFiche: (id: string) => telecharger(`/api/assistants/${ident(id)}/fiche.yaml`, nomFichierFiche(id)),
+    /** Remplace le brouillon par un fichier YAML (mêmes droits que `enregistrer`) ; rend avertissements et empreinte. */
+    importerFiche: async (id: string, texte: string): Promise<ReponseImport> => {
+      const resp = await fetchWithAuth(`${baseUrl}/api/assistants/${ident(id)}/fiche.yaml`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/yaml; charset=utf-8' },
+        body: texte,
+      })
+      if (!resp.ok) {
+        throw new Error(`API error ${resp.status}: ${await resp.text()}`)
+      }
+      return await resp.json() as ReponseImport
+    },
     /** Retire l'assistant (rien n'est effacé) ; un assistant miroir suit sa collection et refuse (409). */
     archiver: (id: string) => post(`/api/assistants/${ident(id)}/archiver`),
     /** Le jeu de questions réuni des sources que la personne lit (lecture seule) ; filtres `relecture`, `fiable`, `q`. */

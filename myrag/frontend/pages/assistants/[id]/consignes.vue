@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Consigne, FicheAssistant, ResultatAssistant } from '~/utils/assistants'
+import type { ErreurImport } from '~/utils/ficheYaml'
 import {
   BORNES_CONSIGNE,
   consignePourEnvoi,
@@ -12,18 +13,20 @@ import {
   resumeConsigne,
   validerConsigne,
 } from '~/utils/assistants'
+import { bilanImport, erreurImport, refusFichierFiche } from '~/utils/ficheYaml'
 
 /**
  * Les consignes d'un assistant (B2) : pour un type de question, où chercher et comment répondre.
  * On les ajoute, modifie, retire et réordonne ; « Enregistrer » envoie la fiche entière
  * (`PUT /api/assistants/{id}`, comme les sources). « Tester » pose une question à l'assistant et
- * montre le plan suivi, la réponse et ses passages.
+ * montre le plan suivi, la réponse et ses passages. « Le fichier de la fiche » exporte ou importe
+ * la fiche entière en YAML (`GET|PUT /api/assistants/{id}/fiche.yaml`).
  */
 definePageMeta({ middleware: 'capacite', capacite: 'assistants' })
 const id = useRoute().params.id as string
 useHead({ title: `Consignes — ${id} — Mes collections` })
 
-const { enregistrer, executer } = useAssistants()
+const { enregistrer, executer, exporterFiche, importerFiche } = useAssistants()
 const { titre: titreSource } = useTitresSources()
 
 const message = ref('')
@@ -144,6 +147,63 @@ async function sauver (fiche: FicheAssistant, recharger: () => Promise<void>) {
   }
   finally {
     envoi.value = false
+  }
+}
+
+// ─── Le fichier de la fiche (YAML) ───────────────────────────────────────────────────────────
+
+const fichierOccupe = ref(false)
+const choixFichier = ref<HTMLInputElement | null>(null)
+const erreurFichier = ref<ErreurImport | null>(null)
+const bilanFichier = ref('')
+const avertissementsFichier = ref<string[]>([])
+
+function effacerFichier () {
+  erreurFichier.value = null
+  bilanFichier.value = ''
+  avertissementsFichier.value = []
+}
+
+async function exporterFichier () {
+  effacerFichier()
+  fichierOccupe.value = true
+  try {
+    await exporterFiche(id)
+  }
+  catch (e) {
+    erreurFichier.value = erreurImport(e)
+  }
+  finally {
+    fichierOccupe.value = false
+  }
+}
+
+async function importerFichier (ev: Event, recharger: () => Promise<void>) {
+  const champ = ev.target as HTMLInputElement
+  const f = champ.files?.[0]
+  champ.value = ''
+  if (!f) {
+    return
+  }
+  effacerFichier()
+  const refus = refusFichierFiche(f)
+  if (refus) {
+    erreurFichier.value = { message: refus, erreurs: [] }
+    return
+  }
+  fichierOccupe.value = true
+  try {
+    const r = await importerFiche(id, await f.text())
+    modifie.value = false
+    bilanFichier.value = bilanImport(r)
+    avertissementsFichier.value = r.avertissements || []
+    await recharger()
+  }
+  catch (e) {
+    erreurFichier.value = erreurImport(e)
+  }
+  finally {
+    fichierOccupe.value = false
   }
 }
 
@@ -571,6 +631,94 @@ async function tester (q?: string) {
           </button>
         </div>
       </template>
+
+      <section
+        class="fr-mt-5w"
+        aria-labelledby="titre-fichier"
+      >
+        <h2
+          id="titre-fichier"
+          class="fr-h5"
+        >
+          Le fichier de la fiche
+        </h2>
+        <p class="fr-text--sm">
+          Toute la fiche — sources, consignes, réglages — dans un fichier YAML, à relire ou à
+          conserver.
+          <template v-if="donnees.mes_droits.ecrire">
+            Importer un fichier remplace le brouillon ; les canaux de publication ne changent pas.
+          </template>
+        </p>
+        <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left">
+          <li>
+            <button
+              type="button"
+              class="fr-btn fr-btn--secondary fr-icon-download-line"
+              :disabled="fichierOccupe"
+              @click="exporterFichier"
+            >
+              Exporter le fichier
+            </button>
+          </li>
+          <li v-if="donnees.mes_droits.ecrire">
+            <button
+              type="button"
+              class="fr-btn fr-btn--secondary fr-icon-upload-line"
+              :disabled="fichierOccupe || !!edition || modifie"
+              :aria-describedby="modifie ? 'import-attente' : undefined"
+              @click="choixFichier?.click()"
+            >
+              {{ fichierOccupe ? 'Import…' : 'Importer un fichier' }}
+            </button>
+            <p
+              v-if="modifie"
+              id="import-attente"
+              class="fr-hint-text"
+            >
+              Enregistrez d'abord vos changements : l'import remplace le brouillon.
+            </p>
+            <input
+              ref="choixFichier"
+              type="file"
+              accept=".yaml,.yml"
+              hidden
+              @change="importerFichier($event, recharger)"
+            >
+          </li>
+        </ul>
+        <div aria-live="polite">
+          <div
+            v-if="erreurFichier"
+            class="fr-alert fr-alert--error fr-alert--sm"
+            role="alert"
+          >
+            <p>{{ erreurFichier.message }}</p>
+            <ul v-if="erreurFichier.erreurs.length">
+              <li
+                v-for="(ligne, i) in erreurFichier.erreurs"
+                :key="i"
+              >
+                {{ ligne }}
+              </li>
+            </ul>
+          </div>
+          <div
+            v-if="bilanFichier"
+            class="fr-alert fr-alert--success fr-alert--sm"
+            role="status"
+          >
+            <p>{{ bilanFichier }}</p>
+            <ul v-if="avertissementsFichier.length">
+              <li
+                v-for="(ligne, i) in avertissementsFichier"
+                :key="i"
+              >
+                {{ ligne }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <section
         ref="zoneEssai"
