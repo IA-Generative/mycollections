@@ -1,0 +1,45 @@
+# Fiche d'essai de la campagne (docs/campagne-recherche.md) : données inventées, publiques.
+# Les sources sont des ALIAS : le fichier privé CAMPAGNE_CORRESPONDANCE donne leur identifiant sur la cible.
+# Variante s2 : régimes, rangs et consignes métier (Algériens, contentieux avec relais, pièces).
+assistant: e2e-camp-sejour-s2
+titre: Essai — Séjour des étrangers (consignes)
+rubrique: droit-etrangers
+description: 'Assistant d''essai de la campagne : régimes, rangs et consignes métier (Algériens, contentieux, pièces).'
+sources:
+  - {id: guide, type: collection, regime: toujours, rang: 1}
+  - {id: faq, type: collection, regime: selon_question, rang: 2}
+  - {id: guide-md, type: collection, regime: selon_question, rang: 3}
+  - {id: mobilite, type: collection, regime: selon_question, rang: 4}
+  - {id: jurisprudence, type: collection, regime: sur_consigne, rang: 5}
+consignes:
+  - id: juridique
+    quand: toujours
+    repondre: Citer le texte applicable (article du CESEDA ou de l'accord) avant toute explication.
+  - id: algeriens
+    quand: 'la personne est de nationalité algérienne : l''accord franco-algérien de 1968 et le certificat de résidence remplacent le CESEDA'
+    exemples:
+      - Un Algérien marié à une Française peut-il obtenir un titre de séjour ?
+      - Quel certificat de résidence pour un ressortissant algérien ?
+      - Un étudiant algérien peut-il travailler en France ?
+    chercher:
+      - {source: guide}
+      - {source: faq}
+    repondre: Citer d'abord l'article de l'accord franco-algérien, puis celui du CESEDA s'il s'applique, puis lister les pièces.
+  - id: contentieux
+    quand: un recours contre un refus de titre, une obligation de quitter le territoire, ce qu'ont jugé les tribunaux
+    exemples:
+      - Que faire après un refus de titre de séjour ?
+      - Un tribunal a-t-il annulé une OQTF visant un conjoint de Français ?
+    chercher:
+      - {source: guide}
+      - {source: jurisprudence, avec: article_trouve}
+    repondre: Citer l'article du CESEDA en cause, puis les décisions (juridiction, numéro, date).
+  - id: pieces
+    quand: les pièces à fournir, la démarche en ligne sur l'ANEF, constituer un dossier de demande
+    exemples:
+      - Quelles pièces fournir pour une carte vie privée et familiale ?
+      - Comment déposer ma demande de titre sur l'ANEF ?
+    chercher:
+      - {source: faq}
+      - {source: guide}
+    repondre: Lister les pièces telles que les documents les donnent, sans en inventer.
