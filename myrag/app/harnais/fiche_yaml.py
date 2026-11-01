@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 
 import yaml
 from pydantic import ValidationError
+from pydantic_core import ErrorDetails
+from yaml.constructor import ConstructorError
 
 from app.harnais.contrat import CONTRAT_VERSION, IDENT_RELAIS, FicheAssistant, canonique, empreinte
 
@@ -88,7 +90,7 @@ def _message_yaml(e: yaml.YAMLError) -> str:
     probleme = getattr(e, "problem", None) or str(e)
     if isinstance(e, _Refus):
         return probleme
-    if isinstance(e, yaml.constructor.ConstructorError) and "could not determine a constructor" in probleme:
+    if isinstance(e, ConstructorError) and "could not determine a constructor" in probleme:
         return "balise YAML refusée (seules les données simples sont lues : textes, nombres, listes, objets)"
     return f"YAML illisible : {probleme}"
 
@@ -114,7 +116,7 @@ def _chemin(loc: tuple, donnees: object) -> str:
     return " › ".join(morceaux)
 
 
-def _message(err: dict) -> str:
+def _message(err: ErrorDetails) -> str:
     t, ctx = err.get("type", ""), err.get("ctx") or {}
     if t == "missing":
         return "champ obligatoire absent"
