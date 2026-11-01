@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { FicheAssistant, ResultatAssistant } from '~/utils/assistants'
-import { sourceDuPassage, traceDuPlan } from '~/utils/assistants'
+import { numeroCitation, reponseAffichee, sourceDuPassage, texteSansReponse, traceDuPlan } from '~/utils/assistants'
 import { renderMarkdownSafe } from '~/utils/sanitize'
 
 /**
- * Ce qu'a rendu l'assistant pour une question : la réponse (Markdown assaini), ses passages (puces
- * de source, fenêtre de lecture) et le plan suivi. Sert le bouton « Tester » des consignes.
+ * Ce qu'a rendu l'assistant pour une question : la réponse (Markdown assaini, renvois [n] qui ouvrent
+ * le passage n), ses passages (puces de source, fenêtre de lecture) et le plan suivi. Sert le bouton
+ * « Tester » des consignes.
  */
 const props = defineProps<{
   resultat: ResultatAssistant
@@ -14,8 +15,18 @@ const props = defineProps<{
 }>()
 
 const trace = computed(() => traceDuPlan(props.resultat.plan, props.fiche, props.titre, props.resultat))
-const reponse = computed(() => props.resultat.reponse ? renderMarkdownSafe(props.resultat.reponse) : '')
+const reponse = computed(() => renderMarkdownSafe(reponseAffichee(props.resultat)))
 const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(p, props.titre)))
+
+const citation = ref<Record<string, any> | null>(null)
+function surClicReponse (ev: MouseEvent) {
+  const n = numeroCitation(ev)
+  const source = n ? sources.value[n - 1] : undefined
+  if (source) {
+    ev.preventDefault()
+    citation.value = source
+  }
+}
 </script>
 
 <template>
@@ -31,14 +42,19 @@ const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(
     <div
       v-if="reponse"
       class="fr-text--sm assistant-resultat__reponse"
+      @click="surClicReponse"
       v-html="reponse"
     />
     <p
       v-else
       class="fr-text--sm"
     >
-      L'assistant a rendu les passages ci-dessous, sans rédiger de réponse.
+      {{ texteSansReponse(resultat) }}
     </p>
+    <PlaygroundLecteurCitation
+      :source="citation"
+      @close="citation = null"
+    />
     <p
       v-if="resultat.plan.reponse_fiable"
       class="fr-text--sm"
@@ -71,5 +87,6 @@ const sources = computed(() => props.resultat.passages.map(p => sourceDuPassage(
 <style scoped>
 .assistant-resultat { padding: 1rem; background: var(--background-alt-grey); }
 .assistant-resultat__reponse :deep(p:last-child) { margin-bottom: 0; }
+.assistant-resultat__reponse :deep(a.assistant-citation) { font-size: 0.8em; vertical-align: super; text-decoration: none; }
 .assistant-resultat__sources { display: flex; flex-wrap: wrap; }
 </style>

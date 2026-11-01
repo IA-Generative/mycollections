@@ -29,13 +29,13 @@ export function useAssistants () {
     versions: async (id: string) => (await get(`/api/assistants/${ident(id)}/versions`)).versions || [],
     /**
      * Pose une question à l'assistant (depuis « Tester » ou le bac à sable) : le plan suivi, les passages, la réponse
-     *  s'il y en a une ; `doublure` dit que le moteur n'est pas branché et que la réponse est un exemple.
+     *  rédigée à partir d'eux (ou la réponse fiable servie) ; `doublure` dit que le moteur n'est pas branché et que la réponse est un exemple.
      */
     executer: async (id: string, question: string): Promise<ReponseMoteur> => {
       const resp = await fetchWithAuth(`${baseUrl}/api/v1/assistants/${ident(id)}/executer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, canal: 'bac-a-sable' }),
+        body: JSON.stringify({ question, canal: 'bac-a-sable', rediger: true }),
       })
       if (!resp.ok) {
         throw new Error(`API error ${resp.status}: ${await resp.text()}`)

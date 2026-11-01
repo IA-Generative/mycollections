@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ChatMessage } from '~/composables/useChat'
+import { numeroCitation } from '~/utils/assistants'
 import { renderMarkdownSafe } from '~/utils/sanitize'
 
 const props = defineProps<{
@@ -35,6 +36,17 @@ const deduped = computed(() => {
 
 const rendered = computed(() => renderMarkdownSafe(props.message.content))
 
+/** Un renvoi `[n]` d'une réponse rédigée (lien `data-citation`) ouvre le passage n dans la fenêtre de lecture. */
+const citation = ref<Record<string, any> | null>(null)
+function surClicReponse (ev: MouseEvent) {
+  const n = numeroCitation(ev)
+  const source = n ? props.message.sources?.[n - 1] : undefined
+  if (source) {
+    ev.preventDefault()
+    citation.value = source
+  }
+}
+
 function onVote (v: 'up' | 'down') {
   emit('vote', v)
 }
@@ -63,7 +75,13 @@ function onVote (v: 'up' | 'down') {
     <div
       v-else
       class="myrag-msg__body myrag-md"
+      @click="surClicReponse"
       v-html="rendered"
+    />
+    <PlaygroundLecteurCitation
+      v-if="message.role === 'assistant'"
+      :source="citation"
+      @close="citation = null"
     />
 
     <!-- Source chips inline under the assistant reply -->
@@ -184,4 +202,5 @@ function onVote (v: 'up' | 'down') {
   font-size: 0.82em;
 }
 .myrag-md :deep(pre code) { background: transparent; padding: 0; }
+.myrag-md :deep(a.assistant-citation) { font-size: 0.8em; vertical-align: super; text-decoration: none; }
 </style>

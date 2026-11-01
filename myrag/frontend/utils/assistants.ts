@@ -325,12 +325,17 @@ export interface PassageAssistant {
   url?: string | null
   meta?: Record<string, unknown>
 }
+/** Un renvoi `[n]` de la réponse rédigée : `n` désigne `passages[n - 1]`. */
+export interface CitationAssistant { n: number, passage: string, document?: string | null, source: string }
 export interface ResultatAssistant {
   plan: PlanAssistant
   passages: PassageAssistant[]
   reponse?: string | null
   duree_ms: number
   par_source?: Record<string, number>
+  /** Présents seulement si une rédaction a été demandée (`rediger: true`). */
+  citations?: CitationAssistant[]
+  redaction?: 'faite' | 'aucun_passage' | 'indisponible' | null
 }
 
 const pourcent = (x: number): number => Math.round(x * 100)
@@ -498,4 +503,57 @@ export function resumeQualiteSource (s: { reponses_fiables: number, servie_fois:
   const questions = total === 0 ? 'Aucune question de référence' : `${total} question${total > 1 ? 's' : ''} de référence, dont ${validees} validée${validees > 1 ? 's' : ''}`
   const fiables = s.reponses_fiables === 0 ? 'aucune réponse fiable' : `${s.reponses_fiables} réponse${s.reponses_fiables > 1 ? 's' : ''} fiable${s.reponses_fiables > 1 ? 's' : ''} (${libelleServie(s.servie_fois).toLowerCase()} au total)`
   return `${questions} ; ${fiables}.`
+}
+
+// ─── La réponse rédigée et ses renvois [n] ───────────────────────────────────────────────────
+
+const RENVOI = /\[(\d{1,3})\](?!\()/g
+
+function echapperAttribut (s: string): string {
+  return s.replace(A_ECHAPPER, c => ECHAPPE_ATTRIBUT[c]!)
+}
+
+/**
+ * Les renvois `[n]` d'une réponse rédigée deviennent des liens vers le passage n (son lien de lecture), marqués
+ * `data-citation` pour que la page les ouvre dans sa fenêtre de lecture. Un `[n]` sans passage reste du texte.
+ * Le HTML produit passe ensuite par `renderMarkdownSafe` (assaini).
+ */
+export function lierCitations (texte: string, passages: readonly Pick<PassageAssistant, 'titre' | 'document' | 'url'>[]): string {
+  return texte.replace(RENVOI, (tout, chiffres: string) => {
+    const n = Number(chiffres)
+    const p = passages[n - 1]
+    if (!p) {
+      return tout
+    }
+    const href = p.url ? echapperAttribut(p.url) : '#'
+    return `<a href="${href}" class="assistant-citation" data-citation="${n}" title="${echapperAttribut(p.titre || p.document)}">[${n}]</a>`
+  })
+}
+
+/** La réponse à afficher : rédigée (renvois liés aux passages), servie telle quelle (réponse fiable), ou rien. */
+export function reponseAffichee (r: Pick<ResultatAssistant, 'reponse' | 'passages' | 'redaction'>): string {
+  const texte = r.reponse?.trim() || ''
+  return texte && r.redaction === 'faite' ? lierCitations(texte, r.passages) : texte
+}
+
+/** Ce que dit l'assistant quand il n'a pas de réponse à montrer. */
+export function texteSansReponse (r: Pick<ResultatAssistant, 'passages' | 'redaction'>): string {
+  const n = r.passages.length
+  if (!n) {
+    return 'L\'assistant n\'a rien trouvé pour cette question.'
+  }
+  const trouves = `${n} passage${n > 1 ? 's' : ''}`
+  return r.redaction === 'indisponible'
+    ? `La réponse n'a pas pu être rédigée pour le moment. Voici ${n > 1 ? 'les' : 'le'} ${trouves} trouvé${n > 1 ? 's' : ''} : ouvrez-les ci-dessous.`
+    : `L'assistant a trouvé ${trouves}, sans rédiger de réponse : ouvrez-les ci-dessous.`
+}
+
+/** Le numéro du renvoi `[n]` cliqué (lien `data-citation`), ou null : autre cible, ou clic laissé au navigateur (Ctrl, Cmd, Maj, milieu). */
+export function numeroCitation (ev: { target: unknown, button?: number, ctrlKey?: boolean, metaKey?: boolean, shiftKey?: boolean }): number | null {
+  if ((ev.button ?? 0) !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+    return null
+  }
+  const cible = ev.target as { closest?: (s: string) => { getAttribute: (a: string) => string | null } | null } | null
+  const n = Number(cible?.closest?.('a[data-citation]')?.getAttribute('data-citation'))
+  return Number.isInteger(n) && n > 0 ? n : null
 }
