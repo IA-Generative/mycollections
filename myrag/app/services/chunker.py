@@ -267,7 +267,7 @@ def chunk_by_qr(text: str, sensitivity: Sensitivity = Sensitivity.PUBLIC) -> lis
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
 
         answer = text[start:end].strip()
-        slug = re.sub(r"[^a-z0-9]+", "-", question.lower())[:40].strip("-")
+        slug = slug_de_section(question)[:40].strip("-")  # « Quotité » → `quotite`, pas `quotit`
 
         chunks.append(
             {
