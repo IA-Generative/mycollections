@@ -28,6 +28,9 @@ SYSTEME = (
     "documentaires, utilise ces outils : trouve d'abord où chercher, puis cherche, puis réponds en français en "
     "t'appuyant uniquement sur les passages trouvés et en citant leurs liens. Si rien ne convient, dis-le."
 )
+#: Les modèles à raisonnement (tools-pro) dépensent leurs jetons à réfléchir avant d'écrire : à 120,
+#: la question sortait vide (`finish_reason: length`) et le catalogue réel ne jouait rien.
+MAX_TOKENS_QUESTION = 1000
 CONSIGNE_QUESTION = (
     "On te donne un passage d'un document administratif. Écris UNE question, en français, qu'un agent poserait "
     "et à laquelle ce passage répond. Ne cite ni le titre du document ni le nom de la collection. Réponds par la "
@@ -129,7 +132,12 @@ class Agent:
         """Une question à laquelle ce passage répond (catalogue réel) ; le passage est une DONNÉE encadrée."""
         donnees = wrap_untrusted(neutralize_for_prompt(extrait, max_len=3000), label="PASSAGE")
         rep = self.passerelle.completer(
-            {"model": self.modele, "messages": [{"role": "system", "content": CONSIGNE_QUESTION}, {"role": "user", "content": donnees}], "temperature": 0, "max_tokens": 120}
+            {
+                "model": self.modele,
+                "messages": [{"role": "system", "content": CONSIGNE_QUESTION}, {"role": "user", "content": donnees}],
+                "temperature": 0,
+                "max_tokens": MAX_TOKENS_QUESTION,
+            }
         )
         texte = ((rep.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
         ligne = " ".join(texte.split()).strip().strip('"«» ')
