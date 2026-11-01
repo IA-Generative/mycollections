@@ -13,6 +13,9 @@ const props = defineProps<{
   sansAvis?: boolean
   /** La réponse est une réponse fiable servie telle quelle : badge, et pas d'alerte « aucune source ». */
   reponseFiable?: boolean
+  /** Réponse rédigée d'un assistant : les numéros des passages cités. Leurs puces portent le numéro du
+   *  renvoi ; les autres passages se replient à part. Absent : une puce par fichier, sans tri. */
+  cites?: number[]
 }>()
 
 const emit = defineEmits<{
@@ -20,10 +23,10 @@ const emit = defineEmits<{
 }>()
 
 /** Dedupe sources by filename so 5 chunks from the same PDF show once. */
-const deduped = computed(() => {
+function dedupliquer (sources: any[]): any[] {
   const seen = new Set<string>()
   const out: any[] = []
-  for (const s of props.message.sources || []) {
+  for (const s of sources) {
     const k = s.original_filename || s.filename || JSON.stringify(s).slice(0, 40)
     if (seen.has(k)) {
       continue
@@ -32,6 +35,16 @@ const deduped = computed(() => {
     out.push(s)
   }
   return out
+}
+const deduped = computed(() => dedupliquer(props.message.sources || []))
+
+/** Les passages cités, dans l'ordre de leurs renvois, puis les autres (un par fichier). */
+const pucesCitees = computed(() => (props.cites || [])
+  .map(n => ({ n, source: props.message.sources?.[n - 1] }))
+  .filter(p => p.source))
+const autresPuces = computed(() => {
+  const cites = new Set(props.cites || [])
+  return dedupliquer((props.message.sources || []).filter((_, i) => !cites.has(i + 1)))
 })
 
 const rendered = computed(() => renderMarkdownSafe(props.message.content))
@@ -86,15 +99,43 @@ function onVote (v: 'up' | 'down') {
 
     <!-- Source chips inline under the assistant reply -->
     <div
-      v-if="message.role === 'assistant' && message.sources?.length"
+      v-if="message.role === 'assistant' && (cites ? pucesCitees.length : message.sources?.length)"
       class="myrag-msg__sources"
     >
-      <PlaygroundSourceChip
-        v-for="(s, i) in deduped"
-        :key="i"
-        :source="s"
-      />
+      <template v-if="cites">
+        <span
+          v-for="p in pucesCitees"
+          :key="p.n"
+          class="myrag-msg__citee"
+        >
+          <span class="myrag-msg__numero">[{{ p.n }}]</span>
+          <PlaygroundSourceChip :source="p.source!" />
+        </span>
+      </template>
+      <template v-else>
+        <PlaygroundSourceChip
+          v-for="(s, i) in deduped"
+          :key="i"
+          :source="s"
+        />
+      </template>
     </div>
+    <details
+      v-if="message.role === 'assistant' && cites && autresPuces.length"
+      class="myrag-msg__autres fr-text--sm"
+    >
+      <summary>
+        {{ pucesCitees.length ? 'Autres passages trouvés, non cités' : 'Passages trouvés, non retenus pour la réponse' }}
+        ({{ autresPuces.length }})
+      </summary>
+      <div class="myrag-msg__sources">
+        <PlaygroundSourceChip
+          v-for="(s, i) in autresPuces"
+          :key="i"
+          :source="s"
+        />
+      </div>
+    </details>
 
     <!-- L'invitation à mettre à jour un index Résana ancien ou incomplet (pour qui le peut). -->
     <div
@@ -183,6 +224,10 @@ function onVote (v: 'up' | 'down') {
   display: flex;
   flex-wrap: wrap;
 }
+.myrag-msg__citee { display: inline-flex; align-items: center; }
+.myrag-msg__numero { font-size: 0.75rem; font-weight: 700; margin-right: 0.15rem; color: var(--text-action-high-blue-france); }
+.myrag-msg__autres { margin-top: 0.5rem; }
+.myrag-msg__autres summary { cursor: pointer; color: var(--text-mention-grey); }
 .myrag-md :deep(p:first-child) { margin-top: 0; }
 .myrag-md :deep(p:last-child) { margin-bottom: 0; }
 .myrag-md :deep(ul),
