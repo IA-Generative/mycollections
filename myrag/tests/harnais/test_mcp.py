@@ -92,7 +92,8 @@ def test_tools_list_rend_trois_outils_sans_aucun_assistant(client, jetons):
     assert {o["name"] for o in outils} == OUTILS and len(outils) == 3
     assert all(len(o["description"]) > 60 and o["inputSchema"]["type"] == "object" for o in outils)  # des descriptions à lire par un modèle
     erreur, contenu = appeler(client, jetons(), "lister_sources")
-    assert not erreur and contenu["assistants"] == []
+    # Sans assistant, restent les collections qu'elle lit (s'il y en a), chacune seule.
+    assert not erreur and all(len(a["collections"]) == 1 and a["consignes"] == [] for a in contenu["assistants"])
 
 
 def test_tools_list_rend_trois_outils_avec_cinquante_assistants(client, en_tant_que, jeu, theatre_branche, jetons, monkeypatch):
@@ -141,6 +142,55 @@ def test_lister_sources_dit_les_cas_que_l_assistant_sait_traiter(client, en_tant
         assert vu["consignes"] == ["une question sur le vote du budget"]
     finally:
         _nettoyer([ident])
+
+
+# ─── Les collections lisibles sans assistant ─────────────────────────────────────
+
+
+def test_une_collection_lisible_sans_assistant_est_listee_seule_et_s_interroge(client, jeu, theatre_branche, jetons):
+    """Une collection non publiée (une amorce, une collection d'équipe) que la personne lit : la recherche la
+    lui propose, le MCP aussi — sinon « je ne sais pas où chercher » ne la trouve jamais (campagne du 2026-11-01)."""
+    erreur, contenu = appeler(client, jetons("alice"), "lister_sources")
+    assert not erreur
+    vus = {a["id"]: a for a in contenu["assistants"]}
+    for k in ("mienne", "partagee", "ouverte"):
+        assert [c["id"] for c in vus[jeu[k]]["collections"]] == [jeu[k]] and vus[jeu[k]]["consignes"] == []
+    assert vus[jeu["mienne"]]["titre"] == "Mes notes"
+    assert jeu["secrete"] not in json.dumps(contenu)
+    erreur, trouve = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=jeu["mienne"])
+    assert not erreur and trouve["passages"] and {p["collection"]["id"] for p in trouve["passages"]} == {jeu["mienne"]}
+    assert trouve["plan"]["assistant"] == jeu["mienne"]
+    erreur, _ = appeler(client, jetons("alice"), "proposer_sources", question="budget", assistant=jeu["partagee"])
+    assert not erreur
+
+
+def test_une_collection_illisible_reste_introuvable(client, jeu, theatre_branche, jetons):
+    erreur, contenu = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=jeu["secrete"])
+    assert erreur and "introuvable" in contenu
+    erreur, bob = appeler(client, jetons("bob"), "rechercher", question="budget", assistant=jeu["secrete"])
+    assert not erreur and {p["collection"]["id"] for p in bob["passages"]} == {jeu["secrete"]}
+
+
+def test_une_collection_deja_portee_seule_n_est_pas_listee_deux_fois(client, en_tant_que, jeu, theatre_branche, jetons, monkeypatch):
+    """Un assistant à une source sur `partagee` la porte : pas d'entrée en double. Un assistant qui a pris le nom
+    de `ouverte` sans la porter masque l'entrée seule de `ouverte` (son identifiant n'est pas libre)."""
+    portant, homonyme = f"t-mcp-portant-{os.urandom(3).hex()}", jeu["ouverte"]
+    try:
+        monkeypatch.setattr(app.config.settings, "auth_enabled", False)
+        en_tant_que(SUPERADMIN)
+        une = [{"id": jeu["partagee"], "type": "collection", "regime": "toujours", "rang": 1}]
+        for ident in (portant, homonyme):
+            assert client.put(f"/api/assistants/{ident}", json=fiche_d_essai(jeu, ident, sources=une).model_dump(mode="json")).status_code == 200
+            assert client.post(f"/api/assistants/{ident}/publier").status_code == 200
+        monkeypatch.setattr(app.config.settings, "auth_enabled", True)
+        client.app.dependency_overrides.clear()
+        erreur, contenu = appeler(client, jetons("alice"), "lister_sources")
+        assert not erreur
+        ids = [a["id"] for a in contenu["assistants"]]
+        assert jeu["partagee"] not in ids and portant in ids
+        assert ids.count(homonyme) == 1 and next(a for a in contenu["assistants"] if a["id"] == homonyme)["collections"][0]["id"] == jeu["partagee"]
+    finally:
+        _nettoyer([portant, homonyme])
 
 
 # ─── L'identité et les droits ────────────────────────────────────────────────────

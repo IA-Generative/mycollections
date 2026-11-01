@@ -25,8 +25,8 @@ from app.services.pseudo import condenser
 
 NOM = "mes-collections"
 INSTRUCTIONS = (
-    "Mes collections : des assistants de recherche qui réunissent des collections de documents. "
-    "Appelez d'abord `lister_sources` pour connaître les assistants et leurs collections, puis `rechercher`. "
+    "Mes collections : des assistants de recherche qui réunissent des collections de documents, et les collections "
+    "elles-mêmes. Appelez d'abord `lister_sources` pour savoir où chercher, puis `rechercher`. "
     "Les résultats ne contiennent que ce que la personne connectée a le droit de lire."
 )
 
@@ -55,7 +55,8 @@ OUTILS: list[types.Tool] = [
         description=(
             "À appeler en premier, pour savoir où chercher. Rend les assistants de recherche que la personne connectée "
             "peut interroger, et pour chacun ses collections de documents (identifiant, titre, description) et les cas "
-            "qu'il sait traiter (`consignes`). Quand un assistant a une consigne qui correspond à la question, "
+            "qu'il sait traiter (`consignes`). Chaque collection qu'elle lit y figure aussi seule, sous son identifiant : "
+            "s'interroge de la même façon. Quand un assistant a une consigne qui correspond à la question, "
             "préférez-le à une collection seule : il cherche dans l'ordre prévu et enchaîne ses sources. "
             "Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
         ),
@@ -124,10 +125,30 @@ def _limiter(user: CurrentUser) -> None:
         raise ErreurOutil(f"Trop de questions posées à la suite. Réessayez dans {attente} secondes.")
 
 
+async def _collections_lisibles(user: CurrentUser) -> list[dict]:
+    """Celles que la recherche propose à la personne (`/api/v1/search/scopes`) : même règle de
+    lecture, même plafond de sensibilité."""
+    from app.routers.recherche import _collections_lisibles as lisibles
+
+    return await lisibles(user)
+
+
+async def _charger_collection(ident: str, user: CurrentUser) -> moteur.Charge | None:
+    """Une collection lisible servie seule, si `ident` la désigne et qu'aucun autre assistant ne porte ce nom."""
+    ligne = await assistant_store.lire(ident)
+    for col in await _collections_lisibles(user):
+        if assistant_store.deriver_identifiant(col["name"]) == ident and (ligne is None or ligne.get("collection_name") == col["name"]):
+            return moteur.charge_collection(col, user)
+    return None
+
+
 async def _charger(ident: str, user: CurrentUser) -> moteur.Charge:
     try:
         return await moteur.charger(ident, user, condenser(user.sub), access.is_superadmin(user.groups))
     except moteur.AssistantIntrouvable:
+        charge = await _charger_collection(ident, user)
+        if charge is not None:
+            return charge
         raise ErreurOutil(f"Assistant « {ident} » introuvable. Appelez `lister_sources` pour connaître ceux que vous pouvez interroger.")
 
 
@@ -151,6 +172,24 @@ async def lister_sources(user: CurrentUser) -> dict:
                 "collections": [{"id": s, "titre": _titre_source(charge, s), "description": (charge.collections[s] or {}).get("description") or ""} for s in charge.lisibles],
                 # Les cas prévus par la fiche (« quand ») : ce qui distingue un assistant métier du miroir d'une collection.
                 "consignes": [c.quand for c in charge.fiche.consignes if c.quand != QUAND_TOUJOURS],
+            }
+        )
+    # Les collections que la personne lit sans assistant pour les porter seules (non publiées : amorces,
+    # collections d'équipe) : la recherche les lui propose, « je ne sais pas où chercher » doit les trouver aussi.
+    portees = {a["collections"][0]["id"] for a in assistants if len(a["collections"]) == 1}
+    pris = {ligne["id"]: ligne.get("collection_name") for ligne in await assistant_store.lister(archives=True)}
+    for col in await _collections_lisibles(user):
+        ident = assistant_store.deriver_identifiant(col["name"])
+        if col["name"] in portees or pris.get(ident, col["name"]) != col["name"]:
+            continue  # déjà portée seule, ou identifiant pris par un autre assistant
+        charge = moteur.charge_collection(col, user)
+        assistants.append(
+            {
+                "id": ident,
+                "titre": charge.fiche.titre,
+                "description": charge.fiche.description,
+                "collections": [{"id": col["name"], "titre": _titre_source(charge, col["name"]), "description": col.get("description") or ""}],
+                "consignes": [],
             }
         )
     return {"assistants": assistants}
