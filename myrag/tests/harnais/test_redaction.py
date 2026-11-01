@@ -104,6 +104,22 @@ def test_une_citation_hors_liste_est_retiree_et_les_groupes_eclates():
     assert [c.n for c in citations] == [1, 2, 3]
 
 
+def test_des_passages_hors_sujet_donnent_la_phrase_convenue_sans_citation():
+    """Pas de seuil de pertinence : une question hors sujet ramène des passages ; le modèle doit le dire."""
+    modele = FauxModele(f"« {redaction.HORS_SUJET} »")
+    texte, citations, etat = _rediger("Quel est le seuil des marchés publics de travaux ?", _passages(12), _fiche(), None, modele)
+    assert redaction.HORS_SUJET in modele.appels[0][0]["content"]
+    assert etat == "faite" and citations == [] and redaction.HORS_SUJET in texte
+
+
+def test_douze_passages_au_plus_sont_montres_au_modele():
+    modele = FauxModele("Réponse [12] [13].")
+    texte, citations, _ = _rediger("budget", _passages(20), _fiche(), None, modele)
+    utilisateur = modele.appels[0][1]["content"]
+    assert redaction.PASSAGES_MAX == 12 and "[12] Document 12" in utilisateur and "[13] Document 13" not in utilisateur
+    assert texte == "Réponse [12]." and [c.n for c in citations] == [12]
+
+
 def test_zero_passage_n_appelle_pas_le_modele():
     modele = FauxModele()
     texte, citations, etat = _rediger("budget", [], _fiche(), "vote", modele)
