@@ -500,6 +500,9 @@ def main(
 def _fabrique(a: argparse.Namespace) -> tuple[Cible, Passerelle | None]:
     base = origine(a.cible)
     sso = os.environ.get("CAMPAGNE_SSO_HOST", "").strip()
+    manquantes = [n for n in ("CAMPAGNE_SSO_HOST", "KC_TEST_IN_USERNAME", "KC_TEST_IN_PASSWORD") if not os.environ.get(n, "").strip()]
+    if manquantes:  # avant d'attendre la fenêtre : une nuit ne doit pas échouer à 21 h sur un réglage
+        raise Usage(f"variables requises : {', '.join(manquantes)}")
     cible = Cible(base, connexion_navigateur(base, sso, compte="KC_TEST_IN"), cadences=a.cadences)
     besoin = "mcp" in a.phases or a.juge_modele
     passerelle = Passerelle.depuis_env(max_appels=a.max_appels_modele) if besoin else None
