@@ -1,0 +1,24 @@
+# Exemple de fiche d'assistant (docs/assistants.md, « Le fichier YAML ») : données inventées.
+# Les identifiants des sources doivent être ceux de collections et de connecteurs de l'installation.
+assistant: sejour-des-etrangers
+titre: Séjour des étrangers
+rubrique: droit-etrangers
+seuil_fiable: 0.9
+validation_requise: false
+sources:
+  - {id: accords-bilateraux, type: collection, regime: selon_question, rang: 1}
+  - {id: ceseda, type: collection, regime: toujours, rang: 2}
+  - {id: referentiel-eligibilite, type: connecteur, regime: sur_consigne}
+consignes:
+  - id: juridique
+    quand: toujours
+    repondre: citer Livre, Titre, Chapitre, article
+    gabarit: juridique
+  - id: accord-bilateral
+    quand: la personne est ressortissante d'un pays lié par un accord bilatéral
+    exemples: ["un Algérien marié à une Française peut-il …"]
+    chercher:
+      - {source: accords-bilateraux}
+      - {source: ceseda}
+      - {source: referentiel-eligibilite, avec: article_trouve}
+    repondre: citer l'article de l'accord avant celui du code, puis lister les pièces
