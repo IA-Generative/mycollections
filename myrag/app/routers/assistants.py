@@ -286,6 +286,8 @@ class DemandeExecution(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     plan: Plan | None = None
     canal: Literal["bac-a-sable", "api"] = "api"
+    #: Rédiger une réponse à partir des passages (règles « répondre »), avec des renvois [n].
+    rediger: bool = False
 
 
 async def _preparer(ident: str, canal: str, user: CurrentUser, capacites_client: list[str] | None = None):
@@ -327,7 +329,7 @@ async def executer(ident: str, demande: DemandeExecution, response: Response, us
         if plan_.assistant != ident or any(e.source not in sources for e in plan_.etapes):
             raise HTTPException(status_code=400, detail="Ce plan ne correspond pas à l'assistant : une étape cherche dans une source qui n'est pas la sienne.")
     try:
-        resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k)
+        resultat, execution = await moteur.executer(charge, plan_, user, moi.hash, demande.canal, top_k=ctx.top_k, rediger=demande.rediger, question=demande.question)
     except moteur.ReponseFiableInvalide:
         raise HTTPException(status_code=400, detail="Ce plan cite une réponse fiable qui n'est pas disponible pour vous.")
     if execution.toutes_en_panne:

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from app.auth import CurrentUser
 from app.config import settings
-from app.harnais import fiables, journal, perimetre
+from app.harnais import fiables, journal, perimetre, redaction
 from app.harnais.apparieur import ApparieurEmbeddings, ApparieurSacDeMots
 from app.harnais.connecteurs.eligibilite import ConnecteurEligibilite
 from app.harnais.connecteurs.openrag import ConnecteurOpenRAG
@@ -151,10 +151,13 @@ async def executer(
     *,
     top_k: int = 20,
     connecteurs: Mapping[str, Connecteur] | None = None,
+    rediger: bool = False,
+    question: str = "",
 ) -> tuple[Resultat, Execution]:
     """Exécute `plan` pour cette personne : le plan est d'abord ramené à son périmètre (une étape
     hors droit ou hors fiche disparaît), les passages d'une source hors périmètre ne sortent
-    jamais. Écrit le journal (sans texte). Un plan à réponse fiable est servi sans recherche."""
+    jamais. Écrit le journal (sans texte). Un plan à réponse fiable est servi sans recherche.
+    `rediger` : une réponse est rédigée à partir des seuls passages rendus (`harnais/redaction.py`)."""
     if plan.reponse_fiable is not None:
         return await servir_fiable(charge, plan, hash_, canal), Execution(sorties={}, duree_ms=0)
     debut = time.monotonic()
@@ -171,4 +174,11 @@ async def executer(
     for p in passages:
         par_source[p.source] = par_source.get(p.source, 0) + 1
     await journal.ecrire(journal.construire(plan, charge.fiche, execution, canal=canal, auteur_hash=hash_, duree_ms=duree_ms))
-    return Resultat(plan=plan_rendu, passages=passages, duree_ms=duree_ms, par_source=par_source), execution
+    resultat = Resultat(plan=plan_rendu, passages=passages, duree_ms=duree_ms, par_source=par_source)
+    if rediger and not execution.toutes_en_panne:
+        q = question or next((e.question for e in plan.etapes), "")
+        consignes = redaction.consignes_a_appliquer(charge.fiche, plan.consigne)
+        texte, citations, etat = await redaction.rediger(q, passages, consignes, charge.fiche, appeler_modele=redaction.appeler_fournisseur)
+        duree_ms = int((time.monotonic() - debut) * 1000)
+        resultat = resultat.model_copy(update={"reponse": texte, "citations": citations, "redaction": etat, "duree_ms": duree_ms})
+    return resultat, execution
