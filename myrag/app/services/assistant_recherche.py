@@ -86,6 +86,15 @@ def apparieur() -> Apparieur:
     return ApparieurSacDeMots()
 
 
+def apparieur_catalogue() -> Apparieur:
+    """De quoi classer les assistants et collections d'une question (`trouver_collections`) : les
+    embeddings du service configuré (repli sur le sac de mots s'il ne répond pas), sinon le sac de mots."""
+    url = settings.catalogue_embeddings_url.strip().rstrip("/").removesuffix("/v1")
+    if url and settings.catalogue_embeddings_modele:
+        return ApparieurEmbeddings(url, settings.catalogue_embeddings_modele, jeton=settings.catalogue_embeddings_cle, delai_s=settings.recherche_delai_s)
+    return ApparieurSacDeMots()
+
+
 def planificateur_regles(charge: Charge, app: Apparieur | None = None) -> Regles:
     """Le planificateur par règles, avec de quoi juger si une source `selon_question` ressemble à la question."""
     descriptions = {n: f"{titre_de(c)}. {c.get('description') or ''}".strip() for n, c in charge.collections.items() if c}
