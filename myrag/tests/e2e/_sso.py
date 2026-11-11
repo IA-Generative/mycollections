@@ -22,6 +22,12 @@ def chez_le_sso(url: str, sso_host: str) -> bool:
     return bool(sso_host) and urlparse(url).netloc == sso_host
 
 
+#: Sous certains VPN, le SSO résout vers une adresse privée. Chrome interdit alors à une page servie
+#: en public de l'appeler (« Local Network Access ») : l'application affiche « Failed to fetch » et
+#: ne part jamais vers le SSO. Le navigateur des essais lève ce contrôle ; celui des personnes, non.
+ARGS_NAVIGATEUR = ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests"]
+
+
 def sso_en_adresse_privee(sso_host: str) -> tuple[bool, str | None]:
     """Un poste sous VPN résout parfois le SSO vers une adresse privée : une page servie en
     public n'a alors pas le droit de l'appeler. Le service n'est pas en cause."""
