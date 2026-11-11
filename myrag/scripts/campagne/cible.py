@@ -135,10 +135,10 @@ def connexion_navigateur(base: str, sso_host: str, compte: str = "KC_TEST_IN") -
             raise Usage("CAMPAGNE_SSO_HOST est requis (l'hôte du SSO, pour reconnaître sa page)")
         from playwright.sync_api import sync_playwright  # ty: ignore[unresolved-import]
 
-        from tests.e2e._sso import connexion
+        from tests.e2e._sso import ARGS_NAVIGATEUR, connexion
 
         with sync_playwright() as p:
-            nav = p.chromium.launch()
+            nav = p.chromium.launch(args=ARGS_NAVIGATEUR)
             try:
                 issue, detail, contexte = connexion(nav, base, sso_host, identifiant, motdepasse)
                 try:
