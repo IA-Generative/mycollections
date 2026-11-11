@@ -171,6 +171,12 @@ class Settings(BaseSettings):
     # Embeddings d'OpenRAG pour apparier une question aux consignes d'un assistant (POST {openrag_url}/v1/embeddings).
     # Vide (défaut) ⇒ sac de mots déterministe ; renseigné mais injoignable ⇒ repli sur le sac de mots, sans erreur.
     assistants_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_ASSISTANTS_EMBEDDINGS_MODELE", "assistants_embeddings_modele"))
+    # Embeddings pour classer les assistants et collections d'une question (outil MCP `trouver_collections`) :
+    # un service OpenAI-compatible (la passerelle MirAI), sa clef (secret) et son modèle. URL ou modèle
+    # vides ⇒ sac de mots. Séparé des consignes, dont le seuil est réglé sur le sac de mots.
+    catalogue_embeddings_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_URL", "catalogue_embeddings_url"))
+    catalogue_embeddings_cle: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_CLE", "catalogue_embeddings_cle"))
+    catalogue_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_MODELE", "catalogue_embeddings_modele"))
     #: `GET /api/v1/sites` sans jeton : les sites des seules collections ouvertes à tous, pour le
     #: débogage de l'extension. Coupé par défaut (une liste anonyme dit quels sites intéressent
     #: Questions posées aux assistants (`plan` et `executer`) par personne et par minute, par

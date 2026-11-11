@@ -24,7 +24,7 @@ from tests.harnais.test_fiables import QUESTION, REPONSE, _semer
 
 _CLE = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 ENTETES = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
-OUTILS = {"lister_sources", "proposer_sources", "rechercher"}
+OUTILS = {"trouver_collections", "lister_sources", "proposer_sources", "rechercher"}
 
 
 @pytest.fixture
@@ -85,18 +85,18 @@ def _nettoyer(idents: list[str]) -> None:
 # ─── tools/list ──────────────────────────────────────────────────────────────────
 
 
-def test_tools_list_rend_trois_outils_sans_aucun_assistant(client, jetons):
+def test_tools_list_rend_quatre_outils_sans_aucun_assistant(client, jetons):
     r = rpc(client, "tools/list", entetes=jetons())
     assert r.status_code == 200, r.text
     outils = r.json()["result"]["tools"]
-    assert {o["name"] for o in outils} == OUTILS and len(outils) == 3
+    assert {o["name"] for o in outils} == OUTILS and len(outils) == 4
     assert all(len(o["description"]) > 60 and o["inputSchema"]["type"] == "object" for o in outils)  # des descriptions à lire par un modèle
     erreur, contenu = appeler(client, jetons(), "lister_sources")
     # Sans assistant, restent les collections qu'elle lit (s'il y en a), chacune seule.
     assert not erreur and all(len(a["collections"]) == 1 and a["consignes"] == [] for a in contenu["assistants"])
 
 
-def test_tools_list_rend_trois_outils_avec_cinquante_assistants(client, en_tant_que, jeu, theatre_branche, jetons, monkeypatch):
+def test_tools_list_rend_quatre_outils_avec_cinquante_assistants(client, en_tant_que, jeu, theatre_branche, jetons, monkeypatch):
     idents = [f"t-mcp-{i:02d}-{os.urandom(3).hex()}" for i in range(50)]
     try:
         monkeypatch.setattr(app.config.settings, "auth_enabled", False)  # la création passe par les routes d'administration
@@ -191,6 +191,48 @@ def test_une_collection_deja_portee_seule_n_est_pas_listee_deux_fois(client, en_
         assert ids.count(homonyme) == 1 and next(a for a in contenu["assistants"] if a["id"] == homonyme)["collections"][0]["id"] == jeu["partagee"]
     finally:
         _nettoyer([portant, homonyme])
+
+
+# ─── Trouver où chercher ─────────────────────────────────────────────────────────
+
+
+def test_trouver_collections_classe_ce_que_la_personne_lit(client, jeu, theatre_branche, jetons):
+    """« Je ne sais pas où chercher » : la question classe les collections lisibles ; le client n'a plus à choisir dans toute la liste."""
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="Quelles sont les méthodes de l'équipe ?")
+    assert not erreur
+    sources = contenu["sources"]
+    assert sources[0]["id"] == jeu["partagee"] and sources[0]["score"] > 0
+    assert {"id", "titre", "description", "collections", "consignes", "score"} == set(sources[0])
+    assert [s["score"] for s in sources] == sorted((s["score"] for s in sources), reverse=True)
+    assert jeu["secrete"] not in json.dumps(contenu)
+    # Ce qu'il rend s'interroge tel quel.
+    erreur, trouve = appeler(client, jetons("alice"), "rechercher", question="méthodes", assistant=sources[0]["id"])
+    assert not erreur and trouve["passages"]
+    # Bob lit `secrete` : elle se classe pour lui.
+    erreur, bob = appeler(client, jetons("bob"), "trouver_collections", question="le secret de Bob")
+    assert not erreur and bob["sources"][0]["id"] == jeu["secrete"]
+
+
+def test_trouver_collections_ne_rend_rien_sans_ressemblance_et_borne_la_limite(client, jeu, theatre_branche, jetons):
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="xylophone zinzolin")
+    assert not erreur and contenu["sources"] == []
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="notes méthodes textes ouverts équipe", limite=1)
+    assert not erreur and len(contenu["sources"]) == 1
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="notes méthodes textes ouverts équipe", limite=500)
+    assert not erreur and 2 <= len(contenu["sources"]) <= 10
+
+
+def test_l_apparieur_du_catalogue_suit_la_configuration(monkeypatch):
+    from app.harnais.apparieur import ApparieurEmbeddings, ApparieurSacDeMots
+    from app.services import assistant_recherche as moteur
+
+    assert isinstance(moteur.apparieur_catalogue(), ApparieurSacDeMots)
+    monkeypatch.setattr(app.config.settings, "catalogue_embeddings_url", "https://modeles.fake-domain.name/v1/")
+    assert isinstance(moteur.apparieur_catalogue(), ApparieurSacDeMots), "sans modèle : sac de mots"
+    monkeypatch.setattr(app.config.settings, "catalogue_embeddings_modele", "modele-e")
+    monkeypatch.setattr(app.config.settings, "catalogue_embeddings_cle", "clef")
+    a = moteur.apparieur_catalogue()
+    assert isinstance(a, ApparieurEmbeddings) and (a.url, a.modele, a.jeton) == ("https://modeles.fake-domain.name", "modele-e", "clef")
 
 
 # ─── L'identité et les droits ────────────────────────────────────────────────────
@@ -312,7 +354,11 @@ def test_la_consigne_de_citation_est_dans_la_description_et_dans_la_sortie(clien
     assert "cite chaque passage" in description and "`url`" in description and "[titre](url)" in description
     assert "si aucun passage ne répond, dis-le" in description
     assert outils["rechercher"]["inputSchema"]["properties"]["limite"]["type"] == "integer"
-    assert "en premier" in outils["lister_sources"]["description"] and outils["proposer_sources"]["description"].startswith("Facultatif")
+    assert (
+        "en premier" in outils["trouver_collections"]["description"]
+        and "tout voir" in outils["lister_sources"]["description"]
+        and outils["proposer_sources"]["description"].startswith("Facultatif")
+    )
     erreur, contenu = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
     assert not erreur and "[titre](url)" in contenu["consigne_de_citation"]
 

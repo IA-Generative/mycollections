@@ -23,7 +23,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from tests.e2e._sso import connexion, jeton_de_session
+from tests.e2e._sso import ARGS_NAVIGATEUR, connexion, jeton_de_session
 
 ICI = pathlib.Path(__file__).resolve().parent
 TEMOIN = "QUETZAL-9031"
@@ -69,7 +69,7 @@ def navigateur():
     from playwright.sync_api import sync_playwright  # ty: ignore[unresolved-import]
 
     with sync_playwright() as p:
-        nav = p.chromium.launch(headless=_env("E2E_HEADED") != "1")
+        nav = p.chromium.launch(headless=_env("E2E_HEADED") != "1", args=ARGS_NAVIGATEUR)
         yield nav
         nav.close()
 
