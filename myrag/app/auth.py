@@ -128,19 +128,36 @@ def verify_jwt(
     return claims
 
 
+def _avec_les_groupes(claims: dict) -> dict:
+    """Pose dans ``groups`` le premier claim de ``MYCOLLECTIONS_CLAIMS_GROUPES`` que le jeton porte.
+
+    Un client dont le mapper ``groups`` doit rester en noms courts (MirAI Chat nomme ses groupes par
+    leur feuille) porte les chemins complets sous un autre claim : c'est lui qui est lu, pour le
+    groupe exigé comme pour les droits. Le jeton est signé : ce claim vient du fournisseur, comme
+    ``groups``. La règle ne change pas : seuls des chemins complets donnent des droits."""
+    for nom in [n.strip() for n in settings.claims_groupes.split(",") if n.strip()]:
+        valeur = claims.get(nom)
+        if isinstance(valeur, list):
+            if nom != "groups":
+                claims["groups"] = valeur
+            break
+    return claims
+
+
 def decoder_le_jeton(token: str) -> dict:
     """Signature (JWKS), émetteur, expiration — sans l'audience ni le groupe exigé.
 
     401 pour un jeton invalide ou expiré, 503 si le JWKS est injoignable."""
     try:
         signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
-        return jwt.decode(
+        claims = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
             issuer=_issuer(),
             options={"verify_aud": False, "require": ["exp", "iat"]},
         )
+        return _avec_les_groupes(claims)
     except jwt.PyJWTError:
         # Pas de détail au client (évite de divulguer la raison exacte).
         raise HTTPException(status_code=401, detail="Jeton invalide ou expiré")
