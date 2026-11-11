@@ -1,4 +1,4 @@
-"""Les trois outils MCP des assistants de recherche : lister, proposer des sources, rechercher.
+"""Les quatre outils MCP des assistants de recherche : trouver où chercher, lister, proposer des sources, rechercher.
 
 Aucun modèle de langage ici : un client MCP (un agent conversationnel) choisit l'assistant, lit le
 plan, et rédige lui-même. Les outils réutilisent `app.services.assistant_recherche` — le même
@@ -26,7 +26,8 @@ from app.services.pseudo import condenser
 NOM = "mes-collections"
 INSTRUCTIONS = (
     "Mes collections : des assistants de recherche qui réunissent des collections de documents, et les collections "
-    "elles-mêmes. Appelez d'abord `lister_sources` pour savoir où chercher, puis `rechercher`. "
+    "elles-mêmes. Pour savoir où chercher, appelez d'abord `trouver_collections` avec la question (ou `lister_sources` "
+    "pour tout voir), puis `rechercher`. "
     "Les résultats ne contiennent que ce que la personne connectée a le droit de lire."
 )
 
@@ -49,11 +50,38 @@ CONSIGNE_DE_CITATION = (
     "Réponds uniquement à partir des passages ; cite chaque passage utilisé par son lien `url` (format Markdown [titre](url)) ; si aucun passage ne répond, dis-le."
 )
 
+#: Sources rendues par `trouver_collections`, par défaut et au plus.
+TROUVER_DEFAUT = 5
+TROUVER_MAX = 10
+
 OUTILS: list[types.Tool] = [
+    types.Tool(
+        name="trouver_collections",
+        description=(
+            "À appeler en premier quand on ne sait pas où chercher. Classe, pour cette question, les assistants et les "
+            "collections que la personne connectée peut interroger, du plus proche au moins proche (titre, description, "
+            "cas traités), et rend les premiers avec leur `score`. Passez ensuite l'`id` du premier à `rechercher` ; si ses "
+            "passages ne répondent pas, essayez le suivant. Une liste vide : rien ne ressemble à la question, voyez "
+            "`lister_sources`. Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "La question de la personne, en français, telle qu'elle la pose.", "minLength": 1, "maxLength": 1000},
+                "limite": {
+                    "type": "integer",
+                    "default": TROUVER_DEFAUT,
+                    "description": f"Facultatif : nombre de sources rendues, de 1 à {TROUVER_MAX} ({TROUVER_DEFAUT} par défaut).",
+                },
+            },
+            "required": ["question"],
+            "additionalProperties": False,
+        },
+    ),
     types.Tool(
         name="lister_sources",
         description=(
-            "À appeler en premier, pour savoir où chercher. Rend les assistants de recherche que la personne connectée "
+            "Pour tout voir (sinon `trouver_collections` choisit pour une question). Rend les assistants de recherche que la personne connectée "
             "peut interroger, et pour chacun ses collections de documents (identifiant, titre, description) et les cas "
             "qu'il sait traiter (`consignes`). Chaque collection qu'elle lit y figure aussi seule, sous son identifiant : "
             "s'interroge de la même façon. Quand un assistant a une consigne qui correspond à la question, "
@@ -195,6 +223,23 @@ async def lister_sources(user: CurrentUser) -> dict:
     return {"assistants": assistants}
 
 
+def _texte_de(entree: dict) -> str:
+    """Ce qui décrit une entrée de `lister_sources` : titres, descriptions, cas traités."""
+    morceaux = [entree["titre"], entree["description"], *entree["consignes"]]
+    for c in entree["collections"]:
+        morceaux += [c["titre"], c["description"]]
+    return " ".join(m for m in dict.fromkeys(morceaux) if m)  # un miroir répète le titre de sa collection
+
+
+async def trouver_collections(user: CurrentUser, question: str, limite: int = TROUVER_DEFAUT) -> dict:
+    """Les entrées de `lister_sources` classées par ressemblance à la question (`moteur.apparieur_catalogue` :
+    embeddings s'ils sont configurés, sinon sac de mots). Sans ressemblance, rien."""
+    limite = max(1, min(TROUVER_MAX, limite))
+    entrees = {a["id"]: a for a in (await lister_sources(user))["assistants"]}
+    classes = await moteur.apparieur_catalogue().apparier(question, [(ident, _texte_de(a)) for ident, a in entrees.items()])
+    return {"sources": [{**entrees[ident], "score": score} for ident, score in classes[:limite] if score > 0]}
+
+
 def _vue_plan(charge: moteur.Charge, plan: Plan) -> dict:
     return {
         "assistant": plan.assistant,
@@ -263,7 +308,12 @@ def serveur(utilisateur: Callable[[], CurrentUser]) -> Server:
     @s.call_tool(validate_input=True)
     async def _appeler(nom: str, arguments: dict[str, Any]) -> list[types.TextContent]:
         user = utilisateur()
-        outils: dict[str, Callable[..., Awaitable[dict]]] = {"lister_sources": lister_sources, "proposer_sources": proposer_sources, "rechercher": rechercher}
+        outils: dict[str, Callable[..., Awaitable[dict]]] = {
+            "trouver_collections": trouver_collections,
+            "lister_sources": lister_sources,
+            "proposer_sources": proposer_sources,
+            "rechercher": rechercher,
+        }
         if nom not in outils:
             raise ErreurOutil(f"Outil inconnu : {nom}")
         return _json(await outils[nom](user, **arguments))
