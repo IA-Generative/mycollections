@@ -405,6 +405,24 @@ def test_groupe_exige_refus(client, jetons):
     assert rpc(client, "tools/list", entetes=jetons("dehors")).status_code == 403
 
 
+def test_un_jeton_de_mirai_chat_groupes_courts_et_chemins_sous_un_second_claim(client, jeu, theatre_branche, jetons, monkeypatch):
+    """Le client de MirAI Chat garde `groups` en noms courts ; ses chemins complets arrivent sous un second claim.
+    Sans le réglage, ce jeton n'entre pas ; avec, il a les droits de la personne, ni plus ni moins."""
+    alice = IDENTITES["alice"]
+    courts = [g.rsplit("/", 1)[-1] for g in alice.groups]
+    jeton = jetons("alice", azp="mirai-beta", aud=["mycollections-front"], groups=courts, groupes_mycollections=list(alice.groups))
+    assert rpc(client, "tools/list", entetes=jeton).status_code == 403  # défaut : seul `groups` est lu
+    monkeypatch.setattr(app.config.settings, "claims_groupes", "groupes_mycollections,groups")
+    assert rpc(client, "tools/list", entetes=jeton).status_code == 200
+    erreur, contenu = appeler(client, jeton, "lister_sources")
+    assert not erreur and {jeu["mienne"], jeu["partagee"]} <= {a["id"] for a in contenu["assistants"]} and jeu["secrete"] not in json.dumps(contenu)
+    # Le jeton du front (pas de second claim) entre toujours ; un second claim en noms courts ne donne rien.
+    assert rpc(client, "tools/list", entetes=jetons("alice")).status_code == 200
+    assert rpc(client, "tools/list", entetes=jetons("alice", groups=list(alice.groups), groupes_mycollections=courts)).status_code == 403
+    # Un second claim vide (personne sans groupe) l'emporte sur `groups` : pas d'entrée.
+    assert rpc(client, "tools/list", entetes=jetons("alice", groupes_mycollections=[])).status_code == 403
+
+
 def test_drapeau_assistants_faux_serveur_indisponible(client, jetons, capacites):
     capacites(assistants=False)
     r = rpc(client, "tools/list", entetes=jetons())

@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # de Mes collections (superadmin, groupes de collection) n'existent, eux, qu'en
     # chemins complets — cf. app/services/access.py.
     myrag_groupe_exige: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_GROUPE_EXIGE", "MYRAG_GROUPE_EXIGE", "myrag_groupe_exige"))
+    # Les claims où lire les groupes, par ordre de préférence : le premier que le jeton porte est lu.
+    # `groupes_mycollections,groups` accepte un client (MirAI Chat) dont `groups` reste en noms courts
+    # et qui porte les chemins complets sous un second claim.
+    claims_groupes: str = Field(default="groups", validation_alias=AliasChoices("MYCOLLECTIONS_CLAIMS_GROUPES", "claims_groupes"))
 
     # Les groupes dont les membres administrent Mes collections (toutes les collections, les
     # catégories, les amorces, le menu Administration). Liste de CHEMINS COMPLETS séparés par des

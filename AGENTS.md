@@ -244,6 +244,7 @@ unitaire : le jouer dans un navigateur (voir `docs/sources.md`).
 | `AUTH_ENABLED` | `false` (backend) ; `true` dans l'image du frontend | Garde JWT Keycloak sur les routes XHR du backend ; false en dev |
 | `MYCOLLECTIONS_REPRISE_AU_DEMARRAGE` | `true` | Reprendre au demarrage les indexations coupees par l'arret precedent |
 | `MYRAG_GROUPE_EXIGE` | `` | Groupe(s) requis pour entrer, séparés par des virgules. `/chemin` = comparé au claim en chemins complets (forme sûre) ; nom sans `/` = forme héritée, comparé tel quel (forgeable) — voir « Groupes et droits » |
+| `MYCOLLECTIONS_CLAIMS_GROUPES` | `groups` | Claims où lire les groupes, par ordre de préférence (CSV) : le premier que le jeton porte est lu. `groupes_mycollections,groups` accepte un client dont `groups` reste en noms courts (MirAI Chat) et qui porte les chemins complets sous un second claim — voir « Groupes et droits » |
 | `MYRAG_SUPERADMIN_GROUPES` | `` | Groupes administrateurs de Mes collections, en chemins complets séparés par des virgules (ex. `/g/mirai-beta-testeurs-admin`). Vide ⇒ personne (hors développement sans authentification). Remplace `/myrag/superadmin` |
 | `MYRAG_GROUP_ROOT` | `/myrag` | Racine des groupes de droits (`<root>/superadmin`, `<root>/<collection>[-admin]`) |
 | `GRAPHRAG_VIEWER_URL` | `` | URL du viewer graph (Cytoscape), exposee via `/api/config` ; non consommee a ce jour — le viewer local `/graph` est toujours servi |
@@ -307,6 +308,10 @@ Les droits viennent du claim `groups` du jeton (`app/services/access.py`, miroir
   vrai chemin. Consequence : avec un mapper `full.path=false`, ni superadmin ni groupe de
   collection ne fonctionnent — seul le createur (reconnu par `sub`) gere sa collection.
   L'avertissement « Claim `groups` en noms courts » dans les journaux le signale.
+- **Un client qui doit garder `groups` en noms courts** (MirAI Chat nomme ses groupes par leur feuille) porte
+  les chemins complets sous un second claim (mapper d'appartenance aux groupes, `full.path=true`, claim
+  `groupes_mycollections`) ; `MYCOLLECTIONS_CLAIMS_GROUPES=groupes_mycollections,groups` le fait lire en
+  premier. La regle ne change pas : ce claim ne donne des droits que s'il est en chemins complets.
 - Les groupes `/myrag/...` se creent a la racine du realm, ou seul un administrateur du realm peut
   creer un groupe.
 - `scope_groups` d'une fiche : compare en chemins ; un nom court enregistre avant la bascule du
