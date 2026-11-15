@@ -96,8 +96,10 @@ ne garde aucun texte. Avec `MYCOLLECTIONS_DOUBLURE_ASSISTANTS`, la doublure rép
 fusion et le filtre des droits, `harnais/redaction.py` rédige une réponse à partir des 20 premiers passages, soit tous ceux de la fusion
 (`PASSAGES_MAX` ; la fusion alterne les sources, les bons passages d'une source arrivent parfois loin), numérotés [1]…[n] et encadrés comme données.
 Prompt système : le gabarit connu des consignes, les règles « répondre » de la consigne `toujours` puis de la retenue, puis
-« uniquement à partir des passages ». Des passages hors sujet font répondre « Les documents trouvés ne répondent pas à cette
-question. » (il n'y a pas de seuil de pertinence). Un renvoi qui ne désigne aucun passage est retiré ; `citations` donne
+« uniquement à partir des passages ». Les règles « répondre » disent comment présenter la réponse, pas quand refuser : un
+article demandé qui manque, une réponse partielle ou pour un cas proche se disent, avec ce que les passages donnent (#198).
+Seuls des passages tous hors sujet font répondre « Les documents trouvés ne répondent pas à cette question. » (il n'y a pas
+de seuil de pertinence) ; la variante « fournis » est ramenée à cette phrase, sans renvoi. Un renvoi qui ne désigne aucun passage est retiré ; `citations` donne
 `{n, passage, document, source}`, `redaction` vaut `faite`, `aucun_passage` (modèle non appelé) ou `indisponible` (panne,
 délai de 60 s, débit plein, fournisseur non configuré : la route rend quand même 200 et les passages). Le modèle est celui
 de la génération (`MYCOLLECTIONS_GENERATION_LLM_*`, sinon le `/v1` d'OpenRAG), sous le débit partagé avec le juge. Sans
