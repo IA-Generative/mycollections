@@ -98,6 +98,16 @@ def en_tant_que(client):
 
 
 @pytest.fixture(autouse=True)
+def _memoire_des_embeddings_vide():
+    """Les vecteurs gardés par `ApparieurEmbeddings` sont au processus : un test ne lit pas ceux d'un autre."""
+    from app.harnais import apparieur
+
+    apparieur.vider_memoire()
+    yield
+    apparieur.vider_memoire()
+
+
+@pytest.fixture(autouse=True)
 def capacites(monkeypatch):
     """Par défaut dans les tests : tout est activé, seuil 5. Rappeler pour changer."""
     from app.services import capacites as module

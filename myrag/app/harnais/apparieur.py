@@ -11,7 +11,7 @@ import logging
 import math
 import re
 import unicodedata
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Sequence
 
 import httpx
@@ -59,6 +59,19 @@ class ApparieurSacDeMots(Apparieur):
         return sorted(scores, key=lambda x: -x[1])  # tri stable : à égalité, l'ordre des candidats
 
 
+#: Les vecteurs déjà calculés des textes candidats (fiches de collection, « quand » et exemples des consignes),
+#: par service, modèle et texte : ils changent peu, la question seule se calcule à chaque appel. Un texte
+#: modifié est une autre clé ; les plus anciens sortent au-delà de `MEMOIRE_MAX`. Par processus, jamais la question.
+_MEMOIRE: OrderedDict[tuple[str, str, str], list[float]] = OrderedDict()
+MEMOIRE_MAX = 5000
+#: Textes par appel au service : au-delà, la passerelle refuse (mesuré : 32) et tout retombait sur le sac de mots.
+LOT_EMBEDDINGS = 32
+
+
+def vider_memoire() -> None:
+    _MEMOIRE.clear()
+
+
 class ApparieurEmbeddings(Apparieur):
     """Cosinus des embeddings rendus par `POST {url}/v1/embeddings`."""
 
@@ -79,11 +92,30 @@ class ApparieurEmbeddings(Apparieur):
             raise ValueError("nombre de vecteurs inattendu")
         return vecteurs
 
+    async def _vecteurs_en_memoire(self, texte: str, candidats: Sequence[tuple[str, str]]) -> tuple[list[float], list[list[float]]]:
+        """Le vecteur de la question (jamais gardé) et ceux des candidats : ceux déjà calculés viennent de la
+        mémoire du processus, les autres du service, par lots de `LOT_EMBEDDINGS` textes."""
+        cles = [(self.url, self.modele, t) for _, t in candidats]
+        manquants = list(dict.fromkeys(t for (_, _, t) in cles if (self.url, self.modele, t) not in _MEMOIRE))
+        a_calculer = [texte, *manquants]
+        vecteurs: list[list[float]] = []
+        for i in range(0, len(a_calculer), LOT_EMBEDDINGS):
+            vecteurs.extend(await self._vecteurs(a_calculer[i : i + LOT_EMBEDDINGS]))
+        for t, v in zip(manquants, vecteurs[1:], strict=True):
+            _MEMOIRE[(self.url, self.modele, t)] = v
+            if len(_MEMOIRE) > MEMOIRE_MAX:
+                _MEMOIRE.popitem(last=False)
+        autres = []
+        for cle in cles:
+            _MEMOIRE.move_to_end(cle)
+            autres.append(_MEMOIRE[cle])
+        return vecteurs[0], autres
+
     async def apparier(self, texte: str, candidats: Sequence[tuple[str, str]]) -> list[tuple[str, float]]:
         if not candidats:
             return []
         try:
-            question, *autres = await self._vecteurs([texte, *(t for _, t in candidats)])
+            question, autres = await self._vecteurs_en_memoire(texte, candidats)
         except Exception as e:  # injoignable, 4xx/5xx, corps inattendu : on retombe, sans erreur
             logger.info("Embeddings indisponibles (%s) : repli sur le sac de mots", type(e).__name__)
             self.repli_utilise = True

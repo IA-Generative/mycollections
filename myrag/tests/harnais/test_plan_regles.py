@@ -201,3 +201,32 @@ async def test_embeddings_en_erreur_http_ou_mal_formes_repli(monkeypatch):
         monkeypatch.setattr(httpx.AsyncClient, "post", faux_post)
         r = await ApparieurEmbeddings("http://x", "m").apparier("budget", [("a", "budget")])
         assert r == [("a", 1.0)]
+
+
+@pytest.mark.asyncio
+async def test_les_vecteurs_des_candidats_sont_gardes_en_memoire_et_demandes_par_lots(monkeypatch):
+    """Le catalogue change peu : au second appel, seule la question part au service. Au-delà de 32 textes,
+    la passerelle refuse : les candidats partent par lots."""
+    from app.harnais import apparieur
+
+    apparieur.vider_memoire()
+    envois: list[list[str]] = []
+
+    async def faux_post(self, url, json=None, **k):
+        envois.append(list(json["input"]))
+        data = [{"index": i, "embedding": [1.0, float(len(t) % 7)]} for i, t in enumerate(json["input"])]
+        return httpx.Response(200, json={"data": data}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", faux_post)
+    a = ApparieurEmbeddings("http://modeles.fake-domain.name", "m")
+    candidats = [(f"c{i}", f"fiche numéro {i}") for i in range(40)]
+    r1 = await a.apparier("première question", candidats)
+    assert [len(e) for e in envois] == [32, 9] and envois[0][0] == "première question"
+    r2 = await a.apparier("seconde question", candidats)
+    assert envois[2] == ["seconde question"] and len(r2) == len(r1) == 40
+    # Une fiche modifiée est un autre texte : elle seule est recalculée ; un autre modèle ne partage rien.
+    await a.apparier("troisième", [("c0", "fiche numéro 0 modifiée"), ("c1", "fiche numéro 1")])
+    assert envois[3] == ["troisième", "fiche numéro 0 modifiée"]
+    await ApparieurEmbeddings("http://modeles.fake-domain.name", "autre").apparier("q", [("c1", "fiche numéro 1")])
+    assert envois[4] == ["q", "fiche numéro 1"]
+    apparieur.vider_memoire()
