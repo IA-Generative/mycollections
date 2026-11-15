@@ -16,6 +16,8 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 
 from app.auth import CurrentUser
+from app.config import settings
+from app.harnais.apparieur import ApparieurEmbeddings
 from app.harnais.contrat import QUAND_TOUJOURS, Etape, Plan
 from app.routers import assistants as routes_assistants
 from app.services import access, assistant_store
@@ -61,7 +63,7 @@ OUTILS: list[types.Tool] = [
             "À appeler en premier quand on ne sait pas où chercher. Classe, pour cette question, les assistants et les "
             "collections que la personne connectée peut interroger, du plus proche au moins proche (titre, description, "
             "cas traités), et rend les premiers avec leur `score`. Passez ensuite l'`id` du premier à `rechercher` ; si ses "
-            "passages ne répondent pas, essayez le suivant. Une liste vide : rien ne ressemble à la question, voyez "
+            "passages ne répondent pas, essayez le suivant. Une liste vide : rien ne ressemble assez à la question (hors du catalogue, sans doute), voyez "
             "`lister_sources`. Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
         ),
         inputSchema={
@@ -233,11 +235,14 @@ def _texte_de(entree: dict) -> str:
 
 async def trouver_collections(user: CurrentUser, question: str, limite: int = TROUVER_DEFAUT) -> dict:
     """Les entrées de `lister_sources` classées par ressemblance à la question (`moteur.apparieur_catalogue` :
-    embeddings s'ils sont configurés, sinon sac de mots). Sans ressemblance, rien."""
+    embeddings s'ils sont configurés, sinon sac de mots). Ce qui ne ressemble pas assez n'est pas rendu :
+    score nul au sac de mots, sous `MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_SEUIL` aux embeddings."""
     limite = max(1, min(TROUVER_MAX, limite))
     entrees = {a["id"]: a for a in (await lister_sources(user))["assistants"]}
-    classes = await moteur.apparieur_catalogue().apparier(question, [(ident, _texte_de(a)) for ident, a in entrees.items()])
-    return {"sources": [{**entrees[ident], "score": score} for ident, score in classes[:limite] if score > 0]}
+    app = moteur.apparieur_catalogue()
+    classes = await app.apparier(question, [(ident, _texte_de(a)) for ident, a in entrees.items()])
+    seuil = settings.catalogue_embeddings_seuil if isinstance(app, ApparieurEmbeddings) and not app.repli_utilise else 0.0
+    return {"sources": [{**entrees[ident], "score": score} for ident, score in classes if score > seuil][:limite]}
 
 
 def _vue_plan(charge: moteur.Charge, plan: Plan) -> dict:

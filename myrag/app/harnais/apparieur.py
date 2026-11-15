@@ -65,6 +65,8 @@ class ApparieurEmbeddings(Apparieur):
     def __init__(self, url: str, modele: str, *, jeton: str = "", delai_s: float = 6.0, repli: Apparieur | None = None):
         self.url, self.modele, self.jeton, self.delai_s = url.rstrip("/"), modele, jeton, delai_s
         self.repli = repli or ApparieurSacDeMots()
+        #: Le dernier appel est-il retombé sur le sac de mots ? Ses scores n'ont pas la même échelle.
+        self.repli_utilise = False
 
     async def _vecteurs(self, textes: list[str]) -> list[list[float]]:
         entetes = {"Authorization": f"Bearer {self.jeton}"} if self.jeton else {}
@@ -84,7 +86,9 @@ class ApparieurEmbeddings(Apparieur):
             question, *autres = await self._vecteurs([texte, *(t for _, t in candidats)])
         except Exception as e:  # injoignable, 4xx/5xx, corps inattendu : on retombe, sans erreur
             logger.info("Embeddings indisponibles (%s) : repli sur le sac de mots", type(e).__name__)
+            self.repli_utilise = True
             return await self.repli.apparier(texte, candidats)
+        self.repli_utilise = False
         nq = math.sqrt(sum(x * x for x in question)) or 1.0
         scores = []
         for (ident, _), v in zip(candidats, autres, strict=True):
