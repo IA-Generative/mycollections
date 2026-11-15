@@ -177,6 +177,10 @@ class Settings(BaseSettings):
     catalogue_embeddings_url: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_URL", "catalogue_embeddings_url"))
     catalogue_embeddings_cle: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_CLE", "catalogue_embeddings_cle"))
     catalogue_embeddings_modele: str = Field(default="", validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_MODELE", "catalogue_embeddings_modele"))
+    # Sous ce score (cosinus des embeddings), une source n'est pas proposée : une question hors sujet
+    # ressemble toujours un peu à tout. Réglé sur bge-m3 et le catalogue de la bêta (2026-11-15) : questions
+    # hors sujet ≤ 0,35, questions du catalogue ≥ 0,39. Sans effet sur le sac de mots (score > 0).
+    catalogue_embeddings_seuil: float = Field(default=0.37, ge=0, le=1, validation_alias=AliasChoices("MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_SEUIL", "catalogue_embeddings_seuil"))
     #: `GET /api/v1/sites` sans jeton : les sites des seules collections ouvertes à tous, pour le
     #: débogage de l'extension. Coupé par défaut (une liste anonyme dit quels sites intéressent
     #: Questions posées aux assistants (`plan` et `executer`) par personne et par minute, par
