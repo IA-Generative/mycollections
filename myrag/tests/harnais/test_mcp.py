@@ -388,11 +388,7 @@ def test_la_consigne_de_citation_est_dans_la_description_et_dans_la_sortie(clien
     trouver = outils["trouver_collections"]["description"]
     assert "documents de référence de l'administration" in trouver and "avant une recherche sur le web" in trouver and "en cas de doute" in trouver
     assert "après `trouver_collections`" in description
-    assert (
-        "EN PREMIER" in trouver
-        and "tout voir" in outils["lister_sources"]["description"]
-        and outils["proposer_sources"]["description"].startswith("Facultatif")
-    )
+    assert "EN PREMIER" in trouver and "tout voir" in outils["lister_sources"]["description"] and outils["proposer_sources"]["description"].startswith("Facultatif")
     erreur, contenu = appeler(client, jetons("alice"), "rechercher", question="budget", assistant=assistant_publie)
     assert not erreur and "[titre](url)" in contenu["consigne_de_citation"]
 
