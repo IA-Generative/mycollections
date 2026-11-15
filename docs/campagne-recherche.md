@@ -50,6 +50,15 @@ uv run --with playwright python -m scripts.campagne.corpus verifier             
 uv run --with playwright python -m scripts.campagne.corpus appliquer --publier    # sinon, les poser (idempotent)
 ```
 
+Hors campagne, les variantes de comparaison `s0` et `s1` sont **archivées** : elles encombreraient les
+résultats des testeurs (liste du MCP, `trouver_collections`, bac à sable), où seule `s2` sert d'exemple.
+Une nuit les rétablit avant de jouer, puis les range :
+
+```bash
+uv run --with playwright python -m scripts.campagne.corpus sortir                 # avant : toutes rétablies
+uv run --with playwright python -m scripts.campagne.corpus ranger --variantes s0,s1   # après
+```
+
 ## Lancer une nuit
 
 ```bash

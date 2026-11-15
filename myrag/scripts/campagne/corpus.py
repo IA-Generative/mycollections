@@ -260,18 +260,38 @@ def appliquer(cible, variante: Variante, *, publier: bool = False) -> dict:
     return sortie
 
 
+def ranger(cible, variante: Variante, *, archive: bool = True) -> dict:
+    """Archive l'assistant d'essai (il disparaît des listes, du MCP et du bac à sable des testeurs) ou le
+    rétablit. Une variante de comparaison (s0, s1) n'a rien à faire dans les résultats des testeurs hors
+    campagne ; elle est rétablie avant de jouer."""
+    if not variante.assistant.startswith(PREFIXE):
+        raise CorpusInvalide(f"seul un assistant préfixé « {PREFIXE} » se manipule ici")
+    action = "archiver" if archive else "desarchiver"
+    r = cible.appel("POST", f"/api/assistants/{quote(variante.assistant, safe='')}/{action}", route="admin")
+    sortie: dict = {"assistant": variante.assistant, "archive": archive}
+    if r.status_code != 200:
+        sortie["erreur"] = f"{action} {r.status_code} : {r.text[:300]}"
+    return sortie
+
+
 def main(argv: list[str] | None = None, *, fabrique_cible=None) -> int:
     p = argparse.ArgumentParser(prog="python -m scripts.campagne.corpus", description="Les assistants d'essai de la campagne.")
-    p.add_argument("commande", choices=("resoudre", "verifier", "appliquer"))
+    p.add_argument("commande", choices=("resoudre", "verifier", "appliquer", "ranger", "sortir"))
     p.add_argument("--jeu", type=Path, default=JEU_DEFAUT, help="dossier des fiches s*.yaml et de questions.yaml")
     p.add_argument("--correspondance", help="fichier JSON alias → identifiant (défaut : CAMPAGNE_CORRESPONDANCE)")
     p.add_argument("--cible", default=os.environ.get("CAMPAGNE_CIBLE", ""), help="origine de Mes collections (défaut : CAMPAGNE_CIBLE)")
     p.add_argument("--publier", action="store_true", help="publie ensuite chaque fiche (appliquer)")
+    p.add_argument("--variantes", help="les variantes concernées, séparées par des virgules (ex. s0,s1) ; défaut : toutes")
     a = p.parse_args(argv)
     try:
         correspondance = charger_correspondance(a.correspondance)
         variantes = charger_variantes(a.jeu, correspondance)
         questions = charger_questions(a.jeu / "questions.yaml", correspondance, variantes)
+        if a.variantes:
+            voulues = {x.strip() for x in a.variantes.split(",") if x.strip()}
+            if inconnues := voulues - {v.nom for v in variantes}:
+                raise CorpusInvalide(f"--variantes : inconnues {', '.join(sorted(inconnues))}")
+            variantes = [v for v in variantes if v.nom in voulues]
     except CorpusInvalide as e:
         print(f"erreur : {e}", file=sys.stderr)
         return 1
@@ -296,6 +316,10 @@ def main(argv: list[str] | None = None, *, fabrique_cible=None) -> int:
                 e = etat(c, v)
                 print(f"{v.nom} : {v.assistant} · {e}")
                 code = code or (0 if e == "conforme" else 1)
+            elif a.commande in ("ranger", "sortir"):
+                s = ranger(c, v, archive=a.commande == "ranger")
+                print(f"{v.nom} : {json.dumps(s, ensure_ascii=False)}")
+                code = code or (1 if "erreur" in s else 0)
             else:
                 s = appliquer(c, v, publier=a.publier)
                 print(f"{v.nom} : {json.dumps(s, ensure_ascii=False)}")
