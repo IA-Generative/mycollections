@@ -119,3 +119,25 @@ def test_la_cli_verifier_signale_une_fiche_differente(correspondance, horloge, v
 
     assert corpus.main(["verifier", "--cible", BASE], fabrique_cible=lambda base: _cible(horloge, gestionnaire)) == 1
     assert "s1 : e2e-camp-sejour-s1 · different" in capsys.readouterr().out
+
+
+def test_ranger_et_sortir_archivent_les_variantes_choisies(correspondance, horloge, capsys):
+    appels = []
+
+    def gestionnaire(req):
+        appels.append((req.method, req.url.path))
+        return httpx.Response(200, json={})
+
+    fabrique = lambda base: _cible(horloge, gestionnaire)  # noqa: E731
+    assert corpus.main(["ranger", "--variantes", "s0,s1", "--cible", BASE], fabrique_cible=fabrique) == 0
+    assert appels == [("POST", "/api/assistants/e2e-camp-sejour-s0/archiver"), ("POST", "/api/assistants/e2e-camp-sejour-s1/archiver")]
+    appels.clear()
+    assert corpus.main(["sortir", "--cible", BASE], fabrique_cible=fabrique) == 0
+    assert [c[1].rsplit("/", 2)[-2:] for c in appels] == [["e2e-camp-sejour-s0", "desarchiver"], ["e2e-camp-sejour-s1", "desarchiver"], ["e2e-camp-sejour-s2", "desarchiver"]]
+
+
+def test_ranger_signale_un_refus_et_une_variante_inconnue(correspondance, horloge, capsys):
+    fabrique = lambda base: _cible(horloge, lambda req: httpx.Response(403, json={"detail": "non"}))  # noqa: E731
+    assert corpus.main(["ranger", "--variantes", "s0", "--cible", BASE], fabrique_cible=fabrique) == 1
+    assert "archiver 403" in capsys.readouterr().out
+    assert corpus.main(["ranger", "--variantes", "s9", "--cible", BASE], fabrique_cible=fabrique) == 1
