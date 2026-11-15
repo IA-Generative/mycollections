@@ -123,6 +123,24 @@ def test_le_refus_convenu_est_rendu_seul_sans_ce_qui_le_suit():
     assert texte == partielle and [c.n for c in citations] == [1]
 
 
+def test_la_variante_fournis_du_refus_est_un_refus():
+    """Campagne du 2026-11-11 : « Les documents fournis ne répondent pas… », suivi de renvois, comptait comme une réponse (#198)."""
+    brut = "Les documents fournis ne répondent pas à cette question. Voir [1]."
+    texte, citations, etat = _rediger("Le budget ?", _passages(3), _fiche(), None, FauxModele(brut))
+    assert (texte, citations, etat) == (redaction.HORS_SUJET, [], "faite")
+
+
+def test_les_consignes_de_redaction_ne_sont_pas_des_conditions_pour_repondre():
+    """#198 : « citer l'article avant toute explication » faisait refuser quand les passages (une FAQ) répondaient
+    sans article ; mêmes passages, la variante sans consigne répondait. La règle impérative le dit au modèle."""
+    modele = FauxModele("Réponse [1].")
+    _rediger("budget", _passages(3), _fiche(), None, modele)
+    systeme = modele.appels[0][0]["content"]
+    assert "pas quand refuser" in systeme
+    assert "même en partie ou pour un cas proche" in systeme
+    assert f"Seulement si AUCUN passage ne traite du sujet de la question, réponds exactement, sans rien ajouter : « {redaction.HORS_SUJET} »" in systeme
+
+
 def test_vingt_passages_au_plus_sont_montres_au_modele():
     """Autant que la fusion en rend (`top_k` = 20) : à 12, les bons passages d'une seconde source restaient hors de la coupe (#198)."""
     modele = FauxModele("Réponse [20] [21].")
