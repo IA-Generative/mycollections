@@ -222,6 +222,35 @@ def test_trouver_collections_ne_rend_rien_sans_ressemblance_et_borne_la_limite(c
     assert not erreur and 2 <= len(contenu["sources"]) <= 10
 
 
+def test_aux_embeddings_une_source_sous_le_seuil_n_est_pas_proposee(client, jeu, theatre_branche, jetons, monkeypatch):
+    """Aux embeddings, tout ressemble un peu à tout : une question hors sujet ne doit rien rendre. Repli sur le
+    sac de mots : son échelle, pas le seuil des embeddings."""
+    from app.harnais.apparieur import ApparieurEmbeddings
+    from app.services import assistant_recherche as moteur
+
+    scores = {jeu["partagee"]: 0.62, jeu["mienne"]: 0.41, jeu["ouverte"]: 0.30}
+
+    class Faux(ApparieurEmbeddings):
+        async def _vecteurs(self, textes):
+            raise AssertionError("non appelé")
+
+        async def apparier(self, texte, candidats):
+            if texte == "panne":
+                self.repli_utilise = True
+                return await self.repli.apparier("méthodes budget vote séance calendrier réunion", candidats)
+            self.repli_utilise = False
+            return sorted(((i, scores.get(i, 0.2) if texte == "pertinente" else 0.31) for i, _ in candidats), key=lambda x: -x[1])
+
+    monkeypatch.setattr(moteur, "apparieur_catalogue", lambda: Faux("https://modeles.fake-domain.name", "m"))
+    monkeypatch.setattr(app.config.settings, "catalogue_embeddings_seuil", 0.37)
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="pertinente")
+    assert not erreur and [s["id"] for s in contenu["sources"]] == [jeu["partagee"], jeu["mienne"]]
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="hors sujet")
+    assert not erreur and contenu["sources"] == []
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="panne")
+    assert not erreur and contenu["sources"][0]["id"] == jeu["partagee"] and 0 < contenu["sources"][0]["score"] < 0.37  # gardée : échelle du sac de mots
+
+
 def test_l_apparieur_du_catalogue_suit_la_configuration(monkeypatch):
     from app.harnais.apparieur import ApparieurEmbeddings, ApparieurSacDeMots
     from app.services import assistant_recherche as moteur
