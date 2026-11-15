@@ -383,8 +383,13 @@ def test_la_consigne_de_citation_est_dans_la_description_et_dans_la_sortie(clien
     assert "cite chaque passage" in description and "`url`" in description and "[titre](url)" in description
     assert "si aucun passage ne répond, dis-le" in description
     assert outils["rechercher"]["inputSchema"]["properties"]["limite"]["type"] == "integer"
+    # Banc du 2026-11-15 (50 fonctions du chat en concurrence) : sans dire ce que contiennent les collections ni
+    # « avant le web », `chat-pro` n'appelait l'outil que 2 fois sur 30 ; avec, 29 sur 30, sans appel à tort.
+    trouver = outils["trouver_collections"]["description"]
+    assert "documents de référence de l'administration" in trouver and "avant une recherche sur le web" in trouver and "en cas de doute" in trouver
+    assert "après `trouver_collections`" in description
     assert (
-        "en premier" in outils["trouver_collections"]["description"]
+        "EN PREMIER" in trouver
         and "tout voir" in outils["lister_sources"]["description"]
         and outils["proposer_sources"]["description"].startswith("Facultatif")
     )

@@ -60,11 +60,13 @@ OUTILS: list[types.Tool] = [
     types.Tool(
         name="trouver_collections",
         description=(
-            "À appeler en premier quand on ne sait pas où chercher. Classe, pour cette question, les assistants et les "
-            "collections que la personne connectée peut interroger, du plus proche au moins proche (titre, description, "
-            "cas traités), et rend les premiers avec leur `score`. Passez ensuite l'`id` du premier à `rechercher` ; si ses "
-            "passages ne répondent pas, essayez le suivant. Une liste vide : rien ne ressemble assez à la question (hors du catalogue, sans doute), voyez "
-            "`lister_sources`. Ne cherche rien dans les documents et ne compte pas dans le quota de questions."
+            "Mes collections réunit les documents de référence de l'administration que la personne connectée peut lire : fiches métier, "
+            "guides de procédure, foires aux questions, textes et accords, jurisprudence. Pour toute question de réglementation, de droit, "
+            "de procédure ou de pratique administrative, appelez cet outil EN PREMIER, avant une recherche sur le web et avant de répondre "
+            "de mémoire : il dit quelles collections et quels assistants de recherche traitent la question, du plus proche au moins proche "
+            "(titre, description, cas traités), avec leur `score`. L'appel est rapide et ne cherche rien dans les documents : en cas de doute, "
+            "appelez-le. Passez ensuite l'`id` du premier à `rechercher` ; si ses passages ne répondent pas, essayez le suivant. Une liste "
+            "vide : aucune collection ne traite ce sujet, répondez alors par un autre moyen. Ne compte pas dans le quota de questions."
         ),
         inputSchema={
             "type": "object",
@@ -112,7 +114,8 @@ OUTILS: list[types.Tool] = [
     types.Tool(
         name="rechercher",
         description=(
-            "Cherche dans les collections d'un assistant et rend les passages les plus pertinents : titre, début du "
+            "Cherche dans les documents de référence de Mes collections (fiches métier, guides, textes, jurisprudence) : à "
+            "appeler après `trouver_collections`, avec l'`id` qu'il a rendu. Rend les passages les plus pertinents : titre, début du "
             "texte, lien de lecture `url` (le texte complet s'y lit), collection. " + CONSIGNE_DE_CITATION + " "
             "Si une réponse de référence fiable existe, elle est rendue telle quelle dans `reponse`, sans passage. "
             "`sources` restreint la recherche à certaines collections (identifiants de `lister_sources`), à poids "
