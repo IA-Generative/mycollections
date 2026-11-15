@@ -117,6 +117,8 @@ def test_garde_fous(client, en_tant_que, creer_collection, nom, monkeypatch):
 
 
 def test_actions_suggerees():
+    from datetime import datetime
+
     from app.models.qualite import ComptesQuestions, MesureFiche
     from app.services.qualite import actions_suggerees
 
@@ -154,7 +156,8 @@ def test_actions_suggerees():
         cree_le="2026-10-15T10:00:00",
         verdicts={"non_conformes": 1, "partielles": 1, "sans_source": 3, "refus_ko": 0},
     )
-    codes = [a["code"] for a in actions_suggerees(comptes(total=10, par_relecture={"valide": 10}), derniere, {})]
+    # Une date fixe : la mesure a cinq jours (au-delà de trente, « lancer_mesure » s'ajouterait).
+    codes = [a["code"] for a in actions_suggerees(comptes(total=10, par_relecture={"valide": 10}), derniere, {}, maintenant=datetime(2026, 10, 20))]
     assert codes == ["corriger_echecs", "redecouper"]
 
 
