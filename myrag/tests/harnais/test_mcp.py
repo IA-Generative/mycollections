@@ -216,6 +216,8 @@ def test_trouver_collections_classe_ce_que_la_personne_lit(client, jeu, theatre_
 def test_trouver_collections_ne_rend_rien_sans_ressemblance_et_borne_la_limite(client, jeu, theatre_branche, jetons):
     erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="xylophone zinzolin")
     assert not erreur and contenu["sources"] == []
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="xylophone zinzolin", candidats=True)
+    assert not erreur and contenu["sources"] and "secret" not in json.dumps(contenu).lower()  # jamais hors des droits
     erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="notes méthodes textes ouverts équipe", limite=1)
     assert not erreur and len(contenu["sources"]) == 1
     erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="notes méthodes textes ouverts équipe", limite=500)
@@ -247,6 +249,9 @@ def test_aux_embeddings_une_source_sous_le_seuil_n_est_pas_proposee(client, jeu,
     assert not erreur and [s["id"] for s in contenu["sources"]] == [jeu["partagee"], jeu["mienne"]]
     erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="hors sujet")
     assert not erreur and contenu["sources"] == []
+    # `candidats` : les plus proches quand même, pour un appelant qui laisse le modèle juger sur les titres.
+    erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="hors sujet", candidats=True, limite=2)
+    assert not erreur and len(contenu["sources"]) == 2 and all(s["score"] == 0.31 for s in contenu["sources"])
     erreur, contenu = appeler(client, jetons("alice"), "trouver_collections", question="panne")
     assert not erreur and contenu["sources"][0]["id"] == jeu["partagee"] and 0 < contenu["sources"][0]["score"] < 0.37  # gardée : échelle du sac de mots
 

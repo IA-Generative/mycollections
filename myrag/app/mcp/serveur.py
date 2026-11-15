@@ -77,6 +77,11 @@ OUTILS: list[types.Tool] = [
                     "default": TROUVER_DEFAUT,
                     "description": f"Facultatif : nombre de sources rendues, de 1 à {TROUVER_MAX} ({TROUVER_DEFAUT} par défaut).",
                 },
+                "candidats": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Facultatif, pour un appelant automatique : rend les sources les plus proches même si aucune ne ressemble assez à la question.",
+                },
             },
             "required": ["question"],
             "additionalProperties": False,
@@ -236,15 +241,20 @@ def _texte_de(entree: dict) -> str:
     return " ".join(m for m in dict.fromkeys(morceaux) if m)  # un miroir répète le titre de sa collection
 
 
-async def trouver_collections(user: CurrentUser, question: str, limite: int = TROUVER_DEFAUT) -> dict:
+async def trouver_collections(user: CurrentUser, question: str, limite: int = TROUVER_DEFAUT, candidats: bool = False) -> dict:
     """Les entrées de `lister_sources` classées par ressemblance à la question (`moteur.apparieur_catalogue` :
     embeddings s'ils sont configurés, sinon sac de mots). Ce qui ne ressemble pas assez n'est pas rendu :
-    score nul au sac de mots, sous `MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_SEUIL` aux embeddings."""
+    score nul au sac de mots, sous `MYCOLLECTIONS_CATALOGUE_EMBEDDINGS_SEUIL` aux embeddings. `candidats` : les plus
+    proches sont rendus même sous le seuil — le seuil classe bien mais détecte mal (banc du 2026-11-15 : la bonne
+    source au premier rang 15 fois sur 16, mais aucun seuil ne sépare les questions du catalogue des autres) ; l'appelant
+    laisse alors le modèle juger sur les titres."""
     limite = max(1, min(TROUVER_MAX, limite))
     entrees = {a["id"]: a for a in (await lister_sources(user))["assistants"]}
     app = moteur.apparieur_catalogue()
     classes = await app.apparier(question, [(ident, _texte_de(a)) for ident, a in entrees.items()])
     seuil = settings.catalogue_embeddings_seuil if isinstance(app, ApparieurEmbeddings) and not app.repli_utilise else 0.0
+    if candidats:
+        seuil = 0.0 if isinstance(app, ApparieurEmbeddings) and not app.repli_utilise else -1.0  # sac de mots : même à score nul
     return {"sources": [{**entrees[ident], "score": score} for ident, score in classes if score > seuil][:limite]}
 
 
